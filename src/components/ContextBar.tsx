@@ -1,17 +1,25 @@
-import type { ProductCode, ProcessType } from "@/lib/types";
-
 interface ContextBarProps {
   client: string;
   productName: string;
+  projectName?: string;
   processLabel: string;
 }
 
-export default function ContextBar({ client, productName, processLabel }: ContextBarProps) {
+export default function ContextBar({ client, productName, projectName, processLabel }: ContextBarProps) {
   return (
     <div className="flex gap-3 flex-wrap">
-      <ContextChip label="CLIENT" value={client} colorClass="bg-context-client/15 text-context-client border-context-client/30" />
-      <ContextChip label="PRODUCT" value={productName} colorClass="bg-context-product/15 text-context-product border-context-product/30" />
-      <ContextChip label="PROCESS" value={processLabel} colorClass="bg-context-process/15 text-context-process border-context-process/30" />
+      {client && (
+        <ContextChip label="CLIENT" value={client} colorClass="bg-context-client/15 text-context-client border-context-client/30" />
+      )}
+      {productName && (
+        <ContextChip label="PRODUCT" value={productName} colorClass="bg-context-product/15 text-context-product border-context-product/30" />
+      )}
+      {projectName && (
+        <ContextChip label="PROJECT" value={projectName} colorClass="bg-primary/15 text-primary border-primary/30" />
+      )}
+      {processLabel && (
+        <ContextChip label="PROCESS" value={processLabel} colorClass="bg-context-process/15 text-context-process border-context-process/30" />
+      )}
     </div>
   );
 }

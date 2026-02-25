@@ -68,7 +68,37 @@ export interface FileVersion {
 }
 
 export type ProductCode = "ltr_expo" | "cta_agent" | "tmd_aga";
-export type ProcessType = "script" | "sf" | "ekonte" | "master";
+export type ProcessType =
+  | "script"
+  | "na_script"
+  | "narration"
+  | "bgm"
+  | "vcon"
+  | "sf"
+  | "storyboard"
+  | "video_horizontal"
+  | "video_vertical";
+
+export type InputMode = "text" | "image" | "audio" | "video";
+
+export interface ProcessConfig {
+  id: ProcessType;
+  label: string;
+  enabled: boolean;
+  inputMode: InputMode;
+}
+
+export const PROCESS_LIST: ProcessConfig[] = [
+  { id: "script", label: "構成/字コンテ", enabled: true, inputMode: "text" },
+  { id: "na_script", label: "NA原稿", enabled: true, inputMode: "text" },
+  { id: "narration", label: "ナレーション", enabled: false, inputMode: "audio" },
+  { id: "bgm", label: "BGM", enabled: false, inputMode: "audio" },
+  { id: "vcon", label: "Vコン", enabled: false, inputMode: "image" },
+  { id: "sf", label: "スタイルフレーム", enabled: true, inputMode: "image" },
+  { id: "storyboard", label: "絵コンテ", enabled: false, inputMode: "image" },
+  { id: "video_horizontal", label: "横動画", enabled: false, inputMode: "video" },
+  { id: "video_vertical", label: "縦動画", enabled: false, inputMode: "video" },
+];
 
 export interface ProductConfig {
   code: ProductCode;
@@ -139,6 +169,7 @@ export const PRODUCTS: ProductConfig[] = [
   },
 ];
 
+/** @deprecated Use PROCESS_LIST instead */
 export const PROCESSES = [
   { id: "script" as ProcessType, label: "字コンテ / NA原稿", enabledFor: "all" as const },
   { id: "sf" as ProcessType, label: "スタイルフレーム", enabledFor: "tmd_aga" as const },
