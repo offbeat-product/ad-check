@@ -17,12 +17,13 @@ export function useProjectTree(): TreeData {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetch = useCallback(async () => {
+  const fetch = useCallback(async (cancelled = false) => {
     const [c, p, pr] = await Promise.all([
       supabase.from("clients").select("*").order("name"),
       supabase.from("products").select("*").order("name"),
       supabase.from("projects").select("*").order("created_at", { ascending: false }),
     ]);
+    if (cancelled) return;
     handleSupabaseError(c.error, "clients");
     handleSupabaseError(p.error, "products");
     handleSupabaseError(pr.error, "projects");
@@ -32,7 +33,11 @@ export function useProjectTree(): TreeData {
     setLoading(false);
   }, []);
 
-  useEffect(() => { fetch(); }, [fetch]);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(cancelled);
+    return () => { cancelled = true; };
+  }, [fetch]);
 
   return { clients, products, projects, loading, refetch: fetch };
 }

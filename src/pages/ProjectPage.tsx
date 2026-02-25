@@ -46,9 +46,10 @@ export default function ProjectPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (cancelled = false) => {
     if (!id) return;
     const { data: proj, error: projErr } = await supabase.from("projects").select("*").eq("id", id).maybeSingle();
+    if (cancelled) return;
     if (handleSupabaseError(projErr, "project")) { setLoading(false); return; }
     if (!proj) { setLoading(false); return; }
     setProject(proj);
@@ -57,6 +58,7 @@ export default function ProjectPage() {
       supabase.from("products").select("*").eq("id", proj.product_id!).maybeSingle(),
       supabase.from("project_files").select("*").eq("project_id", id).order("created_at", { ascending: true }),
     ]);
+    if (cancelled) return;
     handleSupabaseError(prodRes.error, "product");
     handleSupabaseError(fileRes.error, "project_files");
 
@@ -66,6 +68,7 @@ export default function ProjectPage() {
 
     if (prodRes.data?.client_id) {
       const { data: cl, error: clErr } = await supabase.from("clients").select("*").eq("id", prodRes.data.client_id).maybeSingle();
+      if (cancelled) return;
       handleSupabaseError(clErr, "client");
       setClient(cl);
     }
@@ -77,24 +80,31 @@ export default function ProjectPage() {
         .from("check_results")
         .select("id, overall_status, ng_count, warning_count")
         .in("id", checkResultIds);
+      if (cancelled) return;
       handleSupabaseError(crErr, "check_results");
       const map: Record<string, Pick<CheckResultRow, "id" | "overall_status" | "ng_count" | "warning_count">> = {};
       (results ?? []).forEach((r) => { map[r.id] = r; });
       setCheckResults(map);
     }
 
-    setLoading(false);
+    if (!cancelled) setLoading(false);
   }, [id]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchData(cancelled);
+    return () => { cancelled = true; };
+  }, [fetchData]);
 
   // Count comments per file
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
     const fileCheckIds = files.filter(f => f.check_result_id).map(f => f.check_result_id!);
     if (fileCheckIds.length === 0) return;
     supabase.from("comments").select("check_result_id").in("check_result_id", fileCheckIds).then(({ data, error }) => {
+      if (cancelled) return;
       if (handleSupabaseError(error, "comment counts")) return;
       const counts: Record<string, number> = {};
       (data ?? []).forEach((c) => {
@@ -102,6 +112,7 @@ export default function ProjectPage() {
       });
       setCommentCounts(counts);
     });
+    return () => { cancelled = true; };
   }, [files, id]);
 
   const handleFileUpload = async () => {

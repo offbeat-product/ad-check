@@ -30,15 +30,19 @@ export default function SharedViewPage() {
 
   useEffect(() => {
     if (!token) return;
-    loadShareLink();
+    let cancelled = false;
+    loadShareLink(cancelled);
+    return () => { cancelled = true; };
   }, [token]);
 
-  const loadShareLink = async () => {
+  const loadShareLink = async (cancelled = false) => {
     const { data, error: fetchError } = await supabase
       .from("share_links")
       .select("*")
       .eq("token", token!)
       .maybeSingle();
+
+    if (cancelled) return;
 
     if (fetchError || !data) {
       setError("共有リンクが見つかりません");
@@ -60,12 +64,13 @@ export default function SharedViewPage() {
       return;
     }
 
-    if (data.check_result_id) await loadCheckResult(data.check_result_id);
+    if (data.check_result_id) await loadCheckResult(data.check_result_id, cancelled);
     else { setError("チェック結果が見つかりません"); setLoading(false); }
   };
 
-  const loadCheckResult = async (checkResultId: string) => {
+  const loadCheckResult = async (checkResultId: string, cancelled = false) => {
     const { data: cr, error } = await supabase.from("check_results").select("*").eq("id", checkResultId).maybeSingle();
+    if (cancelled) return;
     if (handleSupabaseError(error, "check_result") || !cr) {
       setError("チェック結果が見つかりません");
     } else {

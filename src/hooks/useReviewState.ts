@@ -20,7 +20,9 @@ export function useReviewState(checkResultId: string | null | undefined, checkIt
 
   useEffect(() => {
     if (!checkResultId) return;
+    let cancelled = false;
     supabase.from("comments").select("check_item_id").eq("check_result_id", checkResultId).then(({ data, error }) => {
+      if (cancelled) return;
       if (handleSupabaseError(error, "comments count")) return;
       const counts: Record<string, number> = {};
       (data ?? []).forEach((c) => {
@@ -28,6 +30,7 @@ export function useReviewState(checkResultId: string | null | undefined, checkIt
       });
       setCommentCounts(counts);
     });
+    return () => { cancelled = true; };
   }, [checkResultId]);
 
   const scrollToCard = useCallback((patternId: string) => {
