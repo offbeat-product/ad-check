@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { CheckRecord } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText } from "lucide-react";
+import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 
 const gradeColorMap: Record<string, string> = {
   A: "bg-[hsl(var(--grade-a))]/10 text-[hsl(var(--grade-a))] border-[hsl(var(--grade-a))]/30",
@@ -134,15 +135,18 @@ export default function Dashboard() {
             </table>
           </div>
 
-          {/* Recent files placeholder */}
-          <div className="lg:col-span-2 glass-card">
-            <div className="px-4 py-3 border-b border-border">
-              <h2 className="text-sm font-semibold">最近のファイル</h2>
-            </div>
-            <div className="p-8 text-center text-muted-foreground">
-              <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm">ファイルはまだありません</p>
-              <p className="text-xs mt-1">チェックを実行するとここに表示されます</p>
+          {/* Correction patterns */}
+          <div className="lg:col-span-2 space-y-4">
+            <TopCorrectionPatterns limit={5} />
+            <div className="glass-card">
+              <div className="px-4 py-3 border-b border-border">
+                <h2 className="text-sm font-semibold">最近のファイル</h2>
+              </div>
+              <div className="p-8 text-center text-muted-foreground">
+                <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                <p className="text-sm">ファイルはまだありません</p>
+                <p className="text-xs mt-1">チェックを実行するとここに表示されます</p>
+              </div>
             </div>
           </div>
         </div>

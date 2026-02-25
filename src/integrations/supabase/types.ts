@@ -83,6 +83,9 @@ export type Database = {
       comments: {
         Row: {
           annotation_data: Json | null
+          attachment_name: string | null
+          attachment_type: string | null
+          attachment_url: string | null
           author_email: string
           author_name: string
           check_item_id: string | null
@@ -95,6 +98,9 @@ export type Database = {
         }
         Insert: {
           annotation_data?: Json | null
+          attachment_name?: string | null
+          attachment_type?: string | null
+          attachment_url?: string | null
           author_email: string
           author_name: string
           check_item_id?: string | null
@@ -107,6 +113,9 @@ export type Database = {
         }
         Update: {
           annotation_data?: Json | null
+          attachment_name?: string | null
+          attachment_type?: string | null
+          attachment_url?: string | null
           author_email?: string
           author_name?: string
           check_item_id?: string | null
@@ -133,6 +142,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      correction_patterns: {
+        Row: {
+          auto_apply: boolean | null
+          category: string | null
+          corrected_content: string
+          created_at: string | null
+          frequency: number | null
+          id: string
+          original_content: string
+          product_code: string
+          rule_id: string
+          rule_title: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          auto_apply?: boolean | null
+          category?: string | null
+          corrected_content: string
+          created_at?: string | null
+          frequency?: number | null
+          id?: string
+          original_content: string
+          product_code: string
+          rule_id: string
+          rule_title?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          auto_apply?: boolean | null
+          category?: string | null
+          corrected_content?: string
+          created_at?: string | null
+          frequency?: number | null
+          id?: string
+          original_content?: string
+          product_code?: string
+          rule_id?: string
+          rule_title?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       file_versions: {
         Row: {
@@ -165,6 +219,50 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "file_versions_check_result_id_fkey"
+            columns: ["check_result_id"]
+            isOneToOne: false
+            referencedRelation: "check_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      share_links: {
+        Row: {
+          allow_comment_read: boolean | null
+          allow_comment_write: boolean | null
+          allow_download: boolean | null
+          check_result_id: string | null
+          created_at: string | null
+          expires_at: string | null
+          id: string
+          password_hash: string | null
+          token: string
+        }
+        Insert: {
+          allow_comment_read?: boolean | null
+          allow_comment_write?: boolean | null
+          allow_download?: boolean | null
+          check_result_id?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          password_hash?: string | null
+          token?: string
+        }
+        Update: {
+          allow_comment_read?: boolean | null
+          allow_comment_write?: boolean | null
+          allow_download?: boolean | null
+          check_result_id?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          id?: string
+          password_hash?: string | null
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "share_links_check_result_id_fkey"
             columns: ["check_result_id"]
             isOneToOne: false
             referencedRelation: "check_results"
