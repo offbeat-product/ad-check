@@ -59,8 +59,12 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
     const path = `${checkResultId}/${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from("comment-attachments").upload(path, file);
     if (error) { console.error("[storage upload]", error.message); return null; }
-    const { data: urlData } = supabase.storage.from("comment-attachments").getPublicUrl(path);
-    return { url: urlData.publicUrl, type: file.type, name: file.name };
+    // Use signed URL (bucket is now private)
+    const { data: urlData, error: signError } = await supabase.storage
+      .from("comment-attachments")
+      .createSignedUrl(path, 60 * 60 * 24 * 7); // 7 days
+    if (signError || !urlData?.signedUrl) { console.error("[signed url]", signError?.message); return null; }
+    return { url: urlData.signedUrl, type: file.type, name: file.name };
   };
 
   const handleSubmit = async () => {
