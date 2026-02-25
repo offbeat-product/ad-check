@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { CheckResult, CheckItem } from "@/lib/types";
+import type { Json } from "@/integrations/supabase/types";
 import type { Product, Client } from "@/lib/db-types";
 import { getWebhookPaths } from "@/lib/db-types";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
@@ -152,9 +153,9 @@ export default function CheckPage() {
         warning_count: res.warning_count,
         ok_count: res.ok_count,
         total_checks: res.total_checks,
-        check_items: res.check_items as unknown as Record<string, unknown>[],
-        raw_response: res as unknown as Record<string, unknown>,
-        input_data: inputData as unknown as Record<string, unknown>,
+        check_items: res.check_items as unknown as Json,
+        raw_response: res as unknown as Json,
+        input_data: inputData as unknown as Json,
       }]);
       handleSupabaseError(error, "check_results insert");
     } catch (err: unknown) {

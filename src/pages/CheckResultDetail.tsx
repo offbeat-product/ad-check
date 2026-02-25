@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { CheckItem, CheckStatus } from "@/lib/types";
+import type { Json } from "@/integrations/supabase/types";
 import type { CheckResultRow } from "@/lib/db-types";
 import { useReviewState, useDownload, useExportCsv } from "@/hooks/useReviewState";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
@@ -78,7 +79,7 @@ export default function CheckResultDetail() {
       author_name: user.email?.split("@")[0] || "User",
       author_email: user.email || "",
       content: "アノテーション追加",
-      annotation_data: { annotations },
+      annotation_data: { annotations } as unknown as Json,
       status: "open",
     }]);
     handleSupabaseError(error, "annotation save");
