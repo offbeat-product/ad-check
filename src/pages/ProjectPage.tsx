@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
+import ReferenceMaterialsSection from "@/components/reference/ReferenceMaterialsSection";
 import {
   Upload, FileText, Image, Film, MessageCircle, Plus,
 } from "lucide-react";
@@ -203,6 +204,14 @@ export default function ProjectPage() {
           </TabsList>
 
           <TabsContent value="files" className="space-y-6">
+            {product && (
+              <ReferenceMaterialsSection
+                projectId={id!}
+                productId={product.id}
+                productName={product.name}
+                projectName={project.name}
+              />
+            )}
             {PROCESS_SECTIONS.map((section) => {
               const sectionFiles = getFilesForProcess(section.id);
               return (

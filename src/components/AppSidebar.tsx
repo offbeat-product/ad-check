@@ -111,13 +111,20 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
                 .filter((p) => p.client_id === client.id)
                 .map((product) => (
                   <div key={product.id}>
-                    <button onClick={() => toggleProduct(product.id)}
-                      className="w-full flex items-center gap-2 px-9 py-1.5 text-sm text-muted-foreground hover:bg-muted/50">
-                      {openProducts.has(product.id) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                      <span className="w-2 h-2 rounded-full shrink-0"
-                        style={{ backgroundColor: productColorMap[product.color || ""] || "hsl(193, 100%, 50%)" }} />
-                      <span className="truncate">{product.name}</span>
-                    </button>
+                    <div className="flex items-center w-full">
+                      <button onClick={() => toggleProduct(product.id)}
+                        className="flex items-center gap-1 px-9 py-1.5 text-sm text-muted-foreground hover:bg-muted/50 shrink-0">
+                        {openProducts.has(product.id) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                      </button>
+                      <button
+                        onClick={() => navigate(`/product/${product.id}`)}
+                        className="flex-1 flex items-center gap-2 py-1.5 pr-3 text-sm text-muted-foreground hover:text-foreground transition-colors truncate"
+                      >
+                        <span className="w-2 h-2 rounded-full shrink-0"
+                          style={{ backgroundColor: productColorMap[product.color || ""] || "hsl(193, 100%, 50%)" }} />
+                        <span className="truncate font-medium">{product.name}</span>
+                      </button>
+                    </div>
 
                     {openProducts.has(product.id) && projects
                       .filter((pr) => pr.product_id === product.id)

@@ -32,11 +32,14 @@ function parseResponse(raw: any): CheckResult {
   };
 }
 
-export async function runScriptCheck(webhookPath: string, scriptText: string): Promise<CheckResult> {
+export async function runScriptCheck(webhookPath: string, scriptText: string, referenceContext?: string): Promise<CheckResult> {
+  const body: Record<string, string> = { script_text: scriptText };
+  if (referenceContext) body.reference_context = referenceContext;
+
   const res = await fetch(`${BASE_URL}/${webhookPath}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ script_text: scriptText }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) throw new Error(`Webhook error: ${res.status}`);
@@ -44,11 +47,14 @@ export async function runScriptCheck(webhookPath: string, scriptText: string): P
   return parseResponse(raw);
 }
 
-export async function runSfCheck(imageBase64: string, mediaType: string): Promise<CheckResult> {
+export async function runSfCheck(imageBase64: string, mediaType: string, referenceContext?: string): Promise<CheckResult> {
+  const body: Record<string, string> = { image_base64: imageBase64, media_type: mediaType };
+  if (referenceContext) body.reference_context = referenceContext;
+
   const res = await fetch(`${BASE_URL}/tmdaga-sf-check`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ image_base64: imageBase64, media_type: mediaType }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) throw new Error(`Webhook error: ${res.status}`);

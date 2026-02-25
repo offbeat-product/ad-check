@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { runScriptCheck, runSfCheck } from "@/lib/webhook";
+import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import type { CheckItem } from "@/lib/types";
 import type { Json } from "@/integrations/supabase/types";
 import type { ProjectFile, Product, Project, Client, CheckResultRow } from "@/lib/db-types";
@@ -20,6 +21,7 @@ import ImagePreview from "@/components/review/ImagePreview";
 import ScriptDisplay from "@/components/review/ScriptDisplay";
 import ReviewRightPanel from "@/components/review/ReviewRightPanel";
 import { ArrowLeft, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload } from "lucide-react";
+import ReferenceStatusIndicator from "@/components/reference/ReferenceStatusIndicator";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { FILE_STATUS_CONFIG } from "@/lib/db-types";
@@ -110,21 +112,25 @@ export default function FileReviewPage() {
   }, [fileId, projectId]);
 
   const handleRunCheck = async () => {
-    if (!file || !product || !user) return;
+    if (!file || !product || !user || !projectId) return;
     setChecking(true);
     try {
       const webhookPaths = getWebhookPaths(product);
       const processType = file.process_type === "styleframe" ? "sf" : "script";
       let res: { overall_status: string; detected_case?: string; check_items: CheckItem[]; ng_count: number; warning_count: number; ok_count: number; total_checks: number };
 
+      // Gather reference materials
+      const refMaterials = await gatherReferenceMaterials(projectId, product.id);
+      const referenceContext = JSON.stringify(refMaterials);
+
       if (processType === "sf") {
         const base64 = file.file_data?.replace(/^data:[^;]+;base64,/, "") || "";
         const mediaType = file.file_data?.match(/^data:([^;]+);/)?.[1] || "image/jpeg";
-        res = await runSfCheck(base64, mediaType);
+        res = await runSfCheck(base64, mediaType, referenceContext);
       } else {
         const webhookPath = webhookPaths[processType];
         if (!webhookPath) throw new Error("Webhook未設定");
-        res = await runScriptCheck(webhookPath, file.file_data || "");
+        res = await runScriptCheck(webhookPath, file.file_data || "", referenceContext);
       }
 
       const inputData = processType === "sf" ? { image_base64: file.file_data } : { script_text: file.file_data };
@@ -284,6 +290,9 @@ export default function FileReviewPage() {
           </Popover>
 
           <div className="ml-auto flex items-center gap-1.5">
+            {product && projectId && (
+              <ReferenceStatusIndicator projectId={projectId} productId={product.id} />
+            )}
             {canCheck && (
               <Button size="sm" className="text-xs h-8" onClick={handleRunCheck} disabled={checking}>
                 {checking ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Bot className="h-3 w-3 mr-1" />}
