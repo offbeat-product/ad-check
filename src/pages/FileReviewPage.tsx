@@ -63,21 +63,26 @@ export default function FileReviewPage() {
 
   useEffect(() => {
     if (!fileId || !projectId) return;
+    let cancelled = false;
     (async () => {
       const { data: f, error: fErr } = await supabase.from("project_files").select("*").eq("id", fileId).maybeSingle();
+      if (cancelled) return;
       if (handleSupabaseError(fErr, "file") || !f) { setLoading(false); return; }
       setFile(f);
 
       const { data: proj, error: projErr } = await supabase.from("projects").select("*").eq("id", projectId).maybeSingle();
+      if (cancelled) return;
       handleSupabaseError(projErr, "project");
       setProject(proj);
 
       if (proj?.product_id) {
         const { data: prod, error: prodErr } = await supabase.from("products").select("*").eq("id", proj.product_id).maybeSingle();
+        if (cancelled) return;
         handleSupabaseError(prodErr, "product");
         setProduct(prod);
         if (prod?.client_id) {
           const { data: cl, error: clErr } = await supabase.from("clients").select("*").eq("id", prod.client_id).maybeSingle();
+          if (cancelled) return;
           handleSupabaseError(clErr, "client");
           setClient(cl);
         }
@@ -85,13 +90,15 @@ export default function FileReviewPage() {
 
       if (f.check_result_id) {
         const { data: cr, error: crErr } = await supabase.from("check_results").select("*").eq("id", f.check_result_id).maybeSingle();
+        if (cancelled) return;
         handleSupabaseError(crErr, "check_result");
         setRecord(cr);
       }
 
       await fetchVersions();
-      setLoading(false);
+      if (!cancelled) setLoading(false);
     })();
+    return () => { cancelled = true; };
   }, [fileId, projectId]);
 
   const handleRunCheck = async () => {

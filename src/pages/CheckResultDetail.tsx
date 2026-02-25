@@ -41,11 +41,14 @@ export default function CheckResultDetail() {
 
   useEffect(() => {
     if (!id) return;
+    let cancelled = false;
     supabase.from("check_results").select("*").eq("id", id).maybeSingle().then(({ data, error }) => {
+      if (cancelled) return;
       handleSupabaseError(error, "check_results");
       setRecord(data);
       setLoading(false);
     });
+    return () => { cancelled = true; };
   }, [id]);
 
   const handleStatusChange = async (newStatus: CheckStatus) => {
