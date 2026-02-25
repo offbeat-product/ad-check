@@ -14,6 +14,7 @@ import ProductPage from "./pages/ProductPage";
 import AppLayout from "./components/AppLayout";
 import NotFound from "./pages/NotFound";
 import SharedViewPage from "./pages/SharedViewPage";
+import SettingsPage from "./pages/SettingsPage";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,7 @@ const App = () => (
               <Route path="/product/:id" element={<ProductPage />} />
               <Route path="/project/:id" element={<ProjectPage />} />
               <Route path="/project/:projectId/file/:fileId" element={<FileReviewPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
             </Route>
             <Route path="/shared/:token" element={<SharedViewPage />} />
             <Route path="*" element={<NotFound />} />
