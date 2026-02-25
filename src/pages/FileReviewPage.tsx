@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -24,6 +24,15 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { FILE_STATUS_CONFIG } from "@/lib/db-types";
 
+interface AnnotationData {
+  type: string;
+  points: { x: number; y: number }[];
+  color: string;
+  strokeWidth: number;
+  text?: string;
+  imagePosition?: { x: number; y: number; width: number; height: number };
+}
+
 export default function FileReviewPage() {
   const { projectId, fileId } = useParams<{ projectId: string; fileId: string }>();
   const navigate = useNavigate();
@@ -43,10 +52,9 @@ export default function FileReviewPage() {
   const [shareOpen, setShareOpen] = useState(false);
   const [uploadRevisionOpen, setUploadRevisionOpen] = useState(false);
   const [versions, setVersions] = useState<ProjectFile[]>([]);
+  const [savedAnnotations, setSavedAnnotations] = useState<AnnotationData[]>([]);
+  const [highlightAnnotation, setHighlightAnnotation] = useState<AnnotationData | null>(null);
 
-  // Mandatory annotation comment state
-  const [pendingAnnotation, setPendingAnnotation] = useState<{ annotations: unknown[] } | null>(null);
-  const [annotationComment, setAnnotationComment] = useState("");
 
   const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
   const { items, markers, commentCounts, paintMode, setPaintMode, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
@@ -185,31 +193,59 @@ export default function FileReviewPage() {
     exportCsv(items, `checkmate_${file?.file_name}_${Date.now()}.csv`);
   };
 
-  const handleAnnotationSave = async (annotations: unknown[]) => {
-    setPendingAnnotation({ annotations });
-    setAnnotationComment("");
-  };
+  // Fetch saved annotations from comments
+  const fetchSavedAnnotations = useCallback(async () => {
+    if (!record?.id) return;
+    const { data, error } = await supabase
+      .from("comments")
+      .select("annotation_data")
+      .eq("check_result_id", record.id)
+      .not("annotation_data", "is", null);
+    if (handleSupabaseError(error, "saved annotations")) return;
+    const anns: AnnotationData[] = [];
+    (data ?? []).forEach((c) => {
+      const ad = c.annotation_data as Record<string, unknown> | null;
+      if (ad && Array.isArray(ad.annotations)) {
+        ad.annotations.forEach((a: unknown) => anns.push(a as AnnotationData));
+      } else if (ad && ad.type) {
+        anns.push(ad as unknown as AnnotationData);
+      }
+    });
+    setSavedAnnotations(anns);
+  }, [record?.id]);
 
-  const confirmAnnotationComment = async () => {
-    if (!pendingAnnotation || !record?.id || !user) return;
+  useEffect(() => { fetchSavedAnnotations(); }, [fetchSavedAnnotations]);
+
+  const handleAnnotationSave = async (annotations: unknown[], comment: string) => {
+    if (!record?.id || !user) return;
     const { error } = await supabase.from("comments").insert([{
       check_result_id: record.id,
       author_name: user.email?.split("@")[0] || "User",
       author_email: user.email || "",
-      content: annotationComment || "アノテーション追加",
-      annotation_data: { annotations: pendingAnnotation.annotations } as unknown as Json,
+      content: comment || "アノテーション追加",
+      annotation_data: { annotations } as unknown as Json,
       status: "open",
     }]);
-    if (handleSupabaseError(error, "annotation comment")) return;
-    setPendingAnnotation(null);
-    setAnnotationComment("");
-    toast({ title: "コメントを保存しました" });
+    if (!handleSupabaseError(error, "annotation save")) {
+      toast({ title: "コメントを保存しました" });
+      fetchSavedAnnotations();
+    }
   };
 
-  const cancelAnnotation = () => {
-    setPendingAnnotation(null);
-    setAnnotationComment("");
-  };
+  const handleAnnotationClick = useCallback((annotationData: unknown) => {
+    const ad = annotationData as Record<string, unknown> | null;
+    if (!ad) return;
+    let ann: AnnotationData | null = null;
+    if (Array.isArray(ad.annotations) && ad.annotations.length > 0) {
+      ann = ad.annotations[0] as AnnotationData;
+    } else if (ad.type) {
+      ann = ad as unknown as AnnotationData;
+    }
+    if (ann) {
+      setHighlightAnnotation(ann);
+      setTimeout(() => setHighlightAnnotation(null), 2500);
+    }
+  }, []);
 
   if (loading) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">読み込み中...</div>;
   if (!file) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">ファイルが見つかりません</div>;
@@ -294,6 +330,8 @@ export default function FileReviewPage() {
                 onAnnotationSave={handleAnnotationSave}
                 label={`${client?.name} / ${product?.name} / スタイルフレーム`}
                 noDataMessage="プレビューなし"
+                savedAnnotations={savedAnnotations}
+                highlightAnnotation={highlightAnnotation}
                 overlay={!hasCheckResult && !checking && canCheck ? (
                   <div className="absolute inset-0 flex items-center justify-center bg-background/60">
                     <Button onClick={handleRunCheck}><Bot className="h-4 w-4 mr-2" />AIチェック実行</Button>
@@ -327,6 +365,7 @@ export default function FileReviewPage() {
         checkResultId={record?.id || null}
         hasCheckResult={hasCheckResult}
         onCommentClick={handleCommentClick}
+        onAnnotationClick={handleAnnotationClick}
         emptyCheckMessage={
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
             <Bot className="h-10 w-10 mb-3 opacity-30" />
@@ -341,20 +380,6 @@ export default function FileReviewPage() {
           </div>
         }
       />
-
-      {/* Mandatory annotation comment popup */}
-      {pendingAnnotation && (
-        <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center">
-          <div className="bg-card border border-border rounded-xl shadow-xl p-5 w-[400px] space-y-3">
-            <h3 className="text-sm font-semibold">アノテーションのコメントを入力</h3>
-            <Textarea value={annotationComment} onChange={(e) => setAnnotationComment(e.target.value)} placeholder="修正内容を入力してください..." className="min-h-[80px] text-sm" autoFocus />
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" size="sm" onClick={cancelAnnotation}>取消（アノテーション削除）</Button>
-              <Button size="sm" onClick={confirmAnnotationComment} disabled={!annotationComment.trim()}>保存して投稿</Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Upload revision */}
       <UploadRevisionModal open={uploadRevisionOpen} onOpenChange={setUploadRevisionOpen} file={file} projectId={projectId!}
