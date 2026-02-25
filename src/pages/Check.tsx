@@ -1,29 +1,26 @@
 import { useState, useRef, useCallback } from "react";
+import { useOutletContext } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { PRODUCTS, PROCESSES, type ProductCode, type ProcessType, type CheckResult } from "@/lib/types";
+import { PRODUCTS, PROCESSES, type ProductCode, type ProcessType, type CheckResult, type CheckItem } from "@/lib/types";
 import { runScriptCheck, runSfCheck } from "@/lib/webhook";
 import { compressImage, type CompressResult } from "@/lib/image-compress";
 import ContextBar from "@/components/ContextBar";
 import CheckResultView from "@/components/CheckResultView";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-
-const productColorMap: Record<string, string> = {
-  "product-ltr": "#00d4ff",
-  "product-cta": "#7b2ff7",
-  "product-tmd": "#00c9a7",
-};
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Upload, X, ArrowLeft, Info } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Loader2, Upload, X, Info, RefreshCw, Download } from "lucide-react";
+import type { AppLayoutContext } from "@/components/AppLayout";
 
 export default function CheckPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const navigate = useNavigate();
+  const context = useOutletContext<AppLayoutContext | undefined>();
 
-  const [selectedProduct, setSelectedProduct] = useState<ProductCode>("ltr_expo");
+  const [selectedProduct, setSelectedProduct] = useState<ProductCode>(
+    context?.selectedProduct || "ltr_expo"
+  );
   const [selectedProcess, setSelectedProcess] = useState<ProcessType>("script");
   const [scriptText, setScriptText] = useState("");
   const [imageData, setImageData] = useState<CompressResult | null>(null);
@@ -92,7 +89,6 @@ export default function CheckPage() {
       }
       setResult(res);
 
-      // Save to DB
       await supabase.from("check_results").insert({
         user_id: user.id,
         client_name: "レバレジーズ",
@@ -117,6 +113,24 @@ export default function CheckPage() {
     }
   };
 
+  const handleExportCsv = () => {
+    if (!result) return;
+    const header = "pattern_id,item,status,severity,location,detail,suggestion";
+    const rows = result.check_items.map((ci: CheckItem) =>
+      [ci.pattern_id, ci.item, ci.status, ci.severity, ci.location || "", ci.detail, ci.suggestion || ""]
+        .map(v => `"${String(v).replace(/"/g, '""')}"`)
+        .join(",")
+    );
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `checkmate_${product.code}_${selectedProcess}_${Date.now()}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   const processLabel = PROCESSES.find((p) => p.id === selectedProcess)?.label || "";
 
   const loadingText = selectedProcess === "sf"
@@ -125,18 +139,18 @@ export default function CheckPage() {
     ? "薬事チェック含むAIチェック実行中..."
     : "AIチェック実行中...";
 
+  const productColorMap: Record<string, string> = {
+    "product-ltr": "hsl(193, 100%, 50%)",
+    "product-cta": "hsl(264, 100%, 58%)",
+    "product-tmd": "hsl(166, 100%, 39%)",
+  };
+
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen">
       {/* Top bar */}
-      <header className="border-b border-border px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-xl font-bold">
-            <span className="mr-2">♟</span>
-            <span className="gradient-text">CheckMate AI</span>
-          </h1>
+      <header className="border-b border-border px-6 py-3 flex items-center bg-card">
+        <div className="text-sm text-muted-foreground">
+          レバレジーズ &gt; {product.name} &gt; {processLabel}
         </div>
       </header>
 
@@ -151,7 +165,7 @@ export default function CheckPage() {
           {/* Product tabs */}
           <div className="flex gap-2 flex-wrap">
             {PRODUCTS.map((p) => {
-              const color = productColorMap[p.color] || "#00d4ff";
+              const color = productColorMap[p.color] || "hsl(193, 100%, 50%)";
               const isActive = selectedProduct === p.code;
               return (
                 <button
@@ -162,7 +176,10 @@ export default function CheckPage() {
                     backgroundColor: `${color}15`,
                     borderColor: `${color}80`,
                     color: color,
-                  } : undefined}
+                  } : {
+                    borderColor: "hsl(214, 32%, 91%)",
+                    color: "hsl(215, 16%, 47%)",
+                  }}
                 >
                   <div className="font-bold">{p.label}</div>
                   <div className="text-[10px] opacity-70">{p.rules}</div>
@@ -199,8 +216,8 @@ export default function CheckPage() {
           </div>
 
           {/* Info panel */}
-          <div className="bg-muted/50 rounded-lg p-4 space-y-1">
-            <div className="flex items-center gap-2 text-xs font-bold text-muted-foreground mb-2">
+          <div className="bg-primary/5 border border-primary/10 rounded-lg p-4 space-y-1">
+            <div className="flex items-center gap-2 text-xs font-bold text-primary mb-2">
               <Info className="h-3 w-3" />
               商材情報
             </div>
@@ -218,14 +235,13 @@ export default function CheckPage() {
           <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">STEP 2 — 入力</h2>
 
           {selectedProcess === "sf" ? (
-            /* Image upload */
             <div>
               {!imageData ? (
                 <div
                   onDrop={handleDrop}
                   onDragOver={(e) => e.preventDefault()}
                   onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-border rounded-xl p-12 text-center cursor-pointer hover:border-primary/50 transition-colors"
+                  className="border-2 border-dashed border-border rounded-xl p-12 text-center cursor-pointer hover:border-primary/50 transition-colors bg-muted/30"
                 >
                   <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
                   <p className="text-sm text-muted-foreground">画像をドラッグ＆ドロップ、またはクリックして選択</p>
@@ -257,13 +273,12 @@ export default function CheckPage() {
               )}
             </div>
           ) : (
-            /* Text input */
             <div className="space-y-3">
               <Textarea
                 value={scriptText}
                 onChange={(e) => setScriptText(e.target.value)}
                 placeholder={"冒頭：\n前半：\n中盤：\n後半：\n締め："}
-                className="min-h-[200px] resize-y bg-muted border-border font-mono text-sm"
+                className="min-h-[200px] resize-y border-border font-mono text-sm"
               />
               <Button variant="outline" size="sm" onClick={handleLoadSample} className="text-xs">
                 サンプル読込
@@ -277,7 +292,7 @@ export default function CheckPage() {
           <Button
             onClick={handleExecute}
             disabled={loading || (selectedProcess === "sf" ? !imageData : !scriptText.trim())}
-            className="w-full gradient-bg font-bold text-primary-foreground text-base py-6 hover:opacity-90 transition-opacity disabled:opacity-40"
+            className="w-full bg-primary text-primary-foreground font-bold text-base py-6 hover:opacity-90 transition-opacity disabled:opacity-40"
           >
             {loading ? (
               <span className="flex items-center gap-2">
@@ -290,10 +305,31 @@ export default function CheckPage() {
           </Button>
 
           {result && (
-            <CheckResultView
-              result={result}
-              title={`レバレジーズ / ${product.name} / ${processLabel}チェック`}
-            />
+            <div className="space-y-4">
+              <CheckResultView
+                result={result}
+                title={`レバレジーズ / ${product.name} / ${processLabel}チェック`}
+              />
+              <div className="flex gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => { setResult(null); handleExecute(); }}
+                  disabled={loading}
+                  className="flex items-center gap-2"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  再チェック
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleExportCsv}
+                  className="flex items-center gap-2"
+                >
+                  <Download className="h-4 w-4" />
+                  結果をエクスポート
+                </Button>
+              </div>
+            </div>
           )}
         </section>
       </div>
