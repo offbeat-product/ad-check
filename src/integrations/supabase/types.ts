@@ -80,6 +80,59 @@ export type Database = {
         }
         Relationships: []
       }
+      check_rules: {
+        Row: {
+          category: string
+          created_at: string | null
+          description: string
+          id: string
+          is_active: boolean | null
+          process_type: string
+          product_id: string
+          rule_id: string
+          severity: string
+          sort_order: number | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          description: string
+          id?: string
+          is_active?: boolean | null
+          process_type: string
+          product_id: string
+          rule_id: string
+          severity?: string
+          sort_order?: number | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          description?: string
+          id?: string
+          is_active?: boolean | null
+          process_type?: string
+          product_id?: string
+          rule_id?: string
+          severity?: string
+          sort_order?: number | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "check_rules_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clients: {
         Row: {
           created_at: string | null
