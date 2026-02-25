@@ -5,20 +5,28 @@ import { useAuth } from "@/hooks/useAuth";
 import { compressImage } from "@/lib/image-compress";
 import { useToast } from "@/hooks/use-toast";
 import type { Project, Product, Client, ProjectFile, CheckResultRow } from "@/lib/db-types";
-import { FILE_STATUS_CONFIG, PROCESS_SECTIONS } from "@/lib/db-types";
+import { FILE_STATUS_CONFIG } from "@/lib/db-types";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
+import { useProjectProcesses, type ProjectProcess } from "@/hooks/useProjectProcesses";
+import { PROJECT_STATUS_CONFIG, PROCESS_STATUS_CONFIG, PROCESS_FILE_CONFIG, getProcessWebhookPath } from "@/lib/process-config";
+import ProcessManagementModal from "@/components/ProcessManagementModal";
+import ProcessTimeline from "@/components/ProcessTimeline";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import ReferenceMaterialsSection from "@/components/reference/ReferenceMaterialsSection";
 import {
-  Upload, FileText, Image, Film, MessageCircle, Plus,
+  Upload, FileText, Image, Film, MessageCircle, Plus, Settings, GripVertical,
+  ChevronDown, CalendarIcon, AlertTriangle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { format, differenceInDays, isPast } from "date-fns";
 
 const gradeColorMap: Record<string, string> = {
   A: "bg-[hsl(var(--grade-a))]/10 text-[hsl(var(--grade-a))] border-[hsl(var(--grade-a))]/30",
@@ -26,6 +34,56 @@ const gradeColorMap: Record<string, string> = {
   C: "bg-[hsl(var(--grade-c))]/10 text-[hsl(var(--grade-c))] border-[hsl(var(--grade-c))]/30",
   D: "bg-[hsl(var(--grade-d))]/10 text-[hsl(var(--grade-d))] border-[hsl(var(--grade-d))]/30",
 };
+
+function DeadlineDisplay({ deadline, className }: { deadline: string | null; className?: string }) {
+  if (!deadline) return <span className={cn("text-xs text-muted-foreground/50", className)}>納期未設定</span>;
+  const d = new Date(deadline);
+  const daysUntil = differenceInDays(d, new Date());
+  const past = isPast(d) && daysUntil < 0;
+  const soon = daysUntil >= 0 && daysUntil <= 3;
+
+  return (
+    <span className={cn("text-xs flex items-center gap-1", className,
+      past ? "text-status-ng font-medium" : soon ? "text-status-warning font-medium" : "text-muted-foreground"
+    )}>
+      {(past || soon) && <AlertTriangle className="h-3 w-3" />}
+      {past ? "期限超過" : `納期: ${format(d, "MM/dd")}`}
+    </span>
+  );
+}
+
+function DeadlinePicker({ deadline, onChange }: { deadline: string | null; onChange: (d: string | null) => void }) {
+  const [open, setOpen] = useState(false);
+  const selected = deadline ? new Date(deadline) : undefined;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button className="hover:bg-muted/50 rounded px-1 py-0.5 transition-colors">
+          <DeadlineDisplay deadline={deadline} />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent className="w-auto p-0" align="start">
+        <Calendar
+          mode="single"
+          selected={selected}
+          onSelect={(d) => {
+            onChange(d ? format(d, "yyyy-MM-dd") : null);
+            setOpen(false);
+          }}
+          className="p-3 pointer-events-auto"
+        />
+        {deadline && (
+          <div className="px-3 pb-3">
+            <Button size="sm" variant="ghost" className="text-xs w-full" onClick={() => { onChange(null); setOpen(false); }}>
+              納期をクリア
+            </Button>
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
+  );
+}
 
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
@@ -46,6 +104,14 @@ export default function ProjectPage() {
   const [checkResults, setCheckResults] = useState<Record<string, Pick<CheckResultRow, "id" | "overall_status" | "ng_count" | "warning_count">>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [processModalOpen, setProcessModalOpen] = useState(false);
+
+  const { processes, updateProcess, reorderProcesses, addProcess, deleteProcess, resetToDefaults } = useProjectProcesses(id);
+
+  // Drag state for process sections
+  const dragItem = useRef<number | null>(null);
+  const dragOver = useRef<number | null>(null);
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
 
   const fetchData = useCallback(async (cancelled = false) => {
     if (!id) return;
@@ -74,7 +140,6 @@ export default function ProjectPage() {
       setClient(cl);
     }
 
-    // Batch fetch check results
     const checkResultIds = fileData.filter((f) => f.check_result_id).map((f) => f.check_result_id!);
     if (checkResultIds.length > 0) {
       const { data: results, error: crErr } = await supabase
@@ -97,7 +162,6 @@ export default function ProjectPage() {
     return () => { cancelled = true; };
   }, [fetchData]);
 
-  // Count comments per file
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   useEffect(() => {
     if (!id) return;
@@ -108,13 +172,39 @@ export default function ProjectPage() {
       if (cancelled) return;
       if (handleSupabaseError(error, "comment counts")) return;
       const counts: Record<string, number> = {};
-      (data ?? []).forEach((c) => {
-        counts[c.check_result_id] = (counts[c.check_result_id] || 0) + 1;
-      });
+      (data ?? []).forEach((c) => { counts[c.check_result_id] = (counts[c.check_result_id] || 0) + 1; });
       setCommentCounts(counts);
     });
     return () => { cancelled = true; };
   }, [files, id]);
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (!project || !id) return;
+    const { error } = await supabase.from("projects").update({ status: newStatus }).eq("id", id);
+    if (!handleSupabaseError(error, "status update")) {
+      setProject({ ...project, status: newStatus });
+      toast({ title: "ステータスを更新しました" });
+    }
+  };
+
+  const handleDeadlineChange = async (deadline: string | null) => {
+    if (!project || !id) return;
+    const { error } = await supabase.from("projects").update({ overall_deadline: deadline }).eq("id", id);
+    if (!handleSupabaseError(error, "deadline update")) {
+      setProject({ ...project, overall_deadline: deadline });
+      toast({ title: "納期を更新しました" });
+    }
+  };
+
+  const handleProcessDeadlineChange = async (processId: string, deadline: string | null) => {
+    await updateProcess(processId, { deadline } as Partial<ProjectProcess>);
+    toast({ title: "工程の納期を更新しました" });
+  };
+
+  const handleProcessStatusChange = async (processId: string, status: string) => {
+    await updateProcess(processId, { status } as Partial<ProjectProcess>);
+    toast({ title: "工程ステータスを更新しました" });
+  };
 
   const handleFileUpload = async () => {
     if (!uploadModal || !id || !user) return;
@@ -124,11 +214,12 @@ export default function ProjectPage() {
     let fileType = "text";
     let fileSize = 0;
     let fileName = uploadFileName.trim();
+    const cfg = PROCESS_FILE_CONFIG[uploadModal];
 
-    if (useTextInput && uploadModal === "script") {
+    if (useTextInput && cfg?.allowTextInput) {
       fileData = uploadTextInput;
       fileSize = new Blob([uploadTextInput]).size;
-      if (!fileName) fileName = `字コンテ_${Date.now()}`;
+      if (!fileName) fileName = `${cfg?.label || uploadModal}_${Date.now()}`;
       fileType = "text";
     } else if (selectedFile) {
       if (!fileName) fileName = selectedFile.name;
@@ -177,11 +268,28 @@ export default function ProjectPage() {
     fetchData();
   };
 
-  const getFilesForProcess = (processType: string) =>
-    files.filter((f) => f.process_type === processType);
+  const getFilesForProcess = (processKey: string) =>
+    files.filter((f) => f.process_type === processKey);
+
+  const handleProcessDragStart = (index: number) => { dragItem.current = index; };
+  const handleProcessDragEnter = (index: number) => { dragOver.current = index; setDragOverIdx(index); };
+  const handleProcessDragEnd = () => {
+    if (dragItem.current === null || dragOver.current === null || dragItem.current === dragOver.current) {
+      setDragOverIdx(null); return;
+    }
+    const activeProcesses = processes.filter(p => p.is_active);
+    const reordered = [...activeProcesses];
+    const [removed] = reordered.splice(dragItem.current, 1);
+    reordered.splice(dragOver.current, 0, removed);
+    reorderProcesses(reordered);
+    dragItem.current = null; dragOver.current = null; setDragOverIdx(null);
+  };
 
   if (loading) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">読み込み中...</div>;
   if (!project || !product) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">プロジェクトが見つかりません</div>;
+
+  const statusCfg = PROJECT_STATUS_CONFIG[project.status || "in_progress"] || PROJECT_STATUS_CONFIG.in_progress;
+  const activeProcesses = processes.filter(p => p.is_active);
 
   return (
     <div className="min-h-screen">
@@ -192,7 +300,30 @@ export default function ProjectPage() {
           </div>
           <h1 className="text-lg font-bold mt-0.5">{project.name}</h1>
         </div>
-        <Badge variant="outline" className="text-xs">{project.status === "active" ? "進行中" : project.status}</Badge>
+        <div className="flex items-center gap-3">
+          <DeadlinePicker
+            deadline={(project as any).overall_deadline ?? null}
+            onChange={handleDeadlineChange}
+          />
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className={cn("px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1 transition-colors hover:opacity-80", statusCfg.badgeClass)}>
+                {statusCfg.label}
+                <ChevronDown className="h-3 w-3" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-44 p-2" align="end">
+              {Object.entries(PROJECT_STATUS_CONFIG).map(([key, cfg]) => (
+                <button key={key} onClick={() => handleStatusChange(key)}
+                  className={cn("w-full text-left px-3 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-2",
+                    project.status === key ? "bg-muted" : "hover:bg-muted/50")}>
+                  <span className={cn("w-2 h-2 rounded-full shrink-0", cfg.dotClass)} />
+                  {cfg.label}
+                </button>
+              ))}
+            </PopoverContent>
+          </Popover>
+        </div>
       </header>
 
       <div className="p-6 max-w-6xl mx-auto">
@@ -204,6 +335,8 @@ export default function ProjectPage() {
           </TabsList>
 
           <TabsContent value="files" className="space-y-6">
+            <ProcessTimeline processes={processes} />
+
             {product && (
               <ReferenceMaterialsSection
                 projectId={id!}
@@ -212,16 +345,78 @@ export default function ProjectPage() {
                 projectName={project.name}
               />
             )}
-            {PROCESS_SECTIONS.map((section) => {
-              const sectionFiles = getFilesForProcess(section.id);
+
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold">工程</h2>
+              <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => setProcessModalOpen(true)}>
+                <Settings className="h-3 w-3 mr-1" />工程管理
+              </Button>
+            </div>
+
+            {activeProcesses.map((proc, index) => {
+              const sectionFiles = getFilesForProcess(proc.process_key);
+              const psCfg = PROCESS_STATUS_CONFIG[proc.status] || PROCESS_STATUS_CONFIG.not_started;
+              const cfg = PROCESS_FILE_CONFIG[proc.process_key];
+              const webhookAvailable = product ? !!getProcessWebhookPath(product.code, proc.process_key) : false;
+
               return (
-                <div key={section.id} className="glass-card overflow-hidden">
-                  <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-                    <h2 className="text-sm font-semibold">{section.label}</h2>
-                    <Button size="sm" variant="outline" className="text-xs h-7"
-                      onClick={() => { setUploadModal(section.id); setUseTextInput(false); setSelectedFile(null); setUploadFileName(""); }}>
-                      <Plus className="h-3 w-3 mr-1" />アップロード
-                    </Button>
+                <div
+                  key={proc.id}
+                  draggable
+                  onDragStart={() => handleProcessDragStart(index)}
+                  onDragEnter={() => handleProcessDragEnter(index)}
+                  onDragEnd={handleProcessDragEnd}
+                  onDragOver={(e) => e.preventDefault()}
+                  className={cn("glass-card overflow-hidden transition-all",
+                    dragOverIdx === index && "ring-2 ring-primary/30")}
+                >
+                  <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+                    <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab shrink-0" />
+                    <span className="text-xs text-muted-foreground shrink-0">
+                      {String.fromCodePoint(0x2460 + index)}
+                    </span>
+                    <h2 className="text-sm font-semibold">{proc.process_label}</h2>
+
+                    <DeadlinePicker
+                      deadline={proc.deadline}
+                      onChange={(d) => handleProcessDeadlineChange(proc.id, d)}
+                    />
+
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <button className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium border flex items-center gap-1", psCfg.badgeClass)}>
+                          <span className={cn("w-1.5 h-1.5 rounded-full", psCfg.dotClass)} />
+                          {psCfg.label}
+                          <ChevronDown className="h-2.5 w-2.5" />
+                        </button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-36 p-1.5" align="start">
+                        {Object.entries(PROCESS_STATUS_CONFIG).map(([key, c]) => (
+                          <button key={key} onClick={() => handleProcessStatusChange(proc.id, key)}
+                            className={cn("w-full text-left px-2 py-1 rounded text-[11px] font-medium transition-colors flex items-center gap-1.5",
+                              proc.status === key ? "bg-muted" : "hover:bg-muted/50")}>
+                            <span className={cn("w-1.5 h-1.5 rounded-full", c.dotClass)} />
+                            {c.label}
+                          </button>
+                        ))}
+                      </PopoverContent>
+                    </Popover>
+
+                    {!webhookAvailable && (
+                      <Badge variant="outline" className="text-[9px] ml-1 text-muted-foreground">準備中</Badge>
+                    )}
+
+                    <div className="ml-auto">
+                      <Button size="sm" variant="outline" className="text-xs h-7"
+                        onClick={() => {
+                          setUploadModal(proc.process_key);
+                          setUseTextInput(false);
+                          setSelectedFile(null);
+                          setUploadFileName("");
+                        }}>
+                        <Plus className="h-3 w-3 mr-1" />アップロード
+                      </Button>
+                    </div>
                   </div>
                   <div className="p-4">
                     {sectionFiles.length === 0 ? (
@@ -242,10 +437,10 @@ export default function ProjectPage() {
                               <div className="h-20 rounded-md bg-muted/50 flex items-center justify-center mb-2 overflow-hidden">
                                 {isImageFile && file.file_data ? (
                                   <img src={file.file_data} alt="" className="w-full h-full object-cover" />
-                                ) : section.id === "script" ? (
-                                  <FileText className="h-8 w-8 text-muted-foreground/30" />
-                                ) : section.id === "master" ? (
+                                ) : proc.process_key.includes("video") || proc.process_key === "vcon" ? (
                                   <Film className="h-8 w-8 text-muted-foreground/30" />
+                                ) : proc.process_key.includes("script") || proc.process_key === "na_script" ? (
+                                  <FileText className="h-8 w-8 text-muted-foreground/30" />
                                 ) : (
                                   <Image className="h-8 w-8 text-muted-foreground/30" />
                                 )}
@@ -291,22 +486,22 @@ export default function ProjectPage() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>ファイルアップロード</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            {uploadModal === "script" && (
+            {PROCESS_FILE_CONFIG[uploadModal || ""]?.allowTextInput && (
               <div className="flex gap-2">
                 <Button size="sm" variant={useTextInput ? "outline" : "default"} onClick={() => setUseTextInput(false)} className="text-xs">ファイル選択</Button>
                 <Button size="sm" variant={useTextInput ? "default" : "outline"} onClick={() => setUseTextInput(true)} className="text-xs">テキスト直接入力</Button>
               </div>
             )}
-            {useTextInput && uploadModal === "script" ? (
+            {useTextInput && PROCESS_FILE_CONFIG[uploadModal || ""]?.allowTextInput ? (
               <Textarea value={uploadTextInput} onChange={(e) => setUploadTextInput(e.target.value)}
-                placeholder="冒頭：\n前半：\n中盤：\n後半：\n締め：" className="min-h-[150px] text-sm font-mono" />
+                placeholder="テキストを入力..." className="min-h-[150px] text-sm font-mono" />
             ) : (
               <div onClick={() => fileInputRef.current?.click()}
                 className="border-2 border-dashed border-border rounded-xl p-8 text-center cursor-pointer hover:border-primary/50 transition-colors">
                 <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">{selectedFile ? selectedFile.name : "クリックしてファイルを選択"}</p>
                 <input ref={fileInputRef} type="file" className="hidden"
-                  accept={PROCESS_SECTIONS.find(s => s.id === uploadModal)?.accepts}
+                  accept={PROCESS_FILE_CONFIG[uploadModal || ""]?.accept}
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) { setSelectedFile(f); if (!uploadFileName) setUploadFileName(f.name); } }} />
               </div>
             )}
@@ -320,6 +515,18 @@ export default function ProjectPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Process management modal */}
+      <ProcessManagementModal
+        open={processModalOpen}
+        onOpenChange={setProcessModalOpen}
+        processes={processes}
+        onUpdate={updateProcess}
+        onReorder={reorderProcesses}
+        onAdd={addProcess}
+        onDelete={deleteProcess}
+        onReset={resetToDefaults}
+      />
     </div>
   );
 }

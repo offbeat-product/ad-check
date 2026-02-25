@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
+import { DEFAULT_PROCESSES } from "@/lib/process-config";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,12 +31,10 @@ export default function CreateProjectModal({ open, onOpenChange, onCreated }: Pr
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // New client inline form
   const [showNewClient, setShowNewClient] = useState(false);
   const [newClientName, setNewClientName] = useState("");
   const [creatingClient, setCreatingClient] = useState(false);
 
-  // New product inline form
   const [showNewProduct, setShowNewProduct] = useState(false);
   const [newProductName, setNewProductName] = useState("");
   const [newProductCode, setNewProductCode] = useState("");
@@ -111,11 +110,20 @@ export default function CreateProjectModal({ open, onOpenChange, onCreated }: Pr
       project_code: code.trim() || null,
       description: description.trim() || null,
       created_by: user.id,
+      status: "preparing",
     }).select("id").single();
 
     if (error) {
       toast({ title: "エラー", description: error.message, variant: "destructive" });
     } else if (data) {
+      // Auto-create default processes
+      const processInserts = DEFAULT_PROCESSES.map((p) => ({
+        project_id: data.id,
+        ...p,
+      }));
+      const { error: procErr } = await supabase.from("project_processes").insert(processInserts);
+      handleSupabaseError(procErr, "default processes");
+
       toast({ title: "案件を作成しました" });
       onCreated(data.id);
       onOpenChange(false);
@@ -133,37 +141,27 @@ export default function CreateProjectModal({ open, onOpenChange, onCreated }: Pr
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">クライアント</label>
             {!showNewClient ? (
-              <>
-                <Select value={clientId} onValueChange={(v) => { setClientId(v); setProductId(""); setShowNewProduct(false); }}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="選択..." /></SelectTrigger>
-                  <SelectContent>
-                    {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                    <Separator className="my-1" />
-                    <button
-                      className="w-full text-left px-2 py-1.5 text-sm text-primary hover:bg-muted rounded-sm flex items-center gap-1.5"
-                      onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowNewClient(true); }}
-                    >
-                      <Plus className="h-3.5 w-3.5" />新しいクライアントを追加
-                    </button>
-                  </SelectContent>
-                </Select>
-              </>
+              <Select value={clientId} onValueChange={(v) => { setClientId(v); setProductId(""); setShowNewProduct(false); }}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="選択..." /></SelectTrigger>
+                <SelectContent>
+                  {clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  <Separator className="my-1" />
+                  <button
+                    className="w-full text-left px-2 py-1.5 text-sm text-primary hover:bg-muted rounded-sm flex items-center gap-1.5"
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowNewClient(true); }}
+                  >
+                    <Plus className="h-3.5 w-3.5" />新しいクライアントを追加
+                  </button>
+                </SelectContent>
+              </Select>
             ) : (
               <div className="border border-border rounded-lg p-3 space-y-2 bg-muted/30">
-                <Input
-                  value={newClientName}
-                  onChange={(e) => setNewClientName(e.target.value)}
-                  placeholder="クライアント名"
-                  className="h-8 text-sm"
-                  autoFocus
-                />
+                <Input value={newClientName} onChange={(e) => setNewClientName(e.target.value)} placeholder="クライアント名" className="h-8 text-sm" autoFocus />
                 <div className="flex gap-2">
                   <Button size="sm" className="text-xs h-7" onClick={handleCreateClient} disabled={creatingClient || !newClientName.trim()}>
                     {creatingClient ? "追加中..." : "追加"}
                   </Button>
-                  <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => { setShowNewClient(false); setNewClientName(""); }}>
-                    キャンセル
-                  </Button>
+                  <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => { setShowNewClient(false); setNewClientName(""); }}>キャンセル</Button>
                 </div>
               </div>
             )}
@@ -173,53 +171,33 @@ export default function CreateProjectModal({ open, onOpenChange, onCreated }: Pr
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">商材</label>
             {!showNewProduct ? (
-              <>
-                <Select value={productId} onValueChange={setProductId} disabled={!clientId}>
-                  <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="選択..." /></SelectTrigger>
-                  <SelectContent>
-                    {filteredProducts.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                    {clientId && (
-                      <>
-                        <Separator className="my-1" />
-                        <button
-                          className="w-full text-left px-2 py-1.5 text-sm text-primary hover:bg-muted rounded-sm flex items-center gap-1.5"
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowNewProduct(true); }}
-                        >
-                          <Plus className="h-3.5 w-3.5" />新しい商材を追加
-                        </button>
-                      </>
-                    )}
-                  </SelectContent>
-                </Select>
-              </>
+              <Select value={productId} onValueChange={setProductId} disabled={!clientId}>
+                <SelectTrigger className="h-9 text-sm"><SelectValue placeholder="選択..." /></SelectTrigger>
+                <SelectContent>
+                  {filteredProducts.map((p) => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                  {clientId && (
+                    <>
+                      <Separator className="my-1" />
+                      <button
+                        className="w-full text-left px-2 py-1.5 text-sm text-primary hover:bg-muted rounded-sm flex items-center gap-1.5"
+                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); setShowNewProduct(true); }}
+                      >
+                        <Plus className="h-3.5 w-3.5" />新しい商材を追加
+                      </button>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
             ) : (
               <div className="border border-border rounded-lg p-3 space-y-2 bg-muted/30">
-                <Input
-                  value={newProductName}
-                  onChange={(e) => setNewProductName(e.target.value)}
-                  placeholder="商材名 *"
-                  className="h-8 text-sm"
-                  autoFocus
-                />
-                <Input
-                  value={newProductCode}
-                  onChange={(e) => setNewProductCode(e.target.value)}
-                  placeholder="商材コード * (例: ltr_expo)"
-                  className="h-8 text-sm"
-                />
-                <Input
-                  value={newProductLabel}
-                  onChange={(e) => setNewProductLabel(e.target.value)}
-                  placeholder="表示ラベル（任意）"
-                  className="h-8 text-sm"
-                />
+                <Input value={newProductName} onChange={(e) => setNewProductName(e.target.value)} placeholder="商材名 *" className="h-8 text-sm" autoFocus />
+                <Input value={newProductCode} onChange={(e) => setNewProductCode(e.target.value)} placeholder="商材コード * (例: ltr_expo)" className="h-8 text-sm" />
+                <Input value={newProductLabel} onChange={(e) => setNewProductLabel(e.target.value)} placeholder="表示ラベル（任意）" className="h-8 text-sm" />
                 <div className="flex gap-2">
                   <Button size="sm" className="text-xs h-7" onClick={handleCreateProduct} disabled={creatingProduct || !newProductName.trim() || !newProductCode.trim()}>
                     {creatingProduct ? "追加中..." : "追加"}
                   </Button>
-                  <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => { setShowNewProduct(false); setNewProductName(""); setNewProductCode(""); setNewProductLabel(""); }}>
-                    キャンセル
-                  </Button>
+                  <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => { setShowNewProduct(false); setNewProductName(""); setNewProductCode(""); setNewProductLabel(""); }}>キャンセル</Button>
                 </div>
               </div>
             )}

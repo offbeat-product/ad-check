@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useProjectTree } from "@/hooks/useProjectTree";
+import { PROJECT_STATUS_CONFIG } from "@/lib/process-config";
 import {
-  Home, Zap, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen,
+  Home, Zap, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -15,7 +16,9 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const { clients, products, projects } = useProjectTree();
+  const tree = useProjectTree();
+  const { clients, products, projects } = tree;
+  const updateProjectOrder = (tree as any).updateProjectOrder as ((productId: string, orderedIds: string[]) => Promise<void>) | undefined;
 
   const [openClients, setOpenClients] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem("sb_open_clients") || "[]")); }
@@ -26,6 +29,10 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
     catch { return new Set<string>(); }
   });
   const [projectsOpen, setProjectsOpen] = useState(true);
+
+  // Drag state for project reordering
+  const dragItem = useRef<{ id: string; productId: string } | null>(null);
+  const [dragOverProjectId, setDragOverProjectId] = useState<string | null>(null);
 
   useEffect(() => { localStorage.setItem("sb_open_clients", JSON.stringify([...openClients])); }, [openClients]);
   useEffect(() => { localStorage.setItem("sb_open_products", JSON.stringify([...openProducts])); }, [openProducts]);
@@ -55,6 +62,55 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
   ];
 
   const activeProjectId = location.pathname.match(/\/project\/([^/]+)/)?.[1];
+
+  const handleProjectDragStart = (projectId: string, productId: string) => {
+    dragItem.current = { id: projectId, productId };
+  };
+
+  const handleProjectDragEnter = (projectId: string) => {
+    setDragOverProjectId(projectId);
+  };
+
+  const handleProjectDragEnd = () => {
+    if (!dragItem.current || !dragOverProjectId || dragItem.current.id === dragOverProjectId) {
+      setDragOverProjectId(null);
+      dragItem.current = null;
+      return;
+    }
+
+    const productId = dragItem.current.productId;
+    const productProjects = projects
+      .filter((p) => p.product_id === productId)
+      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+
+    const draggedIdx = productProjects.findIndex((p) => p.id === dragItem.current!.id);
+    const targetIdx = productProjects.findIndex((p) => p.id === dragOverProjectId);
+
+    if (draggedIdx === -1 || targetIdx === -1) {
+      setDragOverProjectId(null);
+      dragItem.current = null;
+      return;
+    }
+
+    // Check same product group
+    const targetProject = projects.find((p) => p.id === dragOverProjectId);
+    if (targetProject?.product_id !== productId) {
+      setDragOverProjectId(null);
+      dragItem.current = null;
+      return;
+    }
+
+    const reordered = [...productProjects];
+    const [removed] = reordered.splice(draggedIdx, 1);
+    reordered.splice(targetIdx, 0, removed);
+
+    if (updateProjectOrder) {
+      updateProjectOrder(productId, reordered.map((p) => p.id));
+    }
+
+    setDragOverProjectId(null);
+    dragItem.current = null;
+  };
 
   return (
     <aside className="w-[260px] min-w-[260px] h-screen bg-sidebar border-r border-sidebar-border flex flex-col overflow-hidden">
@@ -109,40 +165,67 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
 
               {openClients.has(client.id) && products
                 .filter((p) => p.client_id === client.id)
-                .map((product) => (
-                  <div key={product.id}>
-                    <div className="flex items-center w-full">
-                      <button onClick={() => toggleProduct(product.id)}
-                        className="flex items-center gap-1 px-9 py-1.5 text-sm text-muted-foreground hover:bg-muted/50 shrink-0">
-                        {openProducts.has(product.id) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                      </button>
-                      <button
-                        onClick={() => navigate(`/product/${product.id}`)}
-                        className="flex-1 flex items-center gap-2 py-1.5 pr-3 text-sm text-muted-foreground hover:text-foreground transition-colors truncate"
-                      >
-                        <span className="w-2 h-2 rounded-full shrink-0"
-                          style={{ backgroundColor: productColorMap[product.color || ""] || "hsl(193, 100%, 50%)" }} />
-                        <span className="truncate font-medium">{product.name}</span>
-                      </button>
-                    </div>
+                .map((product) => {
+                  const productProjects = projects
+                    .filter((pr) => pr.product_id === product.id)
+                    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
 
-                    {openProducts.has(product.id) && projects
-                      .filter((pr) => pr.product_id === product.id)
-                      .map((project) => (
-                        <button key={project.id} onClick={() => navigate(`/project/${project.id}`)}
-                          className={cn("w-full flex items-center gap-2 px-12 py-1.5 text-xs transition-colors truncate",
-                            activeProjectId === project.id
-                              ? "bg-sidebar-accent text-primary font-medium border-l-2 border-primary"
-                              : "text-muted-foreground hover:bg-muted/50")}>
-                          <span className="truncate">• {project.name}</span>
+                  return (
+                    <div key={product.id}>
+                      <div className="flex items-center w-full">
+                        <button onClick={() => toggleProduct(product.id)}
+                          className="flex items-center gap-1 px-9 py-1.5 text-sm text-muted-foreground hover:bg-muted/50 shrink-0">
+                          {openProducts.has(product.id) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                         </button>
-                      ))
-                    }
-                    {openProducts.has(product.id) && projects.filter((pr) => pr.product_id === product.id).length === 0 && (
-                      <p className="px-12 py-1 text-[10px] text-muted-foreground/50 italic">案件なし</p>
-                    )}
-                  </div>
-                ))
+                        <button
+                          onClick={() => navigate(`/product/${product.id}`)}
+                          className="flex-1 flex items-center gap-2 py-1.5 pr-3 text-sm text-muted-foreground hover:text-foreground transition-colors truncate"
+                        >
+                          <span className="w-2 h-2 rounded-full shrink-0"
+                            style={{ backgroundColor: productColorMap[product.color || ""] || "hsl(193, 100%, 50%)" }} />
+                          <span className="truncate font-medium">{product.name}</span>
+                        </button>
+                      </div>
+
+                      {openProducts.has(product.id) && productProjects.map((project) => {
+                        const stCfg = PROJECT_STATUS_CONFIG[project.status || "in_progress"] || PROJECT_STATUS_CONFIG.in_progress;
+                        const isCompleted = project.status === "completed";
+
+                        return (
+                          <div
+                            key={project.id}
+                            draggable
+                            onDragStart={() => handleProjectDragStart(project.id, product.id)}
+                            onDragEnter={() => handleProjectDragEnter(project.id)}
+                            onDragEnd={handleProjectDragEnd}
+                            onDragOver={(e) => e.preventDefault()}
+                            className={cn(
+                              "group flex items-center",
+                              dragOverProjectId === project.id && "bg-primary/5"
+                            )}
+                          >
+                            <GripVertical className="h-3 w-3 text-muted-foreground/30 ml-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab shrink-0" />
+                            <button
+                              onClick={() => navigate(`/project/${project.id}`)}
+                              className={cn("flex-1 flex items-center gap-2 px-1 py-1.5 text-xs transition-colors truncate",
+                                activeProjectId === project.id
+                                  ? "bg-sidebar-accent text-primary font-medium border-l-2 border-primary"
+                                  : "text-muted-foreground hover:bg-muted/50",
+                                isCompleted && "opacity-60"
+                              )}
+                            >
+                              <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", stCfg.dotClass)} />
+                              <span className="truncate">{project.name}</span>
+                            </button>
+                          </div>
+                        );
+                      })}
+                      {openProducts.has(product.id) && productProjects.length === 0 && (
+                        <p className="px-12 py-1 text-[10px] text-muted-foreground/50 italic">案件なし</p>
+                      )}
+                    </div>
+                  );
+                })
               }
             </div>
           ))}

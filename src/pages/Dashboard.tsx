@@ -4,6 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Project, Product, CheckResultRow, ProjectFile } from "@/lib/db-types";
 import { FILE_STATUS_CONFIG } from "@/lib/db-types";
+import { PROJECT_STATUS_CONFIG } from "@/lib/process-config";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Badge } from "@/components/ui/badge";
 import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderOpen, ChevronLeft, ChevronRight } from "lucide-react";
@@ -158,19 +159,23 @@ export default function Dashboard() {
           <div>
             <h2 className="text-sm font-semibold mb-3">最近のプロジェクト</h2>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
-              {projects.map((pr) => (
-                <button key={pr.id} onClick={() => navigate(`/project/${pr.id}`)}
-                  className="glass-card p-4 text-left hover:border-primary/30 transition-colors">
-                  <div className="flex items-center gap-2 mb-2">
-                    <FolderOpen className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-medium truncate">{pr.name}</span>
-                  </div>
-                  <p className="text-xs text-muted-foreground">{getProductName(pr.product_id)}</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">
-                    {pr.updated_at ? new Date(pr.updated_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
-                  </p>
-                </button>
-              ))}
+              {projects.map((pr) => {
+                const stCfg = PROJECT_STATUS_CONFIG[pr.status || "in_progress"] || PROJECT_STATUS_CONFIG.in_progress;
+                return (
+                  <button key={pr.id} onClick={() => navigate(`/project/${pr.id}`)}
+                    className="glass-card p-4 text-left hover:border-primary/30 transition-colors">
+                    <div className="flex items-center gap-2 mb-2">
+                      <FolderOpen className="h-4 w-4 text-primary" />
+                      <span className="text-sm font-medium truncate flex-1">{pr.name}</span>
+                      <Badge variant="outline" className={cn("text-[10px] shrink-0", stCfg.badgeClass)}>{stCfg.label}</Badge>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{getProductName(pr.product_id)}</p>
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      {pr.updated_at ? new Date(pr.updated_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
+                    </p>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}
