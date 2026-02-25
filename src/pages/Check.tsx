@@ -96,6 +96,38 @@ export default function CheckPage() {
     }
   }, [selectedProductId]);
 
+  // Fetch rule count & high-severity titles when product or process changes
+  useEffect(() => {
+    if (!selectedProductId) {
+      setRuleCount(null);
+      setHighRuleTitles([]);
+      return;
+    }
+    let cancelled = false;
+    Promise.all([
+      supabase
+        .from("check_rules")
+        .select("id", { count: "exact", head: true })
+        .eq("product_id", selectedProductId)
+        .eq("process_type", selectedProcess)
+        .eq("is_active", true),
+      supabase
+        .from("check_rules")
+        .select("title")
+        .eq("product_id", selectedProductId)
+        .eq("process_type", selectedProcess)
+        .eq("severity", "high")
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true })
+        .limit(3),
+    ]).then(([countRes, highRes]) => {
+      if (cancelled) return;
+      setRuleCount(countRes.count ?? 0);
+      setHighRuleTitles((highRes.data ?? []).map((r: any) => r.title));
+    });
+    return () => { cancelled = true; };
+  }, [selectedProductId, selectedProcess]);
+
   // Derived
   const filteredProducts = selectedClientId
     ? dbProducts.filter(p => p.client_id === selectedClientId)
