@@ -21,7 +21,7 @@ export function useProjectTree(): TreeData {
     const [c, p, pr] = await Promise.all([
       supabase.from("clients").select("*").order("name"),
       supabase.from("products").select("*").order("name"),
-      supabase.from("projects").select("*").order("created_at", { ascending: false }),
+      supabase.from("projects").select("*").order("sort_order").order("created_at", { ascending: false }),
     ]);
     if (cancelled) return;
     handleSupabaseError(c.error, "clients");
@@ -39,5 +39,23 @@ export function useProjectTree(): TreeData {
     return () => { cancelled = true; };
   }, [fetch]);
 
-  return { clients, products, projects, loading, refetch: fetch };
+  const updateProjectOrder = useCallback(async (productId: string, orderedIds: string[]) => {
+    // Optimistic update
+    setProjects((prev) => {
+      const updated = [...prev];
+      orderedIds.forEach((id, i) => {
+        const idx = updated.findIndex((p) => p.id === id);
+        if (idx !== -1) {
+          updated[idx] = { ...updated[idx], sort_order: i + 1 };
+        }
+      });
+      return updated;
+    });
+    // Persist
+    for (let i = 0; i < orderedIds.length; i++) {
+      await supabase.from("projects").update({ sort_order: i + 1 }).eq("id", orderedIds[i]);
+    }
+  }, []);
+
+  return { clients, products, projects, loading, refetch: fetch, updateProjectOrder } as TreeData & { updateProjectOrder: (productId: string, orderedIds: string[]) => Promise<void> };
 }

@@ -362,6 +362,53 @@ export type Database = {
           },
         ]
       }
+      project_processes: {
+        Row: {
+          created_at: string
+          deadline: string | null
+          id: string
+          is_active: boolean
+          process_key: string
+          process_label: string
+          project_id: string
+          sort_order: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deadline?: string | null
+          id?: string
+          is_active?: boolean
+          process_key: string
+          process_label: string
+          project_id: string
+          sort_order?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deadline?: string | null
+          id?: string
+          is_active?: boolean
+          process_key?: string
+          process_label?: string
+          project_id?: string
+          sort_order?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_processes_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           created_at: string | null
@@ -370,8 +417,10 @@ export type Database = {
           description: string | null
           id: string
           name: string
+          overall_deadline: string | null
           product_id: string | null
           project_code: string | null
+          sort_order: number | null
           status: string | null
           updated_at: string | null
         }
@@ -382,8 +431,10 @@ export type Database = {
           description?: string | null
           id?: string
           name: string
+          overall_deadline?: string | null
           product_id?: string | null
           project_code?: string | null
+          sort_order?: number | null
           status?: string | null
           updated_at?: string | null
         }
@@ -394,8 +445,10 @@ export type Database = {
           description?: string | null
           id?: string
           name?: string
+          overall_deadline?: string | null
           product_id?: string | null
           project_code?: string | null
+          sort_order?: number | null
           status?: string | null
           updated_at?: string | null
         }

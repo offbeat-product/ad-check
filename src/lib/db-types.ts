@@ -40,9 +40,15 @@ export const FILE_STATUS_CONFIG: Record<string, { label: string; class: string }
   approved: { label: "承認済", class: "bg-status-ok/10 text-status-ok" },
 };
 
+// Legacy PROCESS_SECTIONS kept for backward compat (FileReviewPage uses it for upload accept)
 export const PROCESS_SECTIONS = [
-  { id: "script", label: "① 字コンテ / NA原稿", accepts: ".txt,.docx", allowTextInput: true },
-  { id: "styleframe", label: "② スタイルフレーム", accepts: ".jpg,.jpeg,.png,.webp", allowTextInput: false },
-  { id: "storyboard", label: "③ 絵コンテ", accepts: ".jpg,.jpeg,.png,.pdf", allowTextInput: false },
-  { id: "master", label: "④ 動画マスター", accepts: ".mp4,.mov", allowTextInput: false },
+  { id: "script", label: "① 構成/字コンテ", accepts: ".txt,.docx", allowTextInput: true },
+  { id: "na_script", label: "② NA原稿", accepts: ".txt,.docx", allowTextInput: true },
+  { id: "narration", label: "③ ナレーション", accepts: ".mp3,.wav,.m4a", allowTextInput: false },
+  { id: "bgm", label: "④ BGM", accepts: ".mp3,.wav,.m4a", allowTextInput: false },
+  { id: "vcon", label: "⑤ Vコン", accepts: ".mp4,.mov", allowTextInput: false },
+  { id: "styleframe", label: "⑥ スタイルフレーム", accepts: ".jpg,.jpeg,.png,.psd,.ai", allowTextInput: false },
+  { id: "storyboard", label: "⑦ 絵コンテ", accepts: ".jpg,.jpeg,.png,.pdf,.psd", allowTextInput: false },
+  { id: "video_horizontal", label: "⑧ 横動画", accepts: ".mp4,.mov", allowTextInput: false },
+  { id: "video_vertical", label: "⑨ 縦動画", accepts: ".mp4,.mov", allowTextInput: false },
 ];
