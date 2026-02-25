@@ -37,6 +37,10 @@ export default function CheckPage() {
   const [imageData, setImageData] = useState<CompressResult | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
 
+  // Rule info
+  const [ruleCount, setRuleCount] = useState<number | null>(null);
+  const [highRuleTitles, setHighRuleTitles] = useState<string[]>([]);
+
   // Execution
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CheckResult | null>(null);
