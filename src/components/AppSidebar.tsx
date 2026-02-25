@@ -6,6 +6,7 @@ import { PROJECT_STATUS_CONFIG } from "@/lib/process-config";
 import {
   Home, Zap, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical,
 } from "lucide-react";
+import NotificationBell from "@/components/NotificationBell";
 import { cn } from "@/lib/utils";
 
 interface AppSidebarProps {
@@ -129,6 +130,7 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium truncate">{user?.email || "User"}</p>
         </div>
+        <NotificationBell />
       </div>
 
       <nav className="flex-1 overflow-y-auto py-2">
@@ -231,7 +233,10 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
           ))}
         </div>
 
-        <button className="w-full flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent">
+        <button onClick={() => navigate("/settings")}
+          className={cn("w-full flex items-center gap-3 px-5 py-2.5 text-sm font-medium transition-colors",
+            location.pathname === "/settings" ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-[3px] border-primary"
+              : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent")}>
           <Settings className="h-4 w-4" />設定
         </button>
       </nav>
