@@ -80,6 +80,24 @@ export type Database = {
         }
         Relationships: []
       }
+      clients: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
       comments: {
         Row: {
           annotation_data: Json | null
@@ -222,6 +240,171 @@ export type Database = {
             columns: ["check_result_id"]
             isOneToOne: false
             referencedRelation: "check_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      products: {
+        Row: {
+          client_id: string | null
+          code: string
+          color: string | null
+          created_at: string | null
+          id: string
+          info_lines: string[] | null
+          label: string
+          meta: string | null
+          name: string
+          rules_desc: string | null
+          sample_text: string | null
+          sf_enabled: boolean | null
+          warning: string | null
+          webhook_paths: Json | null
+        }
+        Insert: {
+          client_id?: string | null
+          code: string
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          info_lines?: string[] | null
+          label: string
+          meta?: string | null
+          name: string
+          rules_desc?: string | null
+          sample_text?: string | null
+          sf_enabled?: boolean | null
+          warning?: string | null
+          webhook_paths?: Json | null
+        }
+        Update: {
+          client_id?: string | null
+          code?: string
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          info_lines?: string[] | null
+          label?: string
+          meta?: string | null
+          name?: string
+          rules_desc?: string | null
+          sample_text?: string | null
+          sf_enabled?: boolean | null
+          warning?: string | null
+          webhook_paths?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      project_files: {
+        Row: {
+          check_result_id: string | null
+          created_at: string | null
+          created_by: string | null
+          file_data: string | null
+          file_name: string
+          file_size_bytes: number | null
+          file_type: string
+          id: string
+          parent_file_id: string | null
+          process_type: string
+          project_id: string | null
+          status: string | null
+          updated_at: string | null
+          version_number: number | null
+        }
+        Insert: {
+          check_result_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          file_data?: string | null
+          file_name: string
+          file_size_bytes?: number | null
+          file_type: string
+          id?: string
+          parent_file_id?: string | null
+          process_type: string
+          project_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+          version_number?: number | null
+        }
+        Update: {
+          check_result_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          file_data?: string | null
+          file_name?: string
+          file_size_bytes?: number | null
+          file_type?: string
+          id?: string
+          parent_file_id?: string | null
+          process_type?: string
+          project_id?: string | null
+          status?: string | null
+          updated_at?: string | null
+          version_number?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_files_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      projects: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          deadline: string | null
+          description: string | null
+          id: string
+          name: string
+          product_id: string | null
+          project_code: string | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          deadline?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          product_id?: string | null
+          project_code?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          deadline?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          product_id?: string | null
+          project_code?: string | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "projects_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]

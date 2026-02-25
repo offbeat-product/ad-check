@@ -74,21 +74,23 @@ export function CorrectionPatternCard({ ruleId, productCode, onApply }: Correcti
 
 interface TopPatternsProps {
   limit?: number;
+  productCode?: string;
 }
 
-export function TopCorrectionPatterns({ limit = 5 }: TopPatternsProps) {
+export function TopCorrectionPatterns({ limit = 5, productCode }: TopPatternsProps) {
   const [patterns, setPatterns] = useState<CorrectionPattern[]>([]);
 
   useEffect(() => {
-    supabase
+    let query = supabase
       .from("correction_patterns")
       .select("*")
       .order("frequency", { ascending: false })
-      .limit(limit)
-      .then(({ data }) => {
+      .limit(limit);
+    if (productCode) query = query.eq("product_code", productCode);
+    query.then(({ data }) => {
         setPatterns((data as any as CorrectionPattern[]) || []);
       });
-  }, [limit]);
+  }, [limit, productCode]);
 
   if (patterns.length === 0) return null;
 
