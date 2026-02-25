@@ -39,6 +39,7 @@ export interface CheckRecord {
   check_items: CheckItem[];
   raw_response: any;
   status?: string;
+  input_data?: { image_base64?: string; script_text?: string } | null;
 }
 
 export type CheckStatus = "pending" | "in_progress" | "resolved" | "approved";

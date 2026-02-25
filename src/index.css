@@ -107,4 +107,24 @@
   .status-ok {
     @apply bg-[hsl(var(--status-ok))] text-white;
   }
+
+  .check-marker-ng {
+    background: hsl(var(--status-ng));
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    animation: pulse-ng 2s infinite;
+  }
+
+  .check-marker-warning {
+    background: hsl(var(--status-warning));
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  @keyframes pulse-ng {
+    0%, 100% {
+      box-shadow: 0 0 0 0 hsla(var(--status-ng), 0.4);
+    }
+    50% {
+      box-shadow: 0 0 0 8px hsla(var(--status-ng), 0);
+    }
+  }
 }
