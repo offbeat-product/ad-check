@@ -381,11 +381,16 @@ export default function CheckPage() {
             <div className="bg-primary/5 border border-primary/10 rounded-lg p-4 space-y-1">
               <div className="flex items-center gap-2 text-xs font-bold text-primary mb-2">
                 <Info className="h-3 w-3" />
-                商材情報
+                チェック情報
               </div>
-              {infoLines.map((line, i) => (
-                <p key={i} className="text-xs text-muted-foreground">{line}</p>
-              ))}
+              <p className="text-xs text-muted-foreground">商材：{product.name}</p>
+              <p className="text-xs text-muted-foreground">工程：{processConfig.label}</p>
+              {ruleCount !== null && (
+                <p className="text-xs text-muted-foreground">ルール：{ruleCount}項目</p>
+              )}
+              {highRuleTitles.length > 0 && (
+                <p className="text-xs text-muted-foreground">重点：{highRuleTitles.join(" / ")}</p>
+              )}
               {product.warning && (
                 <p className="text-xs text-status-warning font-medium mt-2">{product.warning}</p>
               )}
