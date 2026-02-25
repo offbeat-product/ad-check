@@ -3,21 +3,49 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
 async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  const [salt, storedHash] = hash.split(":");
-  if (!salt || !storedHash) {
-    // Legacy plain text comparison
-    return password === hash;
+  // PBKDF2 format: pbkdf2:<iterations>:<saltHex>:<hashHex>
+  if (hash.startsWith("pbkdf2:")) {
+    const parts = hash.split(":");
+    if (parts.length !== 4) return false;
+    const iterations = parseInt(parts[1], 10);
+    const saltHex = parts[2];
+    const storedHashHex = parts[3];
+
+    const salt = new Uint8Array(saltHex.match(/.{2}/g)!.map(b => parseInt(b, 16)));
+    const encoder = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(password),
+      "PBKDF2",
+      false,
+      ["deriveBits"]
+    );
+    const hashBuffer = await crypto.subtle.deriveBits(
+      { name: "PBKDF2", salt, iterations, hash: "SHA-256" },
+      keyMaterial,
+      256
+    );
+    const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+    return hashHex === storedHashHex;
   }
-  const encoder = new TextEncoder();
-  const data = encoder.encode(salt + password);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-  return hashHex === storedHash;
+
+  // Legacy SHA-256 format: <salt>:<hashHex>
+  const [salt, storedHash] = hash.split(":");
+  if (salt && storedHash) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(salt + password);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
+    return hashHex === storedHash;
+  }
+
+  // No plain-text fallback — reject unknown formats
+  return false;
 }
 
 serve(async (req) => {

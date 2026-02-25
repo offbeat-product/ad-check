@@ -3,18 +3,27 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// Simple hash using Web Crypto API (SHA-256 with salt)
 async function hashPassword(password: string): Promise<string> {
-  const salt = crypto.randomUUID();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
   const encoder = new TextEncoder();
-  const data = encoder.encode(salt + password);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  const hashHex = hashArray.map(b => b.toString(16).padStart(2, "0")).join("");
-  return `${salt}:${hashHex}`;
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(password),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const hashBuffer = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
+    keyMaterial,
+    256
+  );
+  const saltHex = Array.from(salt).map(b => b.toString(16).padStart(2, "0")).join("");
+  const hashHex = Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, "0")).join("");
+  return `pbkdf2:100000:${saltHex}:${hashHex}`;
 }
 
 serve(async (req) => {
@@ -23,7 +32,6 @@ serve(async (req) => {
   }
 
   try {
-    // --- Authentication: validate JWT ---
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(
@@ -51,7 +59,6 @@ serve(async (req) => {
 
     const { password, check_result_id, expires_at, allow_download, allow_comment_read, allow_comment_write } = await req.json();
 
-    // --- Authorization: verify user owns the check_result ---
     const { data: checkResult, error: checkError } = await userClient
       .from("check_results")
       .select("user_id")
@@ -65,7 +72,6 @@ serve(async (req) => {
       );
     }
 
-    // --- Use service role for insertion (share_links needs it) ---
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
