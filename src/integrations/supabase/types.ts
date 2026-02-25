@@ -725,6 +725,14 @@ export type Database = {
         Args: { p_email: string; p_user_id: string }
         Returns: undefined
       }
+      get_profiles_by_ids: {
+        Args: { p_ids: string[] }
+        Returns: {
+          display_name: string
+          email: string
+          id: string
+        }[]
+      }
       get_share_link_by_token: {
         Args: { token_param: string }
         Returns: {
@@ -772,6 +780,13 @@ export type Database = {
       is_project_member: {
         Args: { p_project_id: string; p_user_id: string }
         Returns: boolean
+      }
+      lookup_profile_by_email: {
+        Args: { p_email: string }
+        Returns: {
+          display_name: string
+          id: string
+        }[]
       }
     }
     Enums: {
