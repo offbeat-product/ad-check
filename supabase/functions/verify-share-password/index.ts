@@ -6,6 +6,23 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+// In-memory rate limiting (per-isolate; resets on cold start but still effective)
+const attempts = new Map<string, { count: number; firstAttempt: number }>();
+const MAX_ATTEMPTS = 5;
+const WINDOW_MS = 60 * 60 * 1000; // 1 hour
+
+function isRateLimited(key: string): boolean {
+  const now = Date.now();
+  const record = attempts.get(key);
+  if (!record || now - record.firstAttempt > WINDOW_MS) {
+    attempts.set(key, { count: 1, firstAttempt: now });
+    return false;
+  }
+  record.count++;
+  if (record.count > MAX_ATTEMPTS) return true;
+  return false;
+}
+
 async function verifyPassword(password: string, hash: string): Promise<boolean> {
   // PBKDF2 format: pbkdf2:<iterations>:<saltHex>:<hashHex>
   if (hash.startsWith("pbkdf2:")) {
@@ -55,6 +72,22 @@ serve(async (req) => {
 
   try {
     const { share_link_id, password } = await req.json();
+
+    if (!share_link_id || !password) {
+      return new Response(JSON.stringify({ valid: false, error: "Missing parameters" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Rate limit by share_link_id (prevents brute-force per link)
+    const rateLimitKey = `share:${share_link_id}`;
+    if (isRateLimited(rateLimitKey)) {
+      return new Response(JSON.stringify({ valid: false, error: "Too many attempts. Please try again later." }), {
+        status: 429,
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": "3600" },
+      });
+    }
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
