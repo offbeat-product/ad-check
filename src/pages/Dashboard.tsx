@@ -7,9 +7,10 @@ import { FILE_STATUS_CONFIG } from "@/lib/db-types";
 import { PROJECT_STATUS_CONFIG } from "@/lib/process-config";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Badge } from "@/components/ui/badge";
-import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderOpen, ChevronLeft, ChevronRight } from "lucide-react";
+import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderOpen, ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import { cn } from "@/lib/utils";
+import CreateProjectModal from "@/components/CreateProjectModal";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -51,6 +52,7 @@ export default function Dashboard() {
   const [recentFiles, setRecentFiles] = useState<(ProjectFile & { project_name?: string })[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
+  const [createOpen, setCreateOpen] = useState(false);
 
   // Fetch paginated records
   useEffect(() => {
@@ -157,7 +159,15 @@ export default function Dashboard() {
 
         {projects.length > 0 && (
           <div>
-            <h2 className="text-sm font-semibold mb-3">最近のプロジェクト</h2>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-sm font-semibold">最近のプロジェクト</h2>
+              <button
+                onClick={() => setCreateOpen(true)}
+                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+              >
+                <Plus className="h-3.5 w-3.5" />新規プロジェクト
+              </button>
+            </div>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
               {projects.map((pr) => {
                 const stCfg = PROJECT_STATUS_CONFIG[pr.status || "in_progress"] || PROJECT_STATUS_CONFIG.in_progress;
@@ -316,6 +326,11 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+      <CreateProjectModal
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={(id) => navigate(`/project/${id}`)}
+      />
     </div>
   );
 }

@@ -119,7 +119,7 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
           <span>♟</span>
           <span className="gradient-text">CheckMate AI</span>
         </h1>
-        <p className="text-[11px] text-muted-foreground mt-0.5">v3.0 — Creative Review</p>
+        <p className="text-[11px] text-muted-foreground mt-0.5">度重なる修正に、終止符を。</p>
       </div>
 
       <div className="px-5 py-3 border-b border-sidebar-border flex items-center gap-3">
