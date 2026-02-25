@@ -2,11 +2,14 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import type { CheckRecord } from "@/lib/types";
-import type { Project, Product } from "@/lib/db-types";
+import type { CheckItem } from "@/lib/types";
+import type { Project, Product, CheckResultRow, ProjectFile } from "@/lib/db-types";
+import { FILE_STATUS_CONFIG } from "@/lib/db-types";
+import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Badge } from "@/components/ui/badge";
 import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderOpen } from "lucide-react";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
+import { cn } from "@/lib/utils";
 
 const gradeColorMap: Record<string, string> = {
   A: "bg-[hsl(var(--grade-a))]/10 text-[hsl(var(--grade-a))] border-[hsl(var(--grade-a))]/30",
@@ -25,21 +28,28 @@ const statusBadgeMap: Record<string, { label: string; class: string }> = {
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [records, setRecords] = useState<CheckRecord[]>([]);
+  const [records, setRecords] = useState<CheckResultRow[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [recentFiles, setRecentFiles] = useState<ProjectFile[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user) return;
     Promise.all([
-      supabase.from("check_results").select("*").order("created_at", { ascending: false }),
+      supabase.from("check_results").select("*").order("created_at", { ascending: false }).limit(50),
       supabase.from("projects").select("*").order("updated_at", { ascending: false }).limit(6),
       supabase.from("products").select("*"),
-    ]).then(([cr, pr, prod]) => {
-      setRecords((cr.data as any as CheckRecord[]) || []);
-      setProjects((pr.data as any) || []);
-      setProducts((prod.data as any) || []);
+      supabase.from("project_files").select("id, project_id, file_name, file_type, process_type, status, updated_at").order("updated_at", { ascending: false }).limit(5),
+    ]).then(([cr, pr, prod, pf]) => {
+      handleSupabaseError(cr.error, "check_results");
+      handleSupabaseError(pr.error, "projects");
+      handleSupabaseError(prod.error, "products");
+      handleSupabaseError(pf.error, "project_files");
+      setRecords(cr.data ?? []);
+      setProjects(pr.data ?? []);
+      setProducts(prod.data ?? []);
+      setRecentFiles((pf.data ?? []) as ProjectFile[]);
       setLoading(false);
     });
   }, [user]);
@@ -47,9 +57,9 @@ export default function Dashboard() {
   const stats = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const todayChecks = records.filter(r => new Date(r.created_at) >= today).length;
-    const totalNg = records.reduce((s, r) => s + (r.ng_count || 0), 0);
-    const grades = records.map(r => r.overall_status);
+    const todayChecks = records.filter(r => r.created_at && new Date(r.created_at) >= today).length;
+    const totalNg = records.reduce((s, r) => s + (r.ng_count ?? 0), 0);
+    const grades = records.map(r => r.overall_status).filter(Boolean) as string[];
     const gradeScore: Record<string, number> = { A: 4, B: 3, C: 2, D: 1 };
     const avgGrade = grades.length > 0
       ? (grades.reduce((s, g) => s + (gradeScore[g] || 0), 0) / grades.length)
@@ -57,11 +67,11 @@ export default function Dashboard() {
     const avgLabel = avgGrade >= 3.5 ? "A" : avgGrade >= 2.5 ? "B" : avgGrade >= 1.5 ? "C" : "D";
     const week = new Date();
     week.setDate(week.getDate() - 7);
-    const weekChecks = records.filter(r => new Date(r.created_at) >= week).length;
+    const weekChecks = records.filter(r => r.created_at && new Date(r.created_at) >= week).length;
     return { todayChecks, totalNg, avgLabel, weekChecks };
   }, [records]);
 
-  const getProductName = (productId: string) => products.find(p => p.id === productId)?.name || "";
+  const getProductName = (productId: string | null) => products.find(p => p.id === productId)?.name || "";
 
   return (
     <div className="min-h-screen">
@@ -74,7 +84,6 @@ export default function Dashboard() {
       </header>
 
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
-        {/* Stat cards */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={ClipboardCheck} label="今日のチェック数" value={stats.todayChecks} color="text-primary" />
           <StatCard icon={AlertTriangle} label="NG検出数（累計）" value={stats.totalNg} color="text-status-ng" />
@@ -82,7 +91,6 @@ export default function Dashboard() {
           <StatCard icon={TrendingUp} label="直近7日" value={`${stats.weekChecks} 件`} color="text-primary" />
         </div>
 
-        {/* Recent projects */}
         {projects.length > 0 && (
           <div>
             <h2 className="text-sm font-semibold mb-3">最近のプロジェクト</h2>
@@ -96,7 +104,7 @@ export default function Dashboard() {
                   </div>
                   <p className="text-xs text-muted-foreground">{getProductName(pr.product_id)}</p>
                   <p className="text-[10px] text-muted-foreground mt-1">
-                    {new Date(pr.updated_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    {pr.updated_at ? new Date(pr.updated_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
                   </p>
                 </button>
               ))}
@@ -105,7 +113,6 @@ export default function Dashboard() {
         )}
 
         <div className="grid lg:grid-cols-5 gap-6">
-          {/* Recent checks */}
           <div className="lg:col-span-3 glass-card overflow-hidden">
             <div className="px-4 py-3 border-b border-border">
               <h2 className="text-sm font-semibold">最近のチェック結果</h2>
@@ -134,15 +141,15 @@ export default function Dashboard() {
                       <tr key={r.id} onClick={() => navigate(`/check-result/${r.id}`)}
                         className="border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors">
                         <td className="px-4 py-2.5 text-muted-foreground">
-                          {new Date(r.created_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                          {r.created_at ? new Date(r.created_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
                         </td>
                         <td className="px-4 py-2.5 font-medium">{r.product_name}</td>
                         <td className="px-4 py-2.5">{r.process_type}</td>
                         <td className="px-4 py-2.5 text-center">
-                          <Badge variant="outline" className={gradeColorMap[r.overall_status] || ""}>{r.overall_status}</Badge>
+                          <Badge variant="outline" className={gradeColorMap[r.overall_status ?? ""] ?? ""}>{r.overall_status}</Badge>
                         </td>
-                        <td className="px-4 py-2.5 text-center text-status-ng font-bold">{r.ng_count}</td>
-                        <td className="px-4 py-2.5 text-center text-status-warning font-bold">{r.warning_count}</td>
+                        <td className="px-4 py-2.5 text-center text-status-ng font-bold">{r.ng_count ?? 0}</td>
+                        <td className="px-4 py-2.5 text-center text-status-warning font-bold">{r.warning_count ?? 0}</td>
                         <td className="px-4 py-2.5 text-center">
                           <Badge variant="outline" className={st.class}>{st.label}</Badge>
                         </td>
@@ -154,18 +161,36 @@ export default function Dashboard() {
             </table>
           </div>
 
-          {/* Correction patterns */}
           <div className="lg:col-span-2 space-y-4">
             <TopCorrectionPatterns limit={5} />
-            <div className="glass-card">
+            <div className="glass-card overflow-hidden">
               <div className="px-4 py-3 border-b border-border">
                 <h2 className="text-sm font-semibold">最近のファイル</h2>
               </div>
-              <div className="p-8 text-center text-muted-foreground">
-                <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                <p className="text-sm">ファイルはまだありません</p>
-                <p className="text-xs mt-1">チェックを実行するとここに表示されます</p>
-              </div>
+              {recentFiles.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">ファイルはまだありません</p>
+                  <p className="text-xs mt-1">プロジェクトにファイルをアップロードすると表示されます</p>
+                </div>
+              ) : (
+                <div className="divide-y divide-border">
+                  {recentFiles.map((f) => {
+                    const st = FILE_STATUS_CONFIG[f.status ?? "uploaded"] ?? FILE_STATUS_CONFIG.uploaded;
+                    return (
+                      <button key={f.id} onClick={() => f.project_id && navigate(`/project/${f.project_id}/file/${f.id}`)}
+                        className="w-full px-4 py-3 flex items-center gap-3 hover:bg-muted/50 transition-colors text-left">
+                        <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{f.file_name}</p>
+                          <p className="text-[10px] text-muted-foreground">{f.process_type}</p>
+                        </div>
+                        <Badge variant="outline" className={cn("text-[10px] shrink-0", st.class)}>{st.label}</Badge>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -174,7 +199,7 @@ export default function Dashboard() {
   );
 }
 
-function StatCard({ icon: Icon, label, value, color }: { icon: any; label: string; value: string | number; color: string }) {
+function StatCard({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: string | number; color: string }) {
   return (
     <div className="glass-card p-4 flex items-center gap-4">
       <div className={`p-2.5 rounded-lg bg-muted ${color}`}>

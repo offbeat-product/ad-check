@@ -34,20 +34,37 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
   const handleApplyCorrections = async () => {
     if (!user || selectedItems.size === 0) return;
 
-    for (const patternId of selectedItems) {
+    // Batch: fetch all existing patterns for this product in one query
+    const patternIds = [...selectedItems];
+    const { data: existing, error: fetchErr } = await supabase
+      .from("correction_patterns")
+      .select("id, rule_id, frequency")
+      .eq("product_code", productCode)
+      .in("rule_id", patternIds);
+
+    if (fetchErr) {
+      toast({ title: "エラー", description: fetchErr.message, variant: "destructive" });
+      return;
+    }
+
+    const existingMap = new Map((existing ?? []).map((e) => [e.rule_id, e]));
+
+    // Separate into updates and inserts
+    const toUpdate: { id: string; frequency: number }[] = [];
+    const toInsert: Array<{
+      user_id: string; product_code: string; rule_id: string;
+      rule_title: string; original_content: string; corrected_content: string; category: string;
+    }> = [];
+
+    for (const patternId of patternIds) {
       const item = items.find((i) => i.pattern_id === patternId);
       if (!item) continue;
 
-      const { data: existing } = await supabase
-        .from("correction_patterns").select("id, frequency")
-        .eq("product_code", productCode).eq("rule_id", item.pattern_id).limit(1);
-
-      if (existing && existing.length > 0) {
-        await supabase.from("correction_patterns")
-          .update({ frequency: (existing[0] as any).frequency + 1, updated_at: new Date().toISOString() } as any)
-          .eq("id", (existing[0] as any).id);
+      const ex = existingMap.get(patternId);
+      if (ex) {
+        toUpdate.push({ id: ex.id, frequency: (ex.frequency ?? 0) + 1 });
       } else {
-        await supabase.from("correction_patterns").insert({
+        toInsert.push({
           user_id: user.id,
           product_code: productCode,
           rule_id: item.pattern_id,
@@ -55,17 +72,42 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
           original_content: item.detail,
           corrected_content: item.suggestion || "",
           category: item.severity,
-        } as any);
+        });
       }
-      setResolvedItems((s) => new Set(s).add(patternId));
     }
+
+    // Execute batch operations
+    const promises: Promise<unknown>[] = [];
+
+    if (toInsert.length > 0) {
+      const insertPromise = async () => {
+        const { error } = await supabase.from("correction_patterns").insert(toInsert);
+        if (error) console.error("[correction_patterns insert]", error.message);
+      };
+      promises.push(insertPromise());
+    }
+
+    for (const u of toUpdate) {
+      const updatePromise = async () => {
+        const { error } = await supabase.from("correction_patterns")
+          .update({ frequency: u.frequency, updated_at: new Date().toISOString() })
+          .eq("id", u.id);
+        if (error) console.error("[correction_patterns update]", error.message);
+      };
+      promises.push(updatePromise());
+    }
+
+    await Promise.all(promises);
+
+    // Mark all as resolved
+    setResolvedItems((s) => {
+      const next = new Set(s);
+      patternIds.forEach((id) => next.add(id));
+      return next;
+    });
+
     toast({ title: "保存しました", description: `${selectedItems.size}件の修正パターンを保存しました` });
     setSelectedItems(new Set());
-  };
-
-  // Expose scrollToCard via a callback ref pattern
-  const scrollToCard = (patternId: string) => {
-    cardRefs.current[patternId]?.scrollIntoView({ behavior: "smooth", block: "center" });
   };
 
   return (
@@ -113,17 +155,4 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
       </div>
     </>
   );
-}
-
-// Export scrollToCard helper for parent components
-export function useScrollToCard() {
-  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
-
-  const scrollToCard = (patternId: string) => {
-    setTimeout(() => {
-      cardRefs.current[patternId]?.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 100);
-  };
-
-  return { cardRefs, scrollToCard };
 }

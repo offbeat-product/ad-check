@@ -1,58 +1,35 @@
-// DB-driven types for the project-based architecture
-export interface Client {
-  id: string;
-  name: string;
-  created_at: string;
+// DB-driven types derived from Supabase generated types for type safety
+import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase/types";
+
+// Row types (read)
+export type Client = Tables<"clients">;
+export type Product = Tables<"products">;
+export type Project = Tables<"projects">;
+export type ProjectFile = Tables<"project_files">;
+export type CheckResultRow = Tables<"check_results">;
+export type CommentRow = Tables<"comments">;
+export type CorrectionPatternRow = Tables<"correction_patterns">;
+export type FileVersionRow = Tables<"file_versions">;
+export type ShareLinkRow = Tables<"share_links">;
+
+// Insert types
+export type ProjectInsert = TablesInsert<"projects">;
+export type ProjectFileInsert = TablesInsert<"project_files">;
+export type CheckResultInsert = TablesInsert<"check_results">;
+export type CommentInsert = TablesInsert<"comments">;
+export type CorrectionPatternInsert = TablesInsert<"correction_patterns">;
+
+// Update types
+export type ProjectFileUpdate = TablesUpdate<"project_files">;
+export type CheckResultUpdate = TablesUpdate<"check_results">;
+
+// Helper to safely cast webhook_paths from Json
+export function getWebhookPaths(product: Product): Record<string, string> {
+  if (!product.webhook_paths || typeof product.webhook_paths !== "object") return {};
+  return product.webhook_paths as Record<string, string>;
 }
 
-export interface Product {
-  id: string;
-  client_id: string;
-  code: string;
-  name: string;
-  label: string;
-  color: string | null;
-  rules_desc: string | null;
-  meta: string | null;
-  sf_enabled: boolean;
-  warning: string | null;
-  webhook_paths: Record<string, string>;
-  sample_text: string | null;
-  info_lines: string[] | null;
-  created_at: string;
-}
-
-export interface Project {
-  id: string;
-  product_id: string;
-  name: string;
-  project_code: string | null;
-  description: string | null;
-  status: string;
-  deadline: string | null;
-  created_by: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ProjectFile {
-  id: string;
-  project_id: string;
-  process_type: string;
-  file_name: string;
-  file_type: string;
-  file_data: string | null;
-  file_size_bytes: number | null;
-  version_number: number;
-  parent_file_id: string | null;
-  status: string;
-  check_result_id: string | null;
-  created_by: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export type ProjectFileStatus = 'uploaded' | 'checking' | 'checked' | 'revision_requested' | 'revised' | 'approved';
+export type ProjectFileStatus = "uploaded" | "checking" | "checked" | "revision_requested" | "revised" | "approved";
 
 export const FILE_STATUS_CONFIG: Record<string, { label: string; class: string }> = {
   uploaded: { label: "未チェック", class: "bg-muted text-muted-foreground" },

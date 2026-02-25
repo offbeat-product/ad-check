@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import type { ShareLinkRow } from "@/lib/db-types";
+import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,16 +11,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link2, Copy, Check, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-
-interface ShareLink {
-  id: string;
-  token: string;
-  expires_at: string | null;
-  allow_download: boolean;
-  allow_comment_read: boolean;
-  allow_comment_write: boolean;
-  created_at: string;
-}
 
 interface ShareLinkModalProps {
   open: boolean;
@@ -37,7 +29,7 @@ export default function ShareLinkModal({ open, onOpenChange, checkResultId }: Sh
   const [allowCommentWrite, setAllowCommentWrite] = useState(true);
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [links, setLinks] = useState<ShareLink[]>([]);
+  const [links, setLinks] = useState<ShareLinkRow[]>([]);
   const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
@@ -45,22 +37,20 @@ export default function ShareLinkModal({ open, onOpenChange, checkResultId }: Sh
   }, [open, checkResultId]);
 
   const fetchLinks = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("share_links")
       .select("*")
       .eq("check_result_id", checkResultId)
       .order("created_at", { ascending: false });
-    setLinks((data as any as ShareLink[]) || []);
+    if (handleSupabaseError(error, "share_links")) return;
+    setLinks(data ?? []);
   };
 
   const handleGenerate = async () => {
     setGenerating(true);
-    const expiresAt = useExpiry
-      ? new Date(Date.now() + expiryDays * 86400000).toISOString()
-      : null;
+    const expiresAt = useExpiry ? new Date(Date.now() + expiryDays * 86400000).toISOString() : null;
 
     try {
-      // Use edge function for password hashing
       const { data, error } = await supabase.functions.invoke("create-share-link", {
         body: {
           check_result_id: checkResultId,
@@ -71,16 +61,15 @@ export default function ShareLinkModal({ open, onOpenChange, checkResultId }: Sh
           allow_comment_write: allowCommentWrite,
         },
       });
-
       if (error) throw error;
-
       if (data?.token) {
         const url = `${window.location.origin}/shared/${data.token}`;
         setGeneratedUrl(url);
         fetchLinks();
       }
-    } catch (err: any) {
-      toast({ title: "エラー", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "不明なエラー";
+      toast({ title: "エラー", description: message, variant: "destructive" });
     }
     setGenerating(false);
   };
@@ -94,8 +83,8 @@ export default function ShareLinkModal({ open, onOpenChange, checkResultId }: Sh
   };
 
   const handleDelete = async (id: string) => {
-    await supabase.from("share_links").delete().eq("id", id);
-    fetchLinks();
+    const { error } = await supabase.from("share_links").delete().eq("id", id);
+    if (!handleSupabaseError(error, "share_links delete")) fetchLinks();
   };
 
   const isExpired = (expiresAt: string | null) => {
@@ -108,8 +97,7 @@ export default function ShareLinkModal({ open, onOpenChange, checkResultId }: Sh
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Link2 className="h-5 w-5 text-primary" />
-            共有リンク
+            <Link2 className="h-5 w-5 text-primary" />共有リンク
           </DialogTitle>
         </DialogHeader>
 
@@ -125,12 +113,8 @@ export default function ShareLinkModal({ open, onOpenChange, checkResultId }: Sh
               <Switch checked={usePassword} onCheckedChange={setUsePassword} />
             </div>
             {usePassword && (
-              <Input
-                type="text"
-                placeholder="半角英数字のみ使用可能"
-                value={password}
-                onChange={(e) => setPassword(e.target.value.replace(/[^a-zA-Z0-9]/g, ""))}
-              />
+              <Input type="text" placeholder="半角英数字のみ使用可能" value={password}
+                onChange={(e) => setPassword(e.target.value.replace(/[^a-zA-Z0-9]/g, ""))} />
             )}
 
             <div className="flex items-center justify-between">
@@ -163,8 +147,7 @@ export default function ShareLinkModal({ open, onOpenChange, checkResultId }: Sh
             </div>
 
             <Button onClick={handleGenerate} disabled={generating} className="w-full">
-              <Link2 className="h-4 w-4 mr-2" />
-              共有リンクを発行
+              <Link2 className="h-4 w-4 mr-2" />共有リンクを発行
             </Button>
 
             {generatedUrl && (
@@ -185,17 +168,13 @@ export default function ShareLinkModal({ open, onOpenChange, checkResultId }: Sh
                 {links.map((link) => (
                   <div key={link.id} className="flex items-center gap-2 p-3 rounded-lg border border-border text-sm">
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs text-muted-foreground truncate">
-                        {window.location.origin}/shared/{link.token}
-                      </p>
+                      <p className="text-xs text-muted-foreground truncate">{window.location.origin}/shared/{link.token}</p>
                       <p className="text-xs text-muted-foreground">
-                        {new Date(link.created_at).toLocaleDateString("ja-JP")}
+                        {link.created_at ? new Date(link.created_at).toLocaleDateString("ja-JP") : ""}
                       </p>
                     </div>
-                    <Badge variant="outline" className={cn(
-                      "text-[10px] shrink-0",
-                      isExpired(link.expires_at) ? "text-status-ng" : "text-status-ok"
-                    )}>
+                    <Badge variant="outline" className={cn("text-[10px] shrink-0",
+                      isExpired(link.expires_at) ? "text-status-ng" : "text-status-ok")}>
                       {isExpired(link.expires_at) ? "期限切れ" : "有効"}
                     </Badge>
                     <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => handleDelete(link.id)}>
