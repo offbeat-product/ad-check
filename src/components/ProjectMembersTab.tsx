@@ -45,31 +45,26 @@ export default function ProjectMembersTab({ projectId, projectName, ownerId }: P
     
     const memberData = data ?? [];
     
-    // Fetch display names for members with user_ids
+    // Fetch display names via RPC (avoids RLS restriction on profiles)
     const userIds = memberData.filter(m => m.user_id).map(m => m.user_id!);
-    if (userIds.length > 0) {
+    const allIds = ownerId ? [...new Set([...userIds, ownerId])] : userIds;
+    
+    if (allIds.length > 0) {
       const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, display_name")
-        .in("id", userIds);
+        .rpc("get_profiles_by_ids", { p_ids: allIds });
       
-      const profileMap = new Map((profiles ?? []).map(p => [p.id, p]));
+      const profileMap = new Map((profiles ?? []).map((p: any) => [p.id, p]));
       setMembers(memberData.map(m => ({
         ...m,
         profile: m.user_id ? profileMap.get(m.user_id) ?? undefined : undefined,
       })));
+      
+      if (ownerId) {
+        const op = profileMap.get(ownerId);
+        setOwnerProfile(op ? { email: op.email, display_name: op.display_name } : null);
+      }
     } else {
       setMembers(memberData);
-    }
-
-    // Fetch owner profile
-    if (ownerId) {
-      const { data: op } = await supabase
-        .from("profiles")
-        .select("email, display_name")
-        .eq("id", ownerId)
-        .maybeSingle();
-      setOwnerProfile(op);
     }
   };
 

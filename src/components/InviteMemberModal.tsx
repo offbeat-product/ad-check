@@ -43,12 +43,10 @@ export default function InviteMemberModal({ open, onOpenChange, projectId, proje
         return;
       }
 
-      // Search for user profile
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("id, email, display_name")
-        .eq("email", email.trim())
-        .maybeSingle();
+      // Search for user profile via RPC (avoids RLS restriction)
+      const { data: profileRows } = await supabase
+        .rpc("lookup_profile_by_email", { p_email: email.trim() });
+      const profile = profileRows && profileRows.length > 0 ? profileRows[0] : null;
 
       // Insert member record
       const { error } = await supabase.from("project_members").insert({
