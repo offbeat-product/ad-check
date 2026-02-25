@@ -89,6 +89,10 @@ export default function CheckPage() {
       }
       setResult(res);
 
+      const inputData = selectedProcess === "sf" && imageData
+        ? { image_base64: `data:${imageData.mediaType};base64,${imageData.base64}` }
+        : { script_text: scriptText };
+
       await supabase.from("check_results").insert({
         user_id: user.id,
         client_name: "レバレジーズ",
@@ -105,6 +109,7 @@ export default function CheckPage() {
         total_checks: res.total_checks,
         check_items: res.check_items as any,
         raw_response: res as any,
+        input_data: inputData as any,
       });
     } catch (err: any) {
       toast({ title: "チェックエラー", description: err.message, variant: "destructive" });

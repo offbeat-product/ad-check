@@ -21,6 +21,7 @@ export type Database = {
           created_at: string | null
           detected_case: string | null
           id: string
+          input_data: Json | null
           input_text: string | null
           input_type: string
           ng_count: number | null
@@ -41,6 +42,7 @@ export type Database = {
           created_at?: string | null
           detected_case?: string | null
           id?: string
+          input_data?: Json | null
           input_text?: string | null
           input_type: string
           ng_count?: number | null
@@ -61,6 +63,7 @@ export type Database = {
           created_at?: string | null
           detected_case?: string | null
           id?: string
+          input_data?: Json | null
           input_text?: string | null
           input_type?: string
           ng_count?: number | null

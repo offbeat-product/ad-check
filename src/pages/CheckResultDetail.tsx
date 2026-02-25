@@ -1,14 +1,16 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import type { CheckRecord, CheckItem, CheckStatus, Comment } from "@/lib/types";
+import { getCheckMarkers, type CheckMarker } from "@/lib/marker-positions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import CommentsPanel from "@/components/CommentsPanel";
 import CompareView from "@/components/CompareView";
-import { ArrowLeft, RefreshCw, Download, GitCompare, MessageCircle, Check, Pin } from "lucide-react";
+import AnnotationCanvas from "@/components/AnnotationCanvas";
+import { ArrowLeft, Download, GitCompare, MessageCircle, Check, Pin } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const statusConfig: Record<string, { label: string; class: string }> = {
@@ -49,10 +51,9 @@ export default function CheckResultDetail() {
   const [resolvedItems, setResolvedItems] = useState<Set<string>>(new Set());
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const [paintMode, setPaintMode] = useState(false);
-  const [annotations, setAnnotations] = useState<Comment[]>([]);
-  const [annotationPopover, setAnnotationPopover] = useState<{ x: number; y: number } | null>(null);
-  const [annotationText, setAnnotationText] = useState("");
-  const imageRef = useRef<HTMLDivElement>(null);
+  const [highlightCard, setHighlightCard] = useState<string | null>(null);
+  const imageContainerRef = useRef<HTMLDivElement>(null);
+  const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   useEffect(() => {
@@ -67,7 +68,6 @@ export default function CheckResultDetail() {
         setLoading(false);
       });
 
-    // Fetch comment counts per item
     supabase
       .from("comments")
       .select("check_item_id")
@@ -79,22 +79,12 @@ export default function CheckResultDetail() {
         });
         setCommentCounts(counts);
       });
-
-    // Fetch annotations
-    supabase
-      .from("comments")
-      .select("*")
-      .eq("check_result_id", id)
-      .not("annotation_data", "is", null)
-      .then(({ data }) => {
-        setAnnotations((data as any as Comment[]) || []);
-      });
   }, [id]);
 
   const handleStatusChange = async (newStatus: CheckStatus) => {
     if (!id) return;
     await supabase.from("check_results").update({ status: newStatus } as any).eq("id", id);
-    setRecord((r) => r ? { ...r, status: newStatus } : r);
+    setRecord((r) => (r ? { ...r, status: newStatus } : r));
   };
 
   const handleExportCsv = () => {
@@ -116,40 +106,30 @@ export default function CheckResultDetail() {
     URL.revokeObjectURL(url);
   };
 
-  const handleImageClick = async (e: React.MouseEvent) => {
-    if (!paintMode || !imageRef.current || !id) return;
-    const rect = imageRef.current.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    setAnnotationPopover({ x, y });
+  const scrollToCard = (patternId: string) => {
+    cardRefs.current[patternId]?.scrollIntoView({ behavior: "smooth", block: "center" });
+    setHighlightCard(patternId);
+    setTimeout(() => setHighlightCard(null), 2000);
   };
 
-  const handleSaveAnnotation = async () => {
-    if (!annotationText.trim() || !annotationPopover || !id) return;
+  const handleAnnotationSave = async (annotations: any[], comment: string) => {
+    if (!id) return;
     const { data: userData } = await supabase.auth.getUser();
     const email = userData?.user?.email || "";
     await supabase.from("comments").insert({
       check_result_id: id,
       author_name: email.split("@")[0] || "User",
       author_email: email,
-      content: annotationText,
-      annotation_data: annotationPopover,
+      content: comment || "アノテーション追加",
+      annotation_data: { annotations } as any,
       status: "open",
     } as any);
-    setAnnotationPopover(null);
-    setAnnotationText("");
-    // Refresh annotations
-    const { data } = await supabase
-      .from("comments")
-      .select("*")
-      .eq("check_result_id", id)
-      .not("annotation_data", "is", null);
-    setAnnotations((data as any as Comment[]) || []);
   };
 
-  const scrollToCard = (patternId: string) => {
-    cardRefs.current[patternId]?.scrollIntoView({ behavior: "smooth", block: "center" });
-  };
+  const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    setImageSize({ width: img.clientWidth, height: img.clientHeight });
+  }, []);
 
   if (loading) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">読み込み中...</div>;
   if (!record) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">結果が見つかりません</div>;
@@ -160,6 +140,8 @@ export default function CheckResultDetail() {
   const isSf = record.process_type === "sf";
   const currentStatus = record.status || "pending";
   const sc = statusConfig[currentStatus] || statusConfig.pending;
+  const markers = getCheckMarkers(items);
+  const inputData = (record as any).input_data as { image_base64?: string; script_text?: string } | null;
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -173,9 +155,7 @@ export default function CheckResultDetail() {
           <span className="text-sm text-muted-foreground">
             {record.client_name} / {record.product_name} / {record.process_type === "sf" ? "スタイルフレーム" : "字コンテ"}
           </span>
-
           <div className="ml-auto flex items-center gap-2">
-            {/* Status dropdown */}
             <Popover>
               <PopoverTrigger asChild>
                 <button className={cn("px-3 py-1 rounded-full text-xs font-medium border", sc.class)}>
@@ -197,7 +177,6 @@ export default function CheckResultDetail() {
                 ))}
               </PopoverContent>
             </Popover>
-
             <Button size="sm" variant="outline" onClick={() => setCompareOpen(true)} className="text-xs">
               <GitCompare className="h-3 w-3 mr-1" />
               比較
@@ -227,55 +206,64 @@ export default function CheckResultDetail() {
                 </Button>
               </div>
               <div
-                ref={imageRef}
-                className={cn("relative rounded-lg overflow-hidden border border-border", paintMode && "cursor-crosshair")}
-                onClick={handleImageClick}
+                ref={imageContainerRef}
+                className="relative rounded-lg overflow-hidden border border-border"
               >
-                {/* Placeholder image - in production would come from file_versions */}
-                <div className="bg-muted h-64 flex items-center justify-center text-muted-foreground text-sm">
-                  SF画像プレビュー
-                </div>
-                {/* Annotation pins */}
-                {annotations.map((ann, i) => {
-                  const pos = ann.annotation_data as { x: number; y: number } | null;
-                  if (!pos) return null;
-                  return (
-                    <div
-                      key={ann.id}
-                      className="absolute w-6 h-6 rounded-full bg-status-ng text-white text-[10px] font-bold flex items-center justify-center cursor-pointer -translate-x-1/2 -translate-y-1/2 shadow-md hover:scale-110 transition-transform"
-                      style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
-                      title={ann.content}
-                    >
-                      {i + 1}
-                    </div>
-                  );
-                })}
-                {/* Annotation popover form */}
-                {annotationPopover && (
-                  <div
-                    className="absolute z-10 bg-card border border-border rounded-lg shadow-lg p-3 w-56"
-                    style={{ left: `${annotationPopover.x}%`, top: `${annotationPopover.y}%` }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Textarea
-                      value={annotationText}
-                      onChange={(e) => setAnnotationText(e.target.value)}
-                      placeholder="修正コメントを入力"
-                      className="min-h-[60px] text-xs mb-2"
-                      autoFocus
-                    />
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={handleSaveAnnotation} className="text-xs flex-1">保存</Button>
-                      <Button size="sm" variant="outline" onClick={() => setAnnotationPopover(null)} className="text-xs">取消</Button>
-                    </div>
+                {inputData?.image_base64 ? (
+                  <img
+                    src={inputData.image_base64}
+                    alt="SF Preview"
+                    className="w-full"
+                    onLoad={handleImageLoad}
+                  />
+                ) : (
+                  <div className="bg-muted h-64 flex items-center justify-center text-muted-foreground text-sm px-4 text-center">
+                    この結果は旧バージョンで実行されたため、プレビューがありません。再チェックしてください。
                   </div>
                 )}
+
+                {/* Auto-generated check markers */}
+                <TooltipProvider>
+                  {markers.map((m) => (
+                    <Tooltip key={m.item.pattern_id}>
+                      <TooltipTrigger asChild>
+                        <div
+                          className={cn(
+                            "absolute w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-bold cursor-pointer -translate-x-1/2 -translate-y-1/2 transition-all hover:scale-130 z-10",
+                            m.item.status === "NG" ? "check-marker-ng" : "check-marker-warning",
+                            paintMode && "opacity-50"
+                          )}
+                          style={{ left: `${m.position.x}%`, top: `${m.position.y}%` }}
+                          onClick={(e) => { e.stopPropagation(); scrollToCard(m.item.pattern_id); }}
+                        >
+                          {m.number}
+                        </div>
+                      </TooltipTrigger>
+                      <TooltipContent side="top" className="text-xs max-w-[200px]">
+                        <span className="font-bold">{m.item.pattern_id}</span>: {m.item.item}
+                      </TooltipContent>
+                    </Tooltip>
+                  ))}
+                </TooltipProvider>
+
+                {/* Annotation canvas */}
+                <AnnotationCanvas
+                  active={paintMode}
+                  width={imageSize.width || 800}
+                  height={imageSize.height || 400}
+                  onSaveAnnotations={handleAnnotationSave}
+                />
               </div>
             </div>
           ) : (
             <div className="glass-card p-4">
               <div className="text-sm font-semibold mb-3">原稿テキスト</div>
-              <ScriptDisplay text={record.input_text || ""} items={items} onItemClick={scrollToCard} />
+              <ScriptDisplay
+                text={inputData?.script_text || record.input_text || ""}
+                items={items}
+                markers={markers}
+                onItemClick={scrollToCard}
+              />
             </div>
           )}
 
@@ -292,17 +280,31 @@ export default function CheckResultDetail() {
             <h3 className="text-sm font-semibold">チェック項目 ({items.length})</h3>
             {items.map((item, i) => {
               const isResolved = resolvedItems.has(item.pattern_id);
+              const marker = markers.find((m) => m.item.pattern_id === item.pattern_id);
+              const isHighlighted = highlightCard === item.pattern_id;
               return (
                 <div
                   key={i}
                   ref={(el) => { cardRefs.current[item.pattern_id] = el; }}
                   className={cn(
-                    "glass-card border-l-4 p-4 space-y-2 transition-opacity",
+                    "glass-card border-l-4 p-4 space-y-2 transition-all",
                     borderColors[item.status] || "",
-                    isResolved && "opacity-60"
+                    isResolved && "opacity-60",
+                    isHighlighted && "ring-2 ring-primary ring-offset-2 animate-pulse"
                   )}
                 >
                   <div className="flex items-center gap-2 flex-wrap">
+                    {/* Marker number badge */}
+                    {marker && (
+                      <div
+                        className={cn(
+                          "w-7 h-7 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0",
+                          item.status === "NG" ? "bg-[hsl(var(--status-ng))]" : "bg-[hsl(var(--status-warning))]"
+                        )}
+                      >
+                        {marker.number}
+                      </div>
+                    )}
                     <span className="text-xs font-mono text-muted-foreground">{item.pattern_id}</span>
                     <Badge variant="outline" className={severityBadge[item.severity] || ""}>
                       {item.severity}
@@ -312,7 +314,7 @@ export default function CheckResultDetail() {
                     </Badge>
                     <div className="ml-auto flex items-center gap-2">
                       <button
-                        onClick={() => { setCommentFilter(item.pattern_id); }}
+                        onClick={() => setCommentFilter(item.pattern_id)}
                         className="flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors"
                       >
                         <MessageCircle className="h-3 w-3" />
@@ -377,12 +379,17 @@ function SummaryCard({ label, value, className }: { label: string; value: string
   );
 }
 
-function ScriptDisplay({ text, items, onItemClick }: { text: string; items: CheckItem[]; onItemClick: (id: string) => void }) {
-  // Highlight NG/WARNING locations in the text
+function ScriptDisplay({
+  text, items, markers, onItemClick,
+}: {
+  text: string;
+  items: CheckItem[];
+  markers: CheckMarker[];
+  onItemClick: (id: string) => void;
+}) {
   const ngLocations = items.filter((i) => i.status === "NG" && i.location).map((i) => ({ loc: i.location!, id: i.pattern_id, status: i.status }));
   const warnLocations = items.filter((i) => i.status === "WARNING" && i.location).map((i) => ({ loc: i.location!, id: i.pattern_id, status: i.status }));
 
-  // Simple approach: split by lines and highlight if location text is found
   const lines = text.split("\n");
 
   return (
@@ -391,19 +398,30 @@ function ScriptDisplay({ text, items, onItemClick }: { text: string; items: Chec
         const ngMatch = ngLocations.find((n) => line.includes(n.loc));
         const warnMatch = !ngMatch ? warnLocations.find((w) => line.includes(w.loc)) : null;
         const match = ngMatch || warnMatch;
+        const marker = match ? markers.find((m) => m.item.pattern_id === match.id) : null;
 
         return (
           <div
             key={i}
             className={cn(
-              "px-3 py-1.5 rounded-md",
+              "px-3 py-1.5 rounded-md flex items-center gap-2",
               ngMatch && "bg-destructive/5 border-l-2 border-status-ng cursor-pointer hover:bg-destructive/10",
               warnMatch && "bg-status-warning/5 border-l-2 border-status-warning cursor-pointer hover:bg-status-warning/10",
               !match && "text-foreground/80"
             )}
             onClick={() => match && onItemClick(match.id)}
           >
-            {line || "\u00A0"}
+            {marker && (
+              <span
+                className={cn(
+                  "w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0",
+                  match?.status === "NG" ? "bg-[hsl(var(--status-ng))]" : "bg-[hsl(var(--status-warning))]"
+                )}
+              >
+                {marker.number}
+              </span>
+            )}
+            <span>{line || "\u00A0"}</span>
           </div>
         );
       })}
