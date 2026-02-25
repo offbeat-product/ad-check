@@ -85,7 +85,7 @@ export function extractTextFromXlsx(file: File): Promise<string> {
     const reader = new FileReader();
     reader.onload = async (e) => {
       try {
-        const XLSX = await import("xlsx");
+        const XLSX = await import("@e965/xlsx");
         const data = new Uint8Array(e.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: "array" });
         const lines: string[] = [];
