@@ -409,6 +409,60 @@ export type Database = {
           },
         ]
       }
+      reference_materials: {
+        Row: {
+          content_text: string | null
+          created_at: string
+          created_by: string | null
+          file_data: string | null
+          file_name: string | null
+          id: string
+          is_active: boolean
+          material_type: string
+          scope_id: string
+          scope_type: string
+          sort_order: number
+          source_type: string
+          source_url: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          content_text?: string | null
+          created_at?: string
+          created_by?: string | null
+          file_data?: string | null
+          file_name?: string | null
+          id?: string
+          is_active?: boolean
+          material_type: string
+          scope_id: string
+          scope_type: string
+          sort_order?: number
+          source_type?: string
+          source_url?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          content_text?: string | null
+          created_at?: string
+          created_by?: string | null
+          file_data?: string | null
+          file_name?: string | null
+          id?: string
+          is_active?: boolean
+          material_type?: string
+          scope_id?: string
+          scope_type?: string
+          sort_order?: number
+          source_type?: string
+          source_url?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       share_links: {
         Row: {
           allow_comment_read: boolean | null

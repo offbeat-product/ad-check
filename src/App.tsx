@@ -10,6 +10,7 @@ import Check from "./pages/Check";
 import CheckResultDetail from "./pages/CheckResultDetail";
 import ProjectPage from "./pages/ProjectPage";
 import FileReviewPage from "./pages/FileReviewPage";
+import ProductPage from "./pages/ProductPage";
 import AppLayout from "./components/AppLayout";
 import NotFound from "./pages/NotFound";
 import SharedViewPage from "./pages/SharedViewPage";
@@ -44,6 +45,7 @@ const App = () => (
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/check" element={<Check />} />
               <Route path="/check-result/:id" element={<CheckResultDetail />} />
+              <Route path="/product/:id" element={<ProductPage />} />
               <Route path="/project/:id" element={<ProjectPage />} />
               <Route path="/project/:projectId/file/:fileId" element={<FileReviewPage />} />
             </Route>
