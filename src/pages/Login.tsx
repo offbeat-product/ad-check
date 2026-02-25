@@ -34,23 +34,23 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
+    <div className="flex min-h-screen items-center justify-center bg-muted p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-bold">
             <span className="mr-2">♟</span>
             <span className="gradient-text">CheckMate AI</span>
           </h1>
-          <p className="text-sm text-muted-foreground">v1.0 — Ad Creative Quality Check</p>
+          <p className="text-sm text-muted-foreground">v2.0 — Ad Creative Quality Check</p>
         </div>
 
         <form onSubmit={handleSubmit} className="glass-card p-8 space-y-6">
-          <h2 className="text-xl font-semibold text-foreground">
+          <h2 className="text-xl font-semibold">
             {isSignUp ? "アカウント作成" : "ログイン"}
           </h2>
 
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-muted-foreground">メールアドレス</Label>
+            <Label htmlFor="email">メールアドレス</Label>
             <Input
               id="email"
               type="email"
@@ -58,12 +58,11 @@ export default function Login() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@company.com"
               required
-              className="bg-muted border-border"
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password" className="text-muted-foreground">パスワード</Label>
+            <Label htmlFor="password">パスワード</Label>
             <Input
               id="password"
               type="password"
@@ -72,11 +71,10 @@ export default function Login() {
               placeholder="••••••••"
               required
               minLength={6}
-              className="bg-muted border-border"
             />
           </div>
 
-          <Button type="submit" disabled={loading} className="w-full gradient-bg font-semibold text-primary-foreground hover:opacity-90 transition-opacity">
+          <Button type="submit" disabled={loading} className="w-full bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity">
             {loading ? "処理中..." : isSignUp ? "アカウント作成" : "ログイン"}
           </Button>
 

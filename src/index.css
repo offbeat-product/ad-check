@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,61 +6,70 @@
 
 @layer base {
   :root {
-    --background: 0 0% 4%;
-    --foreground: 0 0% 95%;
+    --background: 0 0% 100%;
+    --foreground: 215 25% 17%;
 
-    --card: 0 0% 7%;
-    --card-foreground: 0 0% 95%;
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 17%;
 
-    --popover: 0 0% 7%;
-    --popover-foreground: 0 0% 95%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 17%;
 
-    --primary: 190 100% 50%;
-    --primary-foreground: 0 0% 4%;
+    --primary: 224 76% 53%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 264 100% 58%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 215 25% 17%;
 
-    --muted: 0 0% 12%;
-    --muted-foreground: 0 0% 55%;
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
 
-    --accent: 166 100% 39%;
-    --accent-foreground: 0 0% 4%;
+    --accent: 210 40% 96%;
+    --accent-foreground: 215 25% 17%;
 
-    --destructive: 0 76% 63%;
+    --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 13%;
-    --input: 0 0% 13%;
-    --ring: 190 100% 50%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 224 76% 53%;
 
     --radius: 0.75rem;
 
-    /* Custom semantic tokens */
-    --gradient-brand: linear-gradient(135deg, hsl(190, 100%, 50%), hsl(264, 100%, 58%));
-    --gradient-brand-text: linear-gradient(90deg, #00d4ff, #7b2ff7);
+    /* Status colors */
+    --status-ok: 142 71% 45%;
+    --status-ok-foreground: 0 0% 100%;
+    --status-warning: 38 92% 50%;
+    --status-warning-foreground: 0 0% 0%;
+    --status-ng: 0 84% 60%;
+    --status-ng-foreground: 0 0% 100%;
+    --status-info: 224 76% 53%;
 
-    --status-ok: 145 100% 45%;
-    --status-warning: 45 100% 51%;
-    --status-ng: 0 76% 63%;
-    --status-info: 190 100% 50%;
+    /* Grade colors */
+    --grade-a: 142 71% 45%;
+    --grade-b: 85 62% 45%;
+    --grade-c: 38 92% 50%;
+    --grade-d: 0 84% 60%;
 
-    --product-ltr: 190 100% 50%;
+    /* Product colors */
+    --product-ltr: 193 100% 50%;
     --product-cta: 264 100% 58%;
     --product-tmd: 166 100% 39%;
 
+    /* Context bar */
     --context-client: 28 100% 57%;
-    --context-product: 190 100% 50%;
-    --context-process: 145 100% 45%;
+    --context-product: 193 100% 50%;
+    --context-process: 142 71% 45%;
 
-    --sidebar-background: 0 0% 5%;
-    --sidebar-foreground: 0 0% 95%;
-    --sidebar-primary: 190 100% 50%;
-    --sidebar-primary-foreground: 0 0% 4%;
-    --sidebar-accent: 0 0% 10%;
-    --sidebar-accent-foreground: 0 0% 95%;
-    --sidebar-border: 0 0% 13%;
-    --sidebar-ring: 190 100% 50%;
+    /* Sidebar */
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 215 25% 17%;
+    --sidebar-primary: 224 76% 53%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 213 94% 97%;
+    --sidebar-accent-foreground: 224 76% 53%;
+    --sidebar-border: 214 32% 91%;
+    --sidebar-ring: 224 76% 53%;
   }
 }
 
@@ -71,28 +80,20 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Inter', 'Helvetica Neue', 'Hiragino Kaku Gothic ProN', sans-serif;
+    font-family: 'Noto Sans JP', system-ui, sans-serif;
   }
 }
 
 @layer utilities {
   .gradient-text {
-    background: var(--gradient-brand-text);
+    background: linear-gradient(90deg, hsl(224, 76%, 53%), hsl(264, 100%, 58%));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
 
-  .gradient-border {
-    border-image: var(--gradient-brand) 1;
-  }
-
-  .gradient-bg {
-    background: var(--gradient-brand);
-  }
-
   .glass-card {
-    @apply bg-card border border-border rounded-xl backdrop-blur-sm;
+    @apply bg-card border border-border rounded-xl shadow-sm;
   }
 
   .status-ng {
@@ -104,6 +105,6 @@
   }
 
   .status-ok {
-    @apply bg-[hsl(var(--status-ok))] text-black;
+    @apply bg-[hsl(var(--status-ok))] text-white;
   }
 }
