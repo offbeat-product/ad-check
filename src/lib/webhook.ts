@@ -2,17 +2,20 @@ import type { CheckResult } from "./types";
 
 const BASE_URL = "https://offbeat-inc.app.n8n.cloud/webhook";
 
-/** Determine the unified v2 webhook URL based on process type */
-export function getWebhookUrl(processType: string): string {
+/** Determine the unified v2 webhook URL based on process type.
+ *  Returns null for process types that are not yet supported. */
+export function getWebhookUrl(processType: string): string | null {
   switch (processType) {
+    case "script":
+    case "na_script":
+      return `${BASE_URL}/check-script-v2`;
     case "sf":
     case "styleframe":
     case "storyboard":
+    case "vcon":
       return `${BASE_URL}/check-sf-v2`;
-    case "script":
-    case "na_script":
     default:
-      return `${BASE_URL}/check-script-v2`;
+      return null; // narration, bgm, video_horizontal, video_vertical — not yet supported
   }
 }
 
