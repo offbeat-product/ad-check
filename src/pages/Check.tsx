@@ -168,10 +168,10 @@ export default function CheckPage() {
       let res: CheckResult;
       if (processConfig.inputMode === "image") {
         if (!imageData) throw new Error("画像を選択してください");
-        res = await runSfCheck(product.id, imageData.base64, imageData.mediaType);
+        res = await runSfCheck(product.id, imageData.base64, imageData.mediaType, selectedProcess);
       } else {
         if (!scriptText.trim()) throw new Error("テキストを入力してください");
-        res = await runScriptCheck(product.id, scriptText);
+        res = await runScriptCheck(product.id, scriptText, selectedProcess);
       }
       setResult(res);
 
@@ -358,11 +358,15 @@ export default function CheckPage() {
         </section>
 
         {/* ── STEP 2: Input ── */}
-        {selectedProductId && processConfig.enabled && (
+        {selectedProductId && (
           <section className="glass-card p-6 space-y-4">
             <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">STEP 2 — 入力</h2>
 
-            {processConfig.inputMode === "image" ? (
+            {!processConfig.enabled ? (
+              <div className="border-2 border-dashed border-border rounded-xl p-12 text-center text-muted-foreground">
+                <p className="text-sm">この工程のAIチェックは準備中です。今後のアップデートで対応予定です。</p>
+              </div>
+            ) : processConfig.inputMode === "image" ? (
               <ImageInput
                 imageData={imageData}
                 imagePreviewUrl={imagePreviewUrl}
@@ -389,7 +393,7 @@ export default function CheckPage() {
               </div>
             ) : (
               <div className="border-2 border-dashed border-border rounded-xl p-12 text-center text-muted-foreground">
-                <p className="text-sm">この工程は現在準備中です</p>
+                <p className="text-sm">この工程のAIチェックは準備中です。今後のアップデートで対応予定です。</p>
               </div>
             )}
           </section>

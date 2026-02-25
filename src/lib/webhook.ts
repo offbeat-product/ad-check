@@ -49,8 +49,8 @@ function parseResponse(raw: any): CheckResult {
   };
 }
 
-export async function runScriptCheck(productId: string, scriptText: string, referenceContext?: string): Promise<CheckResult> {
-  const body: Record<string, string> = { product_id: productId, script_text: scriptText };
+export async function runScriptCheck(productId: string, scriptText: string, processType: string = "script", referenceContext?: string): Promise<CheckResult> {
+  const body: Record<string, string> = { product_id: productId, process_type: processType, script_text: scriptText };
   if (referenceContext) body.reference_context = referenceContext;
 
   const url = getWebhookUrl("script");
@@ -65,8 +65,8 @@ export async function runScriptCheck(productId: string, scriptText: string, refe
   return parseResponse(raw);
 }
 
-export async function runSfCheck(productId: string, imageBase64: string, mediaType: string, referenceContext?: string): Promise<CheckResult> {
-  const body: Record<string, string> = { product_id: productId, image_base64: imageBase64, media_type: mediaType };
+export async function runSfCheck(productId: string, imageBase64: string, mediaType: string, processType: string = "sf", referenceContext?: string): Promise<CheckResult> {
+  const body: Record<string, string> = { product_id: productId, process_type: processType, image_base64: imageBase64, media_type: mediaType };
   if (referenceContext) body.reference_context = referenceContext;
 
   const url = getWebhookUrl("sf");
