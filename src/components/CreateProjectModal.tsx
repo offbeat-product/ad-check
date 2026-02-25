@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,16 +30,21 @@ export default function CreateProjectModal({ open, onOpenChange, onCreated }: Pr
 
   useEffect(() => {
     if (!open) return;
-    supabase.from("clients").select("*").order("name").then(({ data }) => setClients((data as any) || []));
-    supabase.from("products").select("*").order("name").then(({ data }) => setProducts((data as any) || []));
+    Promise.all([
+      supabase.from("clients").select("*").order("name"),
+      supabase.from("products").select("*").order("name"),
+    ]).then(([cRes, pRes]) => {
+      handleSupabaseError(cRes.error, "clients");
+      handleSupabaseError(pRes.error, "products");
+      const clientData = cRes.data ?? [];
+      setClients(clientData);
+      setProducts(pRes.data ?? []);
+      // Auto-select if only one client
+      if (clientData.length === 1 && !clientId) setClientId(clientData[0].id);
+    });
   }, [open]);
 
   const filteredProducts = products.filter((p) => p.client_id === clientId);
-
-  // Auto-select if only one client
-  useEffect(() => {
-    if (clients.length === 1 && !clientId) setClientId(clients[0].id);
-  }, [clients]);
 
   const handleCreate = async () => {
     if (!name.trim() || !productId || !user) return;
@@ -49,13 +55,13 @@ export default function CreateProjectModal({ open, onOpenChange, onCreated }: Pr
       project_code: code.trim() || null,
       description: description.trim() || null,
       created_by: user.id,
-    } as any).select("id").single();
+    }).select("id").single();
 
     if (error) {
       toast({ title: "エラー", description: error.message, variant: "destructive" });
-    } else {
+    } else if (data) {
       toast({ title: "案件を作成しました" });
-      onCreated((data as any).id);
+      onCreated(data.id);
       onOpenChange(false);
       setName(""); setCode(""); setDescription("");
     }
@@ -65,9 +71,7 @@ export default function CreateProjectModal({ open, onOpenChange, onCreated }: Pr
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle>新規案件作成</DialogTitle>
-        </DialogHeader>
+        <DialogHeader><DialogTitle>新規案件作成</DialogTitle></DialogHeader>
         <div className="space-y-4">
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">クライアント</label>

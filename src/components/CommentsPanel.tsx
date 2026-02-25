@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import type { Comment } from "@/lib/types";
+import type { CommentRow } from "@/lib/db-types";
+import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, MessageCircle, Pin, Reply, Paperclip, X, FileText } from "lucide-react";
+import { Send, Pin, Reply, Paperclip, X, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface CommentsPanelProps {
@@ -14,7 +15,7 @@ interface CommentsPanelProps {
 
 export default function CommentsPanel({ checkResultId, filterItemId }: CommentsPanelProps) {
   const { user } = useAuth();
-  const [comments, setComments] = useState<Comment[]>([]);
+  const [comments, setComments] = useState<CommentRow[]>([]);
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
   const [newComment, setNewComment] = useState("");
   const [replyTo, setReplyTo] = useState<string | null>(null);
@@ -24,12 +25,13 @@ export default function CommentsPanel({ checkResultId, filterItemId }: CommentsP
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchComments = async () => {
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("comments")
       .select("*")
       .eq("check_result_id", checkResultId)
       .order("created_at", { ascending: true });
-    setComments((data as any as Comment[]) || []);
+    if (handleSupabaseError(error, "comments")) return;
+    setComments(data ?? []);
   };
 
   useEffect(() => { fetchComments(); }, [checkResultId]);
@@ -55,7 +57,7 @@ export default function CommentsPanel({ checkResultId, filterItemId }: CommentsP
     const ext = file.name.split(".").pop() || "bin";
     const path = `${checkResultId}/${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from("comment-attachments").upload(path, file);
-    if (error) return null;
+    if (error) { console.error("[storage upload]", error.message); return null; }
     const { data: urlData } = supabase.storage.from("comment-attachments").getPublicUrl(path);
     return { url: urlData.publicUrl, type: file.type, name: file.name };
   };
@@ -64,7 +66,7 @@ export default function CommentsPanel({ checkResultId, filterItemId }: CommentsP
     if (!newComment.trim() || !user) return;
     setUploading(true);
 
-    let attachmentData: any = {};
+    let attachmentData: Record<string, string> = {};
     if (attachment) {
       const result = await uploadAttachment(attachment.file);
       if (result) {
@@ -76,7 +78,7 @@ export default function CommentsPanel({ checkResultId, filterItemId }: CommentsP
       }
     }
 
-    await supabase.from("comments").insert({
+    const { error } = await supabase.from("comments").insert({
       check_result_id: checkResultId,
       check_item_id: filterItemId || null,
       author_name: user.email?.split("@")[0] || "User",
@@ -84,7 +86,8 @@ export default function CommentsPanel({ checkResultId, filterItemId }: CommentsP
       content: newComment,
       status: "open",
       ...attachmentData,
-    } as any);
+    });
+    handleSupabaseError(error, "comment insert");
     setNewComment("");
     setAttachment(null);
     setUploading(false);
@@ -94,7 +97,7 @@ export default function CommentsPanel({ checkResultId, filterItemId }: CommentsP
   const handleReply = async (parentId: string) => {
     if (!replyText.trim() || !user) return;
     const parent = comments.find((c) => c.id === parentId);
-    await supabase.from("comments").insert({
+    const { error } = await supabase.from("comments").insert({
       check_result_id: checkResultId,
       check_item_id: parent?.check_item_id || null,
       author_name: user.email?.split("@")[0] || "User",
@@ -102,7 +105,8 @@ export default function CommentsPanel({ checkResultId, filterItemId }: CommentsP
       content: replyText,
       status: "open",
       parent_id: parentId,
-    } as any);
+    });
+    handleSupabaseError(error, "reply insert");
     setReplyTo(null);
     setReplyText("");
     fetchComments();
@@ -110,7 +114,8 @@ export default function CommentsPanel({ checkResultId, filterItemId }: CommentsP
 
   const toggleStatus = async (id: string, current: string) => {
     const next = current === "open" ? "resolved" : "open";
-    await supabase.from("comments").update({ status: next } as any).eq("id", id);
+    const { error } = await supabase.from("comments").update({ status: next }).eq("id", id);
+    handleSupabaseError(error, "comment status");
     fetchComments();
   };
 
@@ -139,38 +144,26 @@ export default function CommentsPanel({ checkResultId, filterItemId }: CommentsP
 
   return (
     <div className="flex flex-col h-full bg-card">
-      {/* Header */}
       <div className="px-3 py-2 border-b border-border shrink-0">
         <div className="flex gap-1">
           {tabs.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={cn(
-                "px-2.5 py-1 rounded-md text-xs font-medium transition-colors",
-                tab === t.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
-              )}
-            >
-              {t.label}
-              <span className="ml-1 opacity-70">({countByTab(t.key)})</span>
+            <button key={t.key} onClick={() => setTab(t.key)}
+              className={cn("px-2.5 py-1 rounded-md text-xs font-medium transition-colors",
+                tab === t.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted")}>
+              {t.label}<span className="ml-1 opacity-70">({countByTab(t.key)})</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Comments list */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {topLevel.length === 0 && (
           <p className="text-xs text-muted-foreground text-center py-8">コメントはまだありません</p>
         )}
         {topLevel.map((c) => (
           <div key={c.id} className="space-y-2">
-            <CommentCard
-              comment={c}
-              onToggleStatus={() => toggleStatus(c.id, c.status)}
-              onReply={() => setReplyTo(replyTo === c.id ? null : c.id)}
-              timeAgo={timeAgo}
-            />
+            <CommentCard comment={c} onToggleStatus={() => toggleStatus(c.id, c.status)}
+              onReply={() => setReplyTo(replyTo === c.id ? null : c.id)} timeAgo={timeAgo} />
             {replies(c.id).map((r) => (
               <div key={r.id} className="ml-5">
                 <CommentCard comment={r} onToggleStatus={() => toggleStatus(r.id, r.status)} onReply={() => {}} timeAgo={timeAgo} isReply />
@@ -179,16 +172,13 @@ export default function CommentsPanel({ checkResultId, filterItemId }: CommentsP
             {replyTo === c.id && (
               <div className="ml-5 flex gap-2">
                 <Textarea value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="返信を入力..." className="min-h-[50px] text-xs" />
-                <Button size="sm" onClick={() => handleReply(c.id)} className="self-end h-8">
-                  <Send className="h-3 w-3" />
-                </Button>
+                <Button size="sm" onClick={() => handleReply(c.id)} className="self-end h-8"><Send className="h-3 w-3" /></Button>
               </div>
             )}
           </div>
         ))}
       </div>
 
-      {/* Input */}
       <div className="border-t border-border p-3 shrink-0 space-y-2">
         {attachment && (
           <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
@@ -203,13 +193,9 @@ export default function CommentsPanel({ checkResultId, filterItemId }: CommentsP
         )}
         <div className="flex gap-2">
           <div className="flex-1 space-y-1">
-            <Textarea
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="コメントを入力..."
-              className="min-h-[50px] text-xs"
-              onKeyDown={(e) => { if (e.key === "Enter" && e.metaKey) handleSubmit(); }}
-            />
+            <Textarea value={newComment} onChange={(e) => setNewComment(e.target.value)}
+              placeholder="コメントを入力..." className="min-h-[50px] text-xs"
+              onKeyDown={(e) => { if (e.key === "Enter" && e.metaKey) handleSubmit(); }} />
             <div className="flex items-center gap-1">
               <button onClick={() => fileInputRef.current?.click()} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
                 <Paperclip className="h-3.5 w-3.5" />
@@ -226,64 +212,44 @@ export default function CommentsPanel({ checkResultId, filterItemId }: CommentsP
   );
 }
 
-function CommentCard({
-  comment, onToggleStatus, onReply, timeAgo, isReply,
-}: {
-  comment: Comment;
-  onToggleStatus: () => void;
-  onReply: () => void;
-  timeAgo: (d: string) => string;
-  isReply?: boolean;
+function CommentCard({ comment, onToggleStatus, onReply, timeAgo, isReply }: {
+  comment: CommentRow; onToggleStatus: () => void; onReply: () => void; timeAgo: (d: string) => string; isReply?: boolean;
 }) {
   const initial = comment.author_name.charAt(0).toUpperCase();
   const colors = ["bg-primary", "bg-status-ok", "bg-context-client", "bg-product-cta"];
   const colorIdx = comment.author_name.charCodeAt(0) % colors.length;
-  const ext = comment as any;
 
   return (
     <div className="border border-border rounded-lg p-2.5 space-y-1.5 bg-card">
       <div className="flex items-center gap-2">
-        <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white", colors[colorIdx])}>
-          {initial}
-        </div>
+        <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white", colors[colorIdx])}>{initial}</div>
         <span className="text-xs font-medium flex-1">{comment.author_name}</span>
         <span className="text-[10px] text-muted-foreground">{timeAgo(comment.created_at)}</span>
       </div>
       <p className="text-xs">{comment.content}</p>
       {comment.annotation_data && (
-        <div className="flex items-center gap-1 text-[10px] text-primary">
-          <Pin className="h-3 w-3" />
-          画像上の指摘
-        </div>
+        <div className="flex items-center gap-1 text-[10px] text-primary"><Pin className="h-3 w-3" />画像上の指摘</div>
       )}
-      {ext.attachment_url && (
-        <a href={ext.attachment_url} target="_blank" rel="noopener noreferrer" className="block">
-          {ext.attachment_type?.startsWith("image/") ? (
-            <img src={ext.attachment_url} alt={ext.attachment_name} className="max-h-20 rounded border border-border" />
+      {comment.attachment_url && (
+        <a href={comment.attachment_url} target="_blank" rel="noopener noreferrer" className="block">
+          {comment.attachment_type?.startsWith("image/") ? (
+            <img src={comment.attachment_url} alt={comment.attachment_name ?? ""} className="max-h-20 rounded border border-border" />
           ) : (
             <div className="flex items-center gap-1.5 text-[10px] text-primary hover:underline">
-              <FileText className="h-3 w-3" />
-              {ext.attachment_name}
+              <FileText className="h-3 w-3" />{comment.attachment_name}
             </div>
           )}
         </a>
       )}
       <div className="flex items-center gap-2">
-        <button
-          onClick={onToggleStatus}
-          className={cn(
-            "text-[10px] px-2 py-0.5 rounded-full border font-medium",
-            comment.status === "open"
-              ? "border-status-warning/30 text-status-warning bg-status-warning/10"
-              : "border-status-ok/30 text-status-ok bg-status-ok/10"
-          )}
-        >
+        <button onClick={onToggleStatus}
+          className={cn("text-[10px] px-2 py-0.5 rounded-full border font-medium",
+            comment.status === "open" ? "border-status-warning/30 text-status-warning bg-status-warning/10" : "border-status-ok/30 text-status-ok bg-status-ok/10")}>
           {comment.status === "open" ? "未対応" : "対応済"}
         </button>
         {!isReply && (
           <button onClick={onReply} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1">
-            <Reply className="h-3 w-3" />
-            返信
+            <Reply className="h-3 w-3" />返信
           </button>
         )}
       </div>

@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import type { CheckRecord, CheckStatus } from "@/lib/types";
+import type { CheckItem, CheckStatus } from "@/lib/types";
+import type { CheckResultRow } from "@/lib/db-types";
 import { useReviewState, useDownload, useExportCsv } from "@/hooks/useReviewState";
+import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import CompareView from "@/components/CompareView";
@@ -25,30 +27,32 @@ export default function CheckResultDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [record, setRecord] = useState<CheckRecord | null>(null);
+  const [record, setRecord] = useState<CheckResultRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [compareOpen, setCompareOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const { downloadFile } = useDownload();
   const { exportCsv } = useExportCsv();
 
-  const checkItems = record ? (record.check_items as any[]) : null;
+  const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
   const { items, markers, commentCounts, paintMode, setPaintMode, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
     useReviewState(id, checkItems);
 
   useEffect(() => {
     if (!id) return;
-    supabase.from("check_results").select("*").eq("id", id).single().then(({ data, error }) => {
-      if (error) console.error(error);
-      setRecord(data as any);
+    supabase.from("check_results").select("*").eq("id", id).maybeSingle().then(({ data, error }) => {
+      handleSupabaseError(error, "check_results");
+      setRecord(data);
       setLoading(false);
     });
   }, [id]);
 
   const handleStatusChange = async (newStatus: CheckStatus) => {
     if (!id) return;
-    await supabase.from("check_results").update({ status: newStatus } as any).eq("id", id);
-    setRecord((r) => (r ? { ...r, status: newStatus } : r));
+    const { error } = await supabase.from("check_results").update({ status: newStatus }).eq("id", id);
+    if (!handleSupabaseError(error, "status update")) {
+      setRecord((r) => (r ? { ...r, status: newStatus } : r));
+    }
   };
 
   const handleDownload = () => {
@@ -67,16 +71,17 @@ export default function CheckResultDetail() {
     exportCsv(items, `checkmate_${record.product_code}_${Date.now()}.csv`);
   };
 
-  const handleAnnotationSave = async (annotations: any[]) => {
+  const handleAnnotationSave = async (annotations: unknown[]) => {
     if (!id || !user) return;
-    await supabase.from("comments").insert({
+    const { error } = await supabase.from("comments").insert([{
       check_result_id: id,
       author_name: user.email?.split("@")[0] || "User",
       author_email: user.email || "",
       content: "アノテーション追加",
-      annotation_data: { annotations } as any,
+      annotation_data: { annotations },
       status: "open",
-    } as any);
+    }]);
+    handleSupabaseError(error, "annotation save");
   };
 
   if (loading) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">読み込み中...</div>;
@@ -86,12 +91,11 @@ export default function CheckResultDetail() {
   const currentStatus = record.status || "pending";
   const sc = statusConfig[currentStatus] || statusConfig.pending;
   const inputData = record.input_data as { image_base64?: string; script_text?: string } | null;
-  const fileName = `${record.product_code.toUpperCase()}_${record.process_type.toUpperCase()}_${new Date(record.created_at).toISOString().slice(0, 10)}`;
+  const fileName = `${record.product_code.toUpperCase()}_${record.process_type.toUpperCase()}_${new Date(record.created_at!).toISOString().slice(0, 10)}`;
 
   return (
     <div className="flex h-[calc(100vh-0px)] overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        {/* Top action bar */}
         <header className="border-b border-border px-4 py-2 flex items-center gap-3 bg-card shrink-0">
           <button onClick={() => navigate("/dashboard")} className="text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="h-4 w-4" />
@@ -128,7 +132,6 @@ export default function CheckResultDetail() {
           </div>
         </header>
 
-        {/* Creative preview area */}
         <div className="flex-1 overflow-y-auto">
           <div className="p-4">
             {isSf ? (

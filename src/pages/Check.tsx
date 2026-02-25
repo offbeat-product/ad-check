@@ -1,8 +1,11 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import { PRODUCTS, PROCESSES, type ProductCode, type ProcessType, type CheckResult, type CheckItem } from "@/lib/types";
+import type { CheckResult, CheckItem } from "@/lib/types";
+import type { Product, Client } from "@/lib/db-types";
+import { getWebhookPaths } from "@/lib/db-types";
+import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { runScriptCheck, runSfCheck } from "@/lib/webhook";
 import { compressImage, type CompressResult } from "@/lib/image-compress";
 import ContextBar from "@/components/ContextBar";
@@ -11,39 +14,74 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Upload, X, Info, RefreshCw, Download } from "lucide-react";
-// AppLayoutContext removed - using local state
+
+type ProcessType = "script" | "sf" | "ekonte" | "master";
+
+const PROCESSES = [
+  { id: "script" as ProcessType, label: "字コンテ / NA原稿", enabledFor: "all" as const },
+  { id: "sf" as ProcessType, label: "スタイルフレーム", enabledFor: "sf_enabled" as const },
+  { id: "ekonte" as ProcessType, label: "絵コンテ", enabledFor: "none" as const },
+  { id: "master" as ProcessType, label: "動画マスター", enabledFor: "none" as const },
+];
 
 export default function CheckPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [selectedProduct, setSelectedProduct] = useState<ProductCode>("ltr_expo");
+
+  // DB-driven product data
+  const [dbProducts, setDbProducts] = useState<Product[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
   const [selectedProcess, setSelectedProcess] = useState<ProcessType>("script");
   const [scriptText, setScriptText] = useState("");
   const [imageData, setImageData] = useState<CompressResult | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
   const [result, setResult] = useState<CheckResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const product = PRODUCTS.find((p) => p.code === selectedProduct)!;
+  // Fetch products and clients from DB
+  useEffect(() => {
+    Promise.all([
+      supabase.from("products").select("*").order("name"),
+      supabase.from("clients").select("*").order("name"),
+    ]).then(([prodRes, clientRes]) => {
+      handleSupabaseError(prodRes.error, "products");
+      handleSupabaseError(clientRes.error, "clients");
+      const prods = prodRes.data ?? [];
+      setDbProducts(prods);
+      setClients(clientRes.data ?? []);
+      if (prods.length > 0 && !selectedProductId) {
+        setSelectedProductId(prods[0].id);
+      }
+      setDataLoading(false);
+    });
+  }, []);
+
+  const product = dbProducts.find((p) => p.id === selectedProductId);
+  const clientName = product?.client_id ? clients.find(c => c.id === product.client_id)?.name ?? "" : "";
 
   const isProcessEnabled = (processId: ProcessType) => {
+    if (!product) return false;
     const proc = PROCESSES.find((p) => p.id === processId)!;
     if (proc.enabledFor === "all") return true;
     if (proc.enabledFor === "none") return false;
-    return proc.enabledFor === selectedProduct;
+    // "sf_enabled" - check product.sf_enabled
+    return !!product.sf_enabled;
   };
 
-  const handleProductChange = (code: ProductCode) => {
-    setSelectedProduct(code);
+  const handleProductChange = (id: string) => {
+    setSelectedProductId(id);
     setResult(null);
-    if (selectedProcess === "sf" && code !== "tmd_aga") {
+    const prod = dbProducts.find(p => p.id === id);
+    if (selectedProcess === "sf" && !prod?.sf_enabled) {
       setSelectedProcess("script");
     }
   };
 
   const handleLoadSample = () => {
-    setScriptText(product.sampleText);
+    if (product?.sample_text) setScriptText(product.sample_text);
   };
 
   const handleImageUpload = useCallback(async (file: File) => {
@@ -54,7 +92,10 @@ export default function CheckPage() {
     try {
       const compressed = await compressImage(file);
       setImageData(compressed);
-      setImagePreviewUrl(URL.createObjectURL(file));
+      const url = URL.createObjectURL(file);
+      setImagePreviewUrl(url);
+      // Clean up previous URL
+      return () => URL.revokeObjectURL(url);
     } catch {
       toast({ title: "エラー", description: "画像の処理に失敗しました", variant: "destructive" });
     }
@@ -68,18 +109,26 @@ export default function CheckPage() {
     }
   }, [handleImageUpload]);
 
+  // Clean up image preview URL on unmount
+  useEffect(() => {
+    return () => {
+      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    };
+  }, [imagePreviewUrl]);
+
   const handleExecute = async () => {
-    if (!user) return;
+    if (!user || !product) return;
     setLoading(true);
     setResult(null);
     try {
+      const webhookPaths = getWebhookPaths(product);
       let res: CheckResult;
       if (selectedProcess === "sf") {
         if (!imageData) throw new Error("画像を選択してください");
         res = await runSfCheck(imageData.base64, imageData.mediaType);
       } else {
         if (!scriptText.trim()) throw new Error("テキストを入力してください");
-        const webhookPath = product.webhookPaths[selectedProcess];
+        const webhookPath = webhookPaths[selectedProcess];
         if (!webhookPath) throw new Error("このWebhookは設定されていません");
         res = await runScriptCheck(webhookPath, scriptText);
       }
@@ -89,9 +138,9 @@ export default function CheckPage() {
         ? { image_base64: `data:${imageData.mediaType};base64,${imageData.base64}` }
         : { script_text: scriptText };
 
-      await supabase.from("check_results").insert({
+      const { error } = await supabase.from("check_results").insert([{
         user_id: user.id,
-        client_name: "レバレジーズ",
+        client_name: clientName,
         product_code: product.code,
         product_name: product.name,
         process_type: selectedProcess,
@@ -103,12 +152,14 @@ export default function CheckPage() {
         warning_count: res.warning_count,
         ok_count: res.ok_count,
         total_checks: res.total_checks,
-        check_items: res.check_items as any,
-        raw_response: res as any,
-        input_data: inputData as any,
-      });
-    } catch (err: any) {
-      toast({ title: "チェックエラー", description: err.message, variant: "destructive" });
+        check_items: res.check_items as unknown as Record<string, unknown>[],
+        raw_response: res as unknown as Record<string, unknown>,
+        input_data: inputData as unknown as Record<string, unknown>,
+      }]);
+      handleSupabaseError(error, "check_results insert");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "不明なエラー";
+      toast({ title: "チェックエラー", description: message, variant: "destructive" });
     } finally {
       setLoading(false);
     }
@@ -127,51 +178,50 @@ export default function CheckPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `checkmate_${product.code}_${selectedProcess}_${Date.now()}.csv`;
+    a.download = `checkmate_${product?.code}_${selectedProcess}_${Date.now()}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
 
+  if (dataLoading) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">読み込み中...</div>;
+  if (!product) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">商材が登録されていません</div>;
+
   const processLabel = PROCESSES.find((p) => p.id === selectedProcess)?.label || "";
-
-  const loadingText = selectedProcess === "sf"
-    ? "🎨 Vision APIによるSFチェック実行中..."
-    : selectedProduct === "tmd_aga"
-    ? "薬事チェック含むAIチェック実行中..."
-    : "AIチェック実行中...";
-
+  const infoLines = product.info_lines ?? [];
   const productColorMap: Record<string, string> = {
     "product-ltr": "hsl(193, 100%, 50%)",
     "product-cta": "hsl(264, 100%, 58%)",
     "product-tmd": "hsl(166, 100%, 39%)",
   };
 
+  const loadingText = selectedProcess === "sf"
+    ? "🎨 Vision APIによるSFチェック実行中..."
+    : product.code === "tmd_aga"
+    ? "薬事チェック含むAIチェック実行中..."
+    : "AIチェック実行中...";
+
   return (
     <div className="min-h-screen">
-      {/* Top bar */}
       <header className="border-b border-border px-6 py-3 flex items-center bg-card">
         <div className="text-sm text-muted-foreground">
-          レバレジーズ &gt; {product.name} &gt; {processLabel}
+          {clientName} &gt; {product.name} &gt; {processLabel}
         </div>
       </header>
 
       <div className="max-w-4xl mx-auto p-6 space-y-6">
-        {/* Context bar */}
-        <ContextBar client="レバレジーズ" productName={product.name} processLabel={processLabel} />
+        <ContextBar client={clientName} productName={product.name} processLabel={processLabel} />
 
-        {/* STEP 1: Product & Process */}
         <section className="glass-card p-6 space-y-4">
           <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">STEP 1 — コンテキスト選択</h2>
 
-          {/* Product tabs */}
           <div className="flex gap-2 flex-wrap">
-            {PRODUCTS.map((p) => {
-              const color = productColorMap[p.color] || "hsl(193, 100%, 50%)";
-              const isActive = selectedProduct === p.code;
+            {dbProducts.map((p) => {
+              const color = productColorMap[p.color ?? ""] ?? "hsl(193, 100%, 50%)";
+              const isActive = selectedProductId === p.id;
               return (
                 <button
-                  key={p.code}
-                  onClick={() => handleProductChange(p.code)}
+                  key={p.id}
+                  onClick={() => handleProductChange(p.id)}
                   className="px-4 py-2.5 rounded-lg text-sm font-medium border transition-all"
                   style={isActive ? {
                     backgroundColor: `${color}15`,
@@ -183,14 +233,13 @@ export default function CheckPage() {
                   }}
                 >
                   <div className="font-bold">{p.label}</div>
-                  <div className="text-[10px] opacity-70">{p.rules}</div>
-                  <div className="text-[10px] opacity-50">{p.meta}</div>
+                  <div className="text-[10px] opacity-70">{p.rules_desc ?? ""}</div>
+                  <div className="text-[10px] opacity-50">{p.meta ?? ""}</div>
                 </button>
               );
             })}
           </div>
 
-          {/* Process chips */}
           <div className="flex gap-2 flex-wrap">
             {PROCESSES.map((proc) => {
               const enabled = isProcessEnabled(proc.id);
@@ -216,13 +265,12 @@ export default function CheckPage() {
             })}
           </div>
 
-          {/* Info panel */}
           <div className="bg-primary/5 border border-primary/10 rounded-lg p-4 space-y-1">
             <div className="flex items-center gap-2 text-xs font-bold text-primary mb-2">
               <Info className="h-3 w-3" />
               商材情報
             </div>
-            {product.infoLines.map((line, i) => (
+            {infoLines.map((line, i) => (
               <p key={i} className="text-xs text-muted-foreground">{line}</p>
             ))}
             {product.warning && (
@@ -231,7 +279,6 @@ export default function CheckPage() {
           </div>
         </section>
 
-        {/* STEP 2: Input */}
         <section className="glass-card p-6 space-y-4">
           <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">STEP 2 — 入力</h2>
 
@@ -260,7 +307,7 @@ export default function CheckPage() {
                   <div className="relative inline-block">
                     <img src={imagePreviewUrl!} alt="Preview" className="max-h-64 rounded-lg border border-border" />
                     <button
-                      onClick={() => { setImageData(null); setImagePreviewUrl(null); }}
+                      onClick={() => { setImageData(null); if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl); setImagePreviewUrl(null); }}
                       className="absolute -top-2 -right-2 bg-destructive rounded-full p-1 hover:opacity-80"
                     >
                       <X className="h-3 w-3 text-destructive-foreground" />
@@ -281,14 +328,13 @@ export default function CheckPage() {
                 placeholder={"冒頭：\n前半：\n中盤：\n後半：\n締め："}
                 className="min-h-[200px] resize-y border-border font-mono text-sm"
               />
-              <Button variant="outline" size="sm" onClick={handleLoadSample} className="text-xs">
+              <Button variant="outline" size="sm" onClick={handleLoadSample} className="text-xs" disabled={!product.sample_text}>
                 サンプル読込
               </Button>
             </div>
           )}
         </section>
 
-        {/* STEP 3: Execute & Results */}
         <section className="space-y-6">
           <Button
             onClick={handleExecute}
@@ -309,25 +355,14 @@ export default function CheckPage() {
             <div className="space-y-4">
               <CheckResultView
                 result={result}
-                title={`レバレジーズ / ${product.name} / ${processLabel}チェック`}
+                title={`${clientName} / ${product.name} / ${processLabel}チェック`}
               />
               <div className="flex gap-3">
-                <Button
-                  variant="outline"
-                  onClick={() => { setResult(null); handleExecute(); }}
-                  disabled={loading}
-                  className="flex items-center gap-2"
-                >
-                  <RefreshCw className="h-4 w-4" />
-                  再チェック
+                <Button variant="outline" onClick={() => { setResult(null); handleExecute(); }} disabled={loading} className="flex items-center gap-2">
+                  <RefreshCw className="h-4 w-4" />再チェック
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={handleExportCsv}
-                  className="flex items-center gap-2"
-                >
-                  <Download className="h-4 w-4" />
-                  結果をエクスポート
+                <Button variant="outline" onClick={handleExportCsv} className="flex items-center gap-2">
+                  <Download className="h-4 w-4" />結果をエクスポート
                 </Button>
               </div>
             </div>

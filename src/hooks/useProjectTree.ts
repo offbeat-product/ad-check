@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { Client, Product, Project } from "@/lib/db-types";
+import { handleSupabaseError } from "@/lib/supabase-helpers";
 
 export interface TreeData {
   clients: Client[];
@@ -22,9 +23,12 @@ export function useProjectTree(): TreeData {
       supabase.from("products").select("*").order("name"),
       supabase.from("projects").select("*").order("created_at", { ascending: false }),
     ]);
-    setClients((c.data as any as Client[]) || []);
-    setProducts((p.data as any as Product[]) || []);
-    setProjects((pr.data as any as Project[]) || []);
+    handleSupabaseError(c.error, "clients");
+    handleSupabaseError(p.error, "products");
+    handleSupabaseError(pr.error, "projects");
+    setClients(c.data ?? []);
+    setProducts(p.data ?? []);
+    setProjects(pr.data ?? []);
     setLoading(false);
   }, []);
 

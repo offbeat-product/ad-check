@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { CheckItem } from "@/lib/types";
 import { getCheckMarkers } from "@/lib/marker-positions";
+import { handleSupabaseError } from "@/lib/supabase-helpers";
 
 const statusOrder: Record<string, number> = { NG: 0, WARNING: 1, OK: 2 };
 
@@ -19,9 +20,10 @@ export function useReviewState(checkResultId: string | null | undefined, checkIt
 
   useEffect(() => {
     if (!checkResultId) return;
-    supabase.from("comments").select("check_item_id").eq("check_result_id", checkResultId).then(({ data }) => {
+    supabase.from("comments").select("check_item_id").eq("check_result_id", checkResultId).then(({ data, error }) => {
+      if (handleSupabaseError(error, "comments count")) return;
       const counts: Record<string, number> = {};
-      (data || []).forEach((c: any) => {
+      (data ?? []).forEach((c) => {
         if (c.check_item_id) counts[c.check_item_id] = (counts[c.check_item_id] || 0) + 1;
       });
       setCommentCounts(counts);

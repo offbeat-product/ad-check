@@ -3,10 +3,12 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { runScriptCheck, runSfCheck } from "@/lib/webhook";
-import type { CheckRecord, CheckItem } from "@/lib/types";
-import type { ProjectFile, Product, Project, Client } from "@/lib/db-types";
+import type { CheckItem } from "@/lib/types";
+import type { ProjectFile, Product, Project, Client, CheckResultRow } from "@/lib/db-types";
+import { getWebhookPaths } from "@/lib/db-types";
 import { useReviewState, useDownload, useExportCsv } from "@/hooks/useReviewState";
 import { compressImage } from "@/lib/image-compress";
+import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,15 +21,7 @@ import ReviewRightPanel from "@/components/review/ReviewRightPanel";
 import { ArrowLeft, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
-
-const statusConfig: Record<string, { label: string; class: string }> = {
-  uploaded: { label: "未チェック", class: "bg-muted text-muted-foreground" },
-  checking: { label: "チェック中", class: "bg-primary/10 text-primary" },
-  checked: { label: "チェック済", class: "bg-primary/10 text-primary" },
-  revision_requested: { label: "修正依頼", class: "bg-status-warning/10 text-status-warning" },
-  revised: { label: "修正済", class: "border border-status-ok text-status-ok" },
-  approved: { label: "承認済", class: "bg-status-ok/10 text-status-ok" },
-};
+import { FILE_STATUS_CONFIG } from "@/lib/db-types";
 
 export default function FileReviewPage() {
   const { projectId, fileId } = useParams<{ projectId: string; fileId: string }>();
@@ -41,7 +35,7 @@ export default function FileReviewPage() {
   const [project, setProject] = useState<Project | null>(null);
   const [product, setProduct] = useState<Product | null>(null);
   const [client, setClient] = useState<Client | null>(null);
-  const [record, setRecord] = useState<CheckRecord | null>(null);
+  const [record, setRecord] = useState<CheckResultRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [compareOpen, setCompareOpen] = useState(false);
@@ -50,42 +44,51 @@ export default function FileReviewPage() {
   const [versions, setVersions] = useState<ProjectFile[]>([]);
 
   // Mandatory annotation comment state
-  const [pendingAnnotation, setPendingAnnotation] = useState<{ annotations: any[] } | null>(null);
+  const [pendingAnnotation, setPendingAnnotation] = useState<{ annotations: unknown[] } | null>(null);
   const [annotationComment, setAnnotationComment] = useState("");
 
-  const checkItems = record ? (record.check_items as any[]) : null;
+  const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
   const { items, markers, commentCounts, paintMode, setPaintMode, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
     useReviewState(record?.id, checkItems);
+
+  const fetchVersions = async () => {
+    if (!fileId) return;
+    const { data: vers, error } = await supabase.from("project_files").select("*")
+      .or(`id.eq.${fileId},parent_file_id.eq.${fileId}`)
+      .order("version_number");
+    handleSupabaseError(error, "versions");
+    setVersions(vers ?? []);
+  };
 
   useEffect(() => {
     if (!fileId || !projectId) return;
     (async () => {
-      const { data: f } = await supabase.from("project_files").select("*").eq("id", fileId).single();
-      if (!f) { setLoading(false); return; }
-      setFile(f as any);
+      const { data: f, error: fErr } = await supabase.from("project_files").select("*").eq("id", fileId).maybeSingle();
+      if (handleSupabaseError(fErr, "file") || !f) { setLoading(false); return; }
+      setFile(f);
 
-      const { data: proj } = await supabase.from("projects").select("*").eq("id", projectId).single();
-      setProject(proj as any);
+      const { data: proj, error: projErr } = await supabase.from("projects").select("*").eq("id", projectId).maybeSingle();
+      handleSupabaseError(projErr, "project");
+      setProject(proj);
 
-      if (proj) {
-        const { data: prod } = await supabase.from("products").select("*").eq("id", (proj as any).product_id).single();
-        setProduct(prod as any);
-        if (prod) {
-          const { data: cl } = await supabase.from("clients").select("*").eq("id", (prod as any).client_id).single();
-          setClient(cl as any);
+      if (proj?.product_id) {
+        const { data: prod, error: prodErr } = await supabase.from("products").select("*").eq("id", proj.product_id).maybeSingle();
+        handleSupabaseError(prodErr, "product");
+        setProduct(prod);
+        if (prod?.client_id) {
+          const { data: cl, error: clErr } = await supabase.from("clients").select("*").eq("id", prod.client_id).maybeSingle();
+          handleSupabaseError(clErr, "client");
+          setClient(cl);
         }
       }
 
-      if ((f as any).check_result_id) {
-        const { data: cr } = await supabase.from("check_results").select("*").eq("id", (f as any).check_result_id).single();
-        setRecord(cr as any);
+      if (f.check_result_id) {
+        const { data: cr, error: crErr } = await supabase.from("check_results").select("*").eq("id", f.check_result_id).maybeSingle();
+        handleSupabaseError(crErr, "check_result");
+        setRecord(cr);
       }
 
-      const { data: vers } = await supabase.from("project_files").select("*")
-        .or(`id.eq.${fileId},parent_file_id.eq.${fileId}`)
-        .order("version_number");
-      setVersions((vers as any) || []);
-
+      await fetchVersions();
       setLoading(false);
     })();
   }, [fileId, projectId]);
@@ -94,9 +97,9 @@ export default function FileReviewPage() {
     if (!file || !product || !user) return;
     setChecking(true);
     try {
-      const webhookPaths = product.webhook_paths as Record<string, string>;
+      const webhookPaths = getWebhookPaths(product);
       const processType = file.process_type === "styleframe" ? "sf" : "script";
-      let res: any;
+      let res: { overall_status: string; detected_case?: string; check_items: CheckItem[]; ng_count: number; warning_count: number; ok_count: number; total_checks: number };
 
       if (processType === "sf") {
         const base64 = file.file_data?.replace(/^data:[^;]+;base64,/, "") || "";
@@ -110,7 +113,7 @@ export default function FileReviewPage() {
 
       const inputData = processType === "sf" ? { image_base64: file.file_data } : { script_text: file.file_data };
 
-      const { data: crData } = await supabase.from("check_results").insert({
+      const { data: crData, error: insertErr } = await supabase.from("check_results").insert([{
         user_id: user.id,
         client_name: client?.name || "",
         product_code: product.code,
@@ -124,26 +127,28 @@ export default function FileReviewPage() {
         warning_count: res.warning_count,
         ok_count: res.ok_count,
         total_checks: res.total_checks,
-        check_items: res.check_items as any,
-        raw_response: res as any,
-        input_data: inputData as any,
-      }).select("id").single();
+        check_items: res.check_items as unknown as Record<string, unknown>[],
+        raw_response: res as unknown as Record<string, unknown>,
+        input_data: inputData as unknown as Record<string, unknown>,
+      }]).select("id").single();
 
-      if (crData) {
-        await supabase.from("project_files").update({
-          status: "checked",
-          check_result_id: (crData as any).id,
-        } as any).eq("id", file.id);
+      if (handleSupabaseError(insertErr, "check_results insert") || !crData) throw new Error("チェック結果の保存に失敗しました");
 
-        setFile({ ...file, status: "checked", check_result_id: (crData as any).id });
+      const { error: updateErr } = await supabase.from("project_files").update({
+        status: "checked",
+        check_result_id: crData.id,
+      }).eq("id", file.id);
+      handleSupabaseError(updateErr, "project_files update");
 
-        const { data: fullCr } = await supabase.from("check_results").select("*").eq("id", (crData as any).id).single();
-        setRecord(fullCr as any);
-      }
+      setFile({ ...file, status: "checked", check_result_id: crData.id });
+
+      const { data: fullCr } = await supabase.from("check_results").select("*").eq("id", crData.id).maybeSingle();
+      setRecord(fullCr);
 
       toast({ title: "チェック完了", description: `Grade: ${res.overall_status}` });
-    } catch (err: any) {
-      toast({ title: "チェックエラー", description: err.message, variant: "destructive" });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "不明なエラー";
+      toast({ title: "チェックエラー", description: message, variant: "destructive" });
     } finally {
       setChecking(false);
     }
@@ -151,8 +156,10 @@ export default function FileReviewPage() {
 
   const handleStatusChange = async (newStatus: string) => {
     if (!file) return;
-    await supabase.from("project_files").update({ status: newStatus } as any).eq("id", file.id);
-    setFile({ ...file, status: newStatus });
+    const { error } = await supabase.from("project_files").update({ status: newStatus }).eq("id", file.id);
+    if (!handleSupabaseError(error, "status update")) {
+      setFile({ ...file, status: newStatus });
+    }
   };
 
   const handleDownload = () => {
@@ -170,21 +177,22 @@ export default function FileReviewPage() {
     exportCsv(items, `checkmate_${file?.file_name}_${Date.now()}.csv`);
   };
 
-  const handleAnnotationSave = async (annotations: any[]) => {
+  const handleAnnotationSave = async (annotations: unknown[]) => {
     setPendingAnnotation({ annotations });
     setAnnotationComment("");
   };
 
   const confirmAnnotationComment = async () => {
     if (!pendingAnnotation || !record?.id || !user) return;
-    await supabase.from("comments").insert({
+    const { error } = await supabase.from("comments").insert([{
       check_result_id: record.id,
       author_name: user.email?.split("@")[0] || "User",
       author_email: user.email || "",
       content: annotationComment || "アノテーション追加",
-      annotation_data: { annotations: pendingAnnotation.annotations } as any,
+      annotation_data: { annotations: pendingAnnotation.annotations },
       status: "open",
-    } as any);
+    }]);
+    if (handleSupabaseError(error, "annotation comment")) return;
     setPendingAnnotation(null);
     setAnnotationComment("");
     toast({ title: "コメントを保存しました" });
@@ -200,7 +208,7 @@ export default function FileReviewPage() {
 
   const isSf = file.file_type === "image" || file.process_type === "styleframe";
   const currentStatus = file.status || "uploaded";
-  const sc = statusConfig[currentStatus] || statusConfig.uploaded;
+  const sc = FILE_STATUS_CONFIG[currentStatus] ?? FILE_STATUS_CONFIG.uploaded;
   const hasCheckResult = !!record;
   const hasVersions = versions.length > 1;
   const canCheck = product && (
@@ -211,7 +219,6 @@ export default function FileReviewPage() {
   return (
     <div className="flex h-[calc(100vh-0px)] overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        {/* Top action bar */}
         <header className="border-b border-border px-4 py-2 flex items-center gap-3 bg-card shrink-0">
           <button onClick={() => navigate(`/project/${projectId}`)} className="text-muted-foreground hover:text-foreground transition-colors">
             <ArrowLeft className="h-4 w-4" />
@@ -223,7 +230,7 @@ export default function FileReviewPage() {
               <button className={cn("px-3 py-1 rounded-full text-xs font-medium border shrink-0", sc.class)}>{sc.label}</button>
             </PopoverTrigger>
             <PopoverContent className="w-40 p-2" align="start">
-              {Object.entries(statusConfig).map(([key, cfg]) => (
+              {Object.entries(FILE_STATUS_CONFIG).map(([key, cfg]) => (
                 <button key={key} onClick={() => handleStatusChange(key)}
                   className={cn("w-full text-left px-3 py-1.5 rounded text-xs font-medium transition-colors", currentStatus === key ? "bg-muted" : "hover:bg-muted/50")}>
                   {cfg.label}
@@ -267,7 +274,6 @@ export default function FileReviewPage() {
           </div>
         </header>
 
-        {/* Creative preview */}
         <div className="flex-1 overflow-y-auto">
           <div className="p-4">
             {isSf ? (
@@ -344,13 +350,17 @@ export default function FileReviewPage() {
 
       {/* Upload revision */}
       <UploadRevisionModal open={uploadRevisionOpen} onOpenChange={setUploadRevisionOpen} file={file} projectId={projectId!}
-        onUploaded={() => {
-          setUploadRevisionOpen(false);
-          supabase.from("project_files").select("*").or(`id.eq.${fileId},parent_file_id.eq.${fileId}`).order("version_number")
-            .then(({ data }) => setVersions((data as any) || []));
-        }} />
+        onUploaded={() => { setUploadRevisionOpen(false); fetchVersions(); }} />
 
-      {record && <CompareView checkResultId={record.id} processType={record.process_type} originalText={record.input_text} open={compareOpen} onOpenChange={setCompareOpen} />}
+      {/* Compare: use project_files mode */}
+      <CompareView
+        projectFileId={fileId}
+        projectFiles={versions}
+        processType={file.process_type}
+        originalText={file.file_data}
+        open={compareOpen}
+        onOpenChange={setCompareOpen}
+      />
       {record && <ShareLinkModal checkResultId={record.id} open={shareOpen} onOpenChange={setShareOpen} />}
     </div>
   );
@@ -379,17 +389,25 @@ function UploadRevisionModal({ open, onOpenChange, file, projectId, onUploaded }
         fileData = await f.text();
         fileType = "text";
       }
-      const { data: existing } = await supabase.from("project_files").select("version_number")
+      const { data: existing, error: verErr } = await supabase.from("project_files").select("version_number")
         .or(`id.eq.${file.id},parent_file_id.eq.${file.id}`).order("version_number", { ascending: false }).limit(1);
-      const nextVersion = existing && existing.length > 0 ? (existing[0] as any).version_number + 1 : 2;
+      handleSupabaseError(verErr, "version check");
+      const nextVersion = existing && existing.length > 0 ? (existing[0].version_number ?? 1) + 1 : 2;
 
-      await supabase.from("project_files").insert({
-        project_id: projectId, process_type: file.process_type,
-        file_name: `${file.file_name}_v${nextVersion}`, file_type: fileType,
-        file_data: fileData, file_size_bytes: f.size, version_number: nextVersion,
-        parent_file_id: file.id, status: "revised", created_by: user.email || user.id,
-      } as any);
+      const { error: insertErr } = await supabase.from("project_files").insert({
+        project_id: projectId,
+        process_type: file.process_type,
+        file_name: `${file.file_name}_v${nextVersion}`,
+        file_type: fileType,
+        file_data: fileData,
+        file_size_bytes: f.size,
+        version_number: nextVersion,
+        parent_file_id: file.id,
+        status: "revised",
+        created_by: user.email || user.id,
+      });
 
+      if (handleSupabaseError(insertErr, "revision upload")) return;
       toast({ title: `v${nextVersion} をアップロードしました` });
       onUploaded();
     } catch {
