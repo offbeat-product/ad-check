@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { CheckResult, CheckItem } from "@/lib/types";
 import type { Json } from "@/integrations/supabase/types";
 import type { Product, Client } from "@/lib/db-types";
-import { getWebhookPaths } from "@/lib/db-types";
+// getWebhookPaths no longer needed — unified v2 webhook
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { runScriptCheck, runSfCheck } from "@/lib/webhook";
 import { compressImage, type CompressResult } from "@/lib/image-compress";
@@ -125,16 +125,13 @@ export default function CheckPage() {
     setLoading(true);
     setResult(null);
     try {
-      const webhookPaths = getWebhookPaths(product);
       let res: CheckResult;
       if (selectedProcess === "sf") {
         if (!imageData) throw new Error("画像を選択してください");
-        res = await runSfCheck(imageData.base64, imageData.mediaType);
+        res = await runSfCheck(product.id, imageData.base64, imageData.mediaType);
       } else {
         if (!scriptText.trim()) throw new Error("テキストを入力してください");
-        const webhookPath = webhookPaths[selectedProcess];
-        if (!webhookPath) throw new Error("このWebhookは設定されていません");
-        res = await runScriptCheck(webhookPath, scriptText);
+        res = await runScriptCheck(product.id, scriptText);
       }
       setResult(res);
 

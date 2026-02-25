@@ -7,7 +7,7 @@ import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import type { CheckItem } from "@/lib/types";
 import type { Json } from "@/integrations/supabase/types";
 import type { ProjectFile, Product, Project, Client, CheckResultRow } from "@/lib/db-types";
-import { getWebhookPaths } from "@/lib/db-types";
+// getWebhookPaths no longer needed — unified v2 webhook
 import { useReviewState, useDownload, useExportCsv } from "@/hooks/useReviewState";
 import { compressImage } from "@/lib/image-compress";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
@@ -115,7 +115,6 @@ export default function FileReviewPage() {
     if (!file || !product || !user || !projectId) return;
     setChecking(true);
     try {
-      const webhookPaths = getWebhookPaths(product);
       const processType = file.process_type === "styleframe" ? "sf" : "script";
       let res: { overall_status: string; detected_case?: string; check_items: CheckItem[]; ng_count: number; warning_count: number; ok_count: number; total_checks: number };
 
@@ -127,11 +126,9 @@ export default function FileReviewPage() {
       if (processType === "sf") {
         const base64 = file.file_data?.replace(/^data:[^;]+;base64,/, "") || "";
         const mediaType = file.file_data?.match(/^data:([^;]+);/)?.[1] || "image/jpeg";
-        res = await runSfCheck(base64, mediaType, referenceContext);
+        res = await runSfCheck(product.id, base64, mediaType, referenceContext);
       } else {
-        const webhookPath = webhookPaths[processType];
-        if (!webhookPath) throw new Error("Webhook未設定");
-        res = await runScriptCheck(webhookPath, file.file_data || "", referenceContext);
+        res = await runScriptCheck(product.id, file.file_data || "", referenceContext);
       }
 
       const inputData = processType === "sf" ? { image_base64: file.file_data } : { script_text: file.file_data };

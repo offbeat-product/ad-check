@@ -2,6 +2,20 @@ import type { CheckResult } from "./types";
 
 const BASE_URL = "https://offbeat-inc.app.n8n.cloud/webhook";
 
+/** Determine the unified v2 webhook URL based on process type */
+export function getWebhookUrl(processType: string): string {
+  switch (processType) {
+    case "sf":
+    case "styleframe":
+    case "storyboard":
+      return `${BASE_URL}/check-sf-v2`;
+    case "script":
+    case "na_script":
+    default:
+      return `${BASE_URL}/check-script-v2`;
+  }
+}
+
 function parseResponse(raw: any): CheckResult {
   let data = raw;
 
@@ -32,11 +46,12 @@ function parseResponse(raw: any): CheckResult {
   };
 }
 
-export async function runScriptCheck(webhookPath: string, scriptText: string, referenceContext?: string): Promise<CheckResult> {
-  const body: Record<string, string> = { script_text: scriptText };
+export async function runScriptCheck(productId: string, scriptText: string, referenceContext?: string): Promise<CheckResult> {
+  const body: Record<string, string> = { product_id: productId, script_text: scriptText };
   if (referenceContext) body.reference_context = referenceContext;
 
-  const res = await fetch(`${BASE_URL}/${webhookPath}`, {
+  const url = getWebhookUrl("script");
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -47,11 +62,12 @@ export async function runScriptCheck(webhookPath: string, scriptText: string, re
   return parseResponse(raw);
 }
 
-export async function runSfCheck(imageBase64: string, mediaType: string, referenceContext?: string): Promise<CheckResult> {
-  const body: Record<string, string> = { image_base64: imageBase64, media_type: mediaType };
+export async function runSfCheck(productId: string, imageBase64: string, mediaType: string, referenceContext?: string): Promise<CheckResult> {
+  const body: Record<string, string> = { product_id: productId, image_base64: imageBase64, media_type: mediaType };
   if (referenceContext) body.reference_context = referenceContext;
 
-  const res = await fetch(`${BASE_URL}/tmdaga-sf-check`, {
+  const url = getWebhookUrl("sf");
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
