@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { runScriptCheck, runSfCheck } from "@/lib/webhook";
 import type { CheckItem } from "@/lib/types";
+import type { Json } from "@/integrations/supabase/types";
 import type { ProjectFile, Product, Project, Client, CheckResultRow } from "@/lib/db-types";
 import { getWebhookPaths } from "@/lib/db-types";
 import { useReviewState, useDownload, useExportCsv } from "@/hooks/useReviewState";
@@ -127,9 +128,9 @@ export default function FileReviewPage() {
         warning_count: res.warning_count,
         ok_count: res.ok_count,
         total_checks: res.total_checks,
-        check_items: res.check_items as unknown as Record<string, unknown>[],
-        raw_response: res as unknown as Record<string, unknown>,
-        input_data: inputData as unknown as Record<string, unknown>,
+        check_items: res.check_items as unknown as Json,
+        raw_response: res as unknown as Json,
+        input_data: inputData as unknown as Json,
       }]).select("id").single();
 
       if (handleSupabaseError(insertErr, "check_results insert") || !crData) throw new Error("チェック結果の保存に失敗しました");
@@ -189,7 +190,7 @@ export default function FileReviewPage() {
       author_name: user.email?.split("@")[0] || "User",
       author_email: user.email || "",
       content: annotationComment || "アノテーション追加",
-      annotation_data: { annotations: pendingAnnotation.annotations },
+      annotation_data: { annotations: pendingAnnotation.annotations } as unknown as Json,
       status: "open",
     }]);
     if (handleSupabaseError(error, "annotation comment")) return;
