@@ -38,6 +38,32 @@ export interface CheckRecord {
   total_checks: number;
   check_items: CheckItem[];
   raw_response: any;
+  status?: string;
+}
+
+export type CheckStatus = "pending" | "in_progress" | "resolved" | "approved";
+
+export interface Comment {
+  id: string;
+  check_result_id: string;
+  check_item_id?: string;
+  author_name: string;
+  author_email: string;
+  content: string;
+  annotation_data?: { x: number; y: number } | null;
+  status: "open" | "resolved";
+  parent_id?: string | null;
+  created_at: string;
+}
+
+export interface FileVersion {
+  id: string;
+  check_result_id: string;
+  version_number: number;
+  file_type: string;
+  content_text?: string | null;
+  image_url?: string | null;
+  created_at: string;
 }
 
 export type ProductCode = "ltr_expo" | "cta_agent" | "tmd_aga";

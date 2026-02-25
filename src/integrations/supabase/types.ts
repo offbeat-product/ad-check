@@ -30,6 +30,7 @@ export type Database = {
           product_code: string
           product_name: string
           raw_response: Json | null
+          status: string | null
           total_checks: number | null
           user_id: string
           warning_count: number | null
@@ -49,6 +50,7 @@ export type Database = {
           product_code: string
           product_name: string
           raw_response?: Json | null
+          status?: string | null
           total_checks?: number | null
           user_id: string
           warning_count?: number | null
@@ -68,11 +70,104 @@ export type Database = {
           product_code?: string
           product_name?: string
           raw_response?: Json | null
+          status?: string | null
           total_checks?: number | null
           user_id?: string
           warning_count?: number | null
         }
         Relationships: []
+      }
+      comments: {
+        Row: {
+          annotation_data: Json | null
+          author_email: string
+          author_name: string
+          check_item_id: string | null
+          check_result_id: string
+          content: string
+          created_at: string
+          id: string
+          parent_id: string | null
+          status: string
+        }
+        Insert: {
+          annotation_data?: Json | null
+          author_email: string
+          author_name: string
+          check_item_id?: string | null
+          check_result_id: string
+          content: string
+          created_at?: string
+          id?: string
+          parent_id?: string | null
+          status?: string
+        }
+        Update: {
+          annotation_data?: Json | null
+          author_email?: string
+          author_name?: string
+          check_item_id?: string | null
+          check_result_id?: string
+          content?: string
+          created_at?: string
+          id?: string
+          parent_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comments_check_result_id_fkey"
+            columns: ["check_result_id"]
+            isOneToOne: false
+            referencedRelation: "check_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comments_parent_id_fkey"
+            columns: ["parent_id"]
+            isOneToOne: false
+            referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      file_versions: {
+        Row: {
+          check_result_id: string
+          content_text: string | null
+          created_at: string
+          file_type: string
+          id: string
+          image_url: string | null
+          version_number: number
+        }
+        Insert: {
+          check_result_id: string
+          content_text?: string | null
+          created_at?: string
+          file_type: string
+          id?: string
+          image_url?: string | null
+          version_number?: number
+        }
+        Update: {
+          check_result_id?: string
+          content_text?: string | null
+          created_at?: string
+          file_type?: string
+          id?: string
+          image_url?: string | null
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "file_versions_check_result_id_fkey"
+            columns: ["check_result_id"]
+            isOneToOne: false
+            referencedRelation: "check_results"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

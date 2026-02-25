@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Check from "./pages/Check";
+import CheckResultDetail from "./pages/CheckResultDetail";
 import AppLayout from "./components/AppLayout";
 import NotFound from "./pages/NotFound";
 
@@ -39,6 +40,7 @@ const App = () => (
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/check" element={<Check />} />
+              <Route path="/check-result/:id" element={<CheckResultDetail />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
