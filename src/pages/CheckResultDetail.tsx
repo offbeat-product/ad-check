@@ -230,6 +230,7 @@ export default function CheckResultDetail() {
         checkResultId={id || null}
         hasCheckResult={true}
         onCommentClick={handleCommentClick}
+        onCheckItemClick={scrollToCard}
         onAnnotationClick={handleAnnotationClick}
       />
 

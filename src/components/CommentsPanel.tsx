@@ -12,9 +12,10 @@ interface CommentsPanelProps {
   checkResultId: string;
   filterItemId?: string | null;
   onAnnotationClick?: (annotationData: unknown) => void;
+  onCheckItemClick?: (patternId: string) => void;
 }
 
-export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick }: CommentsPanelProps) {
+export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick }: CommentsPanelProps) {
   const { user } = useAuth();
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
@@ -173,6 +174,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
               onReply={() => setReplyTo(replyTo === c.id ? null : c.id)}
               timeAgo={timeAgo}
               onAnnotationClick={onAnnotationClick}
+              onCheckItemClick={onCheckItemClick}
             />
             {replies(c.id).map((r) => (
               <div key={r.id} className="ml-5">
@@ -222,27 +224,32 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   );
 }
 
-function CommentCard({ comment, onToggleStatus, onReply, timeAgo, isReply, onAnnotationClick }: {
-  comment: CommentRow; onToggleStatus: () => void; onReply: () => void; timeAgo: (d: string) => string; isReply?: boolean; onAnnotationClick?: (data: unknown) => void;
+function CommentCard({ comment, onToggleStatus, onReply, timeAgo, isReply, onAnnotationClick, onCheckItemClick }: {
+  comment: CommentRow; onToggleStatus: () => void; onReply: () => void; timeAgo: (d: string) => string; isReply?: boolean; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void;
 }) {
   const initial = comment.author_name.charAt(0).toUpperCase();
   const colors = ["bg-primary", "bg-status-ok", "bg-context-client", "bg-product-cta"];
   const colorIdx = comment.author_name.charCodeAt(0) % colors.length;
   const hasAnnotation = !!comment.annotation_data;
+  const hasCheckItem = !!comment.check_item_id;
 
-  const handleAnnotationClick = () => {
+  const handleCardClick = () => {
     if (hasAnnotation && onAnnotationClick) {
       onAnnotationClick(comment.annotation_data);
+    } else if (hasCheckItem && onCheckItemClick) {
+      onCheckItemClick(comment.check_item_id!);
     }
   };
+
+  const isClickable = (hasAnnotation && onAnnotationClick) || (hasCheckItem && onCheckItemClick);
 
   return (
     <div
       className={cn(
         "border border-border rounded-lg p-2.5 space-y-1.5 bg-card transition-colors",
-        hasAnnotation && onAnnotationClick && "cursor-pointer hover:border-primary/40 hover:bg-primary/5"
+        isClickable && "cursor-pointer hover:border-primary/40 hover:bg-primary/5"
       )}
-      onClick={hasAnnotation && onAnnotationClick ? handleAnnotationClick : undefined}
+      onClick={isClickable ? handleCardClick : undefined}
     >
       <div className="flex items-center gap-2">
         <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white", colors[colorIdx])}>{initial}</div>
@@ -255,6 +262,11 @@ function CommentCard({ comment, onToggleStatus, onReply, timeAgo, isReply, onAnn
           <Pin className="h-3 w-3" />
           📌 画像上の指摘
           {onAnnotationClick && <span className="text-muted-foreground ml-1">（クリックで表示）</span>}
+        </div>
+      )}
+      {!hasAnnotation && hasCheckItem && onCheckItemClick && (
+        <div className="flex items-center gap-1 text-[10px] text-primary">
+          🔍 チェック項目を表示（クリック）
         </div>
       )}
       {comment.attachment_url && (

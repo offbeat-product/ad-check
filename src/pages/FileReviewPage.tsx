@@ -374,6 +374,7 @@ export default function FileReviewPage() {
         checkResultId={record?.id || null}
         hasCheckResult={hasCheckResult}
         onCommentClick={handleCommentClick}
+        onCheckItemClick={scrollToCard}
         onAnnotationClick={handleAnnotationClick}
         emptyCheckMessage={
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
