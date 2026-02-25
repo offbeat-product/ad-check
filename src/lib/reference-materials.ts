@@ -48,7 +48,7 @@ export async function fetchMaterials(scopeType: string, scopeId: string): Promis
   return (data ?? []) as ReferenceMaterial[];
 }
 
-export async function gatherReferenceMaterials(projectId: string, productId: string) {
+export async function gatherReferenceMaterials(projectId: string, productId: string, currentProcessKey?: string) {
   const [productRes, projectRes, patternsRes] = await Promise.all([
     supabase.from("reference_materials").select("*").eq("scope_type", "product").eq("scope_id", productId).eq("is_active", true).order("sort_order"),
     supabase.from("reference_materials").select("*").eq("scope_type", "project").eq("scope_id", projectId).eq("is_active", true).order("sort_order"),
@@ -59,10 +59,28 @@ export async function gatherReferenceMaterials(projectId: string, productId: str
   const projectMaterials = (projectRes.data ?? []) as ReferenceMaterial[];
   const patterns = patternsRes.data ?? [];
 
+  // Import wcheck parser dynamically
+  const { extractWCheckForProcess, getWCheckTextForAI } = await import("@/lib/wcheck-parser");
+
+  const getContentForType = (mats: ReferenceMaterial[], type: string): string => {
+    return mats
+      .filter(m => m.material_type === type)
+      .map(m => {
+        const text = m.content_text || "";
+        if (type === "wcheck" && currentProcessKey) {
+          return extractWCheckForProcess(text, currentProcessKey);
+        }
+        // Strip parsed JSON for non-wcheck or when no process key
+        return getWCheckTextForAI(text);
+      })
+      .filter(Boolean)
+      .join("\n");
+  };
+
   const groupByType = (mats: ReferenceMaterial[]) => {
     const result: Record<string, string> = {};
     for (const t of MATERIAL_TYPES) {
-      result[t.id] = mats.filter(m => m.material_type === t.id).map(m => m.content_text || "").filter(Boolean).join("\n");
+      result[t.id] = getContentForType(mats, t.id);
     }
     return result;
   };
@@ -77,6 +95,7 @@ export async function gatherReferenceMaterials(projectId: string, productId: str
       corrected: p.corrected_content,
       frequency: p.frequency,
     })),
+    process_key: currentProcessKey || null,
   };
 }
 

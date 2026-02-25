@@ -119,8 +119,9 @@ export default function FileReviewPage() {
       const processType = file.process_type === "styleframe" ? "sf" : "script";
       let res: { overall_status: string; detected_case?: string; check_items: CheckItem[]; ng_count: number; warning_count: number; ok_count: number; total_checks: number };
 
-      // Gather reference materials
-      const refMaterials = await gatherReferenceMaterials(projectId, product.id);
+      // Gather reference materials with process-specific filtering
+      const processKey = file.process_type || "script";
+      const refMaterials = await gatherReferenceMaterials(projectId, product.id, processKey);
       const referenceContext = JSON.stringify(refMaterials);
 
       if (processType === "sf") {
@@ -291,7 +292,7 @@ export default function FileReviewPage() {
 
           <div className="ml-auto flex items-center gap-1.5">
             {product && projectId && (
-              <ReferenceStatusIndicator projectId={projectId} productId={product.id} />
+              <ReferenceStatusIndicator projectId={projectId} productId={product.id} processKey={file?.process_type || undefined} />
             )}
             {canCheck && (
               <Button size="sm" className="text-xs h-8" onClick={handleRunCheck} disabled={checking}>

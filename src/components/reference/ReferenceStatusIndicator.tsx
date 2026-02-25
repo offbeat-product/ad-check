@@ -1,15 +1,18 @@
 import { useState, useEffect } from "react";
 import { fetchMaterials, MATERIAL_TYPES, type ReferenceMaterial } from "@/lib/reference-materials";
+import { getWCheckParsedJson, getWCheckTotalCount, extractWCheckForProcess } from "@/lib/wcheck-parser";
 import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ClipboardList } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { ClipboardList, ChevronDown } from "lucide-react";
 
 interface Props {
   projectId: string;
   productId: string;
+  processKey?: string;
 }
 
-export default function ReferenceStatusIndicator({ projectId, productId }: Props) {
+export default function ReferenceStatusIndicator({ projectId, productId, processKey }: Props) {
   const [productMats, setProductMats] = useState<ReferenceMaterial[]>([]);
   const [projectMats, setProjectMats] = useState<ReferenceMaterial[]>([]);
   const [patternCount, setPatternCount] = useState(0);
@@ -30,42 +33,83 @@ export default function ReferenceStatusIndicator({ projectId, productId }: Props
   const totalMats = productMats.length + projectMats.length;
   const totalAll = totalMats + (patternCount > 0 ? 1 : 0);
 
+  // Calculate W-check process-specific items
+  const getWCheckInfo = () => {
+    const allWCheck = [...productMats, ...projectMats].filter(m => m.material_type === "wcheck");
+    let processItemCount = 0;
+    let processLabel = "";
+
+    for (const mat of allWCheck) {
+      if (!mat.content_text) continue;
+      const parsed = getWCheckParsedJson(mat.content_text);
+      if (parsed && processKey) {
+        for (const data of Object.values(parsed)) {
+          if (data.processKeys?.includes(processKey)) {
+            processItemCount += data.itemCount;
+            if (!processLabel) processLabel = data.label;
+          }
+        }
+      }
+    }
+    return { processItemCount, processLabel };
+  };
+
+  const wcheckInfo = getWCheckInfo();
+
   if (totalAll === 0) return null;
+
+  const refItems: { label: string; detail: string; active: boolean }[] = [];
+
+  for (const mt of MATERIAL_TYPES) {
+    const pmC = productMats.filter(m => m.material_type === mt.id).length;
+    const prC = projectMats.filter(m => m.material_type === mt.id).length;
+    if (pmC + prC === 0) {
+      refItems.push({ label: mt.label, detail: "未登録", active: false });
+      continue;
+    }
+
+    if (mt.id === "wcheck" && wcheckInfo.processItemCount > 0 && processKey) {
+      refItems.push({
+        label: mt.label,
+        detail: `${wcheckInfo.processLabel} (${wcheckInfo.processItemCount}項目)`,
+        active: true,
+      });
+    } else {
+      const label = pmC > 0 && prC > 0 ? `商材ベース + 案件${prC}件`
+        : pmC > 0 ? "商材ベース" : `案件${prC}件`;
+      refItems.push({ label: mt.label, detail: label, active: true });
+    }
+  }
+
+  if (patternCount > 0) {
+    refItems.push({ label: "修正パターン", detail: `${patternCount}件`, active: true });
+  }
+
+  const activeCount = refItems.filter(r => r.active).length;
 
   return (
     <Popover>
       <PopoverTrigger asChild>
         <button className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-muted/50">
           <ClipboardList className="h-3.5 w-3.5" />
-          参考資料: {totalMats + patternCount}件がAIチェックに反映されます
-          <span className="text-primary underline ml-1">詳細</span>
+          📋 {activeCount}種の参考資料がAIチェックに反映
+          <ChevronDown className="h-3 w-3" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-72 p-3" align="start">
-        <p className="text-xs font-semibold mb-2">AIチェックに反映される資料</p>
+      <PopoverContent className="w-80 p-3" align="start">
+        <p className="text-xs font-semibold mb-2">AIチェックに反映される参考資料</p>
         <div className="space-y-1">
-          {MATERIAL_TYPES.map((mt) => {
-            const pmC = productMats.filter(m => m.material_type === mt.id).length;
-            const prC = projectMats.filter(m => m.material_type === mt.id).length;
-            if (pmC + prC === 0) return null;
-            const label = pmC > 0 && prC > 0 ? `商材ベース + 案件${prC}件`
-              : pmC > 0 ? "商材ベース" : `案件${prC}件`;
-            return (
-              <div key={mt.id} className="flex items-center gap-2 text-xs">
-                <span className="text-green-600">✅</span>
-                <span>{mt.label}</span>
-                <span className="text-muted-foreground">({label})</span>
-              </div>
-            );
-          })}
-          {patternCount > 0 && (
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-green-600">✅</span>
-              <span>過去の修正パターン</span>
-              <span className="text-muted-foreground">({patternCount}件)</span>
+          {refItems.map((item, i) => (
+            <div key={i} className="flex items-center gap-2 text-xs">
+              <span>{item.active ? "✅" : "⬜"}</span>
+              <span className={item.active ? "" : "text-muted-foreground/60"}>{item.label}</span>
+              <span className="text-muted-foreground">({item.detail})</span>
             </div>
-          )}
+          ))}
         </div>
+        <p className="text-[10px] text-muted-foreground mt-2 pt-2 border-t border-border">
+          合計: {activeCount}種の参考情報がAIチェックに反映されます
+        </p>
       </PopoverContent>
     </Popover>
   );

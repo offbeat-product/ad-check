@@ -3,6 +3,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { MATERIAL_TEMPLATES, extractTextFromXlsx, type ReferenceMaterial } from "@/lib/reference-materials";
+import { parseWCheckFile, buildWCheckContentText, type WCheckParsedData } from "@/lib/wcheck-parser";
+import WCheckPreview from "./WCheckPreview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,6 +34,9 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
   const [fileData, setFileData] = useState(existing?.file_data || "");
   const [saving, setSaving] = useState(false);
   const [extractMsg, setExtractMsg] = useState("");
+  const [wcheckParsed, setWcheckParsed] = useState<WCheckParsedData | null>(null);
+
+  const isWCheck = materialType === "wcheck";
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
@@ -46,6 +51,32 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
 
     // Extract text
     const ext = f.name.split(".").pop()?.toLowerCase() || "";
+
+    // W-Check special handling for Excel files
+    if (isWCheck && ["xlsx", "xls"].includes(ext)) {
+      setExtractMsg("Wチェックシートを解析中...");
+      try {
+        const parsed = await parseWCheckFile(f);
+        const entries = Object.keys(parsed);
+        if (entries.length > 0) {
+          setWcheckParsed(parsed);
+          const builtText = buildWCheckContentText(parsed);
+          setContentText(builtText);
+          setExtractMsg("");
+        } else {
+          // Fallback to regular extraction
+          setWcheckParsed(null);
+          const text = await extractTextFromXlsx(f);
+          setContentText(text);
+          setExtractMsg("Wチェック形式として解析できませんでした。通常のテキスト抽出を行いました。");
+        }
+      } catch {
+        setWcheckParsed(null);
+        setExtractMsg("解析に失敗しました。手動で入力してください。");
+      }
+      return;
+    }
+
     if (["xlsx", "xls", "csv"].includes(ext)) {
       setExtractMsg("テキストを抽出中...");
       try {
@@ -158,6 +189,9 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
           {extractMsg && <p className="text-xs text-amber-600 mt-1">{extractMsg}</p>}
         </div>
       )}
+
+      {/* W-Check parse preview */}
+      {wcheckParsed && <WCheckPreview parsedData={wcheckParsed} />}
 
       {method === "url_reference" && (
         <div>
