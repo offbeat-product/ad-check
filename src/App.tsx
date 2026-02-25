@@ -8,6 +8,8 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Check from "./pages/Check";
 import CheckResultDetail from "./pages/CheckResultDetail";
+import ProjectPage from "./pages/ProjectPage";
+import FileReviewPage from "./pages/FileReviewPage";
 import AppLayout from "./components/AppLayout";
 import NotFound from "./pages/NotFound";
 
@@ -41,6 +43,8 @@ const App = () => (
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/check" element={<Check />} />
               <Route path="/check-result/:id" element={<CheckResultDetail />} />
+              <Route path="/project/:id" element={<ProjectPage />} />
+              <Route path="/project/:projectId/file/:fileId" element={<FileReviewPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>

@@ -3,8 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { CheckRecord } from "@/lib/types";
+import type { Project, Product } from "@/lib/db-types";
 import { Badge } from "@/components/ui/badge";
-import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText } from "lucide-react";
+import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderOpen } from "lucide-react";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 
 const gradeColorMap: Record<string, string> = {
@@ -25,18 +26,22 @@ export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [records, setRecords] = useState<CheckRecord[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("check_results")
-      .select("*")
-      .order("created_at", { ascending: false })
-      .then(({ data }) => {
-        setRecords((data as any as CheckRecord[]) || []);
-        setLoading(false);
-      });
+    Promise.all([
+      supabase.from("check_results").select("*").order("created_at", { ascending: false }),
+      supabase.from("projects").select("*").order("updated_at", { ascending: false }).limit(6),
+      supabase.from("products").select("*"),
+    ]).then(([cr, pr, prod]) => {
+      setRecords((cr.data as any as CheckRecord[]) || []);
+      setProjects((pr.data as any) || []);
+      setProducts((prod.data as any) || []);
+      setLoading(false);
+    });
   }, [user]);
 
   const stats = useMemo(() => {
@@ -56,15 +61,14 @@ export default function Dashboard() {
     return { todayChecks, totalNg, avgLabel, weekChecks };
   }, [records]);
 
+  const getProductName = (productId: string) => products.find(p => p.id === productId)?.name || "";
+
   return (
     <div className="min-h-screen">
-      {/* Top bar */}
       <header className="border-b border-border px-6 py-3 flex items-center justify-between bg-card">
         <div className="text-sm text-muted-foreground">ホーム</div>
-        <button
-          onClick={() => navigate("/check")}
-          className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity"
-        >
+        <button onClick={() => navigate("/check")}
+          className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity">
           + 新規チェック
         </button>
       </header>
@@ -77,6 +81,28 @@ export default function Dashboard() {
           <StatCard icon={BarChart3} label="平均Grade" value={stats.avgLabel} color="text-status-ok" />
           <StatCard icon={TrendingUp} label="直近7日" value={`${stats.weekChecks} 件`} color="text-primary" />
         </div>
+
+        {/* Recent projects */}
+        {projects.length > 0 && (
+          <div>
+            <h2 className="text-sm font-semibold mb-3">最近のプロジェクト</h2>
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+              {projects.map((pr) => (
+                <button key={pr.id} onClick={() => navigate(`/project/${pr.id}`)}
+                  className="glass-card p-4 text-left hover:border-primary/30 transition-colors">
+                  <div className="flex items-center gap-2 mb-2">
+                    <FolderOpen className="h-4 w-4 text-primary" />
+                    <span className="text-sm font-medium truncate">{pr.name}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{getProductName(pr.product_id)}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    {new Date(pr.updated_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="grid lg:grid-cols-5 gap-6">
           {/* Recent checks */}
@@ -105,27 +131,20 @@ export default function Dashboard() {
                   records.slice(0, 20).map((r) => {
                     const st = statusBadgeMap[r.status || "pending"] || statusBadgeMap.pending;
                     return (
-                      <tr
-                        key={r.id}
-                        onClick={() => navigate(`/check-result/${r.id}`)}
-                        className="border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors"
-                      >
+                      <tr key={r.id} onClick={() => navigate(`/check-result/${r.id}`)}
+                        className="border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors">
                         <td className="px-4 py-2.5 text-muted-foreground">
                           {new Date(r.created_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                         </td>
                         <td className="px-4 py-2.5 font-medium">{r.product_name}</td>
                         <td className="px-4 py-2.5">{r.process_type}</td>
                         <td className="px-4 py-2.5 text-center">
-                          <Badge variant="outline" className={gradeColorMap[r.overall_status] || ""}>
-                            {r.overall_status}
-                          </Badge>
+                          <Badge variant="outline" className={gradeColorMap[r.overall_status] || ""}>{r.overall_status}</Badge>
                         </td>
                         <td className="px-4 py-2.5 text-center text-status-ng font-bold">{r.ng_count}</td>
                         <td className="px-4 py-2.5 text-center text-status-warning font-bold">{r.warning_count}</td>
                         <td className="px-4 py-2.5 text-center">
-                          <Badge variant="outline" className={st.class}>
-                            {st.label}
-                          </Badge>
+                          <Badge variant="outline" className={st.class}>{st.label}</Badge>
                         </td>
                       </tr>
                     );

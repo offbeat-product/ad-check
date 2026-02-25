@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback } from "react";
-import { useOutletContext } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { PRODUCTS, PROCESSES, type ProductCode, type ProcessType, type CheckResult, type CheckItem } from "@/lib/types";
@@ -11,16 +11,12 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Upload, X, Info, RefreshCw, Download } from "lucide-react";
-import type { AppLayoutContext } from "@/components/AppLayout";
+// AppLayoutContext removed - using local state
 
 export default function CheckPage() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const context = useOutletContext<AppLayoutContext | undefined>();
-
-  const [selectedProduct, setSelectedProduct] = useState<ProductCode>(
-    context?.selectedProduct || "ltr_expo"
-  );
+  const [selectedProduct, setSelectedProduct] = useState<ProductCode>("ltr_expo");
   const [selectedProcess, setSelectedProcess] = useState<ProcessType>("script");
   const [scriptText, setScriptText] = useState("");
   const [imageData, setImageData] = useState<CompressResult | null>(null);

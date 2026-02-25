@@ -1,22 +1,23 @@
 import { useState } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useNavigate } from "react-router-dom";
 import AppSidebar from "@/components/AppSidebar";
-import type { ProductCode } from "@/lib/types";
-
-export type AppLayoutContext = {
-  selectedProduct: ProductCode | null;
-  setSelectedProduct: (code: ProductCode) => void;
-};
+import CreateProjectModal from "@/components/CreateProjectModal";
 
 export default function AppLayout() {
-  const [selectedProduct, setSelectedProduct] = useState<ProductCode | null>(null);
+  const navigate = useNavigate();
+  const [createOpen, setCreateOpen] = useState(false);
 
   return (
     <div className="flex min-h-screen w-full">
-      <AppSidebar onProductSelect={(code) => setSelectedProduct(code)} />
+      <AppSidebar onCreateProject={() => setCreateOpen(true)} />
       <main className="flex-1 overflow-auto">
-        <Outlet context={{ selectedProduct, setSelectedProduct } satisfies AppLayoutContext} />
+        <Outlet />
       </main>
+      <CreateProjectModal
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={(id) => navigate(`/project/${id}`)}
+      />
     </div>
   );
 }
