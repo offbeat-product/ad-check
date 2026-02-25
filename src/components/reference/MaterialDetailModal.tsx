@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
 import { MATERIAL_TYPES, type ReferenceMaterial } from "@/lib/reference-materials";
+import { getWCheckParsedJson, getWCheckTotalCount } from "@/lib/wcheck-parser";
+import WCheckPreview from "./WCheckPreview";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, Pencil, Trash2, FileText } from "lucide-react";
@@ -31,6 +33,9 @@ export default function MaterialDetailModal({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [addingProduct, setAddingProduct] = useState(false);
+  const [expandedWCheck, setExpandedWCheck] = useState<string | null>(null);
+
+  const isWCheck = materialType === "wcheck";
 
   const handleToggle = async (id: string, active: boolean) => {
     await supabase.from("reference_materials").update({ is_active: active, updated_at: new Date().toISOString() }).eq("id", id);
@@ -47,6 +52,37 @@ export default function MaterialDetailModal({
     ...productMaterials.filter(m => m.is_active).map(m => ({ label: "商材ベース", text: m.content_text })),
     ...projectMaterials.filter(m => m.is_active).map(m => ({ label: "案件追加", text: m.content_text })),
   ];
+
+  const renderWCheckSummary = (m: ReferenceMaterial) => {
+    if (!isWCheck || !m.content_text) return null;
+    const parsed = getWCheckParsedJson(m.content_text);
+    if (!parsed) return null;
+
+    const totalItems = getWCheckTotalCount(parsed);
+    const sheetCount = Object.keys(parsed).length;
+
+    return (
+      <div className="mt-1.5">
+        <p className="text-xs text-status-ok font-medium">
+          ✅ {sheetCount}工程 / {totalItems}項目
+        </p>
+        {expandedWCheck === m.id ? (
+          <>
+            <Button size="sm" variant="ghost" className="text-[10px] h-5 px-1" onClick={() => setExpandedWCheck(null)}>
+              詳細を閉じる ▲
+            </Button>
+            <div className="mt-1">
+              <WCheckPreview parsedData={parsed} />
+            </div>
+          </>
+        ) : (
+          <Button size="sm" variant="ghost" className="text-[10px] h-5 px-1" onClick={() => setExpandedWCheck(m.id)}>
+            詳細を表示 ▼
+          </Button>
+        )}
+      </div>
+    );
+  };
 
   const renderRow = (m: ReferenceMaterial, readOnly = false) => (
     <div key={m.id} className="border border-border rounded-lg p-3 space-y-1">
@@ -83,7 +119,13 @@ export default function MaterialDetailModal({
               <Badge variant="outline" className="text-[9px] h-4">URL参照</Badge>
             )}
           </div>
-          {m.content_text && (
+          {renderWCheckSummary(m)}
+          {!isWCheck && m.content_text && (
+            <p className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1 line-clamp-2">
+              抽出テキスト: 「{m.content_text.slice(0, 100)}...」
+            </p>
+          )}
+          {isWCheck && m.content_text && !getWCheckParsedJson(m.content_text) && (
             <p className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1 line-clamp-2">
               抽出テキスト: 「{m.content_text.slice(0, 100)}...」
             </p>
@@ -92,6 +134,25 @@ export default function MaterialDetailModal({
       )}
     </div>
   );
+
+  // For W-check cards on the project page, show enhanced info
+  const wcheckSummaryForCard = () => {
+    if (!isWCheck) return null;
+    const allMats = [...productMaterials, ...projectMaterials].filter(m => m.is_active && m.content_text);
+    let totalItems = 0;
+    let totalSheets = 0;
+    for (const mat of allMats) {
+      const parsed = getWCheckParsedJson(mat.content_text!);
+      if (parsed) {
+        totalItems += getWCheckTotalCount(parsed);
+        totalSheets += Object.keys(parsed).length;
+      }
+    }
+    if (totalItems > 0) {
+      return { totalSheets, totalItems };
+    }
+    return null;
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -155,20 +216,27 @@ export default function MaterialDetailModal({
             </div>
           </div>
 
-          {/* AI Preview */}
+          {/* AI Preview - skip parsed JSON part for display */}
           {allTexts.length > 0 && (
             <div>
               <h3 className="text-xs font-semibold text-muted-foreground mb-2">
                 ── AIに送信されるテキスト（プレビュー）──
               </h3>
               <div className="border border-border rounded-lg p-3 bg-muted/30 max-h-48 overflow-y-auto text-xs font-mono whitespace-pre-wrap">
-                {allTexts.map((t, i) => (
-                  <div key={i} className="mb-2">
-                    <span className="text-primary font-semibold">[{t.label}]</span>
-                    <br />
-                    {t.text || "(テキストなし)"}
-                  </div>
-                ))}
+                {allTexts.map((t, i) => {
+                  let displayText = t.text || "(テキストなし)";
+                  // Strip parsed JSON for display
+                  if (displayText.includes('---PARSED_JSON---')) {
+                    displayText = displayText.split('---PARSED_JSON---')[0].trim();
+                  }
+                  return (
+                    <div key={i} className="mb-2">
+                      <span className="text-primary font-semibold">[{t.label}]</span>
+                      <br />
+                      {displayText}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

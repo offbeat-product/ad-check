@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { MATERIAL_TYPES, fetchMaterials, type ReferenceMaterial } from "@/lib/reference-materials";
+import { getWCheckParsedJson, getWCheckTotalCount } from "@/lib/wcheck-parser";
 import MaterialDetailModal from "./MaterialDetailModal";
 import { ClipboardList } from "lucide-react";
 
@@ -26,6 +27,23 @@ export default function ReferenceMaterialsSection({ projectId, productId, produc
 
   useEffect(() => { refresh(); }, [refresh]);
 
+  const getWCheckCardInfo = () => {
+    const allWCheck = [...productMaterials, ...projectMaterials]
+      .filter(m => m.material_type === "wcheck" && m.is_active && m.content_text);
+    let totalItems = 0;
+    let totalSheets = 0;
+    for (const mat of allWCheck) {
+      const parsed = getWCheckParsedJson(mat.content_text!);
+      if (parsed) {
+        totalItems += getWCheckTotalCount(parsed);
+        totalSheets += Object.keys(parsed).length;
+      }
+    }
+    return { totalSheets, totalItems };
+  };
+
+  const wcheckInfo = getWCheckCardInfo();
+
   return (
     <>
       <div className="glass-card overflow-hidden">
@@ -44,6 +62,9 @@ export default function ReferenceMaterialsSection({ projectId, productId, produc
                 : pmCount > 0 ? "商材ベース"
                 : "案件固有";
 
+              // Enhanced W-check card
+              const isWCheck = mt.id === "wcheck" && wcheckInfo.totalItems > 0;
+
               return (
                 <button
                   key={mt.id}
@@ -53,9 +74,16 @@ export default function ReferenceMaterialsSection({ projectId, productId, produc
                 >
                   <div className="text-2xl mb-1">{mt.icon}</div>
                   <p className="text-xs font-medium leading-tight">{mt.label}</p>
-                  {total > 0 ? (
+                  {isWCheck ? (
                     <>
-                      <p className="text-[10px] text-green-600 mt-1.5 font-medium">✅ {total}件登録</p>
+                      <p className="text-[10px] text-status-ok mt-1.5 font-medium">
+                        ✅ {wcheckInfo.totalSheets}工程 / {wcheckInfo.totalItems}項目
+                      </p>
+                      <p className="text-[10px] text-muted-foreground">({sourceLabel})</p>
+                    </>
+                  ) : total > 0 ? (
+                    <>
+                      <p className="text-[10px] text-status-ok mt-1.5 font-medium">✅ {total}件登録</p>
                       <p className="text-[10px] text-muted-foreground">({sourceLabel})</p>
                     </>
                   ) : (
