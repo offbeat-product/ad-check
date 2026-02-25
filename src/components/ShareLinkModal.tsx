@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link2, Copy, Check, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 
 interface ShareLink {
   id: string;
@@ -26,6 +27,7 @@ interface ShareLinkModalProps {
 }
 
 export default function ShareLinkModal({ open, onOpenChange, checkResultId }: ShareLinkModalProps) {
+  const { toast } = useToast();
   const [usePassword, setUsePassword] = useState(false);
   const [password, setPassword] = useState("");
   const [useExpiry, setUseExpiry] = useState(false);
@@ -57,19 +59,28 @@ export default function ShareLinkModal({ open, onOpenChange, checkResultId }: Sh
       ? new Date(Date.now() + expiryDays * 86400000).toISOString()
       : null;
 
-    const { data } = await supabase.from("share_links").insert({
-      check_result_id: checkResultId,
-      password_hash: usePassword ? password : null,
-      expires_at: expiresAt,
-      allow_download: allowDownload,
-      allow_comment_read: allowCommentRead,
-      allow_comment_write: allowCommentWrite,
-    } as any).select().single();
+    try {
+      // Use edge function for password hashing
+      const { data, error } = await supabase.functions.invoke("create-share-link", {
+        body: {
+          check_result_id: checkResultId,
+          password: usePassword ? password : null,
+          expires_at: expiresAt,
+          allow_download: allowDownload,
+          allow_comment_read: allowCommentRead,
+          allow_comment_write: allowCommentWrite,
+        },
+      });
 
-    if (data) {
-      const url = `${window.location.origin}/shared/${(data as any).token}`;
-      setGeneratedUrl(url);
-      fetchLinks();
+      if (error) throw error;
+
+      if (data?.token) {
+        const url = `${window.location.origin}/shared/${data.token}`;
+        setGeneratedUrl(url);
+        fetchLinks();
+      }
+    } catch (err: any) {
+      toast({ title: "エラー", description: err.message, variant: "destructive" });
     }
     setGenerating(false);
   };
@@ -109,7 +120,6 @@ export default function ShareLinkModal({ open, onOpenChange, checkResultId }: Sh
           </TabsList>
 
           <TabsContent value="create" className="space-y-4 mt-4">
-            {/* Password */}
             <div className="flex items-center justify-between">
               <span className="text-sm">パスワード付きリンク</span>
               <Switch checked={usePassword} onCheckedChange={setUsePassword} />
@@ -123,26 +133,17 @@ export default function ShareLinkModal({ open, onOpenChange, checkResultId }: Sh
               />
             )}
 
-            {/* Expiry */}
             <div className="flex items-center justify-between">
               <span className="text-sm">有効期限を指定する</span>
               <Switch checked={useExpiry} onCheckedChange={setUseExpiry} />
             </div>
             {useExpiry && (
               <div className="flex items-center gap-2">
-                <Input
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={expiryDays}
-                  onChange={(e) => setExpiryDays(Number(e.target.value))}
-                  className="w-20"
-                />
+                <Input type="number" min={1} max={100} value={expiryDays} onChange={(e) => setExpiryDays(Number(e.target.value))} className="w-20" />
                 <span className="text-sm text-muted-foreground">日間</span>
               </div>
             )}
 
-            {/* Permissions */}
             <div className="flex items-center justify-between">
               <span className="text-sm">ダウンロードを許可する</span>
               <Switch checked={allowDownload} onCheckedChange={setAllowDownload} />
