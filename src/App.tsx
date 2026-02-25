@@ -12,6 +12,7 @@ import ProjectPage from "./pages/ProjectPage";
 import FileReviewPage from "./pages/FileReviewPage";
 import AppLayout from "./components/AppLayout";
 import NotFound from "./pages/NotFound";
+import SharedViewPage from "./pages/SharedViewPage";
 
 const queryClient = new QueryClient();
 
@@ -46,6 +47,7 @@ const App = () => (
               <Route path="/project/:id" element={<ProjectPage />} />
               <Route path="/project/:projectId/file/:fileId" element={<FileReviewPage />} />
             </Route>
+            <Route path="/shared/:token" element={<SharedViewPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
