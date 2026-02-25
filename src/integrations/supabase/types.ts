@@ -562,7 +562,50 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      share_links_safe: {
+        Row: {
+          allow_comment_read: boolean | null
+          allow_comment_write: boolean | null
+          allow_download: boolean | null
+          check_result_id: string | null
+          created_at: string | null
+          expires_at: string | null
+          has_password: boolean | null
+          id: string | null
+          token: string | null
+        }
+        Insert: {
+          allow_comment_read?: boolean | null
+          allow_comment_write?: boolean | null
+          allow_download?: boolean | null
+          check_result_id?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          has_password?: never
+          id?: string | null
+          token?: string | null
+        }
+        Update: {
+          allow_comment_read?: boolean | null
+          allow_comment_write?: boolean | null
+          allow_download?: boolean | null
+          check_result_id?: string | null
+          created_at?: string | null
+          expires_at?: string | null
+          has_password?: never
+          id?: string | null
+          token?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "share_links_check_result_id_fkey"
+            columns: ["check_result_id"]
+            isOneToOne: false
+            referencedRelation: "check_results"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       get_share_link_by_token: {
