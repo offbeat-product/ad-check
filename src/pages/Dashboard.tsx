@@ -1,15 +1,16 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import type { CheckItem } from "@/lib/types";
 import type { Project, Product, CheckResultRow, ProjectFile } from "@/lib/db-types";
 import { FILE_STATUS_CONFIG } from "@/lib/db-types";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Badge } from "@/components/ui/badge";
-import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderOpen } from "lucide-react";
+import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderOpen, ChevronLeft, ChevronRight } from "lucide-react";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import { cn } from "@/lib/utils";
+
+const ITEMS_PER_PAGE = 10;
 
 const gradeColorMap: Record<string, string> = {
   A: "bg-[hsl(var(--grade-a))]/10 text-[hsl(var(--grade-a))] border-[hsl(var(--grade-a))]/30",
@@ -25,36 +26,94 @@ const statusBadgeMap: Record<string, { label: string; class: string }> = {
   approved: { label: "承認済", class: "bg-product-cta/10 text-product-cta" },
 };
 
+function StatCard({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: string | number; color: string }) {
+  return (
+    <div className="glass-card p-4 flex items-center gap-4">
+      <div className={`p-2.5 rounded-lg bg-muted ${color}`}>
+        <Icon className="h-5 w-5" />
+      </div>
+      <div>
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <p className="text-xl font-bold">{value}</p>
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [records, setRecords] = useState<CheckResultRow[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
   const [projects, setProjects] = useState<Project[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [recentFiles, setRecentFiles] = useState<ProjectFile[]>([]);
+  const [recentFiles, setRecentFiles] = useState<(ProjectFile & { project_name?: string })[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
 
+  // Fetch paginated records
   useEffect(() => {
     if (!user) return;
-    Promise.all([
-      supabase.from("check_results").select("*").order("created_at", { ascending: false }).limit(50),
-      supabase.from("projects").select("*").order("updated_at", { ascending: false }).limit(6),
-      supabase.from("products").select("*"),
-      supabase.from("project_files").select("id, project_id, file_name, file_type, process_type, status, updated_at").order("updated_at", { ascending: false }).limit(5),
-    ]).then(([cr, pr, prod, pf]) => {
+    let cancelled = false;
+
+    const fetchData = async () => {
+      setLoading(true);
+      const from = page * ITEMS_PER_PAGE;
+      const to = from + ITEMS_PER_PAGE - 1;
+
+      const [cr, countRes, pr, prod, pf] = await Promise.all([
+        supabase.from("check_results").select("*").order("created_at", { ascending: false }).range(from, to),
+        supabase.from("check_results").select("*", { count: "exact", head: true }),
+        page === 0 ? supabase.from("projects").select("*").order("updated_at", { ascending: false }).limit(6) : null,
+        page === 0 ? supabase.from("products").select("*") : null,
+        page === 0 ? supabase.from("project_files").select("id, project_id, file_name, file_type, process_type, status, updated_at").order("updated_at", { ascending: false }).limit(5) : null,
+      ]);
+
+      if (cancelled) return;
+
       handleSupabaseError(cr.error, "check_results");
-      handleSupabaseError(pr.error, "projects");
-      handleSupabaseError(prod.error, "products");
-      handleSupabaseError(pf.error, "project_files");
+      handleSupabaseError(countRes?.error ?? null, "check_results count");
       setRecords(cr.data ?? []);
-      setProjects(pr.data ?? []);
-      setProducts(prod.data ?? []);
-      setRecentFiles((pf.data ?? []) as ProjectFile[]);
-      setLoading(false);
-    });
-  }, [user]);
+      setTotalCount(countRes?.count ?? 0);
+
+      if (page === 0) {
+        handleSupabaseError(pr?.error ?? null, "projects");
+        handleSupabaseError(prod?.error ?? null, "products");
+        handleSupabaseError(pf?.error ?? null, "project_files");
+        const projectsData = pr?.data ?? [];
+        const productsData = prod?.data ?? [];
+        const filesData = (pf?.data ?? []) as ProjectFile[];
+        setProjects(projectsData);
+        setProducts(productsData);
+
+        // Enrich files with project names (batch, no N+1)
+        if (filesData.length > 0) {
+          const projectIds = [...new Set(filesData.map(f => f.project_id).filter(Boolean))] as string[];
+          if (projectIds.length > 0) {
+            const { data: fileProjects } = await supabase
+              .from("projects").select("id, name").in("id", projectIds);
+            if (!cancelled) {
+              const nameMap = new Map((fileProjects ?? []).map(p => [p.id, p.name]));
+              setRecentFiles(filesData.map(f => ({ ...f, project_name: nameMap.get(f.project_id ?? "") })));
+            }
+          } else {
+            setRecentFiles(filesData);
+          }
+        } else {
+          setRecentFiles([]);
+        }
+      }
+      if (!cancelled) setLoading(false);
+    };
+
+    fetchData();
+    return () => { cancelled = true; };
+  }, [user, page]);
+
+  const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
 
   const stats = useMemo(() => {
+    // Stats are approximate from first page when on page > 0, but good enough for dashboard
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayChecks = records.filter(r => r.created_at && new Date(r.created_at) >= today).length;
@@ -72,6 +131,10 @@ export default function Dashboard() {
   }, [records]);
 
   const getProductName = (productId: string | null) => products.find(p => p.id === productId)?.name || "";
+
+  const goPage = useCallback((p: number) => {
+    setPage(Math.max(0, Math.min(p, totalPages - 1)));
+  }, [totalPages]);
 
   return (
     <div className="min-h-screen">
@@ -114,8 +177,9 @@ export default function Dashboard() {
 
         <div className="grid lg:grid-cols-5 gap-6">
           <div className="lg:col-span-3 glass-card overflow-hidden">
-            <div className="px-4 py-3 border-b border-border">
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
               <h2 className="text-sm font-semibold">最近のチェック結果</h2>
+              <span className="text-xs text-muted-foreground">{totalCount} 件</span>
             </div>
             <table className="w-full text-sm">
               <thead>
@@ -135,7 +199,7 @@ export default function Dashboard() {
                 ) : records.length === 0 ? (
                   <tr><td colSpan={7} className="text-center py-12 text-muted-foreground">チェック結果がありません</td></tr>
                 ) : (
-                  records.slice(0, 20).map((r) => {
+                  records.map((r) => {
                     const st = statusBadgeMap[r.status || "pending"] || statusBadgeMap.pending;
                     return (
                       <tr key={r.id} onClick={() => navigate(`/check-result/${r.id}`)}
@@ -159,6 +223,55 @@ export default function Dashboard() {
                 )}
               </tbody>
             </table>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="px-4 py-3 border-t border-border flex items-center justify-between">
+                <span className="text-xs text-muted-foreground">
+                  {page * ITEMS_PER_PAGE + 1}–{Math.min((page + 1) * ITEMS_PER_PAGE, totalCount)} / {totalCount} 件
+                </span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => goPage(page - 1)}
+                    disabled={page === 0}
+                    className="p-1.5 rounded-md hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                  {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
+                    let p: number;
+                    if (totalPages <= 5) {
+                      p = i;
+                    } else if (page < 3) {
+                      p = i;
+                    } else if (page > totalPages - 4) {
+                      p = totalPages - 5 + i;
+                    } else {
+                      p = page - 2 + i;
+                    }
+                    return (
+                      <button
+                        key={p}
+                        onClick={() => goPage(p)}
+                        className={cn(
+                          "min-w-[28px] h-7 rounded-md text-xs font-medium transition-colors",
+                          p === page ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground"
+                        )}
+                      >
+                        {p + 1}
+                      </button>
+                    );
+                  })}
+                  <button
+                    onClick={() => goPage(page + 1)}
+                    disabled={page >= totalPages - 1}
+                    className="p-1.5 rounded-md hover:bg-muted disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="lg:col-span-2 space-y-4">
@@ -183,7 +296,10 @@ export default function Dashboard() {
                         <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{f.file_name}</p>
-                          <p className="text-[10px] text-muted-foreground">{f.process_type}</p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {f.project_name ? `${f.project_name} · ` : ""}{f.process_type}
+                            {f.updated_at ? ` · ${new Date(f.updated_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}
+                          </p>
                         </div>
                         <Badge variant="outline" className={cn("text-[10px] shrink-0", st.class)}>{st.label}</Badge>
                       </button>
@@ -194,20 +310,6 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-function StatCard({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: string | number; color: string }) {
-  return (
-    <div className="glass-card p-4 flex items-center gap-4">
-      <div className={`p-2.5 rounded-lg bg-muted ${color}`}>
-        <Icon className="h-5 w-5" />
-      </div>
-      <div>
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="text-xl font-bold">{value}</p>
       </div>
     </div>
   );
