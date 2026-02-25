@@ -104,27 +104,27 @@ export default function CheckPage() {
       return;
     }
     let cancelled = false;
-    Promise.all([
-      supabase
-        .from("check_rules")
-        .select("id", { count: "exact", head: true })
-        .eq("product_id", selectedProductId)
-        .eq("process_type", selectedProcess)
-        .eq("is_active", true),
-      supabase
-        .from("check_rules")
-        .select("title")
-        .eq("product_id", selectedProductId)
-        .eq("process_type", selectedProcess)
-        .eq("severity", "high")
-        .eq("is_active", true)
-        .order("sort_order", { ascending: true })
-        .limit(3),
-    ]).then(([countRes, highRes]) => {
-      if (cancelled) return;
-      setRuleCount(countRes.count ?? 0);
-      setHighRuleTitles((highRes.data ?? []).map((r: any) => r.title));
+    const processTypeCode = selectedProcess;
+    console.log('Debug check_rules query:', {
+      product_id: selectedProductId,
+      process_type: processTypeCode,
     });
+    supabase
+      .from("check_rules")
+      .select("id, title, severity", { count: "exact" })
+      .eq("product_id", selectedProductId)
+      .eq("process_type", processTypeCode)
+      .eq("is_active", true)
+      .then((res) => {
+        if (cancelled) return;
+        console.log('Debug check_rules result:', { data: res.data, count: res.count, error: res.error });
+        setRuleCount(res.count ?? 0);
+        const highTitles = (res.data ?? [])
+          .filter((r: any) => r.severity === "high")
+          .slice(0, 3)
+          .map((r: any) => r.title);
+        setHighRuleTitles(highTitles);
+      });
     return () => { cancelled = true; };
   }, [selectedProductId, selectedProcess]);
 
