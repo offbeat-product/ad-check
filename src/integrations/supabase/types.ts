@@ -512,7 +512,50 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_share_link_by_token: {
+        Args: { token_param: string }
+        Returns: {
+          allow_comment_read: boolean
+          allow_comment_write: boolean
+          allow_download: boolean
+          check_result_id: string
+          created_at: string
+          expires_at: string
+          id: string
+          password_hash: string
+          token: string
+        }[]
+      }
+      get_shared_check_result: {
+        Args: { p_check_result_id: string; p_share_token: string }
+        Returns: {
+          check_items: Json | null
+          client_name: string
+          created_at: string | null
+          detected_case: string | null
+          id: string
+          input_data: Json | null
+          input_text: string | null
+          input_type: string
+          ng_count: number | null
+          ok_count: number | null
+          overall_status: string | null
+          process_type: string
+          product_code: string
+          product_name: string
+          raw_response: Json | null
+          status: string | null
+          total_checks: number | null
+          user_id: string
+          warning_count: number | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "check_results"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
     }
     Enums: {
       [_ in never]: never

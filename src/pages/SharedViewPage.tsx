@@ -36,11 +36,9 @@ export default function SharedViewPage() {
   }, [token]);
 
   const loadShareLink = async (cancelled = false) => {
-    const { data, error: fetchError } = await supabase
-      .from("share_links")
-      .select("*")
-      .eq("token", token!)
-      .maybeSingle();
+    const { data: rows, error: fetchError } = await supabase
+      .rpc("get_share_link_by_token", { token_param: token! });
+    const data = rows && rows.length > 0 ? rows[0] : null;
 
     if (cancelled) return;
 
@@ -69,12 +67,14 @@ export default function SharedViewPage() {
   };
 
   const loadCheckResult = async (checkResultId: string, cancelled = false) => {
-    const { data: cr, error } = await supabase.from("check_results").select("*").eq("id", checkResultId).maybeSingle();
+    const { data: rows, error } = await supabase
+      .rpc("get_shared_check_result", { p_check_result_id: checkResultId, p_share_token: token! });
     if (cancelled) return;
-    if (handleSupabaseError(error, "check_result") || !cr) {
+    const cr = rows && rows.length > 0 ? rows[0] : null;
+    if (error || !cr) {
       setError("チェック結果が見つかりません");
     } else {
-      setRecord(cr);
+      setRecord(cr as CheckResultRow);
     }
     setLoading(false);
   };
