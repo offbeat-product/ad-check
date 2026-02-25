@@ -39,11 +39,11 @@ export default function ShareLinkModal({ open, onOpenChange, checkResultId }: Sh
   const fetchLinks = async () => {
     const { data, error } = await supabase
       .from("share_links")
-      .select("*")
+      .select("id, check_result_id, token, expires_at, allow_download, allow_comment_read, allow_comment_write, created_at")
       .eq("check_result_id", checkResultId)
       .order("created_at", { ascending: false });
     if (handleSupabaseError(error, "share_links")) return;
-    setLinks(data ?? []);
+    setLinks((data ?? []) as ShareLinkRow[]);
   };
 
   const handleGenerate = async () => {
