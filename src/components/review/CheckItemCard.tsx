@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Lightbulb, MessageCircle, Check } from "lucide-react";
+import { Lightbulb, MessageCircle, Check, CheckCheck } from "lucide-react";
 import { CorrectionPatternCard } from "@/components/CorrectionPatterns";
 import { cn } from "@/lib/utils";
 import type { CheckItem } from "@/lib/types";
@@ -26,6 +26,7 @@ interface CheckItemCardProps {
   isResolved: boolean;
   isSelected: boolean;
   isHighlighted: boolean;
+  isApplied?: boolean;
   commentCount: number;
   productCode: string;
   onToggleSelect: () => void;
@@ -34,7 +35,7 @@ interface CheckItemCardProps {
 }
 
 const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
-  ({ item, index, marker, isResolved, isSelected, isHighlighted, commentCount, productCode, onToggleSelect, onToggleResolved, onCommentClick }, ref) => {
+  ({ item, index, marker, isResolved, isSelected, isHighlighted, isApplied, commentCount, productCode, onToggleSelect, onToggleResolved, onCommentClick }, ref) => {
     return (
       <div
         ref={ref}
@@ -42,14 +43,18 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
           "border-l-4 rounded-lg border border-border p-3 space-y-2 transition-all bg-card",
           borderColors[item.status] || "",
           isResolved && "opacity-50",
+          isApplied && "opacity-60 bg-status-ok/5",
           isHighlighted && "ring-2 ring-primary ring-offset-1"
         )}
       >
         <div className="flex items-start gap-2">
           {/* Marker + checkbox */}
           <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
-            {item.status !== "OK" && (
+            {item.status !== "OK" && !isApplied && (
               <Checkbox checked={isSelected} onCheckedChange={onToggleSelect} className="h-3.5 w-3.5" />
+            )}
+            {isApplied && (
+              <CheckCheck className="h-4 w-4 text-status-ok" />
             )}
             {marker && (
               <div className={cn(
@@ -72,6 +77,9 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
               <Badge className={cn("text-[10px] h-4 px-1.5", item.status === "NG" ? "status-ng" : item.status === "WARNING" ? "status-warning" : "status-ok")}>
                 {item.status}
               </Badge>
+              {isApplied && (
+                <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-status-ok/30 text-status-ok bg-status-ok/10">反映済み</Badge>
+              )}
             </div>
 
             <p className="text-sm font-medium">{item.item}</p>

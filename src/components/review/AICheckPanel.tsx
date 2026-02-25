@@ -5,6 +5,7 @@ import type { CheckItem } from "@/lib/types";
 import type { CheckMarker } from "@/lib/marker-positions";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { handleSupabaseError } from "@/lib/supabase-helpers";
 import CheckItemCard from "./CheckItemCard";
 
 interface AICheckPanelProps {
@@ -14,13 +15,17 @@ interface AICheckPanelProps {
   commentCounts: Record<string, number>;
   highlightCard: string | null;
   onCommentClick: (patternId: string) => void;
+  checkResultId?: string | null;
+  onTabChange?: (tab: string) => void;
 }
 
-export default function AICheckPanel({ items, markers, productCode, commentCounts, highlightCard, onCommentClick }: AICheckPanelProps) {
+export default function AICheckPanel({ items, markers, productCode, commentCounts, highlightCard, onCommentClick, checkResultId, onTabChange }: AICheckPanelProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [resolvedItems, setResolvedItems] = useState<Set<string>>(new Set());
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [appliedItems, setAppliedItems] = useState<Set<string>>(new Set());
+  const [applying, setApplying] = useState(false);
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   const toggleSelectItem = (id: string) => {
@@ -28,86 +33,134 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
   };
 
   const selectAll = () => {
-    setSelectedItems(new Set(items.filter((i) => i.status !== "OK").map((i) => i.pattern_id)));
+    setSelectedItems(new Set(items.filter((i) => i.status !== "OK" && !appliedItems.has(i.pattern_id)).map((i) => i.pattern_id)));
   };
 
   const handleApplyCorrections = async () => {
     if (!user || selectedItems.size === 0) return;
+    setApplying(true);
 
-    // Batch: fetch all existing patterns for this product in one query
-    const patternIds = [...selectedItems];
-    const { data: existing, error: fetchErr } = await supabase
-      .from("correction_patterns")
-      .select("id, rule_id, frequency")
-      .eq("product_code", productCode)
-      .in("rule_id", patternIds);
+    try {
+      // Batch: fetch all existing patterns for this product in one query
+      const patternIds = [...selectedItems];
+      const { data: existing, error: fetchErr } = await supabase
+        .from("correction_patterns")
+        .select("id, rule_id, frequency")
+        .eq("product_code", productCode)
+        .in("rule_id", patternIds);
 
-    if (fetchErr) {
-      toast({ title: "エラー", description: fetchErr.message, variant: "destructive" });
-      return;
-    }
-
-    const existingMap = new Map((existing ?? []).map((e) => [e.rule_id, e]));
-
-    // Separate into updates and inserts
-    const toUpdate: { id: string; frequency: number }[] = [];
-    const toInsert: Array<{
-      user_id: string; product_code: string; rule_id: string;
-      rule_title: string; original_content: string; corrected_content: string; category: string;
-    }> = [];
-
-    for (const patternId of patternIds) {
-      const item = items.find((i) => i.pattern_id === patternId);
-      if (!item) continue;
-
-      const ex = existingMap.get(patternId);
-      if (ex) {
-        toUpdate.push({ id: ex.id, frequency: (ex.frequency ?? 0) + 1 });
-      } else {
-        toInsert.push({
-          user_id: user.id,
-          product_code: productCode,
-          rule_id: item.pattern_id,
-          rule_title: item.item,
-          original_content: item.detail,
-          corrected_content: item.suggestion || "",
-          category: item.severity,
-        });
+      if (fetchErr) {
+        toast({ title: "エラー", description: fetchErr.message, variant: "destructive" });
+        setApplying(false);
+        return;
       }
+
+      const existingMap = new Map((existing ?? []).map((e) => [e.rule_id, e]));
+
+      // Separate into updates and inserts
+      const toUpdate: { id: string; frequency: number }[] = [];
+      const toInsert: Array<{
+        user_id: string; product_code: string; rule_id: string;
+        rule_title: string; original_content: string; corrected_content: string; category: string;
+      }> = [];
+
+      for (const patternId of patternIds) {
+        const item = items.find((i) => i.pattern_id === patternId);
+        if (!item) continue;
+
+        const ex = existingMap.get(patternId);
+        if (ex) {
+          toUpdate.push({ id: ex.id, frequency: (ex.frequency ?? 0) + 1 });
+        } else {
+          toInsert.push({
+            user_id: user.id,
+            product_code: productCode,
+            rule_id: item.pattern_id,
+            rule_title: item.item,
+            original_content: item.detail,
+            corrected_content: item.suggestion || "",
+            category: item.severity,
+          });
+        }
+      }
+
+      // Execute batch operations
+      const promises: Promise<unknown>[] = [];
+
+      if (toInsert.length > 0) {
+        promises.push(
+          (async () => {
+            const { error } = await supabase.from("correction_patterns").insert(toInsert);
+            if (error) console.error("[correction_patterns insert]", error.message);
+          })()
+        );
+      }
+
+      for (const u of toUpdate) {
+        promises.push(
+          (async () => {
+            const { error } = await supabase.from("correction_patterns")
+              .update({ frequency: u.frequency, updated_at: new Date().toISOString() })
+              .eq("id", u.id);
+            if (error) console.error("[correction_patterns update]", error.message);
+          })()
+        );
+      }
+
+      // BUG 2 FIX: Also create comments for each selected item
+      if (checkResultId) {
+        const commentInserts = patternIds.map((patternId) => {
+          const item = items.find((i) => i.pattern_id === patternId);
+          if (!item) return null;
+          return {
+            check_result_id: checkResultId,
+            check_item_id: item.pattern_id,
+            author_name: "AIチェック",
+            author_email: user.email || "",
+            content: `【${item.pattern_id}】${item.item}\n\n${item.detail}\n\n💡 修正案: ${item.suggestion || "なし"}`,
+            status: "open" as const,
+          };
+        }).filter(Boolean);
+
+        if (commentInserts.length > 0) {
+          promises.push(
+            (async () => {
+              const { error } = await supabase.from("comments").insert(commentInserts);
+              if (error) console.error("[comments insert]", error.message);
+            })()
+          );
+        }
+      }
+
+      await Promise.all(promises);
+
+      // Mark as applied
+      setAppliedItems((s) => {
+        const next = new Set(s);
+        patternIds.forEach((id) => next.add(id));
+        return next;
+      });
+
+      // Mark all as resolved
+      setResolvedItems((s) => {
+        const next = new Set(s);
+        patternIds.forEach((id) => next.add(id));
+        return next;
+      });
+
+      toast({ title: `✅ ${selectedItems.size}件の修正パターンを保存しました` });
+      setSelectedItems(new Set());
+
+      // Switch to comments tab to show newly created comments
+      if (onTabChange) {
+        onTabChange("comments");
+      }
+    } catch (err) {
+      console.error("[handleApplyCorrections]", err);
+      toast({ title: "エラー", description: "保存に失敗しました", variant: "destructive" });
+    } finally {
+      setApplying(false);
     }
-
-    // Execute batch operations
-    const promises: Promise<unknown>[] = [];
-
-    if (toInsert.length > 0) {
-      const insertPromise = async () => {
-        const { error } = await supabase.from("correction_patterns").insert(toInsert);
-        if (error) console.error("[correction_patterns insert]", error.message);
-      };
-      promises.push(insertPromise());
-    }
-
-    for (const u of toUpdate) {
-      const updatePromise = async () => {
-        const { error } = await supabase.from("correction_patterns")
-          .update({ frequency: u.frequency, updated_at: new Date().toISOString() })
-          .eq("id", u.id);
-        if (error) console.error("[correction_patterns update]", error.message);
-      };
-      promises.push(updatePromise());
-    }
-
-    await Promise.all(promises);
-
-    // Mark all as resolved
-    setResolvedItems((s) => {
-      const next = new Set(s);
-      patternIds.forEach((id) => next.add(id));
-      return next;
-    });
-
-    toast({ title: "保存しました", description: `${selectedItems.size}件の修正パターンを保存しました` });
-    setSelectedItems(new Set());
   };
 
   return (
@@ -125,6 +178,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
               isResolved={resolvedItems.has(item.pattern_id)}
               isSelected={selectedItems.has(item.pattern_id)}
               isHighlighted={highlightCard === item.pattern_id}
+              isApplied={appliedItems.has(item.pattern_id)}
               commentCount={commentCounts[item.pattern_id] || 0}
               productCode={productCode}
               onToggleSelect={() => toggleSelectItem(item.pattern_id)}
@@ -147,10 +201,10 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
         <Button
           size="sm"
           className="w-full text-xs bg-status-warning text-black hover:bg-status-warning/90"
-          disabled={selectedItems.size === 0}
+          disabled={selectedItems.size === 0 || applying}
           onClick={handleApplyCorrections}
         >
-          チェックしたコメントを反映 ({selectedItems.size})
+          {applying ? "保存中..." : `チェックしたコメントを反映 (${selectedItems.size})`}
         </Button>
       </div>
     </>

@@ -11,9 +11,10 @@ import { cn } from "@/lib/utils";
 interface CommentsPanelProps {
   checkResultId: string;
   filterItemId?: string | null;
+  onAnnotationClick?: (annotationData: unknown) => void;
 }
 
-export default function CommentsPanel({ checkResultId, filterItemId }: CommentsPanelProps) {
+export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick }: CommentsPanelProps) {
   const { user } = useAuth();
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
@@ -162,8 +163,13 @@ export default function CommentsPanel({ checkResultId, filterItemId }: CommentsP
         )}
         {topLevel.map((c) => (
           <div key={c.id} className="space-y-2">
-            <CommentCard comment={c} onToggleStatus={() => toggleStatus(c.id, c.status)}
-              onReply={() => setReplyTo(replyTo === c.id ? null : c.id)} timeAgo={timeAgo} />
+            <CommentCard
+              comment={c}
+              onToggleStatus={() => toggleStatus(c.id, c.status)}
+              onReply={() => setReplyTo(replyTo === c.id ? null : c.id)}
+              timeAgo={timeAgo}
+              onAnnotationClick={onAnnotationClick}
+            />
             {replies(c.id).map((r) => (
               <div key={r.id} className="ml-5">
                 <CommentCard comment={r} onToggleStatus={() => toggleStatus(r.id, r.status)} onReply={() => {}} timeAgo={timeAgo} isReply />
@@ -212,26 +218,43 @@ export default function CommentsPanel({ checkResultId, filterItemId }: CommentsP
   );
 }
 
-function CommentCard({ comment, onToggleStatus, onReply, timeAgo, isReply }: {
-  comment: CommentRow; onToggleStatus: () => void; onReply: () => void; timeAgo: (d: string) => string; isReply?: boolean;
+function CommentCard({ comment, onToggleStatus, onReply, timeAgo, isReply, onAnnotationClick }: {
+  comment: CommentRow; onToggleStatus: () => void; onReply: () => void; timeAgo: (d: string) => string; isReply?: boolean; onAnnotationClick?: (data: unknown) => void;
 }) {
   const initial = comment.author_name.charAt(0).toUpperCase();
   const colors = ["bg-primary", "bg-status-ok", "bg-context-client", "bg-product-cta"];
   const colorIdx = comment.author_name.charCodeAt(0) % colors.length;
+  const hasAnnotation = !!comment.annotation_data;
+
+  const handleAnnotationClick = () => {
+    if (hasAnnotation && onAnnotationClick) {
+      onAnnotationClick(comment.annotation_data);
+    }
+  };
 
   return (
-    <div className="border border-border rounded-lg p-2.5 space-y-1.5 bg-card">
+    <div
+      className={cn(
+        "border border-border rounded-lg p-2.5 space-y-1.5 bg-card transition-colors",
+        hasAnnotation && onAnnotationClick && "cursor-pointer hover:border-primary/40 hover:bg-primary/5"
+      )}
+      onClick={hasAnnotation && onAnnotationClick ? handleAnnotationClick : undefined}
+    >
       <div className="flex items-center gap-2">
         <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white", colors[colorIdx])}>{initial}</div>
         <span className="text-xs font-medium flex-1">{comment.author_name}</span>
         <span className="text-[10px] text-muted-foreground">{timeAgo(comment.created_at)}</span>
       </div>
-      <p className="text-xs">{comment.content}</p>
-      {comment.annotation_data && (
-        <div className="flex items-center gap-1 text-[10px] text-primary"><Pin className="h-3 w-3" />画像上の指摘</div>
+      <p className="text-xs whitespace-pre-wrap">{comment.content}</p>
+      {hasAnnotation && (
+        <div className="flex items-center gap-1 text-[10px] text-primary">
+          <Pin className="h-3 w-3" />
+          📌 画像上の指摘
+          {onAnnotationClick && <span className="text-muted-foreground ml-1">（クリックで表示）</span>}
+        </div>
       )}
       {comment.attachment_url && (
-        <a href={comment.attachment_url} target="_blank" rel="noopener noreferrer" className="block">
+        <a href={comment.attachment_url} target="_blank" rel="noopener noreferrer" className="block" onClick={(e) => e.stopPropagation()}>
           {comment.attachment_type?.startsWith("image/") ? (
             <img src={comment.attachment_url} alt={comment.attachment_name ?? ""} className="max-h-20 rounded border border-border" />
           ) : (
@@ -241,7 +264,7 @@ function CommentCard({ comment, onToggleStatus, onReply, timeAgo, isReply }: {
           )}
         </a>
       )}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
         <button onClick={onToggleStatus}
           className={cn("text-[10px] px-2 py-0.5 rounded-full border font-medium",
             comment.status === "open" ? "border-status-warning/30 text-status-warning bg-status-warning/10" : "border-status-ok/30 text-status-ok bg-status-ok/10")}>
