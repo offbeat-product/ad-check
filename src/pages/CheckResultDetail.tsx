@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -9,6 +9,7 @@ import { useReviewState, useDownload, useExportCsv } from "@/hooks/useReviewStat
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import CompareView from "@/components/CompareView";
 import ShareLinkModal from "@/components/ShareLinkModal";
 import ImagePreview from "@/components/review/ImagePreview";
@@ -16,6 +17,16 @@ import ScriptDisplay from "@/components/review/ScriptDisplay";
 import ReviewRightPanel from "@/components/review/ReviewRightPanel";
 import { ArrowLeft, Download, GitCompare, Link2, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
+
+interface AnnotationData {
+  type: string;
+  points: { x: number; y: number }[];
+  color: string;
+  strokeWidth: number;
+  text?: string;
+  imagePosition?: { x: number; y: number; width: number; height: number };
+}
 
 const statusConfig: Record<string, { label: string; class: string }> = {
   pending: { label: "チェック済", class: "bg-muted text-muted-foreground" },
@@ -28,10 +39,13 @@ export default function CheckResultDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [record, setRecord] = useState<CheckResultRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [compareOpen, setCompareOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [savedAnnotations, setSavedAnnotations] = useState<AnnotationData[]>([]);
+  const [highlightAnnotation, setHighlightAnnotation] = useState<AnnotationData | null>(null);
   const { downloadFile } = useDownload();
   const { exportCsv } = useExportCsv();
 
@@ -75,18 +89,61 @@ export default function CheckResultDetail() {
     exportCsv(items, `checkmate_${record.product_code}_${Date.now()}.csv`);
   };
 
-  const handleAnnotationSave = async (annotations: unknown[]) => {
+  // Fetch saved annotations from comments
+  const fetchSavedAnnotations = useCallback(async () => {
+    if (!id) return;
+    const { data, error } = await supabase
+      .from("comments")
+      .select("annotation_data")
+      .eq("check_result_id", id)
+      .not("annotation_data", "is", null);
+    if (handleSupabaseError(error, "saved annotations")) return;
+    const anns: AnnotationData[] = [];
+    (data ?? []).forEach((c) => {
+      const ad = c.annotation_data as Record<string, unknown> | null;
+      if (ad && Array.isArray(ad.annotations)) {
+        ad.annotations.forEach((a: unknown) => anns.push(a as AnnotationData));
+      } else if (ad && ad.type) {
+        anns.push(ad as unknown as AnnotationData);
+      }
+    });
+    setSavedAnnotations(anns);
+  }, [id]);
+
+  useEffect(() => { fetchSavedAnnotations(); }, [fetchSavedAnnotations]);
+
+  const handleAnnotationSave = async (annotations: unknown[], comment: string) => {
     if (!id || !user) return;
     const { error } = await supabase.from("comments").insert([{
       check_result_id: id,
       author_name: user.email?.split("@")[0] || "User",
       author_email: user.email || "",
-      content: "アノテーション追加",
+      content: comment || "アノテーション追加",
       annotation_data: { annotations } as unknown as Json,
       status: "open",
     }]);
-    handleSupabaseError(error, "annotation save");
+    if (!handleSupabaseError(error, "annotation save")) {
+      toast({ title: "コメントを保存しました" });
+      fetchSavedAnnotations();
+    }
   };
+
+  const handleAnnotationClick = useCallback((annotationData: unknown) => {
+    const ad = annotationData as Record<string, unknown> | null;
+    if (!ad) return;
+    // Try to extract annotation data
+    let ann: AnnotationData | null = null;
+    if (Array.isArray(ad.annotations) && ad.annotations.length > 0) {
+      ann = ad.annotations[0] as AnnotationData;
+    } else if (ad.type) {
+      ann = ad as unknown as AnnotationData;
+    }
+    if (ann) {
+      setHighlightAnnotation(ann);
+      setTimeout(() => setHighlightAnnotation(null), 2500);
+    }
+  }, []);
+
 
   if (loading) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">読み込み中...</div>;
   if (!record) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">結果が見つかりません</div>;
@@ -148,6 +205,8 @@ export default function CheckResultDetail() {
                 onAnnotationSave={handleAnnotationSave}
                 label={`${record.client_name} / ${record.product_name} / スタイルフレーム`}
                 noDataMessage="プレビュー不可（旧バージョン）。再チェックしてください。"
+                savedAnnotations={savedAnnotations}
+                highlightAnnotation={highlightAnnotation}
               />
             ) : (
               <div>
@@ -171,6 +230,7 @@ export default function CheckResultDetail() {
         checkResultId={id || null}
         hasCheckResult={true}
         onCommentClick={handleCommentClick}
+        onAnnotationClick={handleAnnotationClick}
       />
 
       <CompareView checkResultId={id!} processType={record.process_type} originalText={record.input_text} open={compareOpen} onOpenChange={setCompareOpen} />
