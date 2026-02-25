@@ -1,7 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Square, Circle, ArrowUpRight, Pencil, Type, MapPin, Undo2, Redo2, Trash2, MessageCircle } from "lucide-react";
+import { Square, Circle, ArrowUpRight, Pencil, Type, MapPin, Undo2, Trash2, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type ToolType = "rect" | "ellipse" | "arrow" | "freehand" | "text" | "pin";
@@ -58,8 +58,13 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
   const [currentPoints, setCurrentPoints] = useState<{ x: number; y: number }[]>([]);
   const [textInput, setTextInput] = useState<{ x: number; y: number; value: string } | null>(null);
   const [pinInput, setPinInput] = useState<{ x: number; y: number; value: string } | null>(null);
+
+  // Mandatory comment popup state
+  const [pendingAnnotation, setPendingAnnotation] = useState<Annotation | null>(null);
   const [commentText, setCommentText] = useState("");
-  const [showComment, setShowComment] = useState(false);
+  const [commentError, setCommentError] = useState(false);
+
+  const showingPopup = !!pendingAnnotation;
 
   const getPos = useCallback((e: React.MouseEvent) => {
     const canvas = canvasRef.current;
@@ -68,7 +73,6 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
     return { x: e.clientX - rect.left, y: e.clientY - rect.top };
   }, []);
 
-  // Redraw canvas
   const redraw = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -76,7 +80,11 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
     if (!ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    for (const ann of annotations) {
+    const allAnns = pendingAnnotation ? [...annotations, pendingAnnotation] : annotations;
+
+    for (const ann of allAnns) {
+      const isPending = ann.id === pendingAnnotation?.id;
+      ctx.globalAlpha = isPending ? 0.5 : 1;
       ctx.strokeStyle = ann.color;
       ctx.fillStyle = ann.color;
       ctx.lineWidth = ann.strokeWidth;
@@ -101,7 +109,6 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
         ctx.moveTo(from.x, from.y);
         ctx.lineTo(to.x, to.y);
         ctx.stroke();
-        // Arrowhead
         const angle = Math.atan2(to.y - from.y, to.x - from.x);
         const headLen = 12;
         ctx.beginPath();
@@ -122,9 +129,11 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
         ctx.font = "bold 14px 'Noto Sans JP', sans-serif";
         const metrics = ctx.measureText(ann.text);
         const pad = 4;
+        ctx.globalAlpha = isPending ? 0.4 : 0.85;
         ctx.fillStyle = "rgba(255,255,255,0.85)";
         ctx.fillRect(p.x - pad, p.y - 16, metrics.width + pad * 2, 22);
         ctx.fillStyle = ann.color;
+        ctx.globalAlpha = isPending ? 0.5 : 1;
         ctx.fillText(ann.text, p.x, p.y);
       } else if (ann.type === "pin" && ann.points.length >= 1) {
         const p = ann.points[0];
@@ -140,14 +149,12 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
         ctx.textAlign = "start";
         ctx.textBaseline = "alphabetic";
       }
+      ctx.globalAlpha = 1;
     }
-  }, [annotations]);
+  }, [annotations, pendingAnnotation]);
 
-  useEffect(() => {
-    redraw();
-  }, [annotations, redraw]);
+  useEffect(() => { redraw(); }, [annotations, pendingAnnotation, redraw]);
 
-  // Resize canvas
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -156,8 +163,64 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
     redraw();
   }, [width, height, redraw]);
 
+  // Calculate annotation bounding box as percentage of canvas
+  const getAnnotationImagePosition = (ann: Annotation) => {
+    if (ann.points.length < 2 && ann.type !== "pin" && ann.type !== "text") return undefined;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of ann.points) {
+      minX = Math.min(minX, p.x);
+      minY = Math.min(minY, p.y);
+      maxX = Math.max(maxX, p.x);
+      maxY = Math.max(maxY, p.y);
+    }
+    // Add some padding for pins/text
+    if (ann.type === "pin" || ann.type === "text") {
+      minX -= 20; minY -= 20; maxX += 20; maxY += 20;
+    }
+    return {
+      x: (minX / width) * 100,
+      y: (minY / height) * 100,
+      width: ((maxX - minX) / width) * 100,
+      height: ((maxY - minY) / height) * 100,
+    };
+  };
+
+  // Trigger mandatory comment popup after annotation is completed
+  const triggerCommentPopup = (ann: Annotation) => {
+    setPendingAnnotation(ann);
+    setCommentText("");
+    setCommentError(false);
+  };
+
+  const handleConfirmComment = () => {
+    if (!commentText.trim()) {
+      setCommentError(true);
+      return;
+    }
+    if (!pendingAnnotation) return;
+
+    // Add the annotation permanently
+    setUndoStack((s) => [...s, annotations]);
+    setAnnotations((a) => [...a, pendingAnnotation]);
+
+    // Save with comment
+    const imagePosition = getAnnotationImagePosition(pendingAnnotation);
+    const annotationWithPosition = { ...pendingAnnotation, imagePosition };
+    onSaveAnnotations?.([annotationWithPosition] as unknown as Annotation[], commentText);
+
+    setPendingAnnotation(null);
+    setCommentText("");
+  };
+
+  const handleCancelComment = () => {
+    // Remove the pending annotation completely (undo)
+    setPendingAnnotation(null);
+    setCommentText("");
+    setCommentError(false);
+  };
+
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (!active) return;
+    if (!active || showingPopup) return;
     const pos = getPos(e);
 
     if (tool === "text") {
@@ -177,12 +240,11 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
   };
 
   const handleMouseMove = (e: React.MouseEvent) => {
-    if (!drawing || !active) return;
+    if (!drawing || !active || showingPopup) return;
     const pos = getPos(e);
     if (tool === "freehand") {
       setCurrentPoints((p) => [...p, pos]);
     }
-    // For rect/ellipse/arrow: preview on canvas
     const canvas = canvasRef.current;
     if (!canvas || !startPoint) return;
     const ctx = canvas.getContext("2d");
@@ -220,7 +282,7 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
   };
 
   const handleMouseUp = (e: React.MouseEvent) => {
-    if (!drawing || !active || !startPoint) return;
+    if (!drawing || !active || !startPoint || showingPopup) return;
     const pos = getPos(e);
     setDrawing(false);
 
@@ -232,10 +294,11 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
       strokeWidth,
     };
 
-    setUndoStack((s) => [...s, annotations]);
-    setAnnotations((a) => [...a, newAnn]);
     setStartPoint(null);
     setCurrentPoints([]);
+
+    // Trigger mandatory comment popup
+    triggerCommentPopup(newAnn);
   };
 
   const confirmText = () => {
@@ -251,9 +314,8 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
       strokeWidth,
       text: textInput.value,
     };
-    setUndoStack((s) => [...s, annotations]);
-    setAnnotations((a) => [...a, newAnn]);
     setTextInput(null);
+    triggerCommentPopup(newAnn);
   };
 
   const confirmPin = () => {
@@ -266,12 +328,12 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
       strokeWidth,
       text: pinInput.value || undefined,
     };
-    setUndoStack((s) => [...s, annotations]);
-    setAnnotations((a) => [...a, newAnn]);
     setPinInput(null);
+    triggerCommentPopup(newAnn);
   };
 
   const handleUndo = () => {
+    if (showingPopup) return;
     if (undoStack.length === 0) return;
     const prev = undoStack[undoStack.length - 1];
     setUndoStack((s) => s.slice(0, -1));
@@ -279,16 +341,23 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
   };
 
   const handleClear = () => {
+    if (showingPopup) return;
     setUndoStack((s) => [...s, annotations]);
     setAnnotations([]);
   };
 
-  const handleSave = () => {
-    if (annotations.length === 0 && !commentText.trim()) return;
-    onSaveAnnotations?.(annotations, commentText);
-    setAnnotations([]);
-    setCommentText("");
-    setShowComment(false);
+  // Calculate popup position
+  const getPopupPosition = () => {
+    if (!pendingAnnotation) return { left: "50%", top: "50%" };
+    const pts = pendingAnnotation.points;
+    let cx = 0, cy = 0;
+    for (const p of pts) { cx += p.x; cy += p.y; }
+    cx /= pts.length;
+    cy /= pts.length;
+    // Place below annotation, or above if too close to bottom
+    const popupY = cy + 40 < height - 120 ? cy + 40 : cy - 160;
+    const popupX = Math.max(20, Math.min(cx - 150, width - 320));
+    return { left: `${popupX}px`, top: `${popupY}px` };
   };
 
   if (!active) {
@@ -306,15 +375,45 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
       {/* Canvas overlay */}
       <canvas
         ref={canvasRef}
-        className="absolute inset-0 z-20 cursor-crosshair"
+        className={cn("absolute inset-0 z-20", showingPopup ? "pointer-events-none" : "cursor-crosshair")}
         style={{ width: "100%", height: "100%" }}
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
       />
 
+      {/* Mandatory comment popup overlay */}
+      {showingPopup && (
+        <>
+          {/* Semi-transparent overlay to block canvas interaction */}
+          <div className="absolute inset-0 z-[35] bg-black/20" onClick={(e) => e.stopPropagation()} />
+          
+          {/* Comment popup */}
+          <div
+            className="absolute z-[40] bg-card border border-border rounded-xl shadow-xl p-4 w-[300px]"
+            style={getPopupPosition()}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-semibold mb-2">アノテーションのコメントを入力</h3>
+            <Textarea
+              value={commentText}
+              onChange={(e) => { setCommentText(e.target.value); setCommentError(false); }}
+              placeholder="修正内容を入力してください..."
+              className={cn("min-h-[70px] text-sm mb-2", commentError && "border-destructive")}
+              autoFocus
+              onKeyDown={(e) => { if (e.key === "Enter" && e.metaKey) handleConfirmComment(); }}
+            />
+            {commentError && <p className="text-[10px] text-destructive mb-2">コメントを入力してください</p>}
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" className="text-xs" onClick={handleCancelComment}>取消（削除）</Button>
+              <Button size="sm" className="text-xs" onClick={handleConfirmComment}>保存して投稿</Button>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Text input popover */}
-      {textInput && (
+      {textInput && !showingPopup && (
         <div
           className="absolute z-30 bg-card border border-border rounded-lg shadow-lg p-2 w-48"
           style={{ left: textInput.x, top: textInput.y }}
@@ -337,7 +436,7 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
       )}
 
       {/* Pin input popover */}
-      {pinInput && (
+      {pinInput && !showingPopup && (
         <div
           className="absolute z-30 bg-card border border-border rounded-lg shadow-lg p-2 w-52"
           style={{ left: pinInput.x, top: pinInput.y }}
@@ -357,39 +456,21 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
         </div>
       )}
 
-      {/* Save+Comment form */}
-      {showComment && (
-        <div
-          className="absolute bottom-16 left-4 right-4 z-30 bg-card border border-border rounded-lg shadow-lg p-3"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <Textarea
-            value={commentText}
-            onChange={(e) => setCommentText(e.target.value)}
-            placeholder="アノテーションのコメントを入力..."
-            className="min-h-[60px] text-sm mb-2"
-          />
-          <div className="flex gap-2">
-            <Button size="sm" onClick={handleSave} className="text-xs">保存して投稿</Button>
-            <Button size="sm" variant="outline" onClick={() => setShowComment(false)} className="text-xs">取消</Button>
-          </div>
-        </div>
-      )}
-
       {/* Toolbar */}
       <div className="absolute bottom-0 left-0 right-0 z-30 bg-card border-t border-border shadow-sm px-3 py-2 flex items-center gap-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
-        {/* Tools */}
         {TOOLS.map((t) => {
           const Icon = t.icon;
           return (
             <button
               key={t.type}
               onClick={() => setTool(t.type)}
+              disabled={showingPopup}
               className={cn(
                 "w-9 h-9 rounded-lg border flex items-center justify-center transition-colors",
                 tool === t.type
                   ? "bg-primary/10 border-primary text-primary"
-                  : "border-border text-muted-foreground hover:bg-muted"
+                  : "border-border text-muted-foreground hover:bg-muted",
+                showingPopup && "opacity-40 pointer-events-none"
               )}
               title={t.label}
             >
@@ -400,14 +481,15 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
 
         <div className="w-px h-7 bg-border mx-1" />
 
-        {/* Colors */}
         {COLORS.map((c) => (
           <button
             key={c.value}
             onClick={() => setColor(c.value)}
+            disabled={showingPopup}
             className={cn(
               "w-6 h-6 rounded-full border-2 transition-transform",
-              color === c.value ? "scale-125 border-foreground" : "border-border"
+              color === c.value ? "scale-125 border-foreground" : "border-border",
+              showingPopup && "opacity-40 pointer-events-none"
             )}
             style={{ backgroundColor: c.value }}
             title={c.label}
@@ -416,16 +498,17 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
 
         <div className="w-px h-7 bg-border mx-1" />
 
-        {/* Stroke widths */}
         {STROKE_WIDTHS.map((sw) => (
           <button
             key={sw.value}
             onClick={() => setStrokeWidth(sw.value)}
+            disabled={showingPopup}
             className={cn(
               "px-2 py-1 rounded text-[10px] font-medium border transition-colors",
               strokeWidth === sw.value
                 ? "bg-primary/10 border-primary text-primary"
-                : "border-border text-muted-foreground hover:bg-muted"
+                : "border-border text-muted-foreground hover:bg-muted",
+              showingPopup && "opacity-40 pointer-events-none"
             )}
           >
             {sw.label}
@@ -434,19 +517,11 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
 
         <div className="w-px h-7 bg-border mx-1" />
 
-        {/* Actions */}
-        <button onClick={handleUndo} className="w-9 h-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:bg-muted" title="元に戻す">
+        <button onClick={handleUndo} disabled={showingPopup} className="w-9 h-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:bg-muted disabled:opacity-40" title="元に戻す">
           <Undo2 className="h-4 w-4" />
         </button>
-        <button onClick={handleClear} className="w-9 h-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:bg-muted" title="全削除">
+        <button onClick={handleClear} disabled={showingPopup} className="w-9 h-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:bg-muted disabled:opacity-40" title="全削除">
           <Trash2 className="h-4 w-4" />
-        </button>
-        <button
-          onClick={() => setShowComment(true)}
-          className="ml-auto flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:opacity-90"
-        >
-          <MessageCircle className="h-3 w-3" />
-          保存+コメント
         </button>
       </div>
     </>

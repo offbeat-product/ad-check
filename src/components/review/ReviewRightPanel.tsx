@@ -18,11 +18,12 @@ interface ReviewRightPanelProps {
   hasCheckResult: boolean;
   onCommentClick: (patternId: string) => void;
   emptyCheckMessage?: React.ReactNode;
+  onAnnotationClick?: (annotationData: unknown) => void;
 }
 
 export default function ReviewRightPanel({
   rightTab, onTabChange, items, markers, productCode, commentCounts, highlightCard,
-  commentFilter, checkResultId, hasCheckResult, onCommentClick, emptyCheckMessage,
+  commentFilter, checkResultId, hasCheckResult, onCommentClick, emptyCheckMessage, onAnnotationClick,
 }: ReviewRightPanelProps) {
   return (
     <div className="w-[380px] shrink-0 h-full border-l border-border flex flex-col bg-card">
@@ -45,6 +46,8 @@ export default function ReviewRightPanel({
               commentCounts={commentCounts}
               highlightCard={highlightCard}
               onCommentClick={onCommentClick}
+              checkResultId={checkResultId}
+              onTabChange={onTabChange}
             />
           ) : (
             emptyCheckMessage || (
@@ -58,7 +61,7 @@ export default function ReviewRightPanel({
 
         <TabsContent value="comments" className="flex-1 overflow-hidden mt-0 ring-0 focus-visible:ring-0">
           {checkResultId ? (
-            <CommentsPanel checkResultId={checkResultId} filterItemId={commentFilter} />
+            <CommentsPanel checkResultId={checkResultId} filterItemId={commentFilter} onAnnotationClick={onAnnotationClick} />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
               <MessageCircle className="h-10 w-10 mb-3 opacity-30" />
