@@ -13,6 +13,7 @@ import ContextBar from "@/components/ContextBar";
 import CheckResultView from "@/components/CheckResultView";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Upload, X, Info, RefreshCw, Download } from "lucide-react";
 
@@ -32,7 +33,9 @@ export default function CheckPage() {
   // DB-driven product data
   const [dbProducts, setDbProducts] = useState<Product[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
-  const [selectedProductId, setSelectedProductId] = useState<string | null>(null);
+  const [selectedProductId, setSelectedProductId] = useState<string | null>(() => {
+    try { return localStorage.getItem("checkmate_selected_product_id"); } catch { return null; }
+  });
   const [selectedProcess, setSelectedProcess] = useState<ProcessType>("script");
   const [scriptText, setScriptText] = useState("");
   const [imageData, setImageData] = useState<CompressResult | null>(null);
@@ -54,8 +57,13 @@ export default function CheckPage() {
       handleSupabaseError(clientRes.error, "clients");
       const prods = prodRes.data ?? [];
       setDbProducts(prods);
-      setClients(clientRes.data ?? []);
-      if (prods.length > 0 && !selectedProductId) {
+      const cls = clientRes.data ?? [];
+      setClients(cls);
+      // Restore from localStorage or default to first product
+      const saved = localStorage.getItem("checkmate_selected_product_id");
+      if (saved && prods.some(p => p.id === saved)) {
+        setSelectedProductId(saved);
+      } else if (prods.length > 0 && !selectedProductId) {
         setSelectedProductId(prods[0].id);
       }
       setDataLoading(false);
@@ -77,6 +85,7 @@ export default function CheckPage() {
 
   const handleProductChange = (id: string) => {
     setSelectedProductId(id);
+    try { localStorage.setItem("checkmate_selected_product_id", id); } catch {}
     setResult(null);
     const prod = dbProducts.find(p => p.id === id);
     if (selectedProcess === "sf" && !prod?.sf_enabled) {
@@ -121,7 +130,11 @@ export default function CheckPage() {
   }, [imagePreviewUrl]);
 
   const handleExecute = async () => {
-    if (!user || !product) return;
+    if (!user) return;
+    if (!product) {
+      toast({ title: "エラー", description: "商材を選択してください", variant: "destructive" });
+      return;
+    }
     setLoading(true);
     setResult(null);
     try {
@@ -185,19 +198,14 @@ export default function CheckPage() {
   };
 
   if (dataLoading) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">読み込み中...</div>;
-  if (!product) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">商材が登録されていません</div>;
+  if (dbProducts.length === 0) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">商材が登録されていません</div>;
 
   const processLabel = PROCESSES.find((p) => p.id === selectedProcess)?.label || "";
-  const infoLines = product.info_lines ?? [];
-  const productColorMap: Record<string, string> = {
-    "product-ltr": "hsl(193, 100%, 50%)",
-    "product-cta": "hsl(264, 100%, 58%)",
-    "product-tmd": "hsl(166, 100%, 39%)",
-  };
+  const infoLines = product ? (product.info_lines ?? []) : [];
 
   const loadingText = selectedProcess === "sf"
     ? "🎨 Vision APIによるSFチェック実行中..."
-    : product.code === "tmd_aga"
+    : product?.code === "tmd_aga"
     ? "薬事チェック含むAIチェック実行中..."
     : "AIチェック実行中...";
 
@@ -205,40 +213,33 @@ export default function CheckPage() {
     <div className="min-h-screen">
       <header className="border-b border-border px-6 py-3 flex items-center bg-card">
         <div className="text-sm text-muted-foreground">
-          {clientName} &gt; {product.name} &gt; {processLabel}
+          {clientName} &gt; {product?.name ?? "未選択"} &gt; {processLabel}
         </div>
       </header>
 
       <div className="max-w-4xl mx-auto p-6 space-y-6">
-        <ContextBar client={clientName} productName={product.name} processLabel={processLabel} />
+        <ContextBar client={clientName} productName={product?.name ?? ""} processLabel={processLabel} />
 
         <section className="glass-card p-6 space-y-4">
           <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">STEP 1 — コンテキスト選択</h2>
 
-          <div className="flex gap-2 flex-wrap">
-            {dbProducts.map((p) => {
-              const color = productColorMap[p.color ?? ""] ?? "hsl(193, 100%, 50%)";
-              const isActive = selectedProductId === p.id;
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => handleProductChange(p.id)}
-                  className="px-4 py-2.5 rounded-lg text-sm font-medium border transition-all"
-                  style={isActive ? {
-                    backgroundColor: `${color}15`,
-                    borderColor: `${color}80`,
-                    color: color,
-                  } : {
-                    borderColor: "hsl(214, 32%, 91%)",
-                    color: "hsl(215, 16%, 47%)",
-                  }}
-                >
-                  <div className="font-bold">{p.label}</div>
-                  <div className="text-[10px] opacity-70">{p.rules_desc ?? ""}</div>
-                  <div className="text-[10px] opacity-50">{p.meta ?? ""}</div>
-                </button>
-              );
-            })}
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1.5 block">商材選択（必須）</label>
+            <Select value={selectedProductId ?? ""} onValueChange={handleProductChange}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="商材を選択してください" />
+              </SelectTrigger>
+              <SelectContent>
+                {dbProducts.map((p) => {
+                  const cName = p.client_id ? clients.find(c => c.id === p.client_id)?.name ?? "" : "";
+                  return (
+                    <SelectItem key={p.id} value={p.id}>
+                      {cName ? `${cName} / ${p.name}` : p.name}
+                    </SelectItem>
+                  );
+                })}
+              </SelectContent>
+            </Select>
           </div>
 
           <div className="flex gap-2 flex-wrap">
@@ -274,7 +275,7 @@ export default function CheckPage() {
             {infoLines.map((line, i) => (
               <p key={i} className="text-xs text-muted-foreground">{line}</p>
             ))}
-            {product.warning && (
+            {product?.warning && (
               <p className="text-xs text-status-warning font-medium mt-2">{product.warning}</p>
             )}
           </div>
@@ -329,7 +330,7 @@ export default function CheckPage() {
                 placeholder={"冒頭：\n前半：\n中盤：\n後半：\n締め："}
                 className="min-h-[200px] resize-y border-border font-mono text-sm"
               />
-              <Button variant="outline" size="sm" onClick={handleLoadSample} className="text-xs" disabled={!product.sample_text}>
+              <Button variant="outline" size="sm" onClick={handleLoadSample} className="text-xs" disabled={!product?.sample_text}>
                 サンプル読込
               </Button>
             </div>
@@ -339,7 +340,7 @@ export default function CheckPage() {
         <section className="space-y-6">
           <Button
             onClick={handleExecute}
-            disabled={loading || (selectedProcess === "sf" ? !imageData : !scriptText.trim())}
+            disabled={loading || !product || (selectedProcess === "sf" ? !imageData : !scriptText.trim())}
             className="w-full bg-primary text-primary-foreground font-bold text-base py-6 hover:opacity-90 transition-opacity disabled:opacity-40"
           >
             {loading ? (
