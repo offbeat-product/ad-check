@@ -44,10 +44,12 @@ export default function CheckPage() {
 
   // Fetch products and clients from DB
   useEffect(() => {
+    let cancelled = false;
     Promise.all([
       supabase.from("products").select("*").order("name"),
       supabase.from("clients").select("*").order("name"),
     ]).then(([prodRes, clientRes]) => {
+      if (cancelled) return;
       handleSupabaseError(prodRes.error, "products");
       handleSupabaseError(clientRes.error, "clients");
       const prods = prodRes.data ?? [];
@@ -58,6 +60,7 @@ export default function CheckPage() {
       }
       setDataLoading(false);
     });
+    return () => { cancelled = true; };
   }, []);
 
   const product = dbProducts.find((p) => p.id === selectedProductId);
