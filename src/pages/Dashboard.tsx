@@ -2,10 +2,8 @@ import { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
-import type { CheckRecord, CheckItem } from "@/lib/types";
+import type { CheckRecord } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import CheckResultView from "@/components/CheckResultView";
 import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText } from "lucide-react";
 
 const gradeColorMap: Record<string, string> = {
@@ -15,11 +13,17 @@ const gradeColorMap: Record<string, string> = {
   D: "bg-[hsl(var(--grade-d))]/10 text-[hsl(var(--grade-d))] border-[hsl(var(--grade-d))]/30",
 };
 
+const statusBadgeMap: Record<string, { label: string; class: string }> = {
+  pending: { label: "チェック済", class: "bg-muted text-muted-foreground" },
+  in_progress: { label: "修正中", class: "bg-primary/10 text-primary" },
+  resolved: { label: "修正完了", class: "bg-status-ok/10 text-status-ok" },
+  approved: { label: "承認済", class: "bg-product-cta/10 text-product-cta" },
+};
+
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [records, setRecords] = useState<CheckRecord[]>([]);
-  const [selectedRecord, setSelectedRecord] = useState<CheckRecord | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -88,34 +92,43 @@ export default function Dashboard() {
                   <th className="px-4 py-2.5 font-medium text-center">Grade</th>
                   <th className="px-4 py-2.5 font-medium text-center">NG</th>
                   <th className="px-4 py-2.5 font-medium text-center">WARN</th>
+                  <th className="px-4 py-2.5 font-medium text-center">ステータス</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={6} className="text-center py-12 text-muted-foreground">読み込み中...</td></tr>
+                  <tr><td colSpan={7} className="text-center py-12 text-muted-foreground">読み込み中...</td></tr>
                 ) : records.length === 0 ? (
-                  <tr><td colSpan={6} className="text-center py-12 text-muted-foreground">チェック結果がありません</td></tr>
+                  <tr><td colSpan={7} className="text-center py-12 text-muted-foreground">チェック結果がありません</td></tr>
                 ) : (
-                  records.slice(0, 20).map((r) => (
-                    <tr
-                      key={r.id}
-                      onClick={() => setSelectedRecord(r)}
-                      className="border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors"
-                    >
-                      <td className="px-4 py-2.5 text-muted-foreground">
-                        {new Date(r.created_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                      </td>
-                      <td className="px-4 py-2.5 font-medium">{r.product_name}</td>
-                      <td className="px-4 py-2.5">{r.process_type}</td>
-                      <td className="px-4 py-2.5 text-center">
-                        <Badge variant="outline" className={gradeColorMap[r.overall_status] || ""}>
-                          {r.overall_status}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-2.5 text-center text-status-ng font-bold">{r.ng_count}</td>
-                      <td className="px-4 py-2.5 text-center text-status-warning font-bold">{r.warning_count}</td>
-                    </tr>
-                  ))
+                  records.slice(0, 20).map((r) => {
+                    const st = statusBadgeMap[r.status || "pending"] || statusBadgeMap.pending;
+                    return (
+                      <tr
+                        key={r.id}
+                        onClick={() => navigate(`/check-result/${r.id}`)}
+                        className="border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors"
+                      >
+                        <td className="px-4 py-2.5 text-muted-foreground">
+                          {new Date(r.created_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </td>
+                        <td className="px-4 py-2.5 font-medium">{r.product_name}</td>
+                        <td className="px-4 py-2.5">{r.process_type}</td>
+                        <td className="px-4 py-2.5 text-center">
+                          <Badge variant="outline" className={gradeColorMap[r.overall_status] || ""}>
+                            {r.overall_status}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-2.5 text-center text-status-ng font-bold">{r.ng_count}</td>
+                        <td className="px-4 py-2.5 text-center text-status-warning font-bold">{r.warning_count}</td>
+                        <td className="px-4 py-2.5 text-center">
+                          <Badge variant="outline" className={st.class}>
+                            {st.label}
+                          </Badge>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -134,29 +147,6 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
-
-      {/* Detail modal */}
-      <Dialog open={!!selectedRecord} onOpenChange={() => setSelectedRecord(null)}>
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>チェック詳細</DialogTitle>
-          </DialogHeader>
-          {selectedRecord && (
-            <CheckResultView
-              result={{
-                detected_case: selectedRecord.detected_case,
-                check_items: (selectedRecord.check_items || []) as CheckItem[],
-                overall_status: selectedRecord.overall_status as any,
-                ng_count: selectedRecord.ng_count,
-                warning_count: selectedRecord.warning_count,
-                ok_count: selectedRecord.ok_count,
-                total_checks: selectedRecord.total_checks,
-              }}
-              title={`${selectedRecord.client_name} / ${selectedRecord.product_name} / ${selectedRecord.process_type}`}
-            />
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
