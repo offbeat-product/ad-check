@@ -27,11 +27,11 @@ export default function CheckResultView({ result, title }: Props) {
 
       <div className={`grid grid-cols-2 ${result.manual_count ? "md:grid-cols-5" : "md:grid-cols-4"} gap-3`}>
         <SummaryCard label="判定" value={submit.label} className={getSubmitBadgeClass(result.overall_status)} />
-        <SummaryCard label="修正必須" value={result.ng_count} className="bg-[#EF4444]/10 text-[#EF4444]" />
-        <SummaryCard label="要確認" value={result.warning_count} className="bg-[#F59E0B]/10 text-[#F59E0B]" />
-        <SummaryCard label="問題なし" value={result.ok_count} className="bg-[#10B981]/10 text-[#10B981]" />
+        <SummaryCard label="修正必須" value={result.ng_count} className="bg-status-ng/10 text-status-ng" />
+        <SummaryCard label="要確認" value={result.warning_count} className="bg-status-warning/10 text-status-warning" />
+        <SummaryCard label="問題なし" value={result.ok_count} className="bg-status-ok/10 text-status-ok" />
         {(result.manual_count ?? 0) > 0 && (
-          <SummaryCard label="手動確認" value={result.manual_count!} className="bg-[#6B7280]/10 text-[#6B7280]" />
+          <SummaryCard label="手動確認" value={result.manual_count!} className="bg-status-manual/10 text-status-manual" />
         )}
       </div>
 
@@ -54,22 +54,22 @@ function SummaryCard({ label, value, className }: { label: string; value: string
 }
 
 const borderColors: Record<string, string> = {
-  NG: "border-l-[#EF4444]",
-  WARNING: "border-l-[#F59E0B]",
-  OK: "border-l-[#10B981]",
-  MANUAL: "border-l-[#6B7280]",
+  NG: "border-l-status-ng",
+  WARNING: "border-l-status-warning",
+  OK: "border-l-status-ok",
+  MANUAL: "border-l-status-manual",
 };
 
 const statusBadgeColors: Record<string, string> = {
-  NG: "bg-[#EF4444] text-white",
-  WARNING: "bg-[#F59E0B] text-white",
-  OK: "bg-[#10B981] text-white",
-  MANUAL: "bg-[#6B7280] text-white",
+  NG: "bg-status-ng text-white",
+  WARNING: "bg-status-warning text-white",
+  OK: "bg-status-ok text-white",
+  MANUAL: "bg-status-manual text-white",
 };
 
 const severityBadge: Record<string, string> = {
-  high: "bg-[#EF4444]/10 text-[#EF4444]",
-  medium: "bg-[#F59E0B]/10 text-[#F59E0B]",
+  high: "bg-status-ng/10 text-status-ng",
+  medium: "bg-status-warning/10 text-status-warning",
   low: "bg-muted text-muted-foreground",
 };
 

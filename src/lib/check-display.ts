@@ -10,8 +10,8 @@ export function getSubmitLabel(status: string | null | undefined): { label: stri
 export function getSubmitBadgeClass(status: string | null | undefined): string {
   const { isOk } = getSubmitLabel(status);
   return isOk
-    ? "bg-[#10B981] text-white border-[#10B981]"
-    : "bg-[#EF4444] text-white border-[#EF4444]";
+    ? "bg-status-ok text-white border-status-ok"
+    : "bg-status-ng text-white border-status-ng";
 }
 
 /** Japanese labels for check item statuses */
@@ -23,8 +23,8 @@ export const STATUS_LABEL: Record<string, string> = {
 };
 
 export const STATUS_FILTER_OPTIONS = [
-  { key: "NG", label: "修正必須", color: "bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444]/30" },
-  { key: "WARNING", label: "要確認", color: "bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/30" },
-  { key: "OK", label: "問題なし", color: "bg-[#10B981]/10 text-[#10B981] border-[#10B981]/30" },
-  { key: "MANUAL", label: "手動確認", color: "bg-[#6B7280]/10 text-[#6B7280] border-[#6B7280]/30" },
+  { key: "NG", label: "修正必須", color: "bg-status-ng/10 text-status-ng border-status-ng/30" },
+  { key: "WARNING", label: "要確認", color: "bg-status-warning/10 text-status-warning border-status-warning/30" },
+  { key: "OK", label: "問題なし", color: "bg-status-ok/10 text-status-ok border-status-ok/30" },
+  { key: "MANUAL", label: "手動確認", color: "bg-status-manual/10 text-status-manual border-status-manual/30" },
 ] as const;
