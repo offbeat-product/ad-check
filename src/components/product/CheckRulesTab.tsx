@@ -167,7 +167,15 @@ export default function CheckRulesTab({ productId }: Props) {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      const rulesArray = Array.isArray(data) ? data : Array.isArray(data?.rules) ? data.rules : [];
+      // Response can be: [{rules:[...]}, ...] or {rules:[...]} or [rule, rule, ...]
+      let rulesArray: CheckRule[] = [];
+      if (Array.isArray(data) && data.length > 0 && Array.isArray(data[0]?.rules)) {
+        rulesArray = data[0].rules;
+      } else if (Array.isArray(data?.rules)) {
+        rulesArray = data.rules;
+      } else if (Array.isArray(data)) {
+        rulesArray = data;
+      }
       setRules(rulesArray);
     } catch (e) {
       setError(e instanceof Error ? e.message : "取得に失敗しました");
