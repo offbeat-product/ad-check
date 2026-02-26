@@ -7,6 +7,7 @@ import {
   Home, Zap, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
+// NotificationBell is also rendered in AppLayout header for desktop
 import { cn } from "@/lib/utils";
 
 interface AppSidebarProps {
@@ -140,7 +141,7 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium truncate">{user?.email || "User"}</p>
         </div>
-        <NotificationBell />
+        {/* NotificationBell moved to AppLayout header */}
       </div>
 
       <nav className="flex-1 overflow-y-auto py-2">

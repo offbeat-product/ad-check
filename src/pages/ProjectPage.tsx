@@ -25,8 +25,13 @@ import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import ReferenceMaterialsSection from "@/components/reference/ReferenceMaterialsSection";
 import {
   Upload, FileText, Image, Film, MessageCircle, Plus, Settings, GripVertical,
-  ChevronDown, CalendarIcon, AlertTriangle, Users,
+  ChevronDown, CalendarIcon, AlertTriangle, Users, Trash2,
 } from "lucide-react";
+import NotificationBell from "@/components/NotificationBell";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import ProjectMembersTab from "@/components/ProjectMembersTab";
 import { cn } from "@/lib/utils";
 import { format, differenceInDays, isPast } from "date-fns";
@@ -202,6 +207,23 @@ export default function ProjectPage() {
   const handleProcessStatusChange = async (processId: string, status: string) => {
     await updateProcess(processId, { status } as Partial<ProjectProcess>);
     toast({ title: "工程ステータスを更新しました" });
+  };
+
+  const handleDeleteProject = async () => {
+    if (!id) return;
+    // Delete related data first
+    await Promise.all([
+      supabase.from("project_files").delete().eq("project_id", id),
+      supabase.from("project_processes").delete().eq("project_id", id),
+      supabase.from("project_members").delete().eq("project_id", id),
+    ]);
+    const { error } = await supabase.from("projects").delete().eq("id", id);
+    if (error) {
+      toast({ title: "削除エラー", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "プロジェクトを削除しました" });
+      navigate("/dashboard");
+    }
   };
 
   // Sanitize filename for storage paths
@@ -385,6 +407,7 @@ export default function ProjectPage() {
             deadline={(project as any).overall_deadline ?? null}
             onChange={handleDeadlineChange}
           />
+          <NotificationBell />
           <Popover>
             <PopoverTrigger asChild>
               <button className={cn("px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1 transition-colors hover:opacity-80", statusCfg.badgeClass)}>
@@ -403,6 +426,27 @@ export default function ProjectPage() {
               ))}
             </PopoverContent>
           </Popover>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8 p-0">
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>プロジェクトを削除</AlertDialogTitle>
+                <AlertDialogDescription>
+                  「{project.name}」を削除します。関連するファイル・工程データも全て削除されます。この操作は元に戻せません。
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                <AlertDialogAction onClick={handleDeleteProject} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                  削除する
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </header>
 
