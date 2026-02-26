@@ -71,15 +71,22 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
 
   const isWCheck = materialType === "wcheck";
 
+  const MAX_FILE_DATA_SIZE = 1 * 1024 * 1024; // 1MB – skip base64 storage for larger files
+
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
     setFileName(f.name);
     if (!title) setTitle(f.name.replace(/\.[^.]+$/, ""));
 
-    const reader = new FileReader();
-    reader.onload = () => setFileData(reader.result as string);
-    reader.readAsDataURL(f);
+    // Only store base64 for small files to avoid DB payload limits
+    if (f.size <= MAX_FILE_DATA_SIZE) {
+      const reader = new FileReader();
+      reader.onload = () => setFileData(reader.result as string);
+      reader.readAsDataURL(f);
+    } else {
+      setFileData(""); // Too large for DB – just keep file_name
+    }
 
     const ext = f.name.split(".").pop()?.toLowerCase() || "";
 
