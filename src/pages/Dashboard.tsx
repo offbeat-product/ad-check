@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Project, Product, CheckResultRow, ProjectFile } from "@/lib/db-types";
 import { FILE_STATUS_CONFIG } from "@/lib/db-types";
-import { PROJECT_STATUS_CONFIG } from "@/lib/process-config";
+import { PROJECT_STATUS_CONFIG, getProcessLabel } from "@/lib/process-config";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Badge } from "@/components/ui/badge";
 import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderOpen, ChevronLeft, ChevronRight, Plus } from "lucide-react";
@@ -246,7 +246,7 @@ export default function Dashboard() {
                           {r.created_at ? new Date(r.created_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
                         </td>
                         <td className="px-4 py-2.5 font-medium">{r.product_name}</td>
-                        <td className="px-4 py-2.5">{r.process_type}</td>
+                        <td className="px-4 py-2.5">{getProcessLabel(r.process_type)}</td>
                          <td className="px-4 py-2.5 text-center">
                            <Badge className={cn("text-[10px] font-bold", getSubmitBadgeClass(r.overall_status))}>
                              {getSubmitLabel(r.overall_status).label}
@@ -288,7 +288,7 @@ export default function Dashboard() {
                         </Badge>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{r.process_type}</span>
+                        <span>{getProcessLabel(r.process_type)}</span>
                         <span>·</span>
                         <span className="text-status-ng">修正必須 {r.ng_count ?? 0}</span>
                         <span className="text-status-warning">要確認 {r.warning_count ?? 0}</span>
@@ -378,7 +378,7 @@ export default function Dashboard() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{f.file_name}</p>
                           <p className="text-[10px] text-muted-foreground">
-                            {f.project_name ? `${f.project_name} · ` : ""}{f.process_type}
+                            {f.project_name ? `${f.project_name} · ` : ""}{getProcessLabel(f.process_type)}
                             {f.updated_at ? ` · ${new Date(f.updated_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}` : ""}
                           </p>
                         </div>
