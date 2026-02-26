@@ -309,7 +309,7 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
           <LegalRegulationTemplate onChange={setTemplateData as any} />
         )}
         {method === "template" && materialType === "media_regulation" && (
-          <MediaRegulationTemplate onChange={setTemplateData as any} />
+          <MediaRegulationTemplate productId={productId} onChange={setTemplateData as any} />
         )}
         {method === "template" && materialType === "correction_history" && (
           <CorrectionHistoryTemplate onChange={setTemplateData as any} />
