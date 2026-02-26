@@ -2,7 +2,7 @@ import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { MATERIAL_TEMPLATES, extractTextFromXlsx, type ReferenceMaterial } from "@/lib/reference-materials";
+import { MATERIAL_TYPES, MATERIAL_TEMPLATES, extractTextFromXlsx, type ReferenceMaterial } from "@/lib/reference-materials";
 import { parseWCheckFile, buildWCheckContentText, type WCheckParsedData } from "@/lib/wcheck-parser";
 import WCheckPreview from "./WCheckPreview";
 import OrientationTemplate, { orientationDataToText, type OrientationData } from "./templates/OrientationTemplate";
@@ -278,7 +278,7 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
       <div className="border border-border rounded-lg p-3 space-y-3 bg-muted/20">
         <div>
           <label className="text-xs font-medium text-muted-foreground mb-1 block">タイトル *</label>
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例: 001案件_追加オリエン" className="h-8 text-sm" autoFocus />
+          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={`例: 001案件_${MATERIAL_TYPES.find(t => t.id === materialType)?.label || "参考資料"}`} className="h-8 text-sm" autoFocus />
         </div>
 
         <div className="flex gap-2 flex-wrap">
