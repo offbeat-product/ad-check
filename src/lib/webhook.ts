@@ -123,7 +123,11 @@ export async function runVideoCheck(
   productId: string,
   processType: string,
   scriptText: string,
-  metadata?: Record<string, any>,
+  options?: {
+    videoUrl?: string;
+    videoMimeType?: string;
+    metadata?: Record<string, any>;
+  },
   referenceContext?: string
 ): Promise<CheckResult> {
   const url = getWebhookUrl("vcon");
@@ -133,7 +137,9 @@ export async function runVideoCheck(
     product_id: productId,
     process_type: processType,
     script_text: scriptText,
-    metadata: metadata || {},
+    video_url: options?.videoUrl || "",
+    video_mime_type: options?.videoMimeType || "",
+    metadata: options?.metadata || {},
     reference_context: referenceContext ? JSON.parse(referenceContext) : {},
   };
 
