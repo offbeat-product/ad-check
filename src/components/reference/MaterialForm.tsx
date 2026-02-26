@@ -24,9 +24,8 @@ import {
 import { Upload, Link2, FileText, Sparkles, LayoutTemplate } from "lucide-react";
 import { resolveWebhookProductId } from "@/lib/resolve-product-id";
 
-const N8N_REST_URL = "https://vhvgnslszruyztcoikqq.supabase.co/rest/v1/check_rules";
-const N8N_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZodmduc2xzenJ1eXp0Y29pa3FxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NzkxNzksImV4cCI6MjA4NzQ1NTE3OX0.JChqETzSd1HJFuSBJNZ8xJy6lPENql_lprbTVLvTFeA";
 const PARSE_REFERENCE_URL = "https://offbeat-inc.app.n8n.cloud/webhook/parse-reference";
+const RULES_LIST_URL = "https://offbeat-inc.app.n8n.cloud/webhook/rules-list";
 const ALL_PROCESS_TYPES = ["script", "styleframe", "storyboard", "na_script", "bgm", "narration", "vcon", "video_horizontal", "video_vertical"];
 
 interface Props {
@@ -131,22 +130,60 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
   };
 
   const checkExistingReferenceRules = async (): Promise<number> => {
-    const webhookPid = await resolveWebhookProductId(productId);
-    const res = await fetch(
-      `${N8N_REST_URL}?product_id=eq.${webhookPid}&source_type=eq.reference&select=id`,
-      { headers: { apikey: N8N_API_KEY, Authorization: `Bearer ${N8N_API_KEY}` } }
-    );
-    if (!res.ok) return 0;
-    const data = await res.json();
-    return Array.isArray(data) ? data.length : 0;
+    const { count } = await supabase
+      .from("check_rules")
+      .select("id", { count: "exact", head: true })
+      .eq("product_id", productId)
+      .like("rule_id", "AUTO-%");
+    return count ?? 0;
   };
 
   const deleteExistingReferenceRules = async () => {
-    const webhookPid = await resolveWebhookProductId(productId);
-    await fetch(
-      `${N8N_REST_URL}?product_id=eq.${webhookPid}&source_type=eq.reference`,
-      { method: "DELETE", headers: { apikey: N8N_API_KEY, Authorization: `Bearer ${N8N_API_KEY}` } }
-    );
+    await supabase
+      .from("check_rules")
+      .delete()
+      .eq("product_id", productId)
+      .like("rule_id", "AUTO-%");
+  };
+
+  const syncRulesToLocalDb = async () => {
+    try {
+      const webhookPid = await resolveWebhookProductId(productId);
+      const res = await fetch(RULES_LIST_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ product_id: webhookPid }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      let rulesArray: any[] = [];
+      if (Array.isArray(data) && data.length > 0 && Array.isArray(data[0]?.rules)) {
+        rulesArray = data[0].rules;
+      } else if (Array.isArray(data?.rules)) {
+        rulesArray = data.rules;
+      } else if (Array.isArray(data)) {
+        rulesArray = data;
+      }
+      if (rulesArray.length === 0) return;
+
+      // Upsert rules into local DB
+      const localRules = rulesArray.map((r: any) => ({
+        id: r.id,
+        product_id: productId,
+        process_type: r.process_type,
+        rule_id: r.rule_id,
+        category: r.category,
+        title: r.title || "",
+        description: r.description,
+        severity: r.severity || "medium",
+        sort_order: r.sort_order ?? 999,
+        is_active: r.is_active ?? true,
+      }));
+
+      await supabase.from("check_rules").upsert(localRules, { onConflict: "id" });
+    } catch (err) {
+      console.error("[syncRulesToLocalDb] error:", err);
+    }
   };
 
   const callParseReferenceWebhook = async (text: string) => {
@@ -159,7 +196,12 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const result = await res.json();
-      toast({ title: "AIルールが生成されました", description: `${result.count || 0}件のチェックルールが追加されました。チェックルールタブで確認してください。` });
+      const generatedCount = result.count || 0;
+      toast({ title: "AIルールが生成されました", description: `${generatedCount}件のチェックルールが追加されました。同期中...` });
+
+      // Sync generated rules from external DB to local DB
+      await syncRulesToLocalDb();
+      toast({ title: "ルール同期完了", description: `チェックルールタブで確認してください。` });
     } catch (err) {
       console.error("[parse-reference] error:", err);
       toast({ title: "ルール自動生成に失敗しました", description: "手動でチェックルールを追加してください", variant: "destructive" });
