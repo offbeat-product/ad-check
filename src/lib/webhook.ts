@@ -17,8 +17,12 @@ export function getWebhookUrl(processType: string): string | null {
     case "narration":
     case "bgm":
       return `${BASE_URL}/check-audio-v2`;
+    case "vcon":
+    case "video_horizontal":
+    case "video_vertical":
+      return `${BASE_URL}/check-video-v2`;
     default:
-      return null; // video_horizontal, video_vertical — not yet supported
+      return null;
   }
 }
 
@@ -101,6 +105,36 @@ export async function runAudioCheck(
     script_text: scriptText,
     audio_description: "",
     metadata: metadata || { file_name: "", duration: null, format: null },
+    reference_context: referenceContext ? JSON.parse(referenceContext) : {},
+  };
+
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) throw new Error(`Webhook error: ${res.status}`);
+  const raw = await res.json();
+  return parseResponse(raw);
+}
+
+/** Run video check for vcon/video_horizontal/video_vertical processes */
+export async function runVideoCheck(
+  productId: string,
+  processType: string,
+  scriptText: string,
+  metadata?: Record<string, any>,
+  referenceContext?: string
+): Promise<CheckResult> {
+  const url = getWebhookUrl("vcon");
+  if (!url) throw new Error("動画チェックのWebhookが見つかりません");
+
+  const body: Record<string, any> = {
+    product_id: productId,
+    process_type: processType,
+    script_text: scriptText,
+    metadata: metadata || {},
     reference_context: referenceContext ? JSON.parse(referenceContext) : {},
   };
 

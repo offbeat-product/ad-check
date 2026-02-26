@@ -33,11 +33,11 @@ export const AI_CHECK_CONFIG: Record<string, { inputMode: InputMode; enabled: bo
   'sf':               { inputMode: 'image', enabled: true },
   'styleframe':       { inputMode: 'image', enabled: true },
   'storyboard':       { inputMode: 'image', enabled: true },
-  'vcon':             { inputMode: 'video', enabled: false },
+  'vcon':             { inputMode: 'video', enabled: true },
   'narration':        { inputMode: 'audio', enabled: true },
   'bgm':              { inputMode: 'audio', enabled: true },
-  'video_horizontal': { inputMode: 'video', enabled: false },
-  'video_vertical':   { inputMode: 'video', enabled: false },
+  'video_horizontal': { inputMode: 'video', enabled: true },
+  'video_vertical':   { inputMode: 'video', enabled: true },
 };
 
 // Webhook mapping per product × process
