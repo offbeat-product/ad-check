@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo } from "react";
+import { useRef, useState, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { CheckItem } from "@/lib/types";
@@ -200,11 +200,12 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {filteredItems.map((item, i) => {
+        {/* Non-OK items */}
+        {filteredItems.filter((item) => item.status !== "OK").map((item, i) => {
           const marker = markers.find((m) => m.item.pattern_id === item.pattern_id);
           return (
             <CheckItemCard
-              key={i}
+              key={item.pattern_id}
               ref={(el) => { cardRefs.current[item.pattern_id] = el; }}
               item={item}
               index={i}
@@ -221,6 +222,29 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
             />
           );
         })}
+
+        {/* OK items - collapsed by default */}
+        {(() => {
+          const okItems = filteredItems.filter((item) => item.status === "OK");
+          if (okItems.length === 0) return null;
+          return (
+            <OkItemsSection
+              okItems={okItems}
+              markers={markers}
+              resolvedItems={resolvedItems}
+              selectedItems={selectedItems}
+              highlightCard={highlightCard}
+              appliedItems={appliedItems}
+              commentCounts={commentCounts}
+              productCode={productCode}
+              cardRefs={cardRefs}
+              onToggleSelect={toggleSelectItem}
+              onToggleResolved={(id) => setResolvedItems((s) => { const next = new Set(s); next.has(id) ? next.delete(id) : next.add(id); return next; })}
+              onCommentClick={onCommentClick}
+            />
+          );
+        })()}
+
         {filteredItems.length === 0 && (
           <p className="text-xs text-muted-foreground text-center py-8">該当する項目がありません</p>
         )}
@@ -245,5 +269,55 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
         </Button>
       </div>
     </>
+  );
+}
+
+/* Collapsible section for OK items */
+function OkItemsSection({ okItems, markers, resolvedItems, selectedItems, highlightCard, appliedItems, commentCounts, productCode, cardRefs, onToggleSelect, onToggleResolved, onCommentClick }: {
+  okItems: CheckItem[];
+  markers: import("@/lib/marker-positions").CheckMarker[];
+  resolvedItems: Set<string>;
+  selectedItems: Set<string>;
+  highlightCard: string | null;
+  appliedItems: Set<string>;
+  commentCounts: Record<string, number>;
+  productCode: string;
+  cardRefs: React.MutableRefObject<Record<string, HTMLDivElement | null>>;
+  onToggleSelect: (id: string) => void;
+  onToggleResolved: (id: string) => void;
+  onCommentClick: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="space-y-3">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 text-xs text-muted-foreground hover:text-foreground w-full"
+      >
+        <span className={cn("transition-transform", open && "rotate-90")}>▶</span>
+        <span>問題なし ({okItems.length}件)</span>
+      </button>
+      {open && okItems.map((item, i) => {
+        const marker = markers.find((m) => m.item.pattern_id === item.pattern_id);
+        return (
+          <CheckItemCard
+            key={item.pattern_id}
+            ref={(el) => { cardRefs.current[item.pattern_id] = el; }}
+            item={item}
+            index={i}
+            marker={marker}
+            isResolved={resolvedItems.has(item.pattern_id)}
+            isSelected={selectedItems.has(item.pattern_id)}
+            isHighlighted={highlightCard === item.pattern_id}
+            isApplied={appliedItems.has(item.pattern_id)}
+            commentCount={commentCounts[item.pattern_id] || 0}
+            productCode={productCode}
+            onToggleSelect={() => onToggleSelect(item.pattern_id)}
+            onToggleResolved={() => onToggleResolved(item.pattern_id)}
+            onCommentClick={() => onCommentClick(item.pattern_id)}
+          />
+        );
+      })}
+    </div>
   );
 }
