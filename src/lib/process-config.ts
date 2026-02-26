@@ -17,11 +17,11 @@ export const PROCESS_FILE_CONFIG: Record<string, { accept: string; allowTextInpu
   'na_script':        { accept: '.txt,.docx', allowTextInput: true, label: 'NA原稿' },
   'narration':        { accept: '.mp3,.wav,.m4a', allowTextInput: false, label: 'ナレーション音声' },
   'bgm':              { accept: '.mp3,.wav,.m4a', allowTextInput: false, label: 'BGM音声' },
-  'vcon':             { accept: '.mp4,.mov', allowTextInput: false, label: 'Vコン動画' },
+  'vcon':             { accept: '.mp4,.mov,.webm', allowTextInput: false, label: 'Vコン動画' },
   'styleframe':       { accept: '.jpg,.jpeg,.png,.psd,.ai', allowTextInput: false, label: 'スタイルフレーム画像' },
   'storyboard':       { accept: '.jpg,.jpeg,.png,.pdf,.psd', allowTextInput: false, label: '絵コンテ' },
-  'video_horizontal': { accept: '.mp4,.mov', allowTextInput: false, label: '横動画' },
-  'video_vertical':   { accept: '.mp4,.mov', allowTextInput: false, label: '縦動画' },
+  'video_horizontal': { accept: '.mp4,.mov,.webm', allowTextInput: false, label: '横動画' },
+  'video_vertical':   { accept: '.mp4,.mov,.webm', allowTextInput: false, label: '縦動画' },
 };
 
 // AI check capability per process type
