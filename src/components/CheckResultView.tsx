@@ -29,11 +29,14 @@ export default function CheckResultView({ result, title }: Props) {
         )}
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className={`grid grid-cols-2 ${result.manual_count ? "md:grid-cols-5" : "md:grid-cols-4"} gap-3`}>
         <SummaryCard label="Grade" value={result.overall_status} className={gradeColors[result.overall_status] || ""} />
         <SummaryCard label="NG" value={result.ng_count} className="bg-status-ng/10 text-status-ng" />
         <SummaryCard label="WARNING" value={result.warning_count} className="bg-status-warning/10 text-status-warning" />
         <SummaryCard label="OK" value={result.ok_count} className="bg-status-ok/10 text-status-ok" />
+        {(result.manual_count ?? 0) > 0 && (
+          <SummaryCard label="MANUAL" value={result.manual_count!} className="bg-muted text-muted-foreground" />
+        )}
       </div>
 
       <div className="space-y-3">
