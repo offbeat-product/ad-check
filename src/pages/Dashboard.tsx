@@ -11,20 +11,14 @@ import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderO
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import { cn } from "@/lib/utils";
 import CreateProjectModal from "@/components/CreateProjectModal";
+import { getSubmitLabel, getSubmitBadgeClass } from "@/lib/check-display";
 
 const ITEMS_PER_PAGE = 10;
-
-const gradeColorMap: Record<string, string> = {
-  A: "bg-[hsl(var(--grade-a))]/10 text-[hsl(var(--grade-a))] border-[hsl(var(--grade-a))]/30",
-  B: "bg-[hsl(var(--grade-b))]/10 text-[hsl(var(--grade-b))] border-[hsl(var(--grade-b))]/30",
-  C: "bg-[hsl(var(--grade-c))]/10 text-[hsl(var(--grade-c))] border-[hsl(var(--grade-c))]/30",
-  D: "bg-[hsl(var(--grade-d))]/10 text-[hsl(var(--grade-d))] border-[hsl(var(--grade-d))]/30",
-};
 
 const statusBadgeMap: Record<string, { label: string; class: string }> = {
   pending: { label: "チェック済", class: "bg-muted text-muted-foreground" },
   in_progress: { label: "修正中", class: "bg-primary/10 text-primary" },
-  resolved: { label: "修正完了", class: "bg-status-ok/10 text-status-ok" },
+  resolved: { label: "修正完了", class: "bg-[#10B981]/10 text-[#10B981]" },
   approved: { label: "承認済", class: "bg-product-cta/10 text-product-cta" },
 };
 
@@ -116,21 +110,19 @@ export default function Dashboard() {
   const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
 
   const stats = useMemo(() => {
-    // Stats are approximate from first page when on page > 0, but good enough for dashboard
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayChecks = records.filter(r => r.created_at && new Date(r.created_at) >= today).length;
     const totalNg = records.reduce((s, r) => s + (r.ng_count ?? 0), 0);
-    const grades = records.map(r => r.overall_status).filter(Boolean) as string[];
-    const gradeScore: Record<string, number> = { A: 4, B: 3, C: 2, D: 1 };
-    const avgGrade = grades.length > 0
-      ? (grades.reduce((s, g) => s + (gradeScore[g] || 0), 0) / grades.length)
-      : 0;
-    const avgLabel = avgGrade >= 3.5 ? "A" : avgGrade >= 2.5 ? "B" : avgGrade >= 1.5 ? "C" : "D";
+    const okCount = records.filter(r => {
+      const s = (r.overall_status || "").toUpperCase();
+      return s === "A" || s === "B";
+    }).length;
+    const okRate = records.length > 0 ? Math.round((okCount / records.length) * 100) : 0;
     const week = new Date();
     week.setDate(week.getDate() - 7);
     const weekChecks = records.filter(r => r.created_at && new Date(r.created_at) >= week).length;
-    return { todayChecks, totalNg, avgLabel, weekChecks };
+    return { todayChecks, totalNg, okRate, weekChecks };
   }, [records]);
 
   const getProductName = (productId: string | null) => products.find(p => p.id === productId)?.name || "";
@@ -152,8 +144,8 @@ export default function Dashboard() {
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={ClipboardCheck} label="今日のチェック数" value={stats.todayChecks} color="text-primary" />
-          <StatCard icon={AlertTriangle} label="NG検出数（累計）" value={stats.totalNg} color="text-status-ng" />
-          <StatCard icon={BarChart3} label="平均Grade" value={stats.avgLabel} color="text-status-ok" />
+          <StatCard icon={AlertTriangle} label="修正必須（累計）" value={stats.totalNg} color="text-[#EF4444]" />
+          <StatCard icon={BarChart3} label="提出OK率" value={`${stats.okRate}%`} color="text-[#10B981]" />
           <StatCard icon={TrendingUp} label="直近7日" value={`${stats.weekChecks} 件`} color="text-primary" />
         </div>
 
@@ -198,15 +190,15 @@ export default function Dashboard() {
             </div>
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border text-muted-foreground text-left">
-                  <th className="px-4 py-2.5 font-medium">日時</th>
-                  <th className="px-4 py-2.5 font-medium">商材</th>
-                  <th className="px-4 py-2.5 font-medium">工程</th>
-                  <th className="px-4 py-2.5 font-medium text-center">Grade</th>
-                  <th className="px-4 py-2.5 font-medium text-center">NG</th>
-                  <th className="px-4 py-2.5 font-medium text-center">WARN</th>
-                  <th className="px-4 py-2.5 font-medium text-center">ステータス</th>
-                </tr>
+                 <tr className="border-b border-border text-muted-foreground text-left">
+                   <th className="px-4 py-2.5 font-medium">日時</th>
+                   <th className="px-4 py-2.5 font-medium">商材</th>
+                   <th className="px-4 py-2.5 font-medium">工程</th>
+                   <th className="px-4 py-2.5 font-medium text-center">判定</th>
+                   <th className="px-4 py-2.5 font-medium text-center">修正必須</th>
+                   <th className="px-4 py-2.5 font-medium text-center">要確認</th>
+                   <th className="px-4 py-2.5 font-medium text-center">ステータス</th>
+                 </tr>
               </thead>
               <tbody>
                 {loading ? (
@@ -224,11 +216,13 @@ export default function Dashboard() {
                         </td>
                         <td className="px-4 py-2.5 font-medium">{r.product_name}</td>
                         <td className="px-4 py-2.5">{r.process_type}</td>
-                        <td className="px-4 py-2.5 text-center">
-                          <Badge variant="outline" className={gradeColorMap[r.overall_status ?? ""] ?? ""}>{r.overall_status}</Badge>
-                        </td>
-                        <td className="px-4 py-2.5 text-center text-status-ng font-bold">{r.ng_count ?? 0}</td>
-                        <td className="px-4 py-2.5 text-center text-status-warning font-bold">{r.warning_count ?? 0}</td>
+                         <td className="px-4 py-2.5 text-center">
+                           <Badge className={cn("text-[10px] font-bold", getSubmitBadgeClass(r.overall_status))}>
+                             {getSubmitLabel(r.overall_status).label}
+                           </Badge>
+                         </td>
+                         <td className="px-4 py-2.5 text-center text-[#EF4444] font-bold">{r.ng_count ?? 0}</td>
+                         <td className="px-4 py-2.5 text-center text-[#F59E0B] font-bold">{r.warning_count ?? 0}</td>
                         <td className="px-4 py-2.5 text-center">
                           <Badge variant="outline" className={st.class}>{st.label}</Badge>
                         </td>

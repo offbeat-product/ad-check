@@ -29,12 +29,7 @@ import ProjectMembersTab from "@/components/ProjectMembersTab";
 import { cn } from "@/lib/utils";
 import { format, differenceInDays, isPast } from "date-fns";
 
-const gradeColorMap: Record<string, string> = {
-  A: "bg-[hsl(var(--grade-a))]/10 text-[hsl(var(--grade-a))] border-[hsl(var(--grade-a))]/30",
-  B: "bg-[hsl(var(--grade-b))]/10 text-[hsl(var(--grade-b))] border-[hsl(var(--grade-b))]/30",
-  C: "bg-[hsl(var(--grade-c))]/10 text-[hsl(var(--grade-c))] border-[hsl(var(--grade-c))]/30",
-  D: "bg-[hsl(var(--grade-d))]/10 text-[hsl(var(--grade-d))] border-[hsl(var(--grade-d))]/30",
-};
+import { getSubmitBadgeClass, getSubmitLabel } from "@/lib/check-display";
 
 function DeadlineDisplay({ deadline, className }: { deadline: string | null; className?: string }) {
   if (!deadline) return <span className={cn("text-xs text-muted-foreground/50", className)}>納期未設定</span>;
@@ -498,8 +493,8 @@ export default function ProjectPage() {
                               <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
                                 <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
                                 {cr && (
-                                  <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", gradeColorMap[cr.overall_status ?? ""] ?? "")}>
-                                    {cr.overall_status}
+                                  <Badge className={cn("text-[10px] h-4 px-1.5", getSubmitBadgeClass(cr.overall_status))}>
+                                    {getSubmitLabel(cr.overall_status).isOk ? "OK" : "NG"}
                                   </Badge>
                                 )}
                                 {versionLabel && <span className="text-[10px] text-muted-foreground">{versionLabel}</span>}
@@ -617,10 +612,12 @@ function CheckHistory({ projectId, files, checkResults }: {
                 <td className="px-4 py-2.5 font-medium">{f.file_name}</td>
                 <td className="px-4 py-2.5">{f.process_type}</td>
                 <td className="px-4 py-2.5 text-center">
-                  <Badge variant="outline" className={gradeColorMap[cr?.overall_status ?? ""] ?? ""}>{cr?.overall_status}</Badge>
+                  <Badge className={cn("text-[10px] font-bold", getSubmitBadgeClass(cr?.overall_status))}>
+                    {getSubmitLabel(cr?.overall_status).label}
+                  </Badge>
                 </td>
-                <td className="px-4 py-2.5 text-center text-status-ng font-bold">{cr?.ng_count ?? 0}</td>
-                <td className="px-4 py-2.5 text-center text-status-warning font-bold">{cr?.warning_count ?? 0}</td>
+                <td className="px-4 py-2.5 text-center text-[#EF4444] font-bold">{cr?.ng_count ?? 0}</td>
+                <td className="px-4 py-2.5 text-center text-[#F59E0B] font-bold">{cr?.warning_count ?? 0}</td>
               </tr>
             );
           })}

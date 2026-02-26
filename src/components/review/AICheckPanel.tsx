@@ -1,11 +1,14 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { CheckItem } from "@/lib/types";
 import type { CheckMarker } from "@/lib/marker-positions";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
+import { getSubmitLabel, getSubmitBadgeClass, STATUS_LABEL, STATUS_FILTER_OPTIONS } from "@/lib/check-display";
+import { cn } from "@/lib/utils";
 import CheckItemCard from "./CheckItemCard";
 
 interface AICheckPanelProps {
@@ -17,23 +20,58 @@ interface AICheckPanelProps {
   onCommentClick: (patternId: string) => void;
   checkResultId?: string | null;
   onTabChange?: (tab: string) => void;
+  overallStatus?: string | null;
 }
 
-export default function AICheckPanel({ items, markers, productCode, commentCounts, highlightCard, onCommentClick, checkResultId, onTabChange }: AICheckPanelProps) {
+export default function AICheckPanel({ items, markers, productCode, commentCounts, highlightCard, onCommentClick, checkResultId, onTabChange, overallStatus }: AICheckPanelProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [resolvedItems, setResolvedItems] = useState<Set<string>>(new Set());
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [appliedItems, setAppliedItems] = useState<Set<string>>(new Set());
   const [applying, setApplying] = useState(false);
+  const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set(["NG", "WARNING"]));
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  const toggleFilter = (key: string) => {
+    setActiveFilters((s) => {
+      const next = new Set(s);
+      if (next.has(key)) {
+        next.delete(key);
+        // If all removed, show all
+        if (next.size === 0) {
+          STATUS_FILTER_OPTIONS.forEach((o) => next.add(o.key));
+        }
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const showAll = () => {
+    setActiveFilters(new Set(STATUS_FILTER_OPTIONS.map((o) => o.key)));
+  };
+
+  const filteredItems = useMemo(() => {
+    return items.filter((item) => activeFilters.has(item.status));
+  }, [items, activeFilters]);
+
+  // Counts per status
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { NG: 0, WARNING: 0, OK: 0, MANUAL: 0 };
+    items.forEach((item) => { c[item.status] = (c[item.status] || 0) + 1; });
+    return c;
+  }, [items]);
+
+  const submit = getSubmitLabel(overallStatus);
 
   const toggleSelectItem = (id: string) => {
     setSelectedItems((s) => { const next = new Set(s); next.has(id) ? next.delete(id) : next.add(id); return next; });
   };
 
   const selectAll = () => {
-    setSelectedItems(new Set(items.filter((i) => i.status !== "OK" && !appliedItems.has(i.pattern_id)).map((i) => i.pattern_id)));
+    setSelectedItems(new Set(filteredItems.filter((i) => i.status !== "OK" && !appliedItems.has(i.pattern_id)).map((i) => i.pattern_id)));
   };
 
   const handleApplyCorrections = async () => {
@@ -41,7 +79,6 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
     setApplying(true);
 
     try {
-      // Batch: fetch all existing patterns for this product in one query
       const patternIds = [...selectedItems];
       const { data: existing, error: fetchErr } = await supabase
         .from("correction_patterns")
@@ -57,7 +94,6 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
 
       const existingMap = new Map((existing ?? []).map((e) => [e.rule_id, e]));
 
-      // Separate into updates and inserts
       const toUpdate: { id: string; frequency: number }[] = [];
       const toInsert: Array<{
         user_id: string; product_code: string; rule_id: string;
@@ -67,94 +103,58 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
       for (const patternId of patternIds) {
         const item = items.find((i) => i.pattern_id === patternId);
         if (!item) continue;
-
         const ex = existingMap.get(patternId);
         if (ex) {
           toUpdate.push({ id: ex.id, frequency: (ex.frequency ?? 0) + 1 });
         } else {
           toInsert.push({
-            user_id: user.id,
-            product_code: productCode,
-            rule_id: item.pattern_id,
-            rule_title: item.item,
-            original_content: item.detail,
-            corrected_content: item.suggestion || "",
-            category: item.severity,
+            user_id: user.id, product_code: productCode, rule_id: item.pattern_id,
+            rule_title: item.item, original_content: item.detail,
+            corrected_content: item.suggestion || "", category: item.severity,
           });
         }
       }
 
-      // Execute batch operations
       const promises: Promise<unknown>[] = [];
-
       if (toInsert.length > 0) {
-        promises.push(
-          (async () => {
-            const { error } = await supabase.from("correction_patterns").insert(toInsert);
-            if (error) console.error("[correction_patterns insert]", error.message);
-          })()
-        );
+        promises.push((async () => {
+          const { error } = await supabase.from("correction_patterns").insert(toInsert);
+          if (error) console.error("[correction_patterns insert]", error.message);
+        })());
       }
-
       for (const u of toUpdate) {
-        promises.push(
-          (async () => {
-            const { error } = await supabase.from("correction_patterns")
-              .update({ frequency: u.frequency, updated_at: new Date().toISOString() })
-              .eq("id", u.id);
-            if (error) console.error("[correction_patterns update]", error.message);
-          })()
-        );
+        promises.push((async () => {
+          const { error } = await supabase.from("correction_patterns")
+            .update({ frequency: u.frequency, updated_at: new Date().toISOString() }).eq("id", u.id);
+          if (error) console.error("[correction_patterns update]", error.message);
+        })());
       }
 
-      // BUG 2 FIX: Also create comments for each selected item
       if (checkResultId) {
         const commentInserts = patternIds.map((patternId) => {
           const item = items.find((i) => i.pattern_id === patternId);
           if (!item) return null;
           return {
-            check_result_id: checkResultId,
-            check_item_id: item.pattern_id,
-            author_name: "AIチェック",
-            author_email: user.email || "",
+            check_result_id: checkResultId, check_item_id: item.pattern_id,
+            author_name: "AIチェック", author_email: user.email || "",
             content: `【${item.pattern_id}】${item.item}\n\n${item.detail}\n\n💡 修正案: ${item.suggestion || "なし"}`,
             status: "open" as const,
           };
         }).filter(Boolean);
-
         if (commentInserts.length > 0) {
-          promises.push(
-            (async () => {
-              const { error } = await supabase.from("comments").insert(commentInserts);
-              if (error) console.error("[comments insert]", error.message);
-            })()
-          );
+          promises.push((async () => {
+            const { error } = await supabase.from("comments").insert(commentInserts);
+            if (error) console.error("[comments insert]", error.message);
+          })());
         }
       }
 
       await Promise.all(promises);
-
-      // Mark as applied
-      setAppliedItems((s) => {
-        const next = new Set(s);
-        patternIds.forEach((id) => next.add(id));
-        return next;
-      });
-
-      // Mark all as resolved
-      setResolvedItems((s) => {
-        const next = new Set(s);
-        patternIds.forEach((id) => next.add(id));
-        return next;
-      });
-
+      setAppliedItems((s) => { const next = new Set(s); patternIds.forEach((id) => next.add(id)); return next; });
+      setResolvedItems((s) => { const next = new Set(s); patternIds.forEach((id) => next.add(id)); return next; });
       toast({ title: `✅ ${selectedItems.size}件の修正パターンを保存しました` });
       setSelectedItems(new Set());
-
-      // Switch to comments tab to show newly created comments
-      if (onTabChange) {
-        onTabChange("comments");
-      }
+      if (onTabChange) onTabChange("comments");
     } catch (err) {
       console.error("[handleApplyCorrections]", err);
       toast({ title: "エラー", description: "保存に失敗しました", variant: "destructive" });
@@ -165,8 +165,42 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
 
   return (
     <>
+      {/* Summary bar */}
+      <div className="shrink-0 border-b border-border px-3 py-2 space-y-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge className={cn("text-xs font-bold px-2.5 py-1", getSubmitBadgeClass(overallStatus))}>
+            {submit.label}
+          </Badge>
+          <span className="text-[10px] text-[#EF4444] font-bold">修正必須 {counts.NG}</span>
+          <span className="text-[10px] text-[#F59E0B] font-bold">要確認 {counts.WARNING}</span>
+          <span className="text-[10px] text-[#10B981] font-bold">問題なし {counts.OK}</span>
+          {counts.MANUAL > 0 && <span className="text-[10px] text-[#6B7280] font-bold">手動確認 {counts.MANUAL}</span>}
+        </div>
+
+        {/* Filter buttons */}
+        <div className="flex items-center gap-1 flex-wrap">
+          {STATUS_FILTER_OPTIONS.map((opt) => {
+            const isActive = activeFilters.has(opt.key);
+            const count = counts[opt.key] || 0;
+            return (
+              <button
+                key={opt.key}
+                onClick={() => toggleFilter(opt.key)}
+                className={cn(
+                  "text-[10px] font-medium px-2 py-1 rounded-full border transition-colors",
+                  isActive ? opt.color : "bg-muted/30 text-muted-foreground/50 border-transparent"
+                )}
+              >
+                {opt.label} ({count})
+              </button>
+            );
+          })}
+          <button onClick={showAll} className="text-[10px] text-muted-foreground hover:text-foreground px-1.5">全て</button>
+        </div>
+      </div>
+
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {items.map((item, i) => {
+        {filteredItems.map((item, i) => {
           const marker = markers.find((m) => m.item.pattern_id === item.pattern_id);
           return (
             <CheckItemCard
@@ -187,6 +221,9 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
             />
           );
         })}
+        {filteredItems.length === 0 && (
+          <p className="text-xs text-muted-foreground text-center py-8">該当する項目がありません</p>
+        )}
       </div>
 
       {/* Bottom sticky */}
@@ -200,7 +237,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
         </div>
         <Button
           size="sm"
-          className="w-full text-xs bg-status-warning text-black hover:bg-status-warning/90"
+          className="w-full text-xs bg-[#F59E0B] text-black hover:bg-[#F59E0B]/90"
           disabled={selectedItems.size === 0 || applying}
           onClick={handleApplyCorrections}
         >
