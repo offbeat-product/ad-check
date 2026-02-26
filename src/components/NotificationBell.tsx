@@ -26,23 +26,22 @@ export default function NotificationBell() {
   const handleAcceptInvite = async (n: (typeof notifications)[0], accept: boolean) => {
     const data = n.data as Record<string, string> | null;
     const { supabase } = await import("@/integrations/supabase/client");
+    const currentUser = (await supabase.auth.getUser()).data.user;
+    if (!currentUser) return;
 
     if (n.type === "workspace_invitation") {
       // Accept/decline workspace invitation
-      const userEmail = (await supabase.auth.getUser()).data.user?.email;
-      if (userEmail) {
-        await supabase
-          .from("workspace_members")
-          .update({ status: accept ? "accepted" : "declined", user_id: (await supabase.auth.getUser()).data.user?.id })
-          .eq("email", userEmail);
-      }
-    } else if (data?.project_id) {
-      // Accept/decline project invitation
+      await supabase
+        .from("workspace_members")
+        .update({ status: accept ? "accepted" : "declined", user_id: currentUser.id })
+        .eq("email", currentUser.email!);
+    } else if (n.type === "invitation" && data?.project_id) {
+      // Accept/decline project invitation — match by project_id + current user's email
       await supabase
         .from("project_members")
         .update({ status: accept ? "accepted" : "declined" })
         .eq("project_id", data.project_id)
-        .eq("user_id", (n as any).user_id);
+        .eq("user_id", currentUser.id);
     }
 
     markAsRead(n.id);
