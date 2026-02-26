@@ -21,6 +21,8 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
   const tree = useProjectTree();
   const { clients, products, projects } = tree;
   const updateProjectOrder = (tree as any).updateProjectOrder as ((productId: string, orderedIds: string[]) => Promise<void>) | undefined;
+  const updateClientOrder = (tree as any).updateClientOrder as ((orderedIds: string[]) => Promise<void>) | undefined;
+  const updateProductOrder = (tree as any).updateProductOrder as ((clientId: string, orderedIds: string[]) => Promise<void>) | undefined;
 
   const [openClients, setOpenClients] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem("sb_open_clients") || "[]")); }
@@ -32,9 +34,13 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
   });
   const [projectsOpen, setProjectsOpen] = useState(true);
 
-  // Drag state for project reordering
+  // Drag state for reordering
   const dragItem = useRef<{ id: string; productId: string } | null>(null);
   const [dragOverProjectId, setDragOverProjectId] = useState<string | null>(null);
+  const dragClientItem = useRef<string | null>(null);
+  const [dragOverClientId, setDragOverClientId] = useState<string | null>(null);
+  const dragProductItem = useRef<{ id: string; clientId: string } | null>(null);
+  const [dragOverProductId, setDragOverProductId] = useState<string | null>(null);
 
   useEffect(() => { localStorage.setItem("sb_open_clients", JSON.stringify([...openClients])); }, [openClients]);
   useEffect(() => { localStorage.setItem("sb_open_products", JSON.stringify([...openProducts])); }, [openProducts]);
@@ -114,6 +120,46 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
     dragItem.current = null;
   };
 
+  // Client drag handlers
+  const handleClientDragStart = (clientId: string) => { dragClientItem.current = clientId; };
+  const handleClientDragEnter = (clientId: string) => { setDragOverClientId(clientId); };
+  const handleClientDragEnd = () => {
+    if (!dragClientItem.current || !dragOverClientId || dragClientItem.current === dragOverClientId) {
+      setDragOverClientId(null); dragClientItem.current = null; return;
+    }
+    const sorted = [...clients].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    const fromIdx = sorted.findIndex((c) => c.id === dragClientItem.current);
+    const toIdx = sorted.findIndex((c) => c.id === dragOverClientId);
+    if (fromIdx === -1 || toIdx === -1) { setDragOverClientId(null); dragClientItem.current = null; return; }
+    const reordered = [...sorted];
+    const [removed] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, removed);
+    if (updateClientOrder) updateClientOrder(reordered.map((c) => c.id));
+    setDragOverClientId(null); dragClientItem.current = null;
+  };
+
+  // Product drag handlers
+  const handleProductDragStart = (productId: string, clientId: string) => { dragProductItem.current = { id: productId, clientId }; };
+  const handleProductDragEnter = (productId: string) => { setDragOverProductId(productId); };
+  const handleProductDragEnd = () => {
+    if (!dragProductItem.current || !dragOverProductId || dragProductItem.current.id === dragOverProductId) {
+      setDragOverProductId(null); dragProductItem.current = null; return;
+    }
+    const clientId = dragProductItem.current.clientId;
+    const clientProducts = products.filter((p) => p.client_id === clientId).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+    const fromIdx = clientProducts.findIndex((p) => p.id === dragProductItem.current!.id);
+    const toIdx = clientProducts.findIndex((p) => p.id === dragOverProductId);
+    const target = products.find((p) => p.id === dragOverProductId);
+    if (fromIdx === -1 || toIdx === -1 || target?.client_id !== clientId) {
+      setDragOverProductId(null); dragProductItem.current = null; return;
+    }
+    const reordered = [...clientProducts];
+    const [removed] = reordered.splice(fromIdx, 1);
+    reordered.splice(toIdx, 0, removed);
+    if (updateProductOrder) updateProductOrder(clientId, reordered.map((p) => p.id));
+    setDragOverProductId(null); dragProductItem.current = null;
+  };
+
   return (
     <aside className="w-[260px] min-w-[260px] h-screen bg-sidebar border-r border-sidebar-border flex flex-col overflow-hidden">
       <div className="px-5 py-5 border-b border-sidebar-border">
@@ -168,11 +214,18 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
             {projectsOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
           </button>
 
-          {projectsOpen && [...clients].sort((a, b) => a.name.localeCompare(b.name, "ja")).map((client) => (
-            <div key={client.id}>
-              <div className="flex items-center w-full">
+          {projectsOpen && [...clients].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name, "ja")).map((client) => (
+            <div key={client.id}
+              draggable
+              onDragStart={() => handleClientDragStart(client.id)}
+              onDragEnter={() => handleClientDragEnter(client.id)}
+              onDragEnd={handleClientDragEnd}
+              onDragOver={(e) => e.preventDefault()}
+            >
+              <div className={cn("flex items-center w-full group", dragOverClientId === client.id && "bg-primary/5")}>
+                <GripVertical className="h-3 w-3 text-muted-foreground/30 ml-3 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab shrink-0" />
                 <button onClick={() => toggleClient(client.id)}
-                  className="flex items-center gap-1 px-5 py-2 text-sm text-muted-foreground hover:bg-muted/50 shrink-0">
+                  className="flex items-center gap-1 px-2 py-2 text-sm text-muted-foreground hover:bg-muted/50 shrink-0">
                   {openClients.has(client.id) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                 </button>
                 <button onClick={() => navigate(`/client/${client.id}`)}
@@ -183,22 +236,28 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
 
               {openClients.has(client.id) && [...products]
                 .filter((p) => p.client_id === client.id)
-                .sort((a, b) => a.name.localeCompare(b.name, "ja"))
+                .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name, "ja"))
                 .map((product) => {
                   const productProjects = projects
                     .filter((pr) => pr.product_id === product.id)
                     .sort((a, b) => {
-                      // Primary: sort_order, secondary: created_at desc
                       const orderDiff = (a.sort_order ?? 0) - (b.sort_order ?? 0);
                       if (orderDiff !== 0) return orderDiff;
                       return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
                     });
 
                   return (
-                    <div key={product.id}>
-                      <div className="flex items-center w-full">
+                    <div key={product.id}
+                      draggable
+                      onDragStart={(e) => { e.stopPropagation(); handleProductDragStart(product.id, client.id); }}
+                      onDragEnter={() => handleProductDragEnter(product.id)}
+                      onDragEnd={handleProductDragEnd}
+                      onDragOver={(e) => e.preventDefault()}
+                    >
+                      <div className={cn("flex items-center w-full group", dragOverProductId === product.id && "bg-primary/5")}>
+                        <GripVertical className="h-3 w-3 text-muted-foreground/30 ml-7 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab shrink-0" />
                         <button onClick={() => toggleProduct(product.id)}
-                          className="flex items-center gap-1 px-9 py-1.5 text-sm text-muted-foreground hover:bg-muted/50 shrink-0">
+                          className="flex items-center gap-1 px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted/50 shrink-0">
                           {openProducts.has(product.id) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                         </button>
                         <button

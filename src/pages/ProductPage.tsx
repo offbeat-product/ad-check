@@ -4,17 +4,27 @@ import { supabase } from "@/integrations/supabase/client";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import type { Product, Client, Project } from "@/lib/db-types";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import ReferenceMaterialsSection from "@/components/reference/ReferenceMaterialsSection";
-import { FolderOpen } from "lucide-react";
+import { FolderOpen, Pencil, Trash2, Check, X } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [product, setProduct] = useState<Product | null>(null);
   const [client, setClient] = useState<Client | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [editName, setEditName] = useState("");
 
   const fetchData = useCallback(async () => {
     if (!id) return;
@@ -35,6 +45,37 @@ export default function ProductPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  const handleRename = async () => {
+    if (!product || !editName.trim()) return;
+    const { error } = await supabase.from("products").update({ name: editName.trim() }).eq("id", product.id);
+    if (error) {
+      toast({ title: "エラー", description: error.message, variant: "destructive" });
+    } else {
+      setProduct({ ...product, name: editName.trim() });
+      toast({ title: "商材名を更新しました" });
+    }
+    setEditing(false);
+  };
+
+  const handleDelete = async () => {
+    if (!product) return;
+    if (projects.length > 0) {
+      toast({ title: "削除できません", description: "先に配下の案件を全て削除してください。", variant: "destructive" });
+      return;
+    }
+    await Promise.all([
+      supabase.from("check_rules").delete().eq("product_id", product.id),
+      supabase.from("reference_materials").delete().eq("scope_id", product.id),
+    ]);
+    const { error } = await supabase.from("products").delete().eq("id", product.id);
+    if (error) {
+      toast({ title: "削除エラー", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "商材を削除しました" });
+      navigate(client ? `/client/${client.id}` : "/dashboard");
+    }
+  };
+
   if (loading) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">読み込み中...</div>;
   if (!product) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">商材が見つかりません</div>;
 
@@ -43,9 +84,61 @@ export default function ProductPage() {
       <header className="border-b border-border px-6 py-3 flex items-center justify-between bg-card">
         <div>
           <div className="text-xs text-muted-foreground">{client?.name} &gt; {product.name}</div>
-          <h1 className="text-lg font-bold mt-0.5">{product.name}</h1>
+          <div className="flex items-center gap-2 mt-0.5">
+            {editing ? (
+              <div className="flex items-center gap-2">
+                <Input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="h-8 text-lg font-bold w-64"
+                  autoFocus
+                  onKeyDown={(e) => { if (e.key === "Enter") handleRename(); if (e.key === "Escape") setEditing(false); }}
+                />
+                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleRename}>
+                  <Check className="h-4 w-4 text-status-ok" />
+                </Button>
+                <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditing(false)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <>
+                <h1 className="text-lg font-bold">{product.name}</h1>
+                <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={() => { setEditName(product.name); setEditing(true); }}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              </>
+            )}
+          </div>
         </div>
-        <Badge variant="outline" className="text-xs">{product.code}</Badge>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="text-xs">{product.code}</Badge>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8 p-0">
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>商材を削除</AlertDialogTitle>
+                <AlertDialogDescription>
+                  「{product.name}」を削除します。{projects.length > 0 ? `配下に${projects.length}件の案件があるため、先に案件を削除してください。` : "関連するチェックルールと参考資料も削除されます。この操作は元に戻せません。"}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDelete}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  disabled={projects.length > 0}
+                >
+                  削除する
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </header>
 
       <div className="p-6 max-w-6xl mx-auto">
