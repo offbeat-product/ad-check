@@ -14,7 +14,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import ReferenceMaterialsSection from "@/components/reference/ReferenceMaterialsSection";
 import CheckRulesTab from "@/components/product/CheckRulesTab";
-import { FolderOpen, Pencil, Trash2, Check, X, Palette } from "lucide-react";
+import CreateProjectModal from "@/components/CreateProjectModal";
+import { FolderOpen, Pencil, Trash2, Check, X, Palette, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
@@ -48,6 +49,7 @@ export default function ProductPage() {
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
   const [editExternalId, setEditExternalId] = useState("");
+  const [createProjectOpen, setCreateProjectOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     if (!id) return;
@@ -178,7 +180,6 @@ export default function ProductPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline" className="text-xs">{product.code}</Badge>
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8 p-0">
@@ -209,12 +210,17 @@ export default function ProductPage() {
 
       <div className="p-6 max-w-6xl mx-auto">
         <Tabs defaultValue="projects">
-          <TabsList className="mb-6">
-            <TabsTrigger value="projects">案件一覧</TabsTrigger>
-            <TabsTrigger value="materials">参考資料（商材ベース）</TabsTrigger>
-            <TabsTrigger value="rules">チェックルール</TabsTrigger>
-            <TabsTrigger value="settings">設定</TabsTrigger>
-          </TabsList>
+          <div className="flex items-center justify-between mb-6">
+            <TabsList>
+              <TabsTrigger value="projects">案件一覧</TabsTrigger>
+              <TabsTrigger value="materials">参考資料（商材ベース）</TabsTrigger>
+              <TabsTrigger value="rules">チェックルール</TabsTrigger>
+              <TabsTrigger value="settings">設定</TabsTrigger>
+            </TabsList>
+            <Button size="sm" className="h-8 text-xs" onClick={() => setCreateProjectOpen(true)}>
+              <Plus className="h-3.5 w-3.5 mr-1" />案件登録
+            </Button>
+          </div>
 
           <TabsContent value="projects" className="space-y-4">
             {projects.length === 0 ? (
@@ -311,6 +317,17 @@ export default function ProductPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <CreateProjectModal
+        open={createProjectOpen}
+        onOpenChange={setCreateProjectOpen}
+        onCreated={(projectId) => {
+          setCreateProjectOpen(false);
+          navigate(`/project/${projectId}`);
+        }}
+        defaultClientId={client?.id}
+        defaultProductId={product?.id}
+      />
     </div>
   );
 }

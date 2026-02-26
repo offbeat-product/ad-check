@@ -17,15 +17,17 @@ interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onCreated: (projectId: string) => void;
+  defaultClientId?: string;
+  defaultProductId?: string;
 }
 
-export default function CreateProjectModal({ open, onOpenChange, onCreated }: Props) {
+export default function CreateProjectModal({ open, onOpenChange, onCreated, defaultClientId, defaultProductId }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [clients, setClients] = useState<Client[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [clientId, setClientId] = useState("");
-  const [productId, setProductId] = useState("");
+  const [clientId, setClientId] = useState(defaultClientId || "");
+  const [productId, setProductId] = useState(defaultProductId || "");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [description, setDescription] = useState("");
@@ -54,10 +56,16 @@ export default function CreateProjectModal({ open, onOpenChange, onCreated }: Pr
       const clientData = cRes.data ?? [];
       setClients(clientData);
       setProducts(pRes.data ?? []);
-      if (clientData.length === 1 && !clientId) setClientId(clientData[0].id);
+      // Set defaults
+      if (defaultClientId) {
+        setClientId(defaultClientId);
+      } else if (clientData.length === 1 && !clientId) {
+        setClientId(clientData[0].id);
+      }
+      if (defaultProductId) setProductId(defaultProductId);
     });
     return () => { cancelled = true; };
-  }, [open]);
+  }, [open, defaultClientId, defaultProductId]);
 
   const filteredProducts = products.filter((p) => p.client_id === clientId);
 
