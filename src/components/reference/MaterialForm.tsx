@@ -9,6 +9,7 @@ import OrientationTemplate, { orientationDataToText, type OrientationData } from
 import WCheckTemplate, { wcheckDataToText, type WCheckData } from "./templates/WCheckTemplate";
 import BrandGuidelineTemplate, { brandGuidelineDataToText, type BrandGuidelineData } from "./templates/BrandGuidelineTemplate";
 import LegalRegulationTemplate, { legalRegulationDataToText, type LegalRegulationData } from "./templates/LegalRegulationTemplate";
+import MediaRegulationTemplate, { mediaRegulationDataToText, type MediaRegulationData } from "./templates/MediaRegulationTemplate";
 import CorrectionHistoryTemplate, { correctionHistoryDataToText, type CorrectionHistoryData } from "./templates/CorrectionHistoryTemplate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,7 +41,7 @@ interface Props {
 type InputMethod = "file_upload" | "text_input" | "url_reference" | "template";
 
 // Types that have structured templates
-const TEMPLATE_TYPES = ["orientation", "wcheck", "brand_guideline", "legal_rule", "correction_history"];
+const TEMPLATE_TYPES = ["orientation", "wcheck", "brand_guideline", "legal_rule", "media_regulation", "correction_history"];
 
 export default function MaterialForm({ materialType, scopeType, scopeId, existing, productId, onSaved, onCancel }: Props) {
   const { user } = useAuth();
@@ -65,7 +66,7 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
   const [pendingSaveResult, setPendingSaveResult] = useState<any>(null);
 
   // Template data states
-  const [templateData, setTemplateData] = useState<OrientationData | WCheckData | BrandGuidelineData | LegalRegulationData | CorrectionHistoryData | null>(null);
+  const [templateData, setTemplateData] = useState<OrientationData | WCheckData | BrandGuidelineData | LegalRegulationData | MediaRegulationData | CorrectionHistoryData | null>(null);
 
   const isWCheck = materialType === "wcheck";
 
@@ -202,7 +203,9 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
       } else if (templateData.template_type === "brand_guideline") {
         aiText = brandGuidelineDataToText(templateData as BrandGuidelineData);
       } else if (templateData.template_type === "legal_regulation") {
-        aiText = legalRegulationDataToText(templateData as LegalRegulationData);
+      aiText = legalRegulationDataToText(templateData as LegalRegulationData);
+      } else if (templateData.template_type === "media_regulation") {
+        aiText = mediaRegulationDataToText(templateData as MediaRegulationData);
       } else if (templateData.template_type === "correction_history") {
         aiText = correctionHistoryDataToText(templateData as CorrectionHistoryData);
       }
@@ -304,6 +307,9 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
         )}
         {method === "template" && materialType === "legal_rule" && (
           <LegalRegulationTemplate onChange={setTemplateData as any} />
+        )}
+        {method === "template" && materialType === "media_regulation" && (
+          <MediaRegulationTemplate onChange={setTemplateData as any} />
         )}
         {method === "template" && materialType === "correction_history" && (
           <CorrectionHistoryTemplate onChange={setTemplateData as any} />
