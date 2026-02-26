@@ -271,7 +271,7 @@ export default function ProductPage() {
           </TabsContent>
 
           <TabsContent value="rules">
-            <CheckRulesTab externalProductId={product.external_product_id} />
+            <CheckRulesTab productId={product.id} />
           </TabsContent>
 
           <TabsContent value="settings" className="space-y-4">
@@ -295,7 +295,7 @@ export default function ProductPage() {
                 </div>
               )}
               <div>
-                <label className="text-xs font-medium text-muted-foreground mb-1 block">外部商材ID（n8n側）</label>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">外部連携ID（任意）</label>
                 <div className="flex items-center gap-2">
                   <Input
                     value={editExternalId}

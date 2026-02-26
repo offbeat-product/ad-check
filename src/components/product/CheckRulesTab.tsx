@@ -126,10 +126,10 @@ const emptyForm: RuleFormData = {
 
 // ── Component ──
 interface Props {
-  externalProductId: string | null | undefined;
+  productId: string;
 }
 
-export default function CheckRulesTab({ externalProductId }: Props) {
+export default function CheckRulesTab({ productId }: Props) {
   const { toast } = useToast();
   const [rules, setRules] = useState<CheckRule[]>([]);
   const [loading, setLoading] = useState(false);
@@ -154,14 +154,14 @@ export default function CheckRulesTab({ externalProductId }: Props) {
 
   // ── Fetch ──
   const fetchRules = useCallback(async () => {
-    if (!externalProductId) return;
+    if (!productId) return;
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("https://offbeat-inc.app.n8n.cloud/webhook/rules-list", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product_id: externalProductId }),
+        body: JSON.stringify({ product_id: productId }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -171,7 +171,7 @@ export default function CheckRulesTab({ externalProductId }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [externalProductId]);
+  }, [productId]);
 
   useEffect(() => { fetchRules(); }, [fetchRules]);
 
@@ -222,7 +222,7 @@ export default function CheckRulesTab({ externalProductId }: Props) {
   };
 
   const handleAdd = async () => {
-    if (!externalProductId) return;
+    if (!productId) return;
     setSaving(true);
     try {
       const ruleId = generateRuleId(addForm.process_type, rules);
@@ -230,7 +230,7 @@ export default function CheckRulesTab({ externalProductId }: Props) {
         method: "POST",
         headers: restHeaders,
         body: JSON.stringify({
-          product_id: externalProductId,
+          product_id: productId,
           process_type: addForm.process_type,
           rule_id: ruleId,
           category: addForm.category,
@@ -254,14 +254,7 @@ export default function CheckRulesTab({ externalProductId }: Props) {
   };
 
   // ── Empty state ──
-  if (!externalProductId) {
-    return (
-      <div className="border border-dashed border-border rounded-lg p-8 text-center space-y-2">
-        <p className="text-sm text-muted-foreground">外部商材IDが設定されていません</p>
-        <p className="text-xs text-muted-foreground">設定タブで external_product_id を登録してください</p>
-      </div>
-    );
-  }
+  // No guard needed — productId (internal UUID) is always available
 
   const filtered = rules.filter((r) => {
     if (processFilter !== "all" && r.process_type !== processFilter) return false;
