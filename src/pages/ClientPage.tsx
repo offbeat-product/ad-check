@@ -6,11 +6,16 @@ import type { Client, Product } from "@/lib/db-types";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Pencil, Trash2, Check, X } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ArrowLeft, Pencil, Trash2, Check, X, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface ProductWithStats extends Product {
@@ -33,6 +38,13 @@ export default function ClientPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
+
+  // New product modal
+  const [newProductOpen, setNewProductOpen] = useState(false);
+  const [newProductName, setNewProductName] = useState("");
+  const [newProductCode, setNewProductCode] = useState("");
+  const [newProductLabel, setNewProductLabel] = useState("");
+  const [creatingProduct, setCreatingProduct] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -113,7 +125,6 @@ export default function ClientPage() {
       toast({ title: "削除できません", description: "先に配下の案件を全て削除してください。", variant: "destructive" });
       return;
     }
-    // Delete related data
     await Promise.all([
       supabase.from("check_rules").delete().eq("product_id", product.id),
       supabase.from("reference_materials").delete().eq("scope_id", product.id),
@@ -125,6 +136,37 @@ export default function ClientPage() {
       setProducts((prev) => prev.filter((p) => p.id !== product.id));
       toast({ title: `「${product.name}」を削除しました` });
     }
+  };
+
+  const handleCreateProduct = async () => {
+    if (!newProductName.trim() || !newProductCode.trim() || !client) return;
+    setCreatingProduct(true);
+    const { error } = await supabase.from("products").insert({
+      name: newProductName.trim(),
+      code: newProductCode.trim(),
+      label: newProductLabel.trim() || newProductName.trim(),
+      client_id: client.id,
+    });
+    if (error) {
+      toast({ title: "エラー", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: `「${newProductName.trim()}」を登録しました` });
+      setNewProductOpen(false);
+      setNewProductName("");
+      setNewProductCode("");
+      setNewProductLabel("");
+      // Refresh products
+      const { data: prods } = await supabase.from("products").select("*").eq("client_id", client.id).order("name");
+      const enriched: ProductWithStats[] = await Promise.all(
+        (prods ?? []).map(async (p) => {
+          const { count } = await supabase.from("projects").select("*", { count: "exact", head: true }).eq("product_id", p.id);
+          const { data: latestCheck } = await supabase.from("check_results").select("created_at").eq("product_code", p.code).order("created_at", { ascending: false }).limit(1).maybeSingle();
+          return { ...p, projectCount: count ?? 0, latestCheckDate: latestCheck?.created_at ?? null };
+        })
+      );
+      setProducts(enriched);
+    }
+    setCreatingProduct(false);
   };
 
   if (loading) return <div className="flex items-center justify-center h-64 text-muted-foreground">読み込み中...</div>;
@@ -187,7 +229,12 @@ export default function ClientPage() {
         )}
       </div>
 
-      <h2 className="text-sm font-medium text-muted-foreground mb-4">商材一覧</h2>
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-sm font-medium text-muted-foreground">商材一覧</h2>
+        <Button size="sm" className="h-8 text-xs" onClick={() => setNewProductOpen(true)}>
+          <Plus className="h-3.5 w-3.5 mr-1" />商材登録
+        </Button>
+      </div>
 
       {products.length === 0 ? (
         <p className="text-sm text-muted-foreground/60 italic">商材が登録されていません</p>
@@ -249,6 +296,35 @@ export default function ClientPage() {
           ))}
         </div>
       )}
+
+      {/* New Product Modal */}
+      <Dialog open={newProductOpen} onOpenChange={setNewProductOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>商材を登録</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground mb-1 block">商材名 *</Label>
+              <Input value={newProductName} onChange={(e) => setNewProductName(e.target.value)} placeholder="例: CTA Agent" className="h-9 text-sm" />
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground mb-1 block">コード *</Label>
+              <Input value={newProductCode} onChange={(e) => setNewProductCode(e.target.value)} placeholder="例: cta_agent" className="h-9 text-sm" />
+            </div>
+            <div>
+              <Label className="text-xs font-medium text-muted-foreground mb-1 block">ラベル</Label>
+              <Input value={newProductLabel} onChange={(e) => setNewProductLabel(e.target.value)} placeholder="省略時は商材名を使用" className="h-9 text-sm" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" size="sm" onClick={() => setNewProductOpen(false)}>キャンセル</Button>
+              <Button size="sm" onClick={handleCreateProduct} disabled={creatingProduct || !newProductName.trim() || !newProductCode.trim()}>
+                {creatingProduct ? "登録中..." : "登録"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
