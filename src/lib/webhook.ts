@@ -43,6 +43,11 @@ function parseResponse(raw: any): CheckResult {
     data = data.json;
   }
 
+  // Handle { success: true, result: {...} } wrapper
+  if (data?.result && typeof data.result === "object") {
+    data = data.result;
+  }
+
   return {
     detected_case: data.detected_case || "",
     design_variant: data.design_variant || "",
@@ -52,6 +57,7 @@ function parseResponse(raw: any): CheckResult {
     warning_count: data.warning_count ?? 0,
     ok_count: data.ok_count ?? 0,
     total_checks: data.total_checks ?? 0,
+    manual_count: data.manual_count ?? 0,
   };
 }
 

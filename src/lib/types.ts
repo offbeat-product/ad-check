@@ -18,6 +18,7 @@ export interface CheckResult {
   warning_count: number;
   ok_count: number;
   total_checks: number;
+  manual_count?: number;
 }
 
 export interface CheckRecord {
