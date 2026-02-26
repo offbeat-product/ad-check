@@ -188,7 +188,8 @@ export default function Dashboard() {
               <h2 className="text-sm font-semibold">最近のチェック結果</h2>
               <span className="text-xs text-muted-foreground">{totalCount} 件</span>
             </div>
-            <table className="w-full text-sm">
+            {/* Desktop table */}
+            <table className="w-full text-sm hidden md:table">
               <thead>
                  <tr className="border-b border-border text-muted-foreground text-left">
                    <th className="px-4 py-2.5 font-medium">日時</th>
@@ -202,7 +203,17 @@ export default function Dashboard() {
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={7} className="text-center py-12 text-muted-foreground">読み込み中...</td></tr>
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <tr key={i}>
+                      <td className="px-4 py-3"><div className="h-4 w-20 bg-muted animate-pulse rounded" /></td>
+                      <td className="px-4 py-3"><div className="h-4 w-24 bg-muted animate-pulse rounded" /></td>
+                      <td className="px-4 py-3"><div className="h-4 w-16 bg-muted animate-pulse rounded" /></td>
+                      <td className="px-4 py-3 text-center"><div className="h-5 w-14 bg-muted animate-pulse rounded-full mx-auto" /></td>
+                      <td className="px-4 py-3"><div className="h-4 w-8 bg-muted animate-pulse rounded mx-auto" /></td>
+                      <td className="px-4 py-3"><div className="h-4 w-8 bg-muted animate-pulse rounded mx-auto" /></td>
+                      <td className="px-4 py-3 text-center"><div className="h-5 w-16 bg-muted animate-pulse rounded-full mx-auto" /></td>
+                    </tr>
+                  ))
                 ) : records.length === 0 ? (
                   <tr><td colSpan={7} className="text-center py-12 text-muted-foreground">チェック結果がありません</td></tr>
                 ) : (
@@ -232,6 +243,47 @@ export default function Dashboard() {
                 )}
               </tbody>
             </table>
+
+            {/* Mobile card list */}
+            <div className="md:hidden divide-y divide-border">
+              {loading ? (
+                Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="p-4 space-y-2">
+                    <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+                    <div className="h-3 w-24 bg-muted animate-pulse rounded" />
+                  </div>
+                ))
+              ) : records.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground text-sm">チェック結果がありません</div>
+              ) : (
+                records.map((r) => {
+                  const st = statusBadgeMap[r.status || "pending"] || statusBadgeMap.pending;
+                  return (
+                    <button key={r.id} onClick={() => navigate(`/check-result/${r.id}`)}
+                      className="w-full p-4 text-left hover:bg-muted/50 transition-colors">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-sm font-medium">{r.product_name}</span>
+                        <Badge className={cn("text-[10px] font-bold", getSubmitBadgeClass(r.overall_status))}>
+                          {getSubmitLabel(r.overall_status).label}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>{r.process_type}</span>
+                        <span>·</span>
+                        <span className="text-[#EF4444]">修正必須 {r.ng_count ?? 0}</span>
+                        <span className="text-[#F59E0B]">要確認 {r.warning_count ?? 0}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[10px] text-muted-foreground">
+                          {r.created_at ? new Date(r.created_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
+                        </span>
+                        <Badge variant="outline" className={cn("text-[10px]", st.class)}>{st.label}</Badge>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
 
             {/* Pagination */}
             {totalPages > 1 && (
