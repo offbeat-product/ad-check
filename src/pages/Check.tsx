@@ -6,7 +6,7 @@ import { PROCESS_LIST } from "@/lib/types";
 import type { Json } from "@/integrations/supabase/types";
 import type { Product, Client, Project } from "@/lib/db-types";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
-import { runScriptCheck, runSfCheck, runAudioCheck } from "@/lib/webhook";
+import { runScriptCheck, runSfCheck, runAudioCheck, runVideoCheck } from "@/lib/webhook";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { compressImage, type CompressResult } from "@/lib/image-compress";
@@ -49,6 +49,13 @@ export default function CheckPage() {
   const [bgmDescription, setBgmDescription] = useState("");
   const [bgmDuration, setBgmDuration] = useState<string>("");
   const [bgmLicense, setBgmLicense] = useState("");
+
+  // Video-specific
+  const [videoScriptText, setVideoScriptText] = useState("");
+  const [videoDuration, setVideoDuration] = useState<string>("");
+  const [videoFormat, setVideoFormat] = useState("MP4");
+  const [videoResolution, setVideoResolution] = useState("");
+  const [videoFps, setVideoFps] = useState<string>("");
 
   // Rule info
   const [ruleCount, setRuleCount] = useState<number | null>(null);
@@ -257,6 +264,21 @@ export default function CheckPage() {
             format: null,
           });
         }
+      } else if (processConfig.inputMode === "video") {
+        if (!videoScriptText.trim()) throw new Error("テロップテキストを入力してください");
+        const metadata: Record<string, any> = {
+          file_name: mediaFile?.name || "",
+          duration: videoDuration ? Number(videoDuration) : null,
+          format: videoFormat || null,
+        };
+        if (selectedProcess === "video_horizontal" || selectedProcess === "video_vertical") {
+          metadata.resolution = videoResolution || null;
+          metadata.fps = videoFps ? Number(videoFps) : null;
+        }
+        if (selectedProcess === "video_vertical") {
+          metadata.aspect_ratio = "9:16";
+        }
+        res = await runVideoCheck(product.id, selectedProcess, videoScriptText, metadata);
       } else {
         if (!scriptText.trim()) throw new Error("テキストを入力してください");
         res = await runScriptCheck(product.id, scriptText, selectedProcess);
@@ -267,6 +289,8 @@ export default function CheckPage() {
         ? { image_base64: `data:${imageData.mediaType};base64,${imageData.base64}` }
         : processConfig.inputMode === "audio"
         ? { script_text: selectedProcess === "narration" ? naScriptText : bgmDescription }
+        : processConfig.inputMode === "video"
+        ? { script_text: videoScriptText }
         : { script_text: scriptText };
 
       const { error } = await supabase.from("check_results").insert([{
@@ -329,7 +353,7 @@ export default function CheckPage() {
     processConfig.inputMode === "image" ? !!imageData
     : processConfig.inputMode === "audio"
       ? (selectedProcess === "narration" ? !!naScriptText.trim() : !!bgmDescription.trim())
-    : processConfig.inputMode === "video" ? !!mediaFile
+    : processConfig.inputMode === "video" ? !!videoScriptText.trim()
     : !!scriptText.trim()
   );
 
@@ -544,14 +568,95 @@ export default function CheckPage() {
                 )}
               </div>
             ) : processConfig.inputMode === "video" ? (
-              <MediaInput
-                mediaFile={mediaFile}
-                mediaPreviewUrl={mediaPreviewUrl}
-                inputRef={mediaInputRef}
-                onUpload={handleMediaUpload}
-                onClear={clearMedia}
-                mode="video"
-              />
+              <div className="space-y-5">
+                {/* Video file upload */}
+                <div>
+                  <Label className="text-xs font-medium text-muted-foreground mb-2 block">動画ファイル（任意）</Label>
+                  <MediaInput
+                    mediaFile={mediaFile}
+                    mediaPreviewUrl={mediaPreviewUrl}
+                    inputRef={mediaInputRef}
+                    onUpload={handleMediaUpload}
+                    onClear={clearMedia}
+                    mode="video"
+                  />
+                </div>
+
+                {/* Telop / script text */}
+                <div>
+                  <Label className="text-xs font-medium text-muted-foreground mb-2 block">
+                    {selectedProcess === "vcon" ? "テロップ/ナレーション原稿（AIチェックに使用）" : "テロップテキスト（AIチェックに使用）"}
+                  </Label>
+                  <Textarea
+                    value={videoScriptText}
+                    onChange={e => setVideoScriptText(e.target.value)}
+                    placeholder={selectedProcess === "vcon" ? "Vコンのテロップ/ナレーション原稿を貼り付けてください" : `${processConfig.label}のテロップテキストを貼り付けてください`}
+                    className="min-h-[160px] resize-y border-border font-mono text-sm"
+                  />
+                </div>
+
+                {/* Video metadata */}
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground mb-2 block">尺（秒）</Label>
+                      <Input
+                        type="number"
+                        value={videoDuration}
+                        onChange={e => setVideoDuration(e.target.value)}
+                        placeholder="例：30"
+                        className="border-border text-sm"
+                        min={0}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground mb-2 block">ファイル形式</Label>
+                      <Input
+                        value={videoFormat}
+                        onChange={e => setVideoFormat(e.target.value)}
+                        placeholder="例：MP4"
+                        className="border-border text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {(selectedProcess === "video_horizontal" || selectedProcess === "video_vertical") && (
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-xs font-medium text-muted-foreground mb-2 block">解像度</Label>
+                        <Input
+                          value={videoResolution}
+                          onChange={e => setVideoResolution(e.target.value)}
+                          placeholder={selectedProcess === "video_vertical" ? "例：1080x1920" : "例：1920x1080"}
+                          className="border-border text-sm"
+                        />
+                      </div>
+                      <div>
+                        <Label className="text-xs font-medium text-muted-foreground mb-2 block">フレームレート (fps)</Label>
+                        <Input
+                          type="number"
+                          value={videoFps}
+                          onChange={e => setVideoFps(e.target.value)}
+                          placeholder="例：30"
+                          className="border-border text-sm"
+                          min={0}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedProcess === "video_vertical" && (
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground mb-2 block">アスペクト比</Label>
+                      <Input
+                        value="9:16"
+                        disabled
+                        className="border-border text-sm w-32 opacity-60"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
             ) : processConfig.inputMode === "text" ? (
               <div className="space-y-3">
                 <Textarea
