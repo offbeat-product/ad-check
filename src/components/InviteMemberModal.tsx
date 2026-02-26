@@ -7,6 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
+const ROLE_OPTIONS = [
+  { value: "admin", label: "管理者", description: "全操作+メンバー管理+削除" },
+  { value: "member", label: "メンバー", description: "編集+アップロード+チェック実行" },
+  { value: "viewer", label: "閲覧者", description: "閲覧のみ" },
+];
+
 interface InviteMemberModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -19,7 +25,7 @@ export default function InviteMemberModal({ open, onOpenChange, projectId, proje
   const { user } = useAuth();
   const { toast } = useToast();
   const [email, setEmail] = useState("");
-  const [role, setRole] = useState("editor");
+  const [role, setRole] = useState("member");
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
 
@@ -55,7 +61,7 @@ export default function InviteMemberModal({ open, onOpenChange, projectId, proje
         email: email.trim(),
         role,
         invited_by: user.id,
-        status: "pending",
+        status: profile ? "accepted" : "pending",
       });
 
       if (error) {
@@ -70,19 +76,19 @@ export default function InviteMemberModal({ open, onOpenChange, projectId, proje
           user_id: profile.id,
           type: "invitation",
           title: `${projectName} プロジェクトに招待されました`,
-          message: `${user.email} からの招待`,
+          message: `${user.email} からの招待（${ROLE_OPTIONS.find(r => r.value === role)?.label}）`,
           data: { project_id: projectId, invited_by: user.id },
         });
       } else {
-        setStatusMessage("このユーザーはまだCheckMateに登録されていません。登録後に自動的にプロジェクトに追加されます。");
+        setStatusMessage("このユーザーはまだ登録されていません。登録後に自動的にプロジェクトに追加されます。");
       }
 
       toast({ title: "招待を送信しました" });
       onInvited();
 
-      if (!statusMessage && profile) {
+      if (profile) {
         setEmail("");
-        setRole("editor");
+        setRole("member");
         onOpenChange(false);
       }
     } catch (e: any) {
@@ -115,18 +121,14 @@ export default function InviteMemberModal({ open, onOpenChange, projectId, proje
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="editor">
-                  <div>
-                    <p className="font-medium">編集者</p>
-                    <p className="text-xs text-muted-foreground">チェック実行・コメント可能</p>
-                  </div>
-                </SelectItem>
-                <SelectItem value="viewer">
-                  <div>
-                    <p className="font-medium">閲覧者</p>
-                    <p className="text-xs text-muted-foreground">閲覧のみ</p>
-                  </div>
-                </SelectItem>
+                {ROLE_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    <div>
+                      <p className="font-medium">{opt.label}</p>
+                      <p className="text-xs text-muted-foreground">{opt.description}</p>
+                    </div>
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
