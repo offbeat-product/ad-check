@@ -6,7 +6,9 @@ import { PROCESS_LIST } from "@/lib/types";
 import type { Json } from "@/integrations/supabase/types";
 import type { Product, Client, Project } from "@/lib/db-types";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
-import { runScriptCheck, runSfCheck } from "@/lib/webhook";
+import { runScriptCheck, runSfCheck, runAudioCheck } from "@/lib/webhook";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { compressImage, type CompressResult } from "@/lib/image-compress";
 import ContextBar from "@/components/ContextBar";
 import CheckResultView from "@/components/CheckResultView";
@@ -39,6 +41,14 @@ export default function CheckPage() {
   const [mediaFile, setMediaFile] = useState<File | null>(null);
   const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
+
+  // Narration-specific
+  const [naScriptText, setNaScriptText] = useState("");
+
+  // BGM-specific
+  const [bgmDescription, setBgmDescription] = useState("");
+  const [bgmDuration, setBgmDuration] = useState<string>("");
+  const [bgmLicense, setBgmLicense] = useState("");
 
   // Rule info
   const [ruleCount, setRuleCount] = useState<number | null>(null);
@@ -228,6 +238,25 @@ export default function CheckPage() {
       if (processConfig.inputMode === "image") {
         if (!imageData) throw new Error("画像を選択してください");
         res = await runSfCheck(product.id, imageData.base64, imageData.mediaType, selectedProcess);
+      } else if (processConfig.inputMode === "audio") {
+        if (selectedProcess === "narration") {
+          if (!naScriptText.trim()) throw new Error("NA原稿テキストを入力してください");
+          res = await runAudioCheck(product.id, "narration", naScriptText, {
+            file_name: mediaFile?.name || "",
+            duration: null,
+            format: null,
+          });
+        } else {
+          // BGM
+          if (!bgmDescription.trim()) throw new Error("BGM情報を入力してください");
+          const descParts = [bgmDescription];
+          if (bgmLicense) descParts.push(`ライセンス: ${bgmLicense}`);
+          res = await runAudioCheck(product.id, "bgm", descParts.join("\n"), {
+            file_name: mediaFile?.name || "",
+            duration: bgmDuration ? Number(bgmDuration) : null,
+            format: null,
+          });
+        }
       } else {
         if (!scriptText.trim()) throw new Error("テキストを入力してください");
         res = await runScriptCheck(product.id, scriptText, selectedProcess);
@@ -236,6 +265,8 @@ export default function CheckPage() {
 
       const inputData = processConfig.inputMode === "image" && imageData
         ? { image_base64: `data:${imageData.mediaType};base64,${imageData.base64}` }
+        : processConfig.inputMode === "audio"
+        ? { script_text: selectedProcess === "narration" ? naScriptText : bgmDescription }
         : { script_text: scriptText };
 
       const { error } = await supabase.from("check_results").insert([{
@@ -296,7 +327,9 @@ export default function CheckPage() {
 
   const canExecute = !!product && processConfig.enabled && (
     processConfig.inputMode === "image" ? !!imageData
-    : processConfig.inputMode === "audio" || processConfig.inputMode === "video" ? !!mediaFile
+    : processConfig.inputMode === "audio"
+      ? (selectedProcess === "narration" ? !!naScriptText.trim() : !!bgmDescription.trim())
+    : processConfig.inputMode === "video" ? !!mediaFile
     : !!scriptText.trim()
   );
 
@@ -450,14 +483,66 @@ export default function CheckPage() {
                 }}
               />
             ) : processConfig.inputMode === "audio" ? (
-              <MediaInput
-                mediaFile={mediaFile}
-                mediaPreviewUrl={mediaPreviewUrl}
-                inputRef={mediaInputRef}
-                onUpload={handleMediaUpload}
-                onClear={clearMedia}
-                mode="audio"
-              />
+              <div className="space-y-5">
+                {/* Audio file upload */}
+                <div>
+                  <Label className="text-xs font-medium text-muted-foreground mb-2 block">音声ファイル（任意）</Label>
+                  <MediaInput
+                    mediaFile={mediaFile}
+                    mediaPreviewUrl={mediaPreviewUrl}
+                    inputRef={mediaInputRef}
+                    onUpload={handleMediaUpload}
+                    onClear={clearMedia}
+                    mode="audio"
+                  />
+                </div>
+
+                {selectedProcess === "narration" ? (
+                  /* Narration: NA script textarea */
+                  <div>
+                    <Label className="text-xs font-medium text-muted-foreground mb-2 block">NA原稿テキスト（AIチェックに使用）</Label>
+                    <Textarea
+                      value={naScriptText}
+                      onChange={e => setNaScriptText(e.target.value)}
+                      placeholder="ナレーション原稿のテキストを貼り付けてください"
+                      className="min-h-[160px] resize-y border-border font-mono text-sm"
+                    />
+                  </div>
+                ) : (
+                  /* BGM: info form */
+                  <div className="space-y-4">
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground mb-2 block">BGMの雰囲気 / ジャンル（AIチェックに使用）</Label>
+                      <Input
+                        value={bgmDescription}
+                        onChange={e => setBgmDescription(e.target.value)}
+                        placeholder="例：爽やかなアコースティック"
+                        className="border-border text-sm"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground mb-2 block">尺（秒）</Label>
+                      <Input
+                        type="number"
+                        value={bgmDuration}
+                        onChange={e => setBgmDuration(e.target.value)}
+                        placeholder="例：30"
+                        className="border-border text-sm w-32"
+                        min={0}
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs font-medium text-muted-foreground mb-2 block">ライセンス情報</Label>
+                      <Input
+                        value={bgmLicense}
+                        onChange={e => setBgmLicense(e.target.value)}
+                        placeholder="例：Artlist商用利用可"
+                        className="border-border text-sm"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
             ) : processConfig.inputMode === "video" ? (
               <MediaInput
                 mediaFile={mediaFile}
