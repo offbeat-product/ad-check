@@ -216,9 +216,16 @@ export default function CheckPage() {
   }, [imagePreviewUrl, mediaPreviewUrl]);
 
   const handleMediaUpload = useCallback((file: File) => {
-    const maxSize = 50 * 1024 * 1024; // 50MB
+    const isVideo = /\.(mp4|mov|webm|avi)$/i.test(file.name) || file.type.startsWith("video/");
+    const maxSize = isVideo ? 100 * 1024 * 1024 : 50 * 1024 * 1024;
     if (file.size > maxSize) {
-      toast({ title: "エラー", description: "ファイルサイズは50MB以下にしてください", variant: "destructive" });
+      toast({
+        title: "エラー",
+        description: isVideo
+          ? "ファイルサイズが100MBを超えています。圧縮してからアップロードしてください。"
+          : "ファイルサイズは50MB以下にしてください",
+        variant: "destructive",
+      });
       return;
     }
     setMediaFile(file);
@@ -569,9 +576,24 @@ export default function CheckPage() {
               </div>
             ) : processConfig.inputMode === "video" ? (
               <div className="space-y-5">
-                {/* Video file upload */}
+                {/* Telop / script text — PRIMARY, required */}
                 <div>
-                  <Label className="text-xs font-medium text-muted-foreground mb-2 block">動画ファイル（任意）</Label>
+                  <Label className="text-xs font-medium text-muted-foreground mb-2 block">
+                    {selectedProcess === "vcon" ? "テロップ/字コンテテキスト（AIチェック対象）" : `テロップ/字コンテテキスト（AIチェック対象）`}
+                    <span className="text-destructive ml-1">*必須</span>
+                  </Label>
+                  <Textarea
+                    value={videoScriptText}
+                    onChange={e => setVideoScriptText(e.target.value)}
+                    placeholder={selectedProcess === "vcon" ? "Vコンのテロップ/ナレーション原稿を貼り付けてください" : `${processConfig.label}のテロップテキストを貼り付けてください`}
+                    className="min-h-[160px] resize-y border-border font-mono text-sm"
+                  />
+                </div>
+
+                {/* Video file upload — optional */}
+                <div>
+                  <Label className="text-xs font-medium text-muted-foreground mb-2 block">動画ファイル（任意・管理用）</Label>
+                  <p className="text-xs text-muted-foreground/70 mb-2">※現段階ではAIチェックにはテキスト情報を使用します</p>
                   <MediaInput
                     mediaFile={mediaFile}
                     mediaPreviewUrl={mediaPreviewUrl}
@@ -579,19 +601,7 @@ export default function CheckPage() {
                     onUpload={handleMediaUpload}
                     onClear={clearMedia}
                     mode="video"
-                  />
-                </div>
-
-                {/* Telop / script text */}
-                <div>
-                  <Label className="text-xs font-medium text-muted-foreground mb-2 block">
-                    {selectedProcess === "vcon" ? "テロップ/ナレーション原稿（AIチェックに使用）" : "テロップテキスト（AIチェックに使用）"}
-                  </Label>
-                  <Textarea
-                    value={videoScriptText}
-                    onChange={e => setVideoScriptText(e.target.value)}
-                    placeholder={selectedProcess === "vcon" ? "Vコンのテロップ/ナレーション原稿を貼り付けてください" : `${processConfig.label}のテロップテキストを貼り付けてください`}
-                    className="min-h-[160px] resize-y border-border font-mono text-sm"
+                    maxSizeLabel="MP4 / MOV / WebM・最大100MB"
                   />
                 </div>
 
@@ -781,6 +791,7 @@ function MediaInput({
   onUpload,
   onClear,
   mode,
+  maxSizeLabel,
 }: {
   mediaFile: File | null;
   mediaPreviewUrl: string | null;
@@ -788,12 +799,13 @@ function MediaInput({
   onUpload: (file: File) => void;
   onClear: () => void;
   mode: "audio" | "video";
+  maxSizeLabel?: string;
 }) {
   const isAudio = mode === "audio";
   const accept = isAudio ? ".mp3,.wav,.m4a,.aac,.ogg" : ".mp4,.mov,.webm,.avi";
   const Icon = isAudio ? Music : Film;
   const label = isAudio ? "音声ファイル" : "動画ファイル";
-  const formats = isAudio ? "MP3 / WAV / M4A" : "MP4 / MOV / WebM";
+  const formats = maxSizeLabel || (isAudio ? "MP3 / WAV / M4A・最大50MB" : "MP4 / MOV / WebM・最大50MB");
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -811,7 +823,7 @@ function MediaInput({
       >
         <Icon className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
         <p className="text-sm text-muted-foreground">{label}をドラッグ＆ドロップ、またはクリックして選択</p>
-        <p className="text-xs text-muted-foreground/60 mt-1">{formats}・最大50MB</p>
+        <p className="text-xs text-muted-foreground/60 mt-1">{formats}</p>
         <input
           ref={inputRef}
           type="file"
