@@ -179,9 +179,9 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
       <div className="px-5 py-5 border-b border-sidebar-border">
         <h1 className="text-lg font-bold flex items-center gap-2">
           <span>♟</span>
-          <span className="gradient-text">CheckMate AI</span>
+          <span className="gradient-text">CheckGo AI</span>
         </h1>
-        <p className="text-[11px] text-muted-foreground mt-0.5">終わらないリテイクに、終止符を。</p>
+        <p className="text-[11px] text-muted-foreground mt-0.5">制作現場に、最速の「GO」を。</p>
       </div>
 
       {/* Search shortcut hint */}

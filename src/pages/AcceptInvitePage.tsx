@@ -139,7 +139,7 @@ export default function AcceptInvitePage() {
         <div className="w-full max-w-md space-y-6 text-center">
           <h1 className="text-4xl font-bold">
             <span className="mr-2">♟</span>
-            <span className="gradient-text">CheckMate AI</span>
+            <span className="gradient-text">CheckGo AI</span>
           </h1>
           <div className="glass-card p-8 space-y-4">
             <p className="text-destructive font-medium">{error}</p>
@@ -158,14 +158,14 @@ export default function AcceptInvitePage() {
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-bold">
             <span className="mr-2">♟</span>
-            <span className="gradient-text">CheckMate AI</span>
+            <span className="gradient-text">CheckGo AI</span>
           </h1>
-          <p className="text-sm text-muted-foreground">終わらないリテイクに、終止符を。</p>
+          <p className="text-sm text-muted-foreground">制作現場に、最速の「GO」を。</p>
         </div>
 
         <div className="glass-card p-8 space-y-6">
           <div className="text-center space-y-2">
-            <h2 className="text-xl font-semibold">CheckMate AIへようこそ</h2>
+            <h2 className="text-xl font-semibold">CheckGo AIへようこそ</h2>
             <p className="text-sm text-muted-foreground">
               {invitation?.inviter_name}さんから招待されました
             </p>
