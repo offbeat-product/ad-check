@@ -2,17 +2,22 @@ import { useState } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { Shield, Scale, Stethoscope, ShoppingCart, AlertTriangle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Shield, Scale, Stethoscope, ShoppingCart, AlertTriangle, Info } from "lucide-react";
+import { PLATFORM_PRESETS, type PlatformPresetDef } from "./media-platform-presets";
 
 export interface LegalRegulationData {
   template_type: "legal_regulation";
-  presets: string[];
+  presets: {
+    laws: string[];
+    platforms: string[];
+  };
   preset_content: string;
   custom_rules: string;
   last_updated: string;
 }
 
-interface PresetDef {
+interface LawPresetDef {
   id: string;
   label: string;
   icon: React.ReactNode;
@@ -20,7 +25,7 @@ interface PresetDef {
   content: string;
 }
 
-const PRESETS: PresetDef[] = [
+const LAW_PRESETS: LawPresetDef[] = [
   {
     id: "pharmaceutical",
     label: "薬機法（医薬品医療機器等法）",
@@ -139,26 +144,38 @@ const PRESETS: PresetDef[] = [
 
 interface Props {
   initialData?: LegalRegulationData;
+  suggestedPlatforms?: string[];
   onChange: (data: LegalRegulationData) => void;
 }
 
-export default function LegalRegulationTemplate({ initialData, onChange }: Props) {
-  const [activePresets, setActivePresets] = useState<string[]>(initialData?.presets || ["pharmaceutical", "fair_trade"]);
+export default function LegalRegulationTemplate({ initialData, suggestedPlatforms, onChange }: Props) {
+  const [activeLaws, setActiveLaws] = useState<string[]>(
+    initialData?.presets?.laws ?? (Array.isArray(initialData?.presets) ? initialData.presets as unknown as string[] : ["pharmaceutical", "fair_trade"])
+  );
+  const [activePlatforms, setActivePlatforms] = useState<string[]>(
+    initialData?.presets?.platforms ?? suggestedPlatforms ?? []
+  );
   const [customRules, setCustomRules] = useState(initialData?.custom_rules || "");
   const [industryCustom, setIndustryCustom] = useState("");
+  const [showSuggestion, setShowSuggestion] = useState(!!(suggestedPlatforms && suggestedPlatforms.length > 0));
 
-  const buildAndNotify = (presets: string[], custom: string, industryText: string) => {
-    const presetContents = presets
+  const buildAndNotify = (laws: string[], platforms: string[], custom: string, industryText: string) => {
+    const lawContents = laws
       .filter(id => id !== "industry_custom")
-      .map(id => PRESETS.find(p => p.id === id)?.content || "")
+      .map(id => LAW_PRESETS.find(p => p.id === id)?.content || "")
       .filter(Boolean)
       .join("\n\n");
 
-    const fullContent = [presetContents, industryText, custom].filter(Boolean).join("\n\n");
+    const platformContents = platforms
+      .map(id => PLATFORM_PRESETS.find(p => p.id === id)?.content || "")
+      .filter(Boolean)
+      .join("\n\n");
+
+    const fullContent = [lawContents, platformContents, industryText, custom].filter(Boolean).join("\n\n");
 
     const data: LegalRegulationData = {
       template_type: "legal_regulation",
-      presets,
+      presets: { laws, platforms },
       preset_content: fullContent,
       custom_rules: custom,
       last_updated: new Date().toISOString().split("T")[0],
@@ -166,49 +183,63 @@ export default function LegalRegulationTemplate({ initialData, onChange }: Props
     onChange(data);
   };
 
-  const togglePreset = (id: string) => {
-    const next = activePresets.includes(id) ? activePresets.filter(p => p !== id) : [...activePresets, id];
-    setActivePresets(next);
-    buildAndNotify(next, customRules, industryCustom);
+  const toggleLaw = (id: string) => {
+    const next = activeLaws.includes(id) ? activeLaws.filter(p => p !== id) : [...activeLaws, id];
+    setActiveLaws(next);
+    buildAndNotify(next, activePlatforms, customRules, industryCustom);
+  };
+
+  const togglePlatform = (id: string) => {
+    const next = activePlatforms.includes(id) ? activePlatforms.filter(p => p !== id) : [...activePlatforms, id];
+    setActivePlatforms(next);
+    buildAndNotify(activeLaws, next, customRules, industryCustom);
   };
 
   const handleCustomChange = (text: string) => {
     setCustomRules(text);
-    buildAndNotify(activePresets, text, industryCustom);
+    buildAndNotify(activeLaws, activePlatforms, text, industryCustom);
   };
 
   const handleIndustryChange = (text: string) => {
     setIndustryCustom(text);
-    buildAndNotify(activePresets, customRules, text);
+    buildAndNotify(activeLaws, activePlatforms, customRules, text);
   };
 
-  const activeCount = activePresets.filter(id => id !== "industry_custom").length;
+  const lawCount = activeLaws.filter(id => id !== "industry_custom").length;
+  const platformCount = activePlatforms.length;
 
   return (
     <div className="space-y-4">
+      {/* Suggestion banner */}
+      {showSuggestion && suggestedPlatforms && suggestedPlatforms.length > 0 && (
+        <div className="flex items-start gap-2 p-2.5 rounded-lg bg-accent/50 border border-accent text-xs">
+          <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+          <div>
+            <p className="font-medium">この商材は{suggestedPlatforms.map(id => PLATFORM_PRESETS.find(p => p.id === id)?.label || id).join("・")}に配信予定です。</p>
+            <p className="text-muted-foreground mt-0.5">該当媒体のレギュレーションを自動選択しました。</p>
+          </div>
+          <button onClick={() => setShowSuggestion(false)} className="text-muted-foreground hover:text-foreground ml-auto shrink-0">✕</button>
+        </div>
+      )}
+
+      {/* Step 1: Law presets */}
       <div>
-        <h4 className="text-xs font-semibold text-primary border-b border-border pb-1 mb-2">ステップ1: 法令プリセット選択</h4>
+        <h4 className="text-xs font-semibold text-primary border-b border-border pb-1 mb-2">📋 法令・規制</h4>
         <p className="text-[10px] text-muted-foreground mb-2">ONにすると、そのカテゴリのルールが自動的にAIチェックに含まれます。</p>
         <div className="space-y-2">
-          {PRESETS.map((preset) => {
-            const isActive = activePresets.includes(preset.id);
+          {LAW_PRESETS.map((preset) => {
+            const isActive = activeLaws.includes(preset.id);
             const isIndustry = preset.id === "industry_custom";
             return (
               <div key={preset.id}>
-                <div
-                  className={`border rounded-lg p-3 transition-colors ${
-                    isActive ? "border-primary/40 bg-primary/5" : "border-border bg-muted/10"
-                  }`}
-                >
+                <div className={`border rounded-lg p-3 transition-colors ${isActive ? "border-primary/40 bg-primary/5" : "border-border bg-muted/10"}`}>
                   <div className="flex items-center gap-3">
-                    <div className={`shrink-0 ${isActive ? "text-primary" : "text-muted-foreground"}`}>
-                      {preset.icon}
-                    </div>
+                    <div className={`shrink-0 ${isActive ? "text-primary" : "text-muted-foreground"}`}>{preset.icon}</div>
                     <div className="flex-1 min-w-0">
                       <Label className="text-xs font-medium cursor-pointer block">{preset.label}</Label>
                       <p className="text-[10px] text-muted-foreground">{preset.description}</p>
                     </div>
-                    <Switch checked={isActive} onCheckedChange={() => togglePreset(preset.id)} />
+                    <Switch checked={isActive} onCheckedChange={() => toggleLaw(preset.id)} />
                   </div>
                 </div>
                 {isIndustry && isActive && (
@@ -225,11 +256,46 @@ export default function LegalRegulationTemplate({ initialData, onChange }: Props
             );
           })}
         </div>
-        {activeCount > 0 && (
-          <p className="text-[10px] text-status-ok mt-2 font-medium">✅ {activeCount}カテゴリの法令ルールが適用されます</p>
+        {lawCount > 0 && (
+          <p className="text-[10px] text-status-ok mt-2 font-medium">✅ {lawCount}カテゴリの法令ルールが適用されます</p>
         )}
       </div>
 
+      {/* Step 1b: Platform presets */}
+      <div>
+        <h4 className="text-xs font-semibold text-primary border-b border-border pb-1 mb-2">📱 広告媒体別レギュレーション</h4>
+        <p className="text-[10px] text-muted-foreground mb-2">配信媒体を選択すると、入稿規定・審査ポリシーが自動的に追加されます。</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {PLATFORM_PRESETS.map((platform) => {
+            const isActive = activePlatforms.includes(platform.id);
+            return (
+              <div
+                key={platform.id}
+                className={`border rounded-lg p-3 transition-colors ${isActive ? "border-primary/40 bg-primary/5" : "border-border bg-muted/10"}`}
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-lg shrink-0">{platform.emoji}</span>
+                  <div className="flex-1 min-w-0">
+                    <Label className="text-xs font-medium cursor-pointer block">{platform.label}</Label>
+                    <p className="text-[10px] text-muted-foreground">{platform.description}</p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {platform.badges.map(b => (
+                        <Badge key={b} variant="secondary" className="text-[9px] px-1.5 py-0 h-4">{b}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                  <Switch checked={isActive} onCheckedChange={() => togglePlatform(platform.id)} />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        {platformCount > 0 && (
+          <p className="text-[10px] text-status-ok mt-2 font-medium">✅ {platformCount}媒体のレギュレーションが適用されます</p>
+        )}
+      </div>
+
+      {/* Step 2: Custom rules */}
       <div>
         <h4 className="text-xs font-semibold text-primary border-b border-border pb-1 mb-2">ステップ2: カスタムルール追加</h4>
         <p className="text-[10px] text-muted-foreground mb-1.5">プリセットに加えて、商材固有のルールを自由記述できます。</p>
