@@ -59,7 +59,9 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
   const [fileName, setFileName] = useState(existing?.file_name || "");
   const [fileData, setFileData] = useState(existing?.file_data || "");
   const [saving, setSaving] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState("");
   const [extractMsg, setExtractMsg] = useState("");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [wcheckParsed, setWcheckParsed] = useState<WCheckParsedData | null>(null);
   const [autoGenerateRules, setAutoGenerateRules] = useState(true);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
@@ -71,21 +73,30 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
 
   const isWCheck = materialType === "wcheck";
 
-  const MAX_FILE_DATA_SIZE = 1 * 1024 * 1024; // 1MB – skip base64 storage for larger files
+  const MAX_UPLOAD_SIZE = 50 * 1024 * 1024; // 50MB
+  const MAX_INLINE_SIZE = 512 * 1024; // 512KB – inline base64 in DB; larger → Storage
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
+
+    if (f.size > MAX_UPLOAD_SIZE) {
+      toast({ title: "ファイルサイズ超過", description: "50MBまでのファイルに対応しています", variant: "destructive" });
+      return;
+    }
+
     setFileName(f.name);
     if (!title) setTitle(f.name.replace(/\.[^.]+$/, ""));
 
-    // Only store base64 for small files to avoid DB payload limits
-    if (f.size <= MAX_FILE_DATA_SIZE) {
+    // Small files → inline base64, large files → upload to Storage on save
+    if (f.size <= MAX_INLINE_SIZE) {
       const reader = new FileReader();
       reader.onload = () => setFileData(reader.result as string);
       reader.readAsDataURL(f);
+      setPendingFile(null);
     } else {
-      setFileData(""); // Too large for DB – just keep file_name
+      setFileData("");
+      setPendingFile(f);
     }
 
     const ext = f.name.split(".").pop()?.toLowerCase() || "";
@@ -261,49 +272,70 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     return contentText;
   };
 
+  const uploadFileToStorage = async (file: File, materialId: string): Promise<string> => {
+    const ext = file.name.split(".").pop()?.toLowerCase() || "bin";
+    const path = `${scopeType}/${scopeId}/${materialId}.${ext}`;
+    setUploadProgress("ファイルをアップロード中...");
+    const { error } = await supabase.storage.from("reference-files").upload(path, file, { upsert: true });
+    if (error) throw new Error(`Storage upload failed: ${error.message}`);
+    // Return the path (not a public URL since bucket is private)
+    return `storage://reference-files/${path}`;
+  };
+
   const handleSave = async () => {
     if (!title.trim()) { toast({ title: "タイトルを入力してください", variant: "destructive" }); return; }
     setSaving(true);
+    setUploadProgress("");
 
-    const finalContentText = buildContentText();
+    try {
+      const finalContentText = buildContentText();
 
-    const payload = {
-      scope_type: scopeType,
-      scope_id: scopeId,
-      material_type: materialType,
-      title: title.trim(),
-      content_text: finalContentText || null,
-      file_name: fileName || null,
-      file_data: method === "file_upload" ? fileData || null : null,
-      source_url: method === "url_reference" ? sourceUrl || null : null,
-      source_type: method === "template" ? "template" : method,
-      is_active: true,
-      sort_order: 0,
-      created_by: user?.email || user?.id || null,
-      updated_at: new Date().toISOString(),
-    };
+      const payload: Record<string, any> = {
+        scope_type: scopeType,
+        scope_id: scopeId,
+        material_type: materialType,
+        title: title.trim(),
+        content_text: finalContentText || null,
+        file_name: fileName || null,
+        file_data: method === "file_upload" ? fileData || null : null,
+        source_url: method === "url_reference" ? sourceUrl || null : null,
+        source_type: method === "template" ? "template" : method,
+        is_active: true,
+        sort_order: 0,
+        created_by: user?.email || user?.id || null,
+        updated_at: new Date().toISOString(),
+      };
 
-    let result, error;
-    if (existing) {
-      const res = await supabase.from("reference_materials").update(payload).eq("id", existing.id).select().single();
-      result = res.data;
-      error = res.error;
-    } else {
-      const res = await supabase.from("reference_materials").insert(payload).select().single();
-      result = res.data;
-      error = res.error;
-    }
+      let result, error;
+      if (existing) {
+        const res = await supabase.from("reference_materials").update(payload).eq("id", existing.id).select().single();
+        result = res.data;
+        error = res.error;
+      } else {
+        const res = await supabase.from("reference_materials").insert(payload as any).select().single();
+        result = res.data;
+        error = res.error;
+      }
 
-    if (error) {
-      toast({ title: "エラー", description: error.message, variant: "destructive" });
-    } else {
+      if (error) throw new Error(error.message);
+
+      // Upload large file to Storage and update record with storage URL
+      if (pendingFile && result?.id) {
+        const storageUrl = await uploadFileToStorage(pendingFile, result.id);
+        await supabase.from("reference_materials").update({ file_data: storageUrl }).eq("id", result.id);
+      }
+
       toast({ title: existing ? "更新しました" : "保存しました" });
       onSaved();
       if (autoGenerateRules && finalContentText) {
         triggerRuleGeneration(finalContentText);
       }
+    } catch (err) {
+      toast({ title: "エラー", description: err instanceof Error ? err.message : "保存に失敗しました", variant: "destructive" });
+    } finally {
+      setSaving(false);
+      setUploadProgress("");
     }
-    setSaving(false);
   };
 
   const handleMethodChange = (m: InputMethod) => {
@@ -371,9 +403,10 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
             >
               <Upload className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
               <p className="text-xs text-muted-foreground">{fileName || "クリックしてファイルを選択"}</p>
-              <p className="text-[10px] text-muted-foreground/60 mt-0.5">対応: .xlsx .xls .csv .pdf .png .jpg .pptx .txt</p>
+              <p className="text-[10px] text-muted-foreground/60 mt-0.5">対応: .xlsx .xls .csv .pdf .png .jpg .pptx .txt（最大50MB）</p>
               <input ref={fileInputRef} type="file" className="hidden" accept=".xlsx,.xls,.csv,.pdf,.png,.jpg,.jpeg,.pptx,.txt" onChange={handleFile} />
             </div>
+            {uploadProgress && <p className="text-xs text-primary mt-1">{uploadProgress}</p>}
             {extractMsg && <p className="text-xs text-amber-600 mt-1">{extractMsg}</p>}
           </div>
         )}
