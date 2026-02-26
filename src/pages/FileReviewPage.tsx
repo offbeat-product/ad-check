@@ -21,7 +21,7 @@ import ShareLinkModal from "@/components/ShareLinkModal";
 import ImagePreview from "@/components/review/ImagePreview";
 import ScriptDisplay from "@/components/review/ScriptDisplay";
 import ReviewRightPanel from "@/components/review/ReviewRightPanel";
-import { ArrowLeft, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload } from "lucide-react";
+import { ArrowLeft, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight } from "lucide-react";
 import ReferenceStatusIndicator from "@/components/reference/ReferenceStatusIndicator";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -57,6 +57,7 @@ export default function FileReviewPage() {
   const [versions, setVersions] = useState<ProjectFile[]>([]);
   const [savedAnnotations, setSavedAnnotations] = useState<AnnotationData[]>([]);
   const [highlightAnnotation, setHighlightAnnotation] = useState<AnnotationData | null>(null);
+  const [siblingFiles, setSiblingFiles] = useState<ProjectFile[]>([]);
 
 
   const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
@@ -111,6 +112,47 @@ export default function FileReviewPage() {
     })();
     return () => { cancelled = true; };
   }, [fileId, projectId]);
+
+  // Fetch sibling files for navigation
+  useEffect(() => {
+    if (!file || !projectId) return;
+    let cancelled = false;
+    supabase.from("project_files").select("id, file_name, process_type, check_result_id, status, parent_file_id")
+      .eq("project_id", projectId)
+      .eq("process_type", file.process_type)
+      .is("parent_file_id", null)
+      .order("created_at", { ascending: true })
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        handleSupabaseError(error, "sibling files");
+        setSiblingFiles((data ?? []) as ProjectFile[]);
+      });
+    return () => { cancelled = true; };
+  }, [file?.process_type, projectId, file?.id]);
+
+  const currentIndex = siblingFiles.findIndex(f => f.id === fileId);
+  const prevFile = currentIndex > 0 ? siblingFiles[currentIndex - 1] : null;
+  const nextFile = currentIndex < siblingFiles.length - 1 ? siblingFiles[currentIndex + 1] : null;
+
+  const navigateToFile = useCallback((targetFileId: string) => {
+    navigate(`/project/${projectId}/file/${targetFileId}`, { replace: true });
+  }, [navigate, projectId]);
+
+  // Keyboard shortcuts for prev/next
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === "ArrowLeft" && prevFile) {
+        e.preventDefault();
+        navigateToFile(prevFile.id);
+      } else if (e.key === "ArrowRight" && nextFile) {
+        e.preventDefault();
+        navigateToFile(nextFile.id);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [prevFile, nextFile, navigateToFile]);
 
   const handleRunCheck = async () => {
     if (!file || !product || !user || !projectId) return;
@@ -349,11 +391,33 @@ export default function FileReviewPage() {
     <div className="flex h-screen overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <header className="border-b border-border px-4 py-2 flex items-center gap-3 bg-card shrink-0">
-          <button onClick={() => navigate(`/project/${projectId}`)} className="text-muted-foreground hover:text-foreground transition-colors">
+          <button onClick={() => navigate(`/project/${projectId}`)} className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
             <ArrowLeft className="h-4 w-4" />
           </button>
-          <span className="text-sm font-medium truncate">{file.file_name}</span>
 
+          {/* File navigation */}
+          <div className="flex items-center gap-1 min-w-0">
+            <button
+              onClick={() => prevFile && navigateToFile(prevFile.id)}
+              disabled={!prevFile}
+              className={cn("shrink-0 p-1 rounded transition-colors", prevFile ? "hover:bg-muted text-muted-foreground hover:text-foreground" : "text-muted-foreground/30 cursor-not-allowed")}
+              title={prevFile ? `← ${prevFile.file_name}` : undefined}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <span className="text-sm font-medium truncate">{file.file_name}</span>
+            {siblingFiles.length > 1 && (
+              <span className="text-xs text-muted-foreground shrink-0">({currentIndex + 1}/{siblingFiles.length})</span>
+            )}
+            <button
+              onClick={() => nextFile && navigateToFile(nextFile.id)}
+              disabled={!nextFile}
+              className={cn("shrink-0 p-1 rounded transition-colors", nextFile ? "hover:bg-muted text-muted-foreground hover:text-foreground" : "text-muted-foreground/30 cursor-not-allowed")}
+              title={nextFile ? `→ ${nextFile.file_name}` : undefined}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
           <Popover>
             <PopoverTrigger asChild>
               <button className={cn("px-3 py-1 rounded-full text-xs font-medium border shrink-0", sc.class)}>{sc.label}</button>
