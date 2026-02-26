@@ -247,8 +247,8 @@ export default function CheckPage() {
       setStorageUrl(null);
 
       try {
-        const ext = file.name.split(".").pop() || (isVideo ? "mp4" : "mp3");
-        const path = `${user.id}/${Date.now()}_${file.name}`;
+        const productId = product?.id || user.id;
+        const path = `${productId}/${Date.now()}_${file.name}`;
 
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
