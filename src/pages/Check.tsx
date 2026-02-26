@@ -59,6 +59,7 @@ export default function CheckPage() {
   const [videoFps, setVideoFps] = useState<string>("");
   const [videoUploadProgress, setVideoUploadProgress] = useState<number | null>(null);
   const [videoStorageUrl, setVideoStorageUrl] = useState<string | null>(null);
+  const [audioStorageUrl, setAudioStorageUrl] = useState<string | null>(null);
 
   // Rule info
   const [ruleCount, setRuleCount] = useState<number | null>(null);
@@ -220,6 +221,7 @@ export default function CheckPage() {
 
   const handleMediaUpload = useCallback(async (file: File) => {
     const isVideo = /\.(mp4|mov|webm)$/i.test(file.name) || file.type.startsWith("video/");
+    const isAudio = /\.(mp3|wav|m4a|aac|ogg|flac)$/i.test(file.name) || file.type.startsWith("audio/");
     const maxSize = isVideo ? 500 * 1024 * 1024 : 50 * 1024 * 1024;
     if (file.size > maxSize) {
       toast({
@@ -235,26 +237,27 @@ export default function CheckPage() {
     const url = URL.createObjectURL(file);
     setMediaPreviewUrl(url);
 
-    // For video files, upload to Storage
-    if (isVideo && user) {
-      setVideoUploadProgress(0);
-      setVideoStorageUrl(null);
-      try {
-        const ext = file.name.split(".").pop() || "mp4";
-        const path = `${user.id}/${Date.now()}.${ext}`;
+    // Upload to Storage for video or audio files
+    if ((isVideo || isAudio) && user) {
+      const bucketName = isVideo ? "videos" : "audios";
+      const setProgress = isVideo ? setVideoUploadProgress : () => {};
+      const setStorageUrl = isVideo ? setVideoStorageUrl : setAudioStorageUrl;
 
-        // Use XMLHttpRequest for progress tracking
+      if (isVideo) setVideoUploadProgress(0);
+      setStorageUrl(null);
+
+      try {
+        const ext = file.name.split(".").pop() || (isVideo ? "mp4" : "mp3");
+        const path = `${user.id}/${Date.now()}_${file.name}`;
+
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
         if (!token) throw new Error("認証が必要です");
 
-        const formData = new FormData();
-        formData.append("", file);
-
         await new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           xhr.upload.addEventListener("progress", (e) => {
-            if (e.lengthComputable) {
+            if (e.lengthComputable && isVideo) {
               setVideoUploadProgress(Math.round((e.loaded / e.total) * 100));
             }
           });
@@ -265,20 +268,19 @@ export default function CheckPage() {
           xhr.addEventListener("error", () => reject(new Error("Upload failed")));
 
           const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-          xhr.open("POST", `${supabaseUrl}/storage/v1/object/videos/${path}`);
+          xhr.open("POST", `${supabaseUrl}/storage/v1/object/${bucketName}/${path}`);
           xhr.setRequestHeader("Authorization", `Bearer ${token}`);
           xhr.setRequestHeader("x-upsert", "true");
           xhr.send(file);
         });
 
-        // Get public URL
-        const { data: urlData } = supabase.storage.from("videos").getPublicUrl(path);
-        setVideoStorageUrl(urlData.publicUrl);
-        setVideoUploadProgress(100);
+        const { data: urlData } = supabase.storage.from(bucketName).getPublicUrl(path);
+        setStorageUrl(urlData.publicUrl);
+        if (isVideo) setVideoUploadProgress(100);
         toast({ title: "アップロード完了", description: `${file.name} をアップロードしました` });
       } catch (err) {
-        setVideoUploadProgress(null);
-        setVideoStorageUrl(null);
+        if (isVideo) setVideoUploadProgress(null);
+        setStorageUrl(null);
         toast({ title: "アップロードエラー", description: err instanceof Error ? err.message : "アップロードに失敗しました", variant: "destructive" });
       }
     }
@@ -290,6 +292,7 @@ export default function CheckPage() {
     setMediaPreviewUrl(null);
     setVideoUploadProgress(null);
     setVideoStorageUrl(null);
+    setAudioStorageUrl(null);
   }, [mediaPreviewUrl]);
 
   const handleExecute = async () => {
@@ -312,6 +315,9 @@ export default function CheckPage() {
             file_name: mediaFile?.name || "",
             duration: null,
             format: null,
+          }, {
+            audioUrl: audioStorageUrl || "",
+            audioMimeType: mediaFile?.type || "",
           });
         } else {
           // BGM
@@ -322,6 +328,9 @@ export default function CheckPage() {
             file_name: mediaFile?.name || "",
             duration: bgmDuration ? Number(bgmDuration) : null,
             format: null,
+          }, {
+            audioUrl: audioStorageUrl || "",
+            audioMimeType: mediaFile?.type || "",
           });
         }
       } else if (processConfig.inputMode === "video") {
