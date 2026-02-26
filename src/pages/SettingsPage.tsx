@@ -19,7 +19,8 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, Trash2, UserPlus, Users, Mail, Shield, ShieldCheck, Eye, Copy, Check, MoreHorizontal, Link2, XCircle } from "lucide-react";
+import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { Plus, Trash2, UserPlus, Users, Mail, Shield, ShieldCheck, Eye, Copy, Check, MoreHorizontal, Link2, XCircle, Ban, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -73,6 +74,12 @@ export default function SettingsPage() {
   const [generatedLink, setGeneratedLink] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
+  // Confirmation dialogs
+  const [confirmAction, setConfirmAction] = useState<{
+    type: "deactivate" | "reactivate" | "delete";
+    profile: Profile;
+  } | null>(null);
+
   useEffect(() => {
     if (profile) {
       setDisplayName(profile.display_name || "");
@@ -96,7 +103,7 @@ export default function SettingsPage() {
   const fetchMembers = async () => {
     setMembersLoading(true);
     const [profilesRes, invitationsRes] = await Promise.all([
-      supabase.from("profiles").select("*").eq("is_active", true).order("created_at"),
+      supabase.from("profiles").select("*").order("created_at"),
       supabase.from("invitations").select("*").eq("status", "pending").order("created_at", { ascending: false }),
     ]);
     setProfiles(profilesRes.data ?? []);
@@ -237,11 +244,36 @@ export default function SettingsPage() {
   };
 
   const handleDeactivate = async (profileId: string) => {
-    const { error } = await supabase.from("profiles").update({ is_active: false }).eq("id", profileId);
+    const { error } = await supabase.from("profiles").update({ is_active: false, updated_at: new Date().toISOString() }).eq("id", profileId);
     if (!error) {
       toast({ title: "メンバーを無効化しました" });
       fetchMembers();
+    } else {
+      toast({ title: "エラー", description: error.message, variant: "destructive" });
     }
+    setConfirmAction(null);
+  };
+
+  const handleReactivate = async (profileId: string) => {
+    const { error } = await supabase.from("profiles").update({ is_active: true, updated_at: new Date().toISOString() }).eq("id", profileId);
+    if (!error) {
+      toast({ title: "メンバーを再有効化しました" });
+      fetchMembers();
+    } else {
+      toast({ title: "エラー", description: error.message, variant: "destructive" });
+    }
+    setConfirmAction(null);
+  };
+
+  const handleDeleteMember = async (profileId: string) => {
+    const { error } = await supabase.from("profiles").delete().eq("id", profileId);
+    if (!error) {
+      toast({ title: "メンバーを削除しました" });
+      fetchMembers();
+    } else {
+      toast({ title: "エラー", description: error.message, variant: "destructive" });
+    }
+    setConfirmAction(null);
   };
 
   const resetInviteModal = () => {
@@ -256,7 +288,8 @@ export default function SettingsPage() {
     return <div className="flex items-center justify-center h-full text-muted-foreground py-20">読み込み中...</div>;
   }
 
-  const activeCount = profiles.length;
+  const activeCount = profiles.filter(p => p.is_active).length;
+  const inactiveCount = profiles.filter(p => !p.is_active).length;
   const pendingCount = invitations.length;
 
   return (
@@ -333,7 +366,7 @@ export default function SettingsPage() {
                 <div className="flex items-center gap-2">
                   <h2 className="text-sm font-semibold">ワークスペースメンバー</h2>
                   <Badge variant="outline" className="text-[10px]">
-                    {activeCount}名{pendingCount > 0 && ` (招待中: ${pendingCount})`}
+                    {activeCount}名{inactiveCount > 0 && ` (無効: ${inactiveCount})`}{pendingCount > 0 && ` (招待中: ${pendingCount})`}
                   </Badge>
                 </div>
                 {isAdmin && (
@@ -353,9 +386,10 @@ export default function SettingsPage() {
                       const roleCfg = ROLE_CONFIG[p.role] || ROLE_CONFIG.viewer;
                       const Icon = ROLE_ICON[p.role] || Eye;
                       const isMe = p.id === user?.id;
+                      const isInactive = !p.is_active;
 
                       return (
-                        <div key={p.id} className="flex items-center gap-3 px-4 py-3">
+                        <div key={p.id} className={cn("flex items-center gap-3 px-4 py-3", isInactive && "opacity-50")}>
                           <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold shrink-0">
                             {(p.display_name || p.email).charAt(0).toUpperCase()}
                           </div>
@@ -369,6 +403,11 @@ export default function SettingsPage() {
                           <Badge className={cn("text-[10px] shrink-0", roleCfg.badgeClass)}>
                             <Icon className="h-3 w-3 mr-1" />{roleCfg.label}
                           </Badge>
+                          {isInactive && (
+                            <Badge variant="outline" className="text-[9px] h-4 bg-destructive/10 text-destructive border-destructive/30 shrink-0">
+                              <Ban className="h-2.5 w-2.5 mr-0.5" />無効
+                            </Badge>
+                          )}
                           {isAdmin && !isMe && (
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -377,16 +416,34 @@ export default function SettingsPage() {
                                 </button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                {Object.entries(ROLE_CONFIG).map(([key, cfg]) => (
-                                  key !== p.role && (
-                                    <DropdownMenuItem key={key} onClick={() => handleRoleChange(p.id, key)}>
-                                      {cfg.label}に変更
+                                {isInactive ? (
+                                  <>
+                                    <DropdownMenuItem onClick={() => setConfirmAction({ type: "reactivate", profile: p })}>
+                                      <RotateCcw className="h-3.5 w-3.5 mr-2" />再有効化
                                     </DropdownMenuItem>
-                                  )
-                                ))}
-                                <DropdownMenuItem className="text-destructive" onClick={() => handleDeactivate(p.id)}>
-                                  無効化
-                                </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem className="text-destructive" onClick={() => setConfirmAction({ type: "delete", profile: p })}>
+                                      <Trash2 className="h-3.5 w-3.5 mr-2" />削除
+                                    </DropdownMenuItem>
+                                  </>
+                                ) : (
+                                  <>
+                                    {Object.entries(ROLE_CONFIG).map(([key, cfg]) => (
+                                      key !== p.role && (
+                                        <DropdownMenuItem key={key} onClick={() => handleRoleChange(p.id, key)}>
+                                          {cfg.label}に変更
+                                        </DropdownMenuItem>
+                                      )
+                                    ))}
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem className="text-destructive" onClick={() => setConfirmAction({ type: "deactivate", profile: p })}>
+                                      <Ban className="h-3.5 w-3.5 mr-2" />無効化
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem className="text-destructive" onClick={() => setConfirmAction({ type: "delete", profile: p })}>
+                                      <Trash2 className="h-3.5 w-3.5 mr-2" />削除
+                                    </DropdownMenuItem>
+                                  </>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           )}
@@ -594,6 +651,43 @@ export default function SettingsPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Confirmation Dialog */}
+      <AlertDialog open={!!confirmAction} onOpenChange={(open) => { if (!open) setConfirmAction(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {confirmAction?.type === "deactivate" && "メンバーを無効化しますか？"}
+              {confirmAction?.type === "reactivate" && "メンバーを再有効化しますか？"}
+              {confirmAction?.type === "delete" && "メンバーを完全に削除しますか？"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {confirmAction?.type === "deactivate" &&
+                `${confirmAction.profile.email} を無効化すると、このユーザーはログインできなくなります。後から再有効化できます。`}
+              {confirmAction?.type === "reactivate" &&
+                `${confirmAction.profile.email} を再有効化すると、再びログインできるようになります。`}
+              {confirmAction?.type === "delete" &&
+                `${confirmAction.profile.email} を完全に削除しますか？この操作は取り消せません。`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+            <AlertDialogAction
+              className={confirmAction?.type !== "reactivate" ? "bg-destructive text-destructive-foreground hover:bg-destructive/90" : ""}
+              onClick={() => {
+                if (!confirmAction) return;
+                if (confirmAction.type === "deactivate") handleDeactivate(confirmAction.profile.id);
+                else if (confirmAction.type === "reactivate") handleReactivate(confirmAction.profile.id);
+                else if (confirmAction.type === "delete") handleDeleteMember(confirmAction.profile.id);
+              }}
+            >
+              {confirmAction?.type === "deactivate" && "無効化する"}
+              {confirmAction?.type === "reactivate" && "再有効化する"}
+              {confirmAction?.type === "delete" && "削除する"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
