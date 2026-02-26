@@ -108,6 +108,7 @@ export default function ProjectPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [processModalOpen, setProcessModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ file: ProjectFile; hasCheck: boolean } | null>(null);
 
   const { processes, updateProcess, reorderProcesses, addProcess, deleteProcess, resetToDefaults } = useProjectProcesses(id);
 
@@ -558,35 +559,48 @@ export default function ProjectPage() {
                           const versionLabel = file.parent_file_id ? `v${file.version_number}` : childVersions.length > 0 ? "v1" : null;
 
                           return (
-                            <button key={file.id} onClick={() => navigate(`/project/${id}/file/${file.id}`)}
-                              className="glass-card p-3 text-left hover:border-primary/30 transition-colors group">
-                              <div className="h-20 rounded-md bg-muted/50 flex items-center justify-center mb-2 overflow-hidden">
-                                {isImageFile && file.file_data ? (
-                                  <img src={file.file_data} alt="" className="w-full h-full object-cover" />
-                                ) : proc.process_key.includes("video") || proc.process_key === "vcon" ? (
-                                  <Film className="h-8 w-8 text-muted-foreground/30" />
-                                ) : proc.process_key.includes("script") || proc.process_key === "na_script" ? (
-                                  <FileText className="h-8 w-8 text-muted-foreground/30" />
-                                ) : (
-                                  <Image className="h-8 w-8 text-muted-foreground/30" />
-                                )}
-                              </div>
-                              <p className="text-xs font-medium truncate">{file.file_name}</p>
-                              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                                <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
-                                {cr && (
-                                  <Badge className={cn("text-[10px] h-4 px-1.5", getSubmitBadgeClass(cr.overall_status))}>
-                                    {getSubmitLabel(cr.overall_status).isOk ? "OK" : "NG"}
-                                  </Badge>
-                                )}
-                                {versionLabel && <span className="text-[10px] text-muted-foreground">{versionLabel}</span>}
-                              </div>
-                              {cc > 0 && (
-                                <div className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground">
-                                  <MessageCircle className="h-3 w-3" />{cc}
+                            <div key={file.id} className="relative group">
+                              <button onClick={() => navigate(`/project/${id}/file/${file.id}`)}
+                                className="glass-card p-3 text-left hover:border-primary/30 transition-colors w-full">
+                                <div className="h-20 rounded-md bg-muted/50 flex items-center justify-center mb-2 overflow-hidden">
+                                  {isImageFile && file.file_data ? (
+                                    <img src={file.file_data} alt="" className="w-full h-full object-cover" />
+                                  ) : proc.process_key.includes("video") || proc.process_key === "vcon" ? (
+                                    <Film className="h-8 w-8 text-muted-foreground/30" />
+                                  ) : proc.process_key.includes("script") || proc.process_key === "na_script" ? (
+                                    <FileText className="h-8 w-8 text-muted-foreground/30" />
+                                  ) : (
+                                    <Image className="h-8 w-8 text-muted-foreground/30" />
+                                  )}
                                 </div>
-                              )}
-                            </button>
+                                <p className="text-xs font-medium truncate">{file.file_name}</p>
+                                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                  <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
+                                  {cr && (
+                                    <Badge className={cn("text-[10px] h-4 px-1.5", getSubmitBadgeClass(cr.overall_status))}>
+                                      {getSubmitLabel(cr.overall_status).isOk ? "OK" : "NG"}
+                                    </Badge>
+                                  )}
+                                  {versionLabel && <span className="text-[10px] text-muted-foreground">{versionLabel}</span>}
+                                </div>
+                                {cc > 0 && (
+                                  <div className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground">
+                                    <MessageCircle className="h-3 w-3" />{cc}
+                                  </div>
+                                )}
+                              </button>
+                              {/* Delete button */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setDeleteTarget({ file, hasCheck: !!cr });
+                                }}
+                                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:scale-110 z-10"
+                                title="削除"
+                              >
+                                <span className="text-xs font-bold leading-none">×</span>
+                              </button>
+                            </div>
                           );
                         })}
                       </div>
@@ -614,6 +628,71 @@ export default function ProjectPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* File delete confirmation */}
+      <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>ファイルを削除</AlertDialogTitle>
+            <AlertDialogDescription>
+              「{deleteTarget?.file.file_name}」を削除します。この操作は元に戻せません。
+              {deleteTarget?.hasCheck && (
+                <span className="block mt-2 text-status-warning font-medium">
+                  ⚠️ チェック結果も同時に削除されます。
+                </span>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async () => {
+                if (!deleteTarget) return;
+                const f = deleteTarget.file;
+                try {
+                  // Delete from storage if applicable
+                  const bucket = getStorageBucket(f.process_type);
+                  if (bucket && f.file_data && !f.file_data.startsWith("data:")) {
+                    // Extract path from public URL
+                    const url = new URL(f.file_data);
+                    const pathMatch = url.pathname.match(new RegExp(`/storage/v1/object/public/${bucket}/(.+)`));
+                    if (pathMatch) {
+                      await supabase.storage.from(bucket).remove([decodeURIComponent(pathMatch[1])]);
+                    }
+                  }
+                  // Delete related check results, comments, etc.
+                  if (f.check_result_id) {
+                    await supabase.from("comments").delete().eq("check_result_id", f.check_result_id);
+                    await supabase.from("file_versions").delete().eq("check_result_id", f.check_result_id);
+                    await supabase.from("check_results").delete().eq("id", f.check_result_id);
+                  }
+                  // Delete child versions
+                  const childFiles = files.filter(cf => cf.parent_file_id === f.id);
+                  for (const child of childFiles) {
+                    if (child.check_result_id) {
+                      await supabase.from("comments").delete().eq("check_result_id", child.check_result_id);
+                      await supabase.from("file_versions").delete().eq("check_result_id", child.check_result_id);
+                      await supabase.from("check_results").delete().eq("id", child.check_result_id);
+                    }
+                    await supabase.from("project_files").delete().eq("id", child.id);
+                  }
+                  // Delete the file itself
+                  const { error } = await supabase.from("project_files").delete().eq("id", f.id);
+                  if (error) throw error;
+                  toast({ title: "ファイルを削除しました" });
+                  setFiles(prev => prev.filter(pf => pf.id !== f.id && pf.parent_file_id !== f.id));
+                } catch (err) {
+                  toast({ title: "削除エラー", description: err instanceof Error ? err.message : "削除に失敗しました", variant: "destructive" });
+                }
+                setDeleteTarget(null);
+              }}
+            >
+              削除する
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Upload modal */}
       <Dialog open={!!uploadModal} onOpenChange={(o) => !o && setUploadModal(null)}>
