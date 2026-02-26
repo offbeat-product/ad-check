@@ -1,11 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export const MATERIAL_TYPES = [
-  { id: "orientation", label: "オリエンシート", icon: "📊", color: "#3B82F6" },
-  { id: "wcheck", label: "Wチェックシート", icon: "✅", color: "#22C55E" },
-  { id: "brand_guideline", label: "ブランドガイドライン", icon: "🎨", color: "#8B5CF6" },
-  { id: "legal_rule", label: "法令レギュレーション", icon: "⚖️", color: "#EF4444" },
-  { id: "correction_history", label: "修正履歴", icon: "💬", color: "#F59E0B" },
+  { id: "orientation", label: "オリエンシート", icon: "📋", color: "#3B82F6", description: "クライアントからの制作依頼・要件定義" },
+  { id: "wcheck", label: "Wチェックシート", icon: "✅", color: "#22C55E", description: "社内QMチェック用・CL確認用チェックリスト" },
+  { id: "brand_guideline", label: "ブランドガイドライン", icon: "🎨", color: "#8B5CF6", description: "トンマナ・カラー・フォント・ロゴ使用規定" },
+  { id: "legal_rule", label: "法令レギュレーション", icon: "⚖️", color: "#EF4444", description: "薬機法・景表法・業界固有の広告規制" },
+  { id: "correction_history", label: "修正履歴", icon: "📝", color: "#F59E0B", description: "過去の修正指示・フィードバック・学び" },
 ] as const;
 
 export type MaterialType = (typeof MATERIAL_TYPES)[number]["id"];
