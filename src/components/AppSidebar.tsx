@@ -178,7 +178,7 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
     <aside className="w-[260px] min-w-[260px] h-screen bg-sidebar border-r border-sidebar-border flex flex-col overflow-hidden">
       <div className="px-5 py-5 border-b border-sidebar-border">
         <h1 className="text-lg font-bold flex items-center gap-2">
-          <Rocket className="h-5 w-5" />
+          <Rocket className="h-5 w-5" fill="currentColor" />
           <span className="gradient-text">CheckGo AI</span>
         </h1>
         <p className="text-[11px] text-muted-foreground mt-0.5">制作現場に、最速の「GO」を。</p>

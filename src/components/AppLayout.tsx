@@ -42,7 +42,7 @@ export default function AppLayout() {
             <Menu className="h-5 w-5" />
           </button>
           <h1 className="text-sm font-bold flex-1">
-            <Rocket className="h-4 w-4" /> <span className="gradient-text">CheckGo AI</span>
+            <Rocket className="h-4 w-4" fill="currentColor" /> <span className="gradient-text">CheckGo AI</span>
           </h1>
           <NotificationBell />
           <button
