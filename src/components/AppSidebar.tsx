@@ -20,11 +20,7 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
   const { profile } = useProfile();
   const navigate = useNavigate();
   const location = useLocation();
-  const tree = useProjectTree();
-  const { clients, products, projects } = tree;
-  const updateProjectOrder = (tree as any).updateProjectOrder as ((productId: string, orderedIds: string[]) => Promise<void>) | undefined;
-  const updateClientOrder = (tree as any).updateClientOrder as ((orderedIds: string[]) => Promise<void>) | undefined;
-  const updateProductOrder = (tree as any).updateProductOrder as ((clientId: string, orderedIds: string[]) => Promise<void>) | undefined;
+  const { clients, products, projects, updateProjectOrder, updateClientOrder, updateProductOrder } = useProjectTree() as ReturnType<typeof useProjectTree>;
 
   const [openClients, setOpenClients] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem("sb_open_clients") || "[]")); }

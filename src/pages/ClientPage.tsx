@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
@@ -17,6 +18,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Pencil, Trash2, Check, X, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { PROJECT_TREE_QUERY_KEY } from "@/hooks/useProjectTree";
 
 interface ProductWithStats extends Product {
   projectCount: number;
@@ -33,6 +35,7 @@ export default function ClientPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [client, setClient] = useState<Client | null>(null);
   const [products, setProducts] = useState<ProductWithStats[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,6 +103,7 @@ export default function ClientPage() {
     } else {
       setClient({ ...client, name: editName.trim() });
       toast({ title: "クライアント名を更新しました" });
+      queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
     }
     setEditing(false);
   };
@@ -116,6 +120,7 @@ export default function ClientPage() {
       toast({ title: "削除エラー", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "クライアントを削除しました" });
+      queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
       navigate("/dashboard");
     }
   };
@@ -135,6 +140,7 @@ export default function ClientPage() {
     } else {
       setProducts((prev) => prev.filter((p) => p.id !== product.id));
       toast({ title: `「${product.name}」を削除しました` });
+      queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
     }
   };
 
@@ -151,6 +157,7 @@ export default function ClientPage() {
       toast({ title: "エラー", description: error.message, variant: "destructive" });
     } else {
       toast({ title: `「${newProductName.trim()}」を登録しました` });
+      queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
       setNewProductOpen(false);
       setNewProductName("");
       setNewProductCode("");
