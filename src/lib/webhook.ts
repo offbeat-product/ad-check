@@ -1,9 +1,18 @@
 import type { CheckResult } from "./types";
+import { fetchWithRetry, type RetryOptions } from "./fetch-with-retry";
 
 const BASE_URL = "https://offbeat-inc.app.n8n.cloud/webhook";
 
-/** Determine the unified v2 webhook URL based on process type.
- *  Returns null for process types that are not yet supported. */
+const WEBHOOK_RETRY_OPTIONS: RetryOptions = {
+  maxRetries: 2,
+  timeoutMs: 120_000,
+  initialDelayMs: 2000,
+  onRetry: (attempt, error) => {
+    console.warn(`[Webhook] Retry ${attempt}: ${error.message}`);
+  },
+};
+
+/** Determine the unified v2 webhook URL based on process type. */
 export function getWebhookUrl(processType: string): string | null {
   switch (processType) {
     case "script":
@@ -27,26 +36,10 @@ export function getWebhookUrl(processType: string): string | null {
 
 function parseResponse(raw: any): CheckResult {
   let data = raw;
-
-  // Handle array response
-  if (Array.isArray(data)) {
-    data = data[0];
-  }
-
-  // Handle .data property
-  if (data?.data) {
-    data = Array.isArray(data.data) ? data.data[0] : data.data;
-  }
-
-  // Handle .json property
-  if (data?.json) {
-    data = data.json;
-  }
-
-  // Handle { success: true, result: {...} } wrapper
-  if (data?.result && typeof data.result === "object") {
-    data = data.result;
-  }
+  if (Array.isArray(data)) data = data[0];
+  if (data?.data) data = Array.isArray(data.data) ? data.data[0] : data.data;
+  if (data?.json) data = data.json;
+  if (data?.result && typeof data.result === "object") data = data.result;
 
   return {
     detected_case: data.detected_case || "",
@@ -61,39 +54,34 @@ function parseResponse(raw: any): CheckResult {
   };
 }
 
+async function webhookFetch(url: string, body: Record<string, any>): Promise<CheckResult> {
+  const res = await fetchWithRetry(
+    url,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    },
+    WEBHOOK_RETRY_OPTIONS
+  );
+  const raw = await res.json();
+  return parseResponse(raw);
+}
+
 export async function runScriptCheck(productId: string, scriptText: string, processType: string = "script", referenceContext?: string): Promise<CheckResult> {
   const body: Record<string, string> = { product_id: productId, process_type: processType, script_text: scriptText };
   if (referenceContext) body.reference_context = referenceContext;
-
-  const url = getWebhookUrl("script");
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) throw new Error(`Webhook error: ${res.status}`);
-  const raw = await res.json();
-  return parseResponse(raw);
+  const url = getWebhookUrl("script")!;
+  return webhookFetch(url, body);
 }
 
 export async function runSfCheck(productId: string, imageBase64: string, mediaType: string, processType: string = "sf", referenceContext?: string): Promise<CheckResult> {
   const body: Record<string, string> = { product_id: productId, process_type: processType, image_base64: imageBase64, media_type: mediaType };
   if (referenceContext) body.reference_context = referenceContext;
-
-  const url = getWebhookUrl("sf");
-  const res = await fetch(url!, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) throw new Error(`Webhook error: ${res.status}`);
-  const raw = await res.json();
-  return parseResponse(raw);
+  const url = getWebhookUrl("sf")!;
+  return webhookFetch(url, body);
 }
 
-/** Run audio check for narration/bgm processes */
 export async function runAudioCheck(
   productId: string,
   processType: string,
@@ -115,19 +103,9 @@ export async function runAudioCheck(
     metadata: metadata || { file_name: "", duration: null, format: null },
     reference_context: referenceContext ? JSON.parse(referenceContext) : {},
   };
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) throw new Error(`Webhook error: ${res.status}`);
-  const raw = await res.json();
-  return parseResponse(raw);
+  return webhookFetch(url, body);
 }
 
-/** Run video check for vcon/video_horizontal/video_vertical processes */
 export async function runVideoCheck(
   productId: string,
   processType: string,
@@ -153,19 +131,9 @@ export async function runVideoCheck(
     metadata: options?.metadata || {},
     reference_context: referenceContext ? JSON.parse(referenceContext) : {},
   };
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) throw new Error(`Webhook error: ${res.status}`);
-  const raw = await res.json();
-  return parseResponse(raw);
+  return webhookFetch(url, body);
 }
 
-/** Run comparison check: sends both original and revised content */
 export async function runComparisonCheck(
   productId: string,
   processType: string,
@@ -193,14 +161,5 @@ export async function runComparisonCheck(
   if (data.media_type) body.media_type = data.media_type;
   if (data.original_image_base64) body.original_image_base64 = data.original_image_base64;
   if (referenceContext) body.reference_context = referenceContext;
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-
-  if (!res.ok) throw new Error(`Webhook error: ${res.status}`);
-  const raw = await res.json();
-  return parseResponse(raw);
+  return webhookFetch(url, body);
 }
