@@ -7,6 +7,7 @@ import type { Json } from "@/integrations/supabase/types";
 import type { Product, Client, Project } from "@/lib/db-types";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { runScriptCheck, runSfCheck, runAudioCheck, runVideoCheck } from "@/lib/webhook";
+import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { compressImage, type CompressResult } from "@/lib/image-compress";
@@ -306,10 +307,23 @@ export default function CheckPage() {
     setLoading(true);
     setResult(null);
     try {
+      // Gather reference materials from DB
+      const refMaterials = await gatherReferenceMaterials(
+        selectedProjectId || "",
+        product.id,
+        selectedProcess
+      );
+      const referenceContext = JSON.stringify(refMaterials);
+      console.log('[CheckMate] reference_context材料数:', {
+        product_base: Object.entries(refMaterials.product_base).filter(([, v]) => v).length,
+        project_specific: Object.entries(refMaterials.project_specific).filter(([, v]) => v).length,
+        correction_patterns: refMaterials.correction_patterns?.length || 0,
+      });
+
       let res: CheckResult;
       if (processConfig.inputMode === "image") {
         if (!imageData) throw new Error("画像を選択してください");
-        res = await runSfCheck(product.id, imageData.base64, imageData.mediaType, selectedProcess);
+        res = await runSfCheck(product.id, imageData.base64, imageData.mediaType, selectedProcess, referenceContext);
       } else if (processConfig.inputMode === "audio") {
         // Convert audio file to base64 if available
         let audioBase64 = "";
@@ -336,7 +350,7 @@ export default function CheckPage() {
             audioUrl: audioStorageUrl || "",
             audioMimeType: mediaFile?.type || "",
             audioBase64,
-          });
+          }, referenceContext);
         } else {
           // BGM
           if (!bgmDescription.trim()) throw new Error("BGM情報を入力してください");
@@ -350,7 +364,7 @@ export default function CheckPage() {
             audioUrl: audioStorageUrl || "",
             audioMimeType: mediaFile?.type || "",
             audioBase64,
-          });
+          }, referenceContext);
         }
       } else if (processConfig.inputMode === "video") {
         if (!videoScriptText.trim()) throw new Error("テロップテキストを入力してください");
@@ -389,10 +403,10 @@ export default function CheckPage() {
           videoMimeType,
           videoBase64,
           metadata,
-        });
+        }, referenceContext);
       } else {
         if (!scriptText.trim()) throw new Error("テキストを入力してください");
-        res = await runScriptCheck(product.id, scriptText, selectedProcess);
+        res = await runScriptCheck(product.id, scriptText, selectedProcess, referenceContext);
       }
       setResult(res);
 
