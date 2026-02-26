@@ -3,13 +3,20 @@ import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 import { useToast } from "@/hooks/use-toast";
 
+type UserRole = "admin" | "member" | "viewer";
+
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
+  role: UserRole;
+  roleLoading: boolean;
+  isAdmin: boolean;
+  canEdit: boolean;
+  canManageTeam: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -18,7 +25,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
+  const [role, setRole] = useState<UserRole>("viewer");
+  const [roleLoading, setRoleLoading] = useState(true);
   const { toast } = useToast();
+
+  const fetchRole = useCallback(async (userId: string) => {
+    setRoleLoading(true);
+    try {
+      const { data } = await supabase.rpc("get_user_role", { _user_id: userId });
+      if (data) setRole(data as UserRole);
+    } catch (e) {
+      console.warn("[Auth] Failed to fetch role:", e);
+    } finally {
+      setRoleLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -26,7 +47,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(session?.user ?? null);
       setLoading(false);
 
-      // Handle token refresh failure
+      if (session?.user) {
+        // Defer to avoid Supabase deadlock
+        setTimeout(() => fetchRole(session.user.id), 0);
+      } else {
+        setRole("viewer");
+        setRoleLoading(false);
+      }
+
       if (event === "TOKEN_REFRESHED" && !session) {
         toast({
           title: "セッションの有効期限が切れました",
@@ -35,39 +63,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         });
       }
 
-      // Handle sign out (including forced sign out from expired refresh token)
       if (event === "SIGNED_OUT") {
         setUser(null);
         setSession(null);
+        setRole("viewer");
       }
     });
 
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (error) {
         console.warn("[Auth] Session recovery failed:", error.message);
-        // Clear stale session
         supabase.auth.signOut();
       }
       setSession(session);
       setUser(session?.user ?? null);
       setLoading(false);
+      if (session?.user) {
+        fetchRole(session.user.id);
+      } else {
+        setRoleLoading(false);
+      }
     });
 
     return () => subscription.unsubscribe();
-  }, [toast]);
+  }, [toast, fetchRole]);
 
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
-  }, []);
-
-  const signUp = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: window.location.origin },
-    });
-    if (error) throw error;
+    // Update last_login_at
+    const { data: { user: u } } = await supabase.auth.getUser();
+    if (u) {
+      await supabase.from("profiles").update({ last_login_at: new Date().toISOString() }).eq("id", u.id);
+    }
   }, []);
 
   const signOut = useCallback(async () => {
@@ -75,8 +103,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) throw error;
   }, []);
 
+  const resetPassword = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/login`,
+    });
+    if (error) throw error;
+  }, []);
+
+  const isAdmin = role === "admin";
+  const canEdit = role === "admin" || role === "member";
+  const canManageTeam = role === "admin";
+
   return (
-    <AuthContext.Provider value={{ user, session, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, role, roleLoading, isAdmin, canEdit, canManageTeam, signIn, signOut, resetPassword }}>
       {children}
     </AuthContext.Provider>
   );

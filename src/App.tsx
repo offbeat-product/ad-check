@@ -16,6 +16,8 @@ import AppLayout from "./components/AppLayout";
 import NotFound from "./pages/NotFound";
 import SharedViewPage from "./pages/SharedViewPage";
 import SettingsPage from "./pages/SettingsPage";
+import TeamPage from "./pages/TeamPage";
+import AcceptInvitePage from "./pages/AcceptInvitePage";
 
 const queryClient = new QueryClient();
 
@@ -43,6 +45,7 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+            <Route path="/accept-invite" element={<AcceptInvitePage />} />
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/check" element={<Check />} />
@@ -52,6 +55,7 @@ const App = () => (
               <Route path="/project/:id" element={<ProjectPage />} />
               <Route path="/project/:projectId/file/:fileId" element={<FileReviewPage />} />
               <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/team" element={<TeamPage />} />
             </Route>
             <Route path="/shared/:token" element={<SharedViewPage />} />
             <Route path="*" element={<NotFound />} />

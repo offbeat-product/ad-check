@@ -9,9 +9,9 @@ import { useToast } from "@/hooks/use-toast";
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
-  const { signIn, signUp } = useAuth();
+  const [resetMode, setResetMode] = useState(false);
+  const { signIn, resetPassword } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -19,9 +19,10 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     try {
-      if (isSignUp) {
-        await signUp(email, password);
-        toast({ title: "確認メールを送信しました", description: "メールを確認してアカウントを有効化してください。" });
+      if (resetMode) {
+        await resetPassword(email);
+        toast({ title: "パスワードリセットメールを送信しました", description: "メールを確認してパスワードを再設定してください。" });
+        setResetMode(false);
       } else {
         await signIn(email, password);
         navigate("/dashboard");
@@ -46,7 +47,7 @@ export default function Login() {
 
         <form onSubmit={handleSubmit} className="glass-card p-8 space-y-6">
           <h2 className="text-xl font-semibold">
-            {isSignUp ? "アカウント作成" : "ログイン"}
+            {resetMode ? "パスワードリセット" : "ログイン"}
           </h2>
 
           <div className="space-y-2">
@@ -61,30 +62,41 @@ export default function Login() {
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="password">パスワード</Label>
-            <Input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              minLength={6}
-            />
-          </div>
+          {!resetMode && (
+            <div className="space-y-2">
+              <Label htmlFor="password">パスワード</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                minLength={6}
+              />
+            </div>
+          )}
 
           <Button type="submit" disabled={loading} className="w-full bg-primary text-primary-foreground font-semibold hover:opacity-90 transition-opacity">
-            {loading ? "処理中..." : isSignUp ? "アカウント作成" : "ログイン"}
+            {loading ? "処理中..." : resetMode ? "リセットメールを送信" : "ログイン"}
           </Button>
 
           <p className="text-center text-sm text-muted-foreground">
-            {isSignUp ? "既にアカウントをお持ちですか？" : "アカウントをお持ちでないですか？"}
-            <button type="button" onClick={() => setIsSignUp(!isSignUp)} className="ml-1 text-primary hover:underline">
-              {isSignUp ? "ログイン" : "新規登録"}
-            </button>
+            {resetMode ? (
+              <button type="button" onClick={() => setResetMode(false)} className="text-primary hover:underline">
+                ログインに戻る
+              </button>
+            ) : (
+              <button type="button" onClick={() => setResetMode(true)} className="text-primary hover:underline">
+                パスワードを忘れた方はこちら
+              </button>
+            )}
           </p>
         </form>
+
+        <p className="text-center text-xs text-muted-foreground">
+          招待制のため、管理者からの招待が必要です
+        </p>
       </div>
     </div>
   );
