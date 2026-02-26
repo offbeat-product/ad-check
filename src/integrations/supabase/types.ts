@@ -732,6 +732,39 @@ export type Database = {
           },
         ]
       }
+      workspace_members: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          invited_by: string | null
+          role: string
+          status: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          invited_by?: string | null
+          role?: string
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          invited_by?: string | null
+          role?: string
+          status?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       share_links_safe: {
@@ -836,8 +869,13 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_workspace_role: { Args: { _user_id: string }; Returns: string }
       is_project_member: {
         Args: { p_project_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      is_workspace_member_accepted: {
+        Args: { _user_id: string }
         Returns: boolean
       }
       lookup_profile_by_email: {

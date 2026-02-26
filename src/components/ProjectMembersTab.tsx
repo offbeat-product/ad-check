@@ -12,6 +12,8 @@ type ProjectMember = Tables<"project_members"> & { profile?: { display_name: str
 
 const ROLE_LABELS: Record<string, string> = {
   owner: "オーナー",
+  admin: "管理者",
+  member: "メンバー",
   editor: "編集者",
   viewer: "閲覧者",
 };
