@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { runScriptCheck, runSfCheck, getWebhookUrl } from "@/lib/webhook";
+import { runScriptCheck, runSfCheck, runAudioCheck, runVideoCheck, getWebhookUrl } from "@/lib/webhook";
 import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import type { CheckItem } from "@/lib/types";
@@ -118,8 +118,7 @@ export default function FileReviewPage() {
     try {
       const processKey = file.process_type || "script";
       const aiCfg = AI_CHECK_CONFIG[processKey];
-      const isImageMode = aiCfg?.inputMode === "image";
-      const processType = isImageMode ? "sf" : processKey;
+      const inputMode = aiCfg?.inputMode || "text";
 
       // Gather reference materials
       const refMaterials = await gatherReferenceMaterials(projectId, product.id, processKey);
@@ -127,15 +126,33 @@ export default function FileReviewPage() {
 
       let res: { overall_status: string; detected_case?: string; check_items: CheckItem[]; ng_count: number; warning_count: number; ok_count: number; total_checks: number };
 
-      if (isImageMode) {
+      if (inputMode === "image") {
         const base64 = file.file_data?.replace(/^data:[^;]+;base64,/, "") || "";
         const mediaType = file.file_data?.match(/^data:([^;]+);/)?.[1] || "image/jpeg";
         res = await runSfCheck(product.id, base64, mediaType, processKey, referenceContext);
+      } else if (inputMode === "audio") {
+        // Audio processes: send file_data as script_text (text content of the file)
+        res = await runAudioCheck(product.id, processKey, file.file_data || "", {
+          file_name: file.file_name || "",
+          duration: null,
+          format: null,
+        }, {
+          audioUrl: "",
+          audioMimeType: "",
+        }, referenceContext);
+      } else if (inputMode === "video") {
+        // Video processes: send file_data as script_text
+        res = await runVideoCheck(product.id, processKey, file.file_data || "", {
+          videoUrl: "",
+          videoMimeType: "",
+          videoBase64: "",
+          metadata: { file_name: file.file_name || "" },
+        }, referenceContext);
       } else {
         res = await runScriptCheck(product.id, file.file_data || "", processKey, referenceContext);
       }
 
-      const inputData = isImageMode ? { image_base64: file.file_data } : { script_text: file.file_data };
+      const inputData = inputMode === "image" ? { image_base64: file.file_data } : { script_text: file.file_data };
 
       const { data: crData, error: insertErr } = await supabase.from("check_results").insert([{
         user_id: user.id,
@@ -143,8 +160,8 @@ export default function FileReviewPage() {
         product_code: product.code,
         product_name: product.name,
         process_type: processKey,
-        input_type: isImageMode ? "image" : "text",
-        input_text: isImageMode ? null : file.file_data,
+        input_type: inputMode === "image" ? "image" : "text",
+        input_text: inputMode === "image" ? null : file.file_data,
         overall_status: res.overall_status,
         detected_case: res.detected_case,
         ng_count: res.ng_count,
@@ -172,7 +189,8 @@ export default function FileReviewPage() {
       toast({ title: "チェック完了", description: `Grade: ${res.overall_status}` });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "不明なエラー";
-      toast({ title: "チェックエラー", description: message, variant: "destructive" });
+      console.error("[FileReview] AIチェックエラー:", err);
+      toast({ title: "チェック送信に失敗しました。再度お試しください", description: message, variant: "destructive" });
     } finally {
       setChecking(false);
     }
