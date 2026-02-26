@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
-import { useWorkspaceMembers, WORKSPACE_ROLE_CONFIG } from "@/hooks/useWorkspaceMembers";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -14,12 +13,26 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Plus, Trash2, UserPlus, Users, Mail, Shield, ShieldCheck, Eye } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Plus, Trash2, UserPlus, Users, Mail, Shield, ShieldCheck, Eye, Copy, Check, MoreHorizontal, Link2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Client = Tables<"clients">;
 type Product = Tables<"products">;
+type Profile = Tables<"profiles">;
+type Invitation = Tables<"invitations">;
+
+const ROLE_CONFIG: Record<string, { label: string; description: string; badgeClass: string }> = {
+  admin: { label: "管理者", description: "全操作+メンバー管理+削除", badgeClass: "bg-destructive/10 text-destructive" },
+  member: { label: "メンバー", description: "編集+アップロード+チェック実行", badgeClass: "bg-primary/10 text-primary" },
+  viewer: { label: "閲覧者", description: "閲覧のみ", badgeClass: "bg-muted text-muted-foreground" },
+};
 
 const ROLE_ICON: Record<string, React.ElementType> = {
   admin: ShieldCheck,
@@ -28,9 +41,8 @@ const ROLE_ICON: Record<string, React.ElementType> = {
 };
 
 export default function SettingsPage() {
-  const { user } = useAuth();
+  const { user, isAdmin, canEdit } = useAuth();
   const { profile, loading: profileLoading, updateProfile } = useProfile();
-  const { members, loading: membersLoading, isAdmin, inviteMember, updateMemberRole, removeMember } = useWorkspaceMembers();
   const { toast } = useToast();
 
   // Profile state
@@ -47,10 +59,19 @@ export default function SettingsPage() {
   const [orgTab, setOrgTab] = useState("clients");
   const [newClientName, setNewClientName] = useState("");
 
-  // Workspace invite
+  // Members
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [membersLoading, setMembersLoading] = useState(true);
+
+  // Invite modal
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteDisplayName, setInviteDisplayName] = useState("");
   const [inviteRole, setInviteRole] = useState("member");
   const [inviting, setInviting] = useState(false);
+  const [generatedLink, setGeneratedLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (profile) {
@@ -70,6 +91,21 @@ export default function SettingsPage() {
       setProducts(pr.data ?? []);
     };
     fetchOrg();
+  }, []);
+
+  const fetchMembers = async () => {
+    setMembersLoading(true);
+    const [profilesRes, invitationsRes] = await Promise.all([
+      supabase.from("profiles").select("*").eq("is_active", true).order("created_at"),
+      supabase.from("invitations").select("*").eq("status", "pending").order("created_at", { ascending: false }),
+    ]);
+    setProfiles(profilesRes.data ?? []);
+    setInvitations(invitationsRes.data ?? []);
+    setMembersLoading(false);
+  };
+
+  useEffect(() => {
+    fetchMembers();
   }, []);
 
   const handleSaveProfile = async () => {
@@ -105,40 +141,123 @@ export default function SettingsPage() {
     toast({ title: "クライアントを削除しました" });
   };
 
-  const handleInvite = async () => {
-    if (!inviteEmail.trim()) return;
+  // Invitation
+  const handleCreateInvitation = async () => {
+    if (!inviteEmail.trim() || !user) return;
     setInviting(true);
-    const result = await inviteMember(inviteEmail.trim(), inviteRole);
-    if (result.error) {
-      toast({ title: "招待エラー", description: result.error, variant: "destructive" });
-    } else {
-      toast({ title: "メンバーを招待しました", description: `${inviteEmail} を${WORKSPACE_ROLE_CONFIG[inviteRole]?.label}として招待しました` });
-      setInviteEmail("");
+
+    try {
+      // Check if already a member
+      const existingProfile = profiles.find(p => p.email === inviteEmail.trim());
+      if (existingProfile) {
+        toast({ title: "エラー", description: "このメールアドレスは既に登録されています", variant: "destructive" });
+        setInviting(false);
+        return;
+      }
+
+      // Check if already invited
+      const existingInvite = invitations.find(i => i.email === inviteEmail.trim());
+      if (existingInvite) {
+        toast({ title: "エラー", description: "このメールアドレスは既に招待済みです", variant: "destructive" });
+        setInviting(false);
+        return;
+      }
+
+      // Create invitation record
+      const { data: invitation, error } = await supabase
+        .from("invitations")
+        .insert({
+          email: inviteEmail.trim(),
+          role: inviteRole,
+          display_name: inviteDisplayName.trim() || null,
+          invited_by: user.id,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Also create workspace member record
+      await supabase.from("workspace_members").insert({
+        email: inviteEmail.trim(),
+        role: inviteRole,
+        status: "pending",
+        invited_by: user.id,
+      });
+
+      // Try to create auth account (sends confirmation email)
+      await supabase.auth.signUp({
+        email: inviteEmail.trim(),
+        password: crypto.randomUUID().slice(0, 16),
+        options: {
+          data: { display_name: inviteDisplayName.trim() || undefined, role: inviteRole },
+          emailRedirectTo: `${window.location.origin}/accept-invite`,
+        },
+      });
+
+      // Generate invite link
+      const link = `${window.location.origin}/accept-invite?token=${invitation.token}`;
+      setGeneratedLink(link);
+      await fetchMembers();
+    } catch (err: any) {
+      toast({ title: "エラー", description: err.message, variant: "destructive" });
     }
     setInviting(false);
   };
 
-  const handleRoleChange = async (memberId: string, role: string) => {
-    const result = await updateMemberRole(memberId, role);
-    if (result.error) {
-      toast({ title: "エラー", description: result.error, variant: "destructive" });
-    } else {
-      toast({ title: "権限を変更しました" });
+  const handleCopyLink = async (link: string) => {
+    await navigator.clipboard.writeText(link);
+    setCopied(true);
+    toast({ title: "招待リンクをコピーしました", description: "相手に共有してください。" });
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCancelInvitation = async (id: string) => {
+    const { error } = await supabase.from("invitations").update({ status: "cancelled" }).eq("id", id);
+    if (!error) {
+      toast({ title: "招待をキャンセルしました" });
+      fetchMembers();
     }
   };
 
-  const handleRemoveMember = async (memberId: string) => {
-    const result = await removeMember(memberId);
-    if (result.error) {
-      toast({ title: "エラー", description: result.error, variant: "destructive" });
+  const handleCopyInviteLink = async (token: string) => {
+    const link = `${window.location.origin}/accept-invite?token=${token}`;
+    await navigator.clipboard.writeText(link);
+    toast({ title: "招待リンクをコピーしました" });
+  };
+
+  const handleRoleChange = async (profileId: string, newRole: string) => {
+    const { error } = await supabase.from("profiles").update({ role: newRole }).eq("id", profileId);
+    if (error) {
+      toast({ title: "エラー", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "メンバーを削除しました" });
+      toast({ title: "権限を変更しました" });
+      fetchMembers();
     }
+  };
+
+  const handleDeactivate = async (profileId: string) => {
+    const { error } = await supabase.from("profiles").update({ is_active: false }).eq("id", profileId);
+    if (!error) {
+      toast({ title: "メンバーを無効化しました" });
+      fetchMembers();
+    }
+  };
+
+  const resetInviteModal = () => {
+    setInviteEmail("");
+    setInviteDisplayName("");
+    setInviteRole("member");
+    setGeneratedLink(null);
+    setCopied(false);
   };
 
   if (profileLoading) {
     return <div className="flex items-center justify-center h-full text-muted-foreground py-20">読み込み中...</div>;
   }
+
+  const activeCount = profiles.length;
+  const pendingCount = invitations.length;
 
   return (
     <div className="min-h-screen">
@@ -154,7 +273,7 @@ export default function SettingsPage() {
             <TabsTrigger value="members" className="flex items-center gap-1">
               <Users className="h-3.5 w-3.5" />メンバー
             </TabsTrigger>
-            <TabsTrigger value="organization">組織管理</TabsTrigger>
+            {isAdmin && <TabsTrigger value="organization">組織管理</TabsTrigger>}
           </TabsList>
 
           {/* Profile Tab */}
@@ -202,14 +321,6 @@ export default function SettingsPage() {
                 </div>
                 <Switch checked={notifyComment} onCheckedChange={setNotifyComment} />
               </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium">プロジェクト招待</p>
-                  <p className="text-xs text-muted-foreground">プロジェクトに招待された時に通知</p>
-                </div>
-                <Switch checked={true} disabled />
-              </div>
-              <p className="text-[10px] text-muted-foreground">※ 招待通知はOFFにできません</p>
               <Button size="sm" onClick={handleSaveNotifications}>保存</Button>
             </div>
           </TabsContent>
@@ -217,216 +328,272 @@ export default function SettingsPage() {
           {/* Members Tab */}
           <TabsContent value="members">
             <div className="space-y-6">
-              {/* Invite Form */}
-              {isAdmin && (
-                <div className="glass-card p-6 space-y-4">
-                  <h2 className="text-sm font-semibold flex items-center gap-2">
-                    <UserPlus className="h-4 w-4" />メンバーを招待
-                  </h2>
-                  <p className="text-xs text-muted-foreground">
-                    招待されたメンバーはワークスペース内の全データにアクセスできます。権限レベルで操作範囲を制御します。
-                  </p>
-                  <div className="flex gap-2">
-                    <Input
-                      type="email"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      placeholder="メールアドレスを入力"
-                      className="h-9 text-sm flex-1"
-                      onKeyDown={(e) => e.key === "Enter" && handleInvite()}
-                    />
-                    <Select value={inviteRole} onValueChange={setInviteRole}>
-                      <SelectTrigger className="w-32 h-9 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(WORKSPACE_ROLE_CONFIG).map(([key, cfg]) => (
-                          <SelectItem key={key} value={key}>
-                            <div className="flex items-center gap-1.5">
-                              {cfg.label}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button size="sm" className="h-9" onClick={handleInvite} disabled={inviting || !inviteEmail.trim()}>
-                      <Mail className="h-3.5 w-3.5 mr-1" />
-                      {inviting ? "送信中..." : "招待"}
-                    </Button>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-3 pt-2">
-                    {Object.entries(WORKSPACE_ROLE_CONFIG).map(([key, cfg]) => {
-                      const Icon = ROLE_ICON[key] || Shield;
-                      return (
-                        <div key={key} className="p-3 rounded-lg border border-border bg-muted/20 text-center">
-                          <Icon className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
-                          <p className="text-xs font-medium">{cfg.label}</p>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">{cfg.description}</p>
-                        </div>
-                      );
-                    })}
-                  </div>
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-semibold">ワークスペースメンバー</h2>
+                  <Badge variant="outline" className="text-[10px]">
+                    {activeCount}名{pendingCount > 0 && ` (招待中: ${pendingCount})`}
+                  </Badge>
                 </div>
-              )}
+                {isAdmin && (
+                  <Button size="sm" className="h-8 text-xs" onClick={() => { resetInviteModal(); setInviteOpen(true); }}>
+                    <UserPlus className="h-3.5 w-3.5 mr-1" />メンバーを招待
+                  </Button>
+                )}
+              </div>
 
-              {/* Members List */}
-              <div className="glass-card p-6 space-y-4">
-                <h2 className="text-sm font-semibold flex items-center gap-2">
-                  <Users className="h-4 w-4" />ワークスペースメンバー
-                  <Badge variant="outline" className="text-[10px] ml-1">{members.length}名</Badge>
-                </h2>
-
+              {/* Active Members */}
+              <div className="glass-card divide-y divide-border overflow-hidden">
                 {membersLoading ? (
                   <p className="text-sm text-muted-foreground text-center py-8">読み込み中...</p>
-                ) : members.length === 0 ? (
-                  <div className="text-center py-8">
-                    <Users className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
-                    <p className="text-sm text-muted-foreground">メンバーがいません</p>
-                    <p className="text-xs text-muted-foreground/60 mt-1">上のフォームからメンバーを招待してください</p>
-                  </div>
                 ) : (
-                  <div className="space-y-1">
-                    {members.map((m) => {
-                      const roleCfg = WORKSPACE_ROLE_CONFIG[m.role] || WORKSPACE_ROLE_CONFIG.viewer;
-                      const Icon = ROLE_ICON[m.role] || Shield;
-                      const isMe = m.user_id === user?.id;
+                  <>
+                    {profiles.map((p) => {
+                      const roleCfg = ROLE_CONFIG[p.role] || ROLE_CONFIG.viewer;
+                      const Icon = ROLE_ICON[p.role] || Eye;
+                      const isMe = p.id === user?.id;
 
                       return (
-                        <div key={m.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors">
+                        <div key={p.id} className="flex items-center gap-3 px-4 py-3">
                           <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold shrink-0">
-                            {(m.display_name || m.email).charAt(0).toUpperCase()}
+                            {(p.display_name || p.email).charAt(0).toUpperCase()}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium truncate">
-                                {m.display_name || m.email.split("@")[0]}
-                                {isMe && <span className="text-xs text-muted-foreground ml-1">(自分)</span>}
-                              </p>
-                              {m.status === "pending" && (
-                                <Badge variant="outline" className="text-[9px] h-4 bg-status-warning/10 text-status-warning border-status-warning/30">
-                                  招待中
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-xs text-muted-foreground truncate">{m.email}</p>
+                            <p className="text-sm font-medium truncate">
+                              {p.display_name || p.email.split("@")[0]}
+                              {isMe && <span className="text-xs text-muted-foreground ml-1">(自分)</span>}
+                            </p>
+                            <p className="text-xs text-muted-foreground truncate">{p.email}</p>
                           </div>
-
-                          {isAdmin && !isMe ? (
-                            <div className="flex items-center gap-2 shrink-0">
-                              <Select value={m.role} onValueChange={(role) => handleRoleChange(m.id, role)}>
-                                <SelectTrigger className="w-24 h-7 text-xs">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {Object.entries(WORKSPACE_ROLE_CONFIG).map(([key, cfg]) => (
-                                    <SelectItem key={key} value={key} className="text-xs">{cfg.label}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                  <button className="p-1.5 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors">
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>メンバーを削除</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      「{m.display_name || m.email}」をワークスペースから削除します。この操作は元に戻せません。
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                                    <AlertDialogAction
-                                      onClick={() => handleRemoveMember(m.id)}
-                                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                                    >
-                                      削除する
-                                    </AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
-                            </div>
-                          ) : (
-                            <Badge className={cn("text-[10px] shrink-0", roleCfg.badgeClass)}>
-                              <Icon className="h-3 w-3 mr-1" />
-                              {roleCfg.label}
-                            </Badge>
+                          <Badge className={cn("text-[10px] shrink-0", roleCfg.badgeClass)}>
+                            <Icon className="h-3 w-3 mr-1" />{roleCfg.label}
+                          </Badge>
+                          {isAdmin && !isMe && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <button className="p-1 rounded hover:bg-muted transition-colors">
+                                  <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+                                </button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {Object.entries(ROLE_CONFIG).map(([key, cfg]) => (
+                                  key !== p.role && (
+                                    <DropdownMenuItem key={key} onClick={() => handleRoleChange(p.id, key)}>
+                                      {cfg.label}に変更
+                                    </DropdownMenuItem>
+                                  )
+                                ))}
+                                <DropdownMenuItem className="text-destructive" onClick={() => handleDeactivate(p.id)}>
+                                  無効化
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           )}
                         </div>
                       );
                     })}
-                  </div>
+
+                    {/* Pending Invitations */}
+                    {invitations.map((inv) => (
+                      <div key={inv.id} className="flex items-center gap-3 px-4 py-3 bg-muted/20">
+                        <div className="w-8 h-8 rounded-full bg-muted text-muted-foreground flex items-center justify-center shrink-0">
+                          <Mail className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{inv.email}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {ROLE_CONFIG[inv.role]?.label || inv.role} · 有効期限: {new Date(inv.expires_at).toLocaleDateString("ja-JP")}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="text-[9px] h-4 bg-amber-500/10 text-amber-600 border-amber-500/30 shrink-0">
+                          招待中
+                        </Badge>
+                        {isAdmin && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <button className="p-1 rounded hover:bg-muted transition-colors">
+                                <MoreHorizontal className="h-4 w-4 text-muted-foreground" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleCopyInviteLink(inv.token)}>
+                                <Link2 className="h-3.5 w-3.5 mr-2" />リンクをコピー
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="text-destructive" onClick={() => handleCancelInvitation(inv.id)}>
+                                <XCircle className="h-3.5 w-3.5 mr-2" />招待キャンセル
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
+                    ))}
+
+                    {profiles.length === 0 && invitations.length === 0 && (
+                      <div className="text-center py-8">
+                        <Users className="h-8 w-8 mx-auto mb-2 text-muted-foreground/30" />
+                        <p className="text-sm text-muted-foreground">メンバーがいません</p>
+                      </div>
+                    )}
+                  </>
                 )}
+              </div>
+
+              {/* Role explanation */}
+              <div className="grid grid-cols-3 gap-3">
+                {Object.entries(ROLE_CONFIG).map(([key, cfg]) => {
+                  const Icon = ROLE_ICON[key] || Shield;
+                  return (
+                    <div key={key} className="p-3 rounded-lg border border-border bg-muted/20 text-center">
+                      <Icon className="h-4 w-4 mx-auto mb-1 text-muted-foreground" />
+                      <p className="text-xs font-medium">{cfg.label}</p>
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{cfg.description}</p>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </TabsContent>
 
           {/* Organization Tab */}
-          <TabsContent value="organization">
-            <div className="glass-card p-6 space-y-5">
-              <h2 className="text-sm font-semibold">組織管理</h2>
-              <Tabs value={orgTab} onValueChange={setOrgTab}>
-                <TabsList>
-                  <TabsTrigger value="clients">クライアント</TabsTrigger>
-                  <TabsTrigger value="products">商材</TabsTrigger>
-                </TabsList>
-                <TabsContent value="clients" className="mt-4 space-y-3">
-                  <div className="flex gap-2">
-                    <Input value={newClientName} onChange={(e) => setNewClientName(e.target.value)} placeholder="クライアント名" className="h-8 text-sm flex-1" onKeyDown={(e) => e.key === "Enter" && handleAddClient()} />
-                    <Button size="sm" className="h-8 text-xs" onClick={handleAddClient}>
-                      <Plus className="h-3 w-3 mr-1" />追加
-                    </Button>
-                  </div>
-                  <div className="space-y-1">
-                    {clients.map((c) => {
-                      const productCount = products.filter((p) => p.client_id === c.id).length;
-                      return (
-                        <div key={c.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors">
-                          <div>
-                            <p className="text-sm font-medium">{c.name}</p>
-                            <p className="text-xs text-muted-foreground">商材: {productCount}</p>
-                          </div>
-                          <button onClick={() => handleDeleteClient(c.id)} className="p-1 rounded hover:bg-muted transition-colors">
-                            <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
-                          </button>
-                        </div>
-                      );
-                    })}
-                    {clients.length === 0 && (
-                      <p className="text-sm text-muted-foreground text-center py-4">クライアントがありません</p>
-                    )}
-                  </div>
-                </TabsContent>
-                <TabsContent value="products" className="mt-4 space-y-3">
-                  <div className="space-y-1">
-                    {products.map((p) => {
-                      const clientName = clients.find((c) => c.id === p.client_id)?.name || "";
-                      return (
-                        <div key={p.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors">
-                          <div className="flex items-center gap-2">
-                            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color ? `hsl(${p.color})` : "hsl(var(--primary))" }} />
+          {isAdmin && (
+            <TabsContent value="organization">
+              <div className="glass-card p-6 space-y-5">
+                <h2 className="text-sm font-semibold">組織管理</h2>
+                <Tabs value={orgTab} onValueChange={setOrgTab}>
+                  <TabsList>
+                    <TabsTrigger value="clients">クライアント</TabsTrigger>
+                    <TabsTrigger value="products">商材</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="clients" className="mt-4 space-y-3">
+                    <div className="flex gap-2">
+                      <Input value={newClientName} onChange={(e) => setNewClientName(e.target.value)} placeholder="クライアント名" className="h-8 text-sm flex-1" onKeyDown={(e) => e.key === "Enter" && handleAddClient()} />
+                      <Button size="sm" className="h-8 text-xs" onClick={handleAddClient}>
+                        <Plus className="h-3 w-3 mr-1" />追加
+                      </Button>
+                    </div>
+                    <div className="space-y-1">
+                      {clients.map((c) => {
+                        const productCount = products.filter((p) => p.client_id === c.id).length;
+                        return (
+                          <div key={c.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors">
                             <div>
-                              <p className="text-sm font-medium">{p.name}</p>
-                              <p className="text-xs text-muted-foreground">{clientName} · {p.code}</p>
+                              <p className="text-sm font-medium">{c.name}</p>
+                              <p className="text-xs text-muted-foreground">商材: {productCount}</p>
                             </div>
+                            <button onClick={() => handleDeleteClient(c.id)} className="p-1 rounded hover:bg-muted transition-colors">
+                              <Trash2 className="h-3.5 w-3.5 text-muted-foreground" />
+                            </button>
                           </div>
-                          <Badge variant="outline" className="text-[10px]">{p.label}</Badge>
-                        </div>
-                      );
-                    })}
-                    {products.length === 0 && (
-                      <p className="text-sm text-muted-foreground text-center py-4">商材がありません</p>
-                    )}
-                  </div>
-                </TabsContent>
-              </Tabs>
-            </div>
-          </TabsContent>
+                        );
+                      })}
+                      {clients.length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-4">クライアントがありません</p>
+                      )}
+                    </div>
+                  </TabsContent>
+                  <TabsContent value="products" className="mt-4 space-y-3">
+                    <div className="space-y-1">
+                      {products.map((p) => {
+                        const clientName = clients.find((c) => c.id === p.client_id)?.name || "";
+                        return (
+                          <div key={p.id} className="flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: p.color ? `hsl(${p.color})` : "hsl(var(--primary))" }} />
+                              <div>
+                                <p className="text-sm font-medium">{p.name}</p>
+                                <p className="text-xs text-muted-foreground">{clientName} · {p.code}</p>
+                              </div>
+                            </div>
+                            <Badge variant="outline" className="text-[10px]">{p.label}</Badge>
+                          </div>
+                        );
+                      })}
+                      {products.length === 0 && (
+                        <p className="text-sm text-muted-foreground text-center py-4">商材がありません</p>
+                      )}
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            </TabsContent>
+          )}
         </Tabs>
       </div>
+
+      {/* Invite Modal */}
+      <Dialog open={inviteOpen} onOpenChange={(open) => { setInviteOpen(open); if (!open) resetInviteModal(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{generatedLink ? "✅ 招待を作成しました" : "メンバーを招待"}</DialogTitle>
+          </DialogHeader>
+
+          {generatedLink ? (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">招待リンク:</p>
+              <div className="flex items-center gap-2">
+                <Input value={generatedLink} readOnly className="h-9 text-xs bg-muted" />
+                <Button size="sm" variant="outline" className="shrink-0 h-9" onClick={() => handleCopyLink(generatedLink)}>
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                このリンクを招待したい方にSlackやLINE等で共有してください。<br />
+                有効期限: 7日間
+              </p>
+              <Button variant="outline" className="w-full" onClick={() => { setInviteOpen(false); resetInviteModal(); }}>
+                閉じる
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">メールアドレス *</label>
+                <Input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="example@company.com"
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">表示名</label>
+                <Input
+                  value={inviteDisplayName}
+                  onChange={(e) => setInviteDisplayName(e.target.value)}
+                  placeholder="例: 山田太郎"
+                  className="h-9 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">ロール</label>
+                <Select value={inviteRole} onValueChange={setInviteRole}>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(ROLE_CONFIG).map(([key, cfg]) => (
+                      <SelectItem key={key} value={key}>
+                        <div>
+                          <p className="font-medium">{cfg.label}</p>
+                          <p className="text-xs text-muted-foreground">{cfg.description}</p>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setInviteOpen(false)}>キャンセル</Button>
+                <Button size="sm" onClick={handleCreateInvitation} disabled={inviting || !inviteEmail.trim()}>
+                  {inviting ? "作成中..." : "招待を作成"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
