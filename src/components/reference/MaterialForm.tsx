@@ -211,13 +211,22 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     return normalizedRules.length;
   };
 
-  const callParseReferenceWebhook = async (text: string) => {
+  const callParseReferenceWebhook = async (text: string, fileUrl?: string) => {
     toast({ title: "AIルール生成中...", description: "参考資料からチェックルールを自動生成しています" });
     try {
+      const webhookPayload: Record<string, any> = {
+        product_id: await resolveWebhookProductId(productId),
+        material_type: materialType,
+        content_text: text,
+        process_types: ALL_PROCESS_TYPES,
+      };
+      if (fileUrl) {
+        webhookPayload.file_url = fileUrl;
+      }
       const res = await fetch(PARSE_REFERENCE_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product_id: await resolveWebhookProductId(productId), material_type: materialType, content_text: text, process_types: ALL_PROCESS_TYPES }),
+        body: JSON.stringify(webhookPayload),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const result = await res.json();
@@ -232,22 +241,22 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     }
   };
 
-  const triggerRuleGeneration = async (savedContentText: string) => {
+  const triggerRuleGeneration = async (savedContentText: string, fileUrl?: string) => {
     const existingCount = await checkExistingReferenceRules();
     if (existingCount > 0) {
       setDuplicateCount(existingCount);
-      setPendingSaveResult({ text: savedContentText });
+      setPendingSaveResult({ text: savedContentText, fileUrl });
       setShowDuplicateDialog(true);
     } else {
-      await callParseReferenceWebhook(savedContentText);
+      await callParseReferenceWebhook(savedContentText, fileUrl);
     }
   };
 
   const handleDuplicateConfirm = async () => {
     setShowDuplicateDialog(false);
     if (!pendingSaveResult) return;
-    const { text } = pendingSaveResult;
-    await callParseReferenceWebhook(text);
+    const { text, fileUrl } = pendingSaveResult;
+    await callParseReferenceWebhook(text, fileUrl);
     setPendingSaveResult(null);
   };
 
@@ -278,8 +287,9 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     setUploadProgress("ファイルをアップロード中...");
     const { error } = await supabase.storage.from("reference-files").upload(path, file, { upsert: true });
     if (error) throw new Error(`Storage upload failed: ${error.message}`);
-    // Return the path (not a public URL since bucket is private)
-    return `storage://reference-files/${path}`;
+    // Return public URL so external systems (n8n) can access the file
+    const { data: urlData } = supabase.storage.from("reference-files").getPublicUrl(path);
+    return urlData.publicUrl;
   };
 
   const handleSave = async () => {
@@ -319,16 +329,17 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
 
       if (error) throw new Error(error.message);
 
-      // Upload large file to Storage and update record with storage URL
+      // Upload large file to Storage and update record with public URL
+      let uploadedFileUrl: string | undefined;
       if (pendingFile && result?.id) {
-        const storageUrl = await uploadFileToStorage(pendingFile, result.id);
-        await supabase.from("reference_materials").update({ file_data: storageUrl }).eq("id", result.id);
+        uploadedFileUrl = await uploadFileToStorage(pendingFile, result.id);
+        await supabase.from("reference_materials").update({ file_data: uploadedFileUrl }).eq("id", result.id);
       }
 
       toast({ title: existing ? "更新しました" : "保存しました" });
       onSaved();
       if (autoGenerateRules && finalContentText) {
-        triggerRuleGeneration(finalContentText);
+        triggerRuleGeneration(finalContentText, uploadedFileUrl);
       }
     } catch (err) {
       toast({ title: "エラー", description: err instanceof Error ? err.message : "保存に失敗しました", variant: "destructive" });
