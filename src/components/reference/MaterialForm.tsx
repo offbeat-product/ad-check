@@ -138,52 +138,77 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     return count ?? 0;
   };
 
-  const deleteExistingReferenceRules = async () => {
-    await supabase
-      .from("check_rules")
-      .delete()
-      .eq("product_id", productId)
-      .like("rule_id", "AUTO-%");
-  };
 
-  const syncRulesToLocalDb = async () => {
-    try {
-      const webhookPid = await resolveWebhookProductId(productId);
-      const res = await fetch(RULES_LIST_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product_id: webhookPid }),
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      let rulesArray: any[] = [];
-      if (Array.isArray(data) && data.length > 0 && Array.isArray(data[0]?.rules)) {
-        rulesArray = data[0].rules;
-      } else if (Array.isArray(data?.rules)) {
-        rulesArray = data.rules;
-      } else if (Array.isArray(data)) {
-        rulesArray = data;
-      }
-      if (rulesArray.length === 0) return;
+  const syncRulesToLocalDb = async (): Promise<number> => {
+    const webhookPid = await resolveWebhookProductId(productId);
+    const res = await fetch(RULES_LIST_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ product_id: webhookPid }),
+    });
+    if (!res.ok) throw new Error(`rules-list HTTP ${res.status}`);
 
-      // Upsert rules into local DB
-      const localRules = rulesArray.map((r: any) => ({
-        id: r.id,
+    const data = await res.json();
+    let rulesArray: any[] = [];
+    if (Array.isArray(data) && data.length > 0 && Array.isArray(data[0]?.rules)) {
+      rulesArray = data[0].rules;
+    } else if (Array.isArray(data?.rules)) {
+      rulesArray = data.rules;
+    } else if (Array.isArray(data)) {
+      rulesArray = data;
+    }
+
+    const normalizedRules = rulesArray
+      .filter((r: any) => r?.rule_id && r?.process_type && r?.category && r?.description)
+      .map((r: any) => ({
         product_id: productId,
-        process_type: r.process_type,
-        rule_id: r.rule_id,
-        category: r.category,
-        title: r.title || "",
-        description: r.description,
-        severity: r.severity || "medium",
-        sort_order: r.sort_order ?? 999,
+        process_type: String(r.process_type),
+        rule_id: String(r.rule_id),
+        category: String(r.category),
+        title: String(r.title || ""),
+        description: String(r.description),
+        severity: String(r.severity || "medium"),
+        sort_order: Number.isFinite(r.sort_order) ? r.sort_order : 999,
         is_active: r.is_active ?? true,
       }));
 
-      await supabase.from("check_rules").upsert(localRules, { onConflict: "id" });
-    } catch (err) {
-      console.error("[syncRulesToLocalDb] error:", err);
+    if (normalizedRules.length === 0) {
+      throw new Error("同期対象ルールが0件でした");
     }
+
+    const { data: existingRows, error: existingError } = await supabase
+      .from("check_rules")
+      .select("id, rule_id")
+      .eq("product_id", productId)
+      .like("rule_id", "AUTO-%");
+    if (existingError) throw existingError;
+
+    const existingByRuleId = new Map((existingRows ?? []).map((row) => [row.rule_id, row.id]));
+    const incomingRuleIds = new Set(normalizedRules.map((r) => r.rule_id));
+
+    const upsertPayload = normalizedRules.map((r) => ({
+      ...r,
+      id: existingByRuleId.get(r.rule_id),
+    }));
+
+    const { error: upsertError } = await supabase
+      .from("check_rules")
+      .upsert(upsertPayload, { onConflict: "id" });
+    if (upsertError) throw upsertError;
+
+    const staleIds = (existingRows ?? [])
+      .filter((row) => !incomingRuleIds.has(row.rule_id))
+      .map((row) => row.id);
+
+    if (staleIds.length > 0) {
+      const { error: deleteError } = await supabase
+        .from("check_rules")
+        .delete()
+        .in("id", staleIds);
+      if (deleteError) throw deleteError;
+    }
+
+    return normalizedRules.length;
   };
 
   const callParseReferenceWebhook = async (text: string) => {
@@ -199,12 +224,11 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
       const generatedCount = result.count || 0;
       toast({ title: "AIルールが生成されました", description: `${generatedCount}件のチェックルールが追加されました。同期中...` });
 
-      // Sync generated rules from external DB to local DB
-      await syncRulesToLocalDb();
-      toast({ title: "ルール同期完了", description: `チェックルールタブで確認してください。` });
+      const syncedCount = await syncRulesToLocalDb();
+      toast({ title: "ルール同期完了", description: `${syncedCount}件を反映しました。` });
     } catch (err) {
       console.error("[parse-reference] error:", err);
-      toast({ title: "ルール自動生成に失敗しました", description: "手動でチェックルールを追加してください", variant: "destructive" });
+      toast({ title: "ルール自動生成に失敗しました", description: "既存ルールは保持されています。再実行してください", variant: "destructive" });
     }
   };
 
@@ -223,7 +247,6 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     setShowDuplicateDialog(false);
     if (!pendingSaveResult) return;
     const { text } = pendingSaveResult;
-    await deleteExistingReferenceRules();
     await callParseReferenceWebhook(text);
     setPendingSaveResult(null);
   };
