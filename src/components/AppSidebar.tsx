@@ -157,20 +157,31 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
             {projectsOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
           </button>
 
-          {projectsOpen && clients.map((client) => (
+          {projectsOpen && [...clients].sort((a, b) => a.name.localeCompare(b.name, "ja")).map((client) => (
             <div key={client.id}>
-              <button onClick={() => toggleClient(client.id)}
-                className="w-full flex items-center gap-2 px-7 py-2 text-sm text-muted-foreground hover:bg-muted/50">
-                {openClients.has(client.id) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                <span className="font-medium">{client.name}</span>
-              </button>
+              <div className="flex items-center w-full">
+                <button onClick={() => toggleClient(client.id)}
+                  className="flex items-center gap-1 px-5 py-2 text-sm text-muted-foreground hover:bg-muted/50 shrink-0">
+                  {openClients.has(client.id) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                </button>
+                <button onClick={() => navigate(`/client/${client.id}`)}
+                  className="flex-1 py-2 pr-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors truncate text-left">
+                  {client.name}
+                </button>
+              </div>
 
-              {openClients.has(client.id) && products
+              {openClients.has(client.id) && [...products]
                 .filter((p) => p.client_id === client.id)
+                .sort((a, b) => a.name.localeCompare(b.name, "ja"))
                 .map((product) => {
                   const productProjects = projects
                     .filter((pr) => pr.product_id === product.id)
-                    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+                    .sort((a, b) => {
+                      // Primary: sort_order, secondary: created_at desc
+                      const orderDiff = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+                      if (orderDiff !== 0) return orderDiff;
+                      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+                    });
 
                   return (
                     <div key={product.id}>
@@ -223,7 +234,12 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
                         );
                       })}
                       {openProducts.has(product.id) && productProjects.length === 0 && (
-                        <p className="px-12 py-1 text-[10px] text-muted-foreground/50 italic">案件なし</p>
+                        <button
+                          onClick={() => onCreateProject?.()}
+                          className="px-12 py-1.5 text-[10px] text-primary/70 hover:text-primary transition-colors flex items-center gap-1"
+                        >
+                          <Plus className="h-3 w-3" />案件を追加
+                        </button>
                       )}
                     </div>
                   );
