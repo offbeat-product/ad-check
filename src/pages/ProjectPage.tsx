@@ -98,7 +98,6 @@ export default function ProjectPage() {
   const [files, setFiles] = useState<ProjectFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadModal, setUploadModal] = useState<string | null>(null);
-  const [uploadFileName, setUploadFileName] = useState("");
   const [uploadTextInput, setUploadTextInput] = useState("");
   const [useTextInput, setUseTextInput] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -207,6 +206,38 @@ export default function ProjectPage() {
     toast({ title: "工程ステータスを更新しました" });
   };
 
+  // Sanitize filename for storage paths
+  const sanitizeFileName = (name: string): string => {
+    return name
+      .replace(/[^\w\s.\-\u3000-\u9FFF\uF900-\uFAFF]/g, "_")
+      .replace(/\s+/g, "_")
+      .replace(/_+/g, "_");
+  };
+
+  // Determine storage bucket by process type
+  const getStorageBucket = (processType: string): string | null => {
+    const audioProcesses = ["narration", "bgm"];
+    const videoProcesses = ["vcon", "video_horizontal", "video_vertical"];
+    if (audioProcesses.includes(processType)) return "audios";
+    if (videoProcesses.includes(processType)) return "videos";
+    return null; // images & text stay in DB
+  };
+
+  const getFileFormatHint = (processType: string): string => {
+    const hints: Record<string, string> = {
+      script: "TXT / DOCX",
+      na_script: "TXT / DOCX",
+      narration: "MP3 / WAV / M4A（最大50MB）",
+      bgm: "MP3 / WAV / M4A（最大50MB）",
+      vcon: "MP4 / MOV / WebM（最大500MB）",
+      styleframe: "JPG / PNG / PSD / AI",
+      storyboard: "JPG / PNG / PDF / PSD",
+      video_horizontal: "MP4 / MOV / WebM（最大500MB）",
+      video_vertical: "MP4 / MOV / WebM（最大500MB）",
+    };
+    return hints[processType] || "";
+  };
+
   const handleFileUpload = async () => {
     if (!uploadModal || !id || !user) return;
     setUploading(true);
@@ -214,19 +245,35 @@ export default function ProjectPage() {
     let fileData = "";
     let fileType = "text";
     let fileSize = 0;
-    let fileName = uploadFileName.trim();
+    let fileName = "";
     const cfg = PROCESS_FILE_CONFIG[uploadModal];
 
     if (useTextInput && cfg?.allowTextInput) {
       fileData = uploadTextInput;
       fileSize = new Blob([uploadTextInput]).size;
-      if (!fileName) fileName = `${cfg?.label || uploadModal}_${Date.now()}`;
+      fileName = `${cfg?.label || uploadModal}_${Date.now()}.txt`;
       fileType = "text";
     } else if (selectedFile) {
-      if (!fileName) fileName = selectedFile.name;
+      fileName = sanitizeFileName(selectedFile.name);
       fileSize = selectedFile.size;
+      const bucket = getStorageBucket(uploadModal);
 
-      if (selectedFile.type.startsWith("image/")) {
+      if (bucket) {
+        // Upload to Storage bucket (audio/video)
+        fileType = selectedFile.type.startsWith("audio/") ? "audio" : "video";
+        const storagePath = `${id}/${Date.now()}_${fileName}`;
+        const { error: storageError } = await supabase.storage
+          .from(bucket)
+          .upload(storagePath, selectedFile, { upsert: true });
+
+        if (storageError) {
+          toast({ title: "エラー", description: storageError.message, variant: "destructive" });
+          setUploading(false);
+          return;
+        }
+        const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(storagePath);
+        fileData = urlData.publicUrl;
+      } else if (selectedFile.type.startsWith("image/")) {
         fileType = "image";
         try {
           const compressed = await compressImage(selectedFile);
@@ -262,7 +309,6 @@ export default function ProjectPage() {
     }
     setUploadModal(null);
     setSelectedFile(null);
-    setUploadFileName("");
     setUploadTextInput("");
     setUseTextInput(false);
     setUploading(false);
@@ -415,8 +461,7 @@ export default function ProjectPage() {
                         onClick={() => {
                           setUploadModal(proc.process_key);
                           setUseTextInput(false);
-                          setSelectedFile(null);
-                          setUploadFileName("");
+                           setSelectedFile(null);
                         }}>
                         <Plus className="h-3 w-3 mr-1" />アップロード
                       </Button>
@@ -512,15 +557,12 @@ export default function ProjectPage() {
                 className="border-2 border-dashed border-border rounded-xl p-8 text-center cursor-pointer hover:border-primary/50 transition-colors">
                 <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">{selectedFile ? selectedFile.name : "クリックしてファイルを選択"}</p>
+                <p className="text-xs text-muted-foreground/60 mt-1">{getFileFormatHint(uploadModal || "")}</p>
                 <input ref={fileInputRef} type="file" className="hidden"
                   accept={PROCESS_FILE_CONFIG[uploadModal || ""]?.accept}
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) { setSelectedFile(f); if (!uploadFileName) setUploadFileName(f.name); } }} />
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) setSelectedFile(f); }} />
               </div>
             )}
-            <div>
-              <label className="text-xs font-medium text-muted-foreground mb-1 block">ファイル名</label>
-              <Input value={uploadFileName} onChange={(e) => setUploadFileName(e.target.value)} placeholder="ファイル名" className="h-9 text-sm" />
-            </div>
             <Button onClick={handleFileUpload} disabled={uploading || (!selectedFile && !uploadTextInput.trim())} className="w-full">
               {uploading ? "アップロード中..." : "アップロード"}
             </Button>
