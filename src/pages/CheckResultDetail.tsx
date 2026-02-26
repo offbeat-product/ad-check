@@ -1,6 +1,56 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { handleSupabaseError } from "@/lib/supabase-helpers";
+
+/**
+ * CheckResultDetail now acts as a redirect page.
+ * It looks up the project_file linked to this check_result and redirects
+ * to the FileReviewPage for a consistent experience.
+ * If no linked file is found, it falls back to a standalone view.
+ */
+export default function CheckResultDetail() {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const [fallback, setFallback] = useState(false);
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+
+    (async () => {
+      // Try to find a project_file linked to this check_result
+      const { data: files, error } = await supabase
+        .from("project_files")
+        .select("id, project_id")
+        .eq("check_result_id", id)
+        .limit(1);
+
+      if (cancelled) return;
+      handleSupabaseError(error, "project_files lookup");
+
+      if (files && files.length > 0 && files[0].project_id) {
+        // Redirect to FileReviewPage
+        navigate(`/project/${files[0].project_id}/file/${files[0].id}`, { replace: true });
+      } else {
+        // No linked file — try to navigate to the project if we can find it via check_result
+        setFallback(true);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [id, navigate]);
+
+  if (!fallback) {
+    return <div className="flex items-center justify-center h-full text-muted-foreground py-20">読み込み中...</div>;
+  }
+
+  // Fallback: render the standalone check result view (import lazily)
+  return <FallbackCheckResultView id={id!} />;
+}
+
+// Lazy inline fallback for check results not linked to any project file
+import { useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import type { CheckItem, CheckStatus } from "@/lib/types";
 import type { Json } from "@/integrations/supabase/types";
@@ -8,10 +58,9 @@ import type { CheckResultRow } from "@/lib/db-types";
 import { useReviewState, useDownload, useExportCsv } from "@/hooks/useReviewState";
 import { exportCheckExcel } from "@/lib/export-excel";
 import { getSubmitLabel, getSubmitBadgeClass } from "@/lib/check-display";
-import { handleSupabaseError } from "@/lib/supabase-helpers";
+import { getProcessLabel } from "@/lib/process-config";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import CompareView from "@/components/CompareView";
 import ShareLinkModal from "@/components/ShareLinkModal";
 import ImagePreview from "@/components/review/ImagePreview";
@@ -37,8 +86,7 @@ const statusConfig: Record<string, { label: string; class: string }> = {
   approved: { label: "承認済", class: "bg-product-cta/10 text-product-cta" },
 };
 
-export default function CheckResultDetail() {
-  const { id } = useParams<{ id: string }>();
+function FallbackCheckResultView({ id }: { id: string }) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
@@ -106,7 +154,6 @@ export default function CheckResultDetail() {
     );
   };
 
-  // Fetch saved annotations from comments
   const fetchSavedAnnotations = useCallback(async () => {
     if (!id) return;
     const { data, error } = await supabase
@@ -148,7 +195,6 @@ export default function CheckResultDetail() {
   const handleAnnotationClick = useCallback((annotationData: unknown) => {
     const ad = annotationData as Record<string, unknown> | null;
     if (!ad) return;
-    // Try to extract annotation data
     let ann: AnnotationData | null = null;
     if (Array.isArray(ad.annotations) && ad.annotations.length > 0) {
       ann = ad.annotations[0] as AnnotationData;
@@ -161,7 +207,6 @@ export default function CheckResultDetail() {
     }
   }, []);
 
-
   if (loading) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">読み込み中...</div>;
   if (!record) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">結果が見つかりません</div>;
 
@@ -169,30 +214,16 @@ export default function CheckResultDetail() {
   const currentStatus = record.status || "pending";
   const sc = statusConfig[currentStatus] || statusConfig.pending;
   const inputData = record.input_data as { image_base64?: string; script_text?: string } | null;
-  const fileName = `${record.product_code.toUpperCase()}_${record.process_type.toUpperCase()}_${new Date(record.created_at!).toISOString().slice(0, 10)}`;
-
-  const PROCESS_LABEL_MAP: Record<string, string> = {
-    script: "構成/字コンテ",
-    na_script: "NA原稿",
-    bgm: "BGM",
-    narration: "ナレーション",
-    vcon: "Vコン",
-    sf: "スタイルフレーム",
-    styleframe: "スタイルフレーム",
-    storyboard: "絵コンテ",
-    video_horizontal: "横動画",
-    video_vertical: "縦動画",
-  };
-  const processLabel = PROCESS_LABEL_MAP[record.process_type] || record.process_type;
+  const processLabel = getProcessLabel(record.process_type);
 
   return (
-    <div className="flex h-[calc(100vh-0px)] overflow-hidden">
+    <div className="flex h-screen overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <header className="border-b border-border px-4 py-2 flex items-center gap-3 bg-card shrink-0">
-          <button onClick={() => navigate("/dashboard")} className="text-muted-foreground hover:text-foreground transition-colors">
+          <button onClick={() => navigate(-1)} className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
             <ArrowLeft className="h-4 w-4" />
           </button>
-          <span className="text-sm font-medium truncate">{fileName}</span>
+          <span className="text-sm font-medium truncate">{record.product_name} / {processLabel}</span>
           <Popover>
             <PopoverTrigger asChild>
               <button className={cn("px-3 py-1 rounded-full text-xs font-medium border shrink-0", sc.class)}>{sc.label}</button>
@@ -209,10 +240,10 @@ export default function CheckResultDetail() {
 
           <div className="ml-auto flex items-center gap-1.5">
             <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => setRightTab("ai-check")}>
-              <CheckCircle2 className="h-3 w-3 mr-1" />AIチェック結果
+              <CheckCircle2 className="h-3 w-3 mr-1" />AI結果
             </Button>
             <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => setShareOpen(true)}>
-              <Link2 className="h-3 w-3 mr-1" />共有リンク
+              <Link2 className="h-3 w-3 mr-1" />共有
             </Button>
             <Button size="sm" variant="outline" className="text-xs h-8" onClick={handleDownload}>
               <Download className="h-3 w-3 mr-1" />DL
