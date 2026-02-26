@@ -244,12 +244,17 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
   };
 
   const triggerRuleGeneration = async (savedContentText: string, fileUrl?: string) => {
-    const existingCount = await checkExistingReferenceRules();
-    if (existingCount > 0) {
-      setDuplicateCount(existingCount);
-      setPendingSaveResult({ text: savedContentText, fileUrl });
-      setShowDuplicateDialog(true);
-    } else {
+    try {
+      const existingCount = await checkExistingReferenceRules();
+      if (existingCount > 0) {
+        setDuplicateCount(existingCount);
+        setPendingSaveResult({ text: savedContentText, fileUrl });
+        setShowDuplicateDialog(true);
+      } else {
+        await callParseReferenceWebhook(savedContentText, fileUrl);
+      }
+    } catch (err) {
+      console.error("[parse-reference] duplicate check failed, fallback to webhook:", err);
       await callParseReferenceWebhook(savedContentText, fileUrl);
     }
   };
