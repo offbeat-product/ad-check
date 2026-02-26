@@ -57,7 +57,7 @@ export default function Login() {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-bold">
-            <span className="mr-2">♟</span>
+            <span className="mr-2">🚀</span>
             <span className="gradient-text">CheckGo AI</span>
           </h1>
           <p className="text-sm text-muted-foreground">制作現場に、最速の「GO」を。</p>

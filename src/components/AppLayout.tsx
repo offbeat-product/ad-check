@@ -42,7 +42,7 @@ export default function AppLayout() {
             <Menu className="h-5 w-5" />
           </button>
           <h1 className="text-sm font-bold flex-1">
-            <span>♟</span> <span className="gradient-text">CheckGo AI</span>
+            <span>🚀</span> <span className="gradient-text">CheckGo AI</span>
           </h1>
           <NotificationBell />
           <button
