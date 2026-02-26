@@ -16,7 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Upload, X, Info, RefreshCw, Download, Music, Film } from "lucide-react";
+import { Loader2, Upload, X, Info, RefreshCw, Download, Music, Film, CheckCircle2 } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 
 export default function CheckPage() {
   const { user } = useAuth();
@@ -56,6 +57,8 @@ export default function CheckPage() {
   const [videoFormat, setVideoFormat] = useState("MP4");
   const [videoResolution, setVideoResolution] = useState("");
   const [videoFps, setVideoFps] = useState<string>("");
+  const [videoUploadProgress, setVideoUploadProgress] = useState<number | null>(null);
+  const [videoStorageUrl, setVideoStorageUrl] = useState<string | null>(null);
 
   // Rule info
   const [ruleCount, setRuleCount] = useState<number | null>(null);
@@ -215,14 +218,14 @@ export default function CheckPage() {
     };
   }, [imagePreviewUrl, mediaPreviewUrl]);
 
-  const handleMediaUpload = useCallback((file: File) => {
-    const isVideo = /\.(mp4|mov|webm|avi)$/i.test(file.name) || file.type.startsWith("video/");
-    const maxSize = isVideo ? 100 * 1024 * 1024 : 50 * 1024 * 1024;
+  const handleMediaUpload = useCallback(async (file: File) => {
+    const isVideo = /\.(mp4|mov|webm)$/i.test(file.name) || file.type.startsWith("video/");
+    const maxSize = isVideo ? 500 * 1024 * 1024 : 50 * 1024 * 1024;
     if (file.size > maxSize) {
       toast({
         title: "エラー",
         description: isVideo
-          ? "ファイルサイズが100MBを超えています。圧縮してからアップロードしてください。"
+          ? "動画ファイルは500MB以下にしてください"
           : "ファイルサイズは50MB以下にしてください",
         variant: "destructive",
       });
@@ -231,12 +234,62 @@ export default function CheckPage() {
     setMediaFile(file);
     const url = URL.createObjectURL(file);
     setMediaPreviewUrl(url);
-  }, [toast]);
+
+    // For video files, upload to Storage
+    if (isVideo && user) {
+      setVideoUploadProgress(0);
+      setVideoStorageUrl(null);
+      try {
+        const ext = file.name.split(".").pop() || "mp4";
+        const path = `${user.id}/${Date.now()}.${ext}`;
+
+        // Use XMLHttpRequest for progress tracking
+        const { data: { session } } = await supabase.auth.getSession();
+        const token = session?.access_token;
+        if (!token) throw new Error("認証が必要です");
+
+        const formData = new FormData();
+        formData.append("", file);
+
+        await new Promise<void>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.upload.addEventListener("progress", (e) => {
+            if (e.lengthComputable) {
+              setVideoUploadProgress(Math.round((e.loaded / e.total) * 100));
+            }
+          });
+          xhr.addEventListener("load", () => {
+            if (xhr.status >= 200 && xhr.status < 300) resolve();
+            else reject(new Error(`Upload failed: ${xhr.status}`));
+          });
+          xhr.addEventListener("error", () => reject(new Error("Upload failed")));
+
+          const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+          xhr.open("POST", `${supabaseUrl}/storage/v1/object/videos/${path}`);
+          xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+          xhr.setRequestHeader("x-upsert", "true");
+          xhr.send(file);
+        });
+
+        // Get public URL
+        const { data: urlData } = supabase.storage.from("videos").getPublicUrl(path);
+        setVideoStorageUrl(urlData.publicUrl);
+        setVideoUploadProgress(100);
+        toast({ title: "アップロード完了", description: `${file.name} をアップロードしました` });
+      } catch (err) {
+        setVideoUploadProgress(null);
+        setVideoStorageUrl(null);
+        toast({ title: "アップロードエラー", description: err instanceof Error ? err.message : "アップロードに失敗しました", variant: "destructive" });
+      }
+    }
+  }, [toast, user]);
 
   const clearMedia = useCallback(() => {
     setMediaFile(null);
     if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
     setMediaPreviewUrl(null);
+    setVideoUploadProgress(null);
+    setVideoStorageUrl(null);
   }, [mediaPreviewUrl]);
 
   const handleExecute = async () => {
@@ -285,7 +338,11 @@ export default function CheckPage() {
         if (selectedProcess === "video_vertical") {
           metadata.aspect_ratio = "9:16";
         }
-        res = await runVideoCheck(product.id, selectedProcess, videoScriptText, metadata);
+        res = await runVideoCheck(product.id, selectedProcess, videoScriptText, {
+          videoUrl: videoStorageUrl || "",
+          videoMimeType: mediaFile?.type || "",
+          metadata,
+        });
       } else {
         if (!scriptText.trim()) throw new Error("テキストを入力してください");
         res = await runScriptCheck(product.id, scriptText, selectedProcess);
@@ -601,7 +658,9 @@ export default function CheckPage() {
                     onUpload={handleMediaUpload}
                     onClear={clearMedia}
                     mode="video"
-                    maxSizeLabel="MP4 / MOV / WebM・最大100MB"
+                    maxSizeLabel="MP4 / MOV / WebM・最大500MB"
+                    uploadProgress={videoUploadProgress}
+                    storageUrl={videoStorageUrl}
                   />
                 </div>
 
@@ -792,6 +851,8 @@ function MediaInput({
   onClear,
   mode,
   maxSizeLabel,
+  uploadProgress,
+  storageUrl,
 }: {
   mediaFile: File | null;
   mediaPreviewUrl: string | null;
@@ -800,12 +861,14 @@ function MediaInput({
   onClear: () => void;
   mode: "audio" | "video";
   maxSizeLabel?: string;
+  uploadProgress?: number | null;
+  storageUrl?: string | null;
 }) {
   const isAudio = mode === "audio";
-  const accept = isAudio ? ".mp3,.wav,.m4a,.aac,.ogg" : ".mp4,.mov,.webm,.avi";
+  const accept = isAudio ? ".mp3,.wav,.m4a,.aac,.ogg" : ".mp4,.mov,.webm";
   const Icon = isAudio ? Music : Film;
   const label = isAudio ? "音声ファイル" : "動画ファイル";
-  const formats = maxSizeLabel || (isAudio ? "MP3 / WAV / M4A・最大50MB" : "MP4 / MOV / WebM・最大50MB");
+  const formats = maxSizeLabel || (isAudio ? "MP3 / WAV / M4A・最大50MB" : "MP4 / MOV / WebM・最大500MB");
 
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -835,6 +898,9 @@ function MediaInput({
     );
   }
 
+  const isUploading = uploadProgress !== null && uploadProgress !== undefined && uploadProgress < 100;
+  const isUploaded = uploadProgress === 100 && !!storageUrl;
+
   return (
     <div className="space-y-3">
       <div className="relative">
@@ -852,10 +918,28 @@ function MediaInput({
             <button
               onClick={onClear}
               className="bg-destructive rounded-full p-1 hover:opacity-80 shrink-0"
+              disabled={isUploading}
             >
               <X className="h-3 w-3 text-destructive-foreground" />
             </button>
           </div>
+
+          {/* Upload progress */}
+          {isUploading && (
+            <div className="space-y-1 mb-3">
+              <Progress value={uploadProgress} className="h-2" />
+              <p className="text-xs text-muted-foreground">アップロード中... {uploadProgress}%</p>
+            </div>
+          )}
+
+          {/* Upload complete */}
+          {isUploaded && (
+            <div className="flex items-center gap-1.5 text-xs text-green-600 mb-3">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              アップロード完了
+            </div>
+          )}
+
           {mediaPreviewUrl && isAudio && (
             <audio controls className="w-full" src={mediaPreviewUrl}>
               お使いのブラウザは音声再生に対応していません。
