@@ -148,11 +148,25 @@ export default function CheckResultDetail() {
   if (loading) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">読み込み中...</div>;
   if (!record) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">結果が見つかりません</div>;
 
-  const isSf = record.process_type === "sf";
+  const isSf = record.process_type === "sf" || record.process_type === "styleframe" || record.process_type === "storyboard";
   const currentStatus = record.status || "pending";
   const sc = statusConfig[currentStatus] || statusConfig.pending;
   const inputData = record.input_data as { image_base64?: string; script_text?: string } | null;
   const fileName = `${record.product_code.toUpperCase()}_${record.process_type.toUpperCase()}_${new Date(record.created_at!).toISOString().slice(0, 10)}`;
+
+  const PROCESS_LABEL_MAP: Record<string, string> = {
+    script: "構成/字コンテ",
+    na_script: "NA原稿",
+    bgm: "BGM",
+    narration: "ナレーション",
+    vcon: "Vコン",
+    sf: "スタイルフレーム",
+    styleframe: "スタイルフレーム",
+    storyboard: "絵コンテ",
+    video_horizontal: "横動画",
+    video_vertical: "縦動画",
+  };
+  const processLabel = PROCESS_LABEL_MAP[record.process_type] || record.process_type;
 
   return (
     <div className="flex h-[calc(100vh-0px)] overflow-hidden">
@@ -203,14 +217,14 @@ export default function CheckResultDetail() {
                 onPaintModeToggle={() => setPaintMode(!paintMode)}
                 onMarkerClick={scrollToCard}
                 onAnnotationSave={handleAnnotationSave}
-                label={`${record.client_name} / ${record.product_name} / スタイルフレーム`}
+                label={`${record.client_name} / ${record.product_name} / ${processLabel}`}
                 noDataMessage="プレビュー不可（旧バージョン）。再チェックしてください。"
                 savedAnnotations={savedAnnotations}
                 highlightAnnotation={highlightAnnotation}
               />
             ) : (
               <div>
-                <span className="text-xs text-muted-foreground mb-2 block">{record.client_name} / {record.product_name} / 字コンテ</span>
+                <span className="text-xs text-muted-foreground mb-2 block">{record.client_name} / {record.product_name} / {processLabel}</span>
                 <ScriptDisplay text={inputData?.script_text || record.input_text || ""} items={items} markers={markers} onItemClick={scrollToCard} />
               </div>
             )}
