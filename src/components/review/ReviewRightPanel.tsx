@@ -60,6 +60,9 @@ export default function ReviewRightPanel({
               checkResultId={checkResultId}
               onTabChange={onTabChange}
               overallStatus={overallStatus}
+              productId={productId}
+              projectId={projectId}
+              processKey={file?.process_type}
             />
           ) : (
             emptyCheckMessage || (

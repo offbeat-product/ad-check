@@ -10,6 +10,7 @@ import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { getSubmitLabel, getSubmitBadgeClass, STATUS_LABEL, STATUS_FILTER_OPTIONS } from "@/lib/check-display";
 import { cn } from "@/lib/utils";
 import CheckItemCard from "./CheckItemCard";
+import ReferenceStatusIndicator from "@/components/reference/ReferenceStatusIndicator";
 
 interface AICheckPanelProps {
   items: CheckItem[];
@@ -21,9 +22,12 @@ interface AICheckPanelProps {
   checkResultId?: string | null;
   onTabChange?: (tab: string) => void;
   overallStatus?: string | null;
+  productId?: string;
+  projectId?: string;
+  processKey?: string;
 }
 
-export default function AICheckPanel({ items, markers, productCode, commentCounts, highlightCard, onCommentClick, checkResultId, onTabChange, overallStatus }: AICheckPanelProps) {
+export default function AICheckPanel({ items, markers, productCode, commentCounts, highlightCard, onCommentClick, checkResultId, onTabChange, overallStatus, productId, projectId, processKey }: AICheckPanelProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [resolvedItems, setResolvedItems] = useState<Set<string>>(new Set());
@@ -167,6 +171,9 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
     <div className="flex flex-col h-full min-h-0">
       {/* Summary bar */}
       <div className="shrink-0 border-b border-border px-3 py-2 space-y-2">
+        {productId && projectId && (
+          <ReferenceStatusIndicator projectId={projectId} productId={productId} processKey={processKey} />
+        )}
         <div className="flex items-center gap-2 flex-wrap">
           <Badge className={cn("text-xs font-bold px-2.5 py-1", getSubmitBadgeClass(overallStatus))}>
             {submit.label}

@@ -22,7 +22,7 @@ import ImagePreview from "@/components/review/ImagePreview";
 import ScriptDisplay from "@/components/review/ScriptDisplay";
 import ReviewRightPanel from "@/components/review/ReviewRightPanel";
 import { ArrowLeft, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight } from "lucide-react";
-import ReferenceStatusIndicator from "@/components/reference/ReferenceStatusIndicator";
+
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { FILE_STATUS_CONFIG } from "@/lib/db-types";
@@ -433,9 +433,6 @@ export default function FileReviewPage() {
           </Popover>
 
           <div className="ml-auto flex items-center gap-1.5">
-            {product && projectId && (
-              <ReferenceStatusIndicator projectId={projectId} productId={product.id} processKey={file?.process_type || undefined} />
-            )}
             {canCheck && (
               <Button size="sm" className="text-xs h-8" onClick={handleRunCheck} disabled={checking}>
                 {checking ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Bot className="h-3 w-3 mr-1" />}
