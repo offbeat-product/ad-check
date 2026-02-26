@@ -5,6 +5,9 @@ import { useToast } from "@/hooks/use-toast";
 import { MATERIAL_TEMPLATES, extractTextFromXlsx, type ReferenceMaterial } from "@/lib/reference-materials";
 import { parseWCheckFile, buildWCheckContentText, type WCheckParsedData } from "@/lib/wcheck-parser";
 import WCheckPreview from "./WCheckPreview";
+import OrientationTemplate, { orientationDataToText, type OrientationData } from "./templates/OrientationTemplate";
+import WCheckTemplate, { wcheckDataToText, type WCheckData } from "./templates/WCheckTemplate";
+import BrandGuidelineTemplate, { brandGuidelineDataToText, type BrandGuidelineData } from "./templates/BrandGuidelineTemplate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -15,7 +18,7 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Upload, Link2, FileText, Sparkles } from "lucide-react";
+import { Upload, Link2, FileText, Sparkles, LayoutTemplate } from "lucide-react";
 
 const N8N_REST_URL = "https://vhvgnslszruyztcoikqq.supabase.co/rest/v1/check_rules";
 const N8N_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZodmduc2xzenJ1eXp0Y29pa3FxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NzkxNzksImV4cCI6MjA4NzQ1NTE3OX0.JChqETzSd1HJFuSBJNZ8xJy6lPENql_lprbTVLvTFeA";
@@ -32,15 +35,21 @@ interface Props {
   onCancel: () => void;
 }
 
-type InputMethod = "file_upload" | "text_input" | "url_reference";
+type InputMethod = "file_upload" | "text_input" | "url_reference" | "template";
+
+// Types that have structured templates
+const TEMPLATE_TYPES = ["orientation", "wcheck", "brand_guideline"];
 
 export default function MaterialForm({ materialType, scopeType, scopeId, existing, productId, onSaved, onCancel }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const hasTemplate = TEMPLATE_TYPES.includes(materialType);
+  const defaultMethod = existing?.source_type as InputMethod || (hasTemplate && !existing ? "template" : "file_upload");
+
   const [title, setTitle] = useState(existing?.title || "");
-  const [method, setMethod] = useState<InputMethod>((existing?.source_type as InputMethod) || "file_upload");
+  const [method, setMethod] = useState<InputMethod>(defaultMethod);
   const [contentText, setContentText] = useState(existing?.content_text || "");
   const [sourceUrl, setSourceUrl] = useState(existing?.source_url || "");
   const [fileName, setFileName] = useState(existing?.file_name || "");
@@ -52,6 +61,9 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const [duplicateCount, setDuplicateCount] = useState(0);
   const [pendingSaveResult, setPendingSaveResult] = useState<any>(null);
+
+  // Template data states
+  const [templateData, setTemplateData] = useState<OrientationData | WCheckData | BrandGuidelineData | null>(null);
 
   const isWCheck = materialType === "wcheck";
 
@@ -122,12 +134,7 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
   const checkExistingReferenceRules = async (extProductId: string): Promise<number> => {
     const res = await fetch(
       `${N8N_REST_URL}?product_id=eq.${extProductId}&source_type=eq.reference&select=id`,
-      {
-        headers: {
-          apikey: N8N_API_KEY,
-          Authorization: `Bearer ${N8N_API_KEY}`,
-        },
-      }
+      { headers: { apikey: N8N_API_KEY, Authorization: `Bearer ${N8N_API_KEY}` } }
     );
     if (!res.ok) return 0;
     const data = await res.json();
@@ -137,62 +144,33 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
   const deleteExistingReferenceRules = async (extProductId: string) => {
     await fetch(
       `${N8N_REST_URL}?product_id=eq.${extProductId}&source_type=eq.reference`,
-      {
-        method: "DELETE",
-        headers: {
-          apikey: N8N_API_KEY,
-          Authorization: `Bearer ${N8N_API_KEY}`,
-        },
-      }
+      { method: "DELETE", headers: { apikey: N8N_API_KEY, Authorization: `Bearer ${N8N_API_KEY}` } }
     );
   };
 
   const callParseReferenceWebhook = async (extProductId: string, text: string) => {
-    const toastId = toast({
-      title: "AIルール生成中...",
-      description: "参考資料からチェックルールを自動生成しています",
-    });
-
+    toast({ title: "AIルール生成中...", description: "参考資料からチェックルールを自動生成しています" });
     try {
       const res = await fetch(PARSE_REFERENCE_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          product_id: extProductId,
-          material_type: materialType,
-          content_text: text,
-          process_types: ALL_PROCESS_TYPES,
-        }),
+        body: JSON.stringify({ product_id: extProductId, material_type: materialType, content_text: text, process_types: ALL_PROCESS_TYPES }),
       });
-
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const result = await res.json();
-
-      toast({
-        title: "AIルールが生成されました",
-        description: `${result.count || 0}件のチェックルールが追加されました。チェックルールタブで確認してください。`,
-      });
+      toast({ title: "AIルールが生成されました", description: `${result.count || 0}件のチェックルールが追加されました。チェックルールタブで確認してください。` });
     } catch (err) {
       console.error("[parse-reference] error:", err);
-      toast({
-        title: "ルール自動生成に失敗しました",
-        description: "手動でチェックルールを追加してください",
-        variant: "destructive",
-      });
+      toast({ title: "ルール自動生成に失敗しました", description: "手動でチェックルールを追加してください", variant: "destructive" });
     }
   };
 
   const triggerRuleGeneration = async (savedContentText: string) => {
     const extId = await getExternalProductId();
     if (!extId) {
-      toast({
-        title: "外部商材IDが未設定です",
-        description: "この商材のexternal_product_idを設定してください",
-        variant: "destructive",
-      });
+      toast({ title: "外部商材IDが未設定です", description: "この商材のexternal_product_idを設定してください", variant: "destructive" });
       return;
     }
-
     const existingCount = await checkExistingReferenceRules(extId);
     if (existingCount > 0) {
       setDuplicateCount(existingCount);
@@ -212,20 +190,38 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     setPendingSaveResult(null);
   };
 
+  const buildContentText = (): string => {
+    if (method === "template" && templateData) {
+      let aiText = "";
+      if (templateData.template_type === "orientation") {
+        aiText = orientationDataToText(templateData as OrientationData);
+      } else if (templateData.template_type === "w_check") {
+        aiText = wcheckDataToText(templateData as WCheckData);
+      } else if (templateData.template_type === "brand_guideline") {
+        aiText = brandGuidelineDataToText(templateData as BrandGuidelineData);
+      }
+      // Store both AI text and structured JSON
+      return aiText + "\n---TEMPLATE_JSON---\n" + JSON.stringify(templateData);
+    }
+    return contentText;
+  };
+
   const handleSave = async () => {
     if (!title.trim()) { toast({ title: "タイトルを入力してください", variant: "destructive" }); return; }
     setSaving(true);
+
+    const finalContentText = buildContentText();
 
     const payload = {
       scope_type: scopeType,
       scope_id: scopeId,
       material_type: materialType,
       title: title.trim(),
-      content_text: contentText || null,
+      content_text: finalContentText || null,
       file_name: fileName || null,
       file_data: method === "file_upload" ? fileData || null : null,
       source_url: method === "url_reference" ? sourceUrl || null : null,
-      source_type: method,
+      source_type: method === "template" ? "template" : method,
       is_active: true,
       sort_order: 0,
       created_by: user?.email || user?.id || null,
@@ -248,10 +244,8 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     } else {
       toast({ title: existing ? "更新しました" : "保存しました" });
       onSaved();
-
-      // Trigger AI rule generation async (non-blocking)
-      if (autoGenerateRules && contentText) {
-        triggerRuleGeneration(contentText);
+      if (autoGenerateRules && finalContentText) {
+        triggerRuleGeneration(finalContentText);
       }
     }
     setSaving(false);
@@ -264,6 +258,13 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     }
   };
 
+  const methodButtons = [
+    ...(hasTemplate ? [{ id: "template" as InputMethod, label: "テンプレート", icon: LayoutTemplate }] : []),
+    { id: "file_upload" as InputMethod, label: "ファイル", icon: Upload },
+    { id: "text_input" as InputMethod, label: "テキスト", icon: FileText },
+    { id: "url_reference" as InputMethod, label: "URL", icon: Link2 },
+  ];
+
   return (
     <>
       <div className="border border-border rounded-lg p-3 space-y-3 bg-muted/20">
@@ -272,12 +273,8 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
           <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="例: 001案件_追加オリエン" className="h-8 text-sm" autoFocus />
         </div>
 
-        <div className="flex gap-2">
-          {([
-            { id: "file_upload" as InputMethod, label: "ファイル", icon: Upload },
-            { id: "text_input" as InputMethod, label: "テキスト", icon: FileText },
-            { id: "url_reference" as InputMethod, label: "URL", icon: Link2 },
-          ]).map((opt) => (
+        <div className="flex gap-2 flex-wrap">
+          {methodButtons.map((opt) => (
             <Button
               key={opt.id}
               size="sm"
@@ -290,6 +287,18 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
           ))}
         </div>
 
+        {/* Template input */}
+        {method === "template" && materialType === "orientation" && (
+          <OrientationTemplate onChange={setTemplateData as any} />
+        )}
+        {method === "template" && materialType === "wcheck" && (
+          <WCheckTemplate onChange={setTemplateData as any} />
+        )}
+        {method === "template" && materialType === "brand_guideline" && (
+          <BrandGuidelineTemplate onChange={setTemplateData as any} />
+        )}
+
+        {/* File upload */}
         {method === "file_upload" && (
           <div>
             <div
@@ -299,20 +308,15 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
               <Upload className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
               <p className="text-xs text-muted-foreground">{fileName || "クリックしてファイルを選択"}</p>
               <p className="text-[10px] text-muted-foreground/60 mt-0.5">対応: .xlsx .xls .csv .pdf .png .jpg .pptx .txt</p>
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                accept=".xlsx,.xls,.csv,.pdf,.png,.jpg,.jpeg,.pptx,.txt"
-                onChange={handleFile}
-              />
+              <input ref={fileInputRef} type="file" className="hidden" accept=".xlsx,.xls,.csv,.pdf,.png,.jpg,.jpeg,.pptx,.txt" onChange={handleFile} />
             </div>
             {extractMsg && <p className="text-xs text-amber-600 mt-1">{extractMsg}</p>}
           </div>
         )}
 
-        {wcheckParsed && <WCheckPreview parsedData={wcheckParsed} />}
+        {wcheckParsed && method === "file_upload" && <WCheckPreview parsedData={wcheckParsed} />}
 
+        {/* URL input */}
         {method === "url_reference" && (
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">URL</label>
@@ -321,32 +325,27 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
           </div>
         )}
 
-        <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1 block">AIに送信するテキスト（自動抽出 or 手動入力）</label>
-          <Textarea
-            value={contentText}
-            onChange={(e) => setContentText(e.target.value)}
-            placeholder={method === "file_upload" ? "ファイルアップロード後にテキストが自動抽出されます。内容を確認・編集してください。" : MATERIAL_TEMPLATES[materialType] || "テキストを入力..."}
-            className="min-h-[150px] text-xs font-mono"
-          />
-        </div>
+        {/* Text area for non-template methods */}
+        {method !== "template" && (
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">AIに送信するテキスト（自動抽出 or 手動入力）</label>
+            <Textarea
+              value={contentText}
+              onChange={(e) => setContentText(e.target.value)}
+              placeholder={method === "file_upload" ? "ファイルアップロード後にテキストが自動抽出されます。内容を確認・編集してください。" : MATERIAL_TEMPLATES[materialType] || "テキストを入力..."}
+              className="min-h-[150px] text-xs font-mono"
+            />
+          </div>
+        )}
 
         {/* AI Rule Generation Toggle */}
         <div className="flex items-center gap-3 p-2 rounded-lg bg-primary/5 border border-primary/10">
           <Sparkles className="h-4 w-4 text-primary shrink-0" />
           <div className="flex-1">
-            <Label htmlFor="auto-generate-rules" className="text-xs font-medium cursor-pointer">
-              AIルール自動生成
-            </Label>
-            <p className="text-[10px] text-muted-foreground mt-0.5">
-              ONにすると、参考資料の内容からAIがチェックルールを自動生成します
-            </p>
+            <Label htmlFor="auto-generate-rules" className="text-xs font-medium cursor-pointer">AIルール自動生成</Label>
+            <p className="text-[10px] text-muted-foreground mt-0.5">ONにすると、参考資料の内容からAIがチェックルールを自動生成します</p>
           </div>
-          <Switch
-            id="auto-generate-rules"
-            checked={autoGenerateRules}
-            onCheckedChange={setAutoGenerateRules}
-          />
+          <Switch id="auto-generate-rules" checked={autoGenerateRules} onCheckedChange={setAutoGenerateRules} />
         </div>
 
         <div className="flex gap-2">
