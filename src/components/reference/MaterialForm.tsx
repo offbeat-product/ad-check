@@ -116,20 +116,31 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
       source_url: method === "url_reference" ? sourceUrl || null : null,
       source_type: method,
       is_active: true,
-      created_by: user?.email?.split("@")[0] || user?.id || null,
+      sort_order: 0,
+      created_by: user?.email || user?.id || null,
       updated_at: new Date().toISOString(),
     };
 
-    let error;
+    console.log("[ReferenceMaterial] 保存開始:", { existing: !!existing, scopeType, scopeId, materialType, title: title.trim() });
+
+    let result, error;
     if (existing) {
-      ({ error } = await supabase.from("reference_materials").update(payload).eq("id", existing.id));
+      const res = await supabase.from("reference_materials").update(payload).eq("id", existing.id).select().single();
+      result = res.data;
+      error = res.error;
+      console.log("[ReferenceMaterial] UPDATE結果:", { data: result, error });
     } else {
-      ({ error } = await supabase.from("reference_materials").insert(payload));
+      const res = await supabase.from("reference_materials").insert(payload).select().single();
+      result = res.data;
+      error = res.error;
+      console.log("[ReferenceMaterial] INSERT結果:", { data: result, error });
     }
 
     if (error) {
+      console.error("[ReferenceMaterial] 保存エラー:", error);
       toast({ title: "エラー", description: error.message, variant: "destructive" });
     } else {
+      console.log("[ReferenceMaterial] 保存成功:", result?.id);
       toast({ title: existing ? "更新しました" : "保存しました" });
       onSaved();
     }
