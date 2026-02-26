@@ -37,7 +37,10 @@ export default function Login() {
     <div className="flex min-h-screen items-center justify-center bg-muted p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-2">
-          <h1 className="text-4xl font-bold gradient-text">CheckMate AI</h1>
+          <h1 className="text-4xl font-bold">
+            <span className="mr-2">♟</span>
+            <span className="gradient-text">CheckMate AI</span>
+          </h1>
           <p className="text-sm text-muted-foreground">終わらないリテイクに、終止符を。</p>
         </div>
 
