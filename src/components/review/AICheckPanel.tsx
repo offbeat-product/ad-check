@@ -164,7 +164,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
   };
 
   return (
-    <>
+    <div className="flex flex-col h-full min-h-0">
       {/* Summary bar */}
       <div className="shrink-0 border-b border-border px-3 py-2 space-y-2">
         <div className="flex items-center gap-2 flex-wrap">
@@ -199,7 +199,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+      <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
         {/* Non-OK items */}
         {filteredItems.filter((item) => item.status !== "OK").map((item, i) => {
           const marker = markers.find((m) => m.item.pattern_id === item.pattern_id);
@@ -268,7 +268,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
           {applying ? "保存中..." : `チェックしたコメントを反映 (${selectedItems.size})`}
         </Button>
       </div>
-    </>
+    </div>
   );
 }
 
