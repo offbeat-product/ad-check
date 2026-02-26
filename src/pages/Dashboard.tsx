@@ -209,16 +209,16 @@ export default function Dashboard() {
               <span className="text-xs text-muted-foreground">{totalCount} 件</span>
             </div>
             {/* Desktop table */}
-            <table className="w-full text-sm hidden md:table">
+            <table className="w-full text-xs hidden md:table">
               <thead>
                  <tr className="border-b border-border text-muted-foreground text-left">
-                   <th className="px-4 py-2.5 font-medium">日時</th>
-                   <th className="px-4 py-2.5 font-medium">商材</th>
-                   <th className="px-4 py-2.5 font-medium">工程</th>
-                   <th className="px-4 py-2.5 font-medium text-center">判定</th>
-                   <th className="px-4 py-2.5 font-medium text-center">修正必須</th>
-                   <th className="px-4 py-2.5 font-medium text-center">要確認</th>
-                   <th className="px-4 py-2.5 font-medium text-center">ステータス</th>
+                   <th className="px-3 py-2 font-medium whitespace-nowrap">日時</th>
+                   <th className="px-3 py-2 font-medium whitespace-nowrap">商材</th>
+                   <th className="px-3 py-2 font-medium whitespace-nowrap">工程</th>
+                   <th className="px-3 py-2 font-medium text-center whitespace-nowrap">判定</th>
+                   <th className="px-3 py-2 font-medium text-center whitespace-nowrap">修正必須</th>
+                   <th className="px-3 py-2 font-medium text-center whitespace-nowrap">要確認</th>
+                   <th className="px-3 py-2 font-medium text-center whitespace-nowrap">ステータス</th>
                  </tr>
               </thead>
               <tbody>
@@ -242,20 +242,20 @@ export default function Dashboard() {
                     return (
                       <tr key={r.id} onClick={() => navigate(`/check-result/${r.id}`)}
                         className="border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors">
-                        <td className="px-4 py-2.5 text-muted-foreground">
+                        <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
                           {r.created_at ? new Date(r.created_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
                         </td>
-                        <td className="px-4 py-2.5 font-medium">{r.product_name}</td>
-                        <td className="px-4 py-2.5">{getProcessLabel(r.process_type)}</td>
-                         <td className="px-4 py-2.5 text-center">
+                        <td className="px-3 py-2 font-medium">{r.product_name}</td>
+                        <td className="px-3 py-2 whitespace-nowrap">{getProcessLabel(r.process_type)}</td>
+                         <td className="px-3 py-2 text-center">
                            <Badge className={cn("text-[10px] font-bold", getSubmitBadgeClass(r.overall_status))}>
                              {getSubmitLabel(r.overall_status).label}
                            </Badge>
                          </td>
-                         <td className="px-4 py-2.5 text-center text-status-ng font-bold">{r.ng_count ?? 0}</td>
-                         <td className="px-4 py-2.5 text-center text-status-warning font-bold">{r.warning_count ?? 0}</td>
-                        <td className="px-4 py-2.5 text-center">
-                          <Badge variant="outline" className={st.class}>{st.label}</Badge>
+                         <td className="px-3 py-2 text-center text-status-ng font-bold">{r.ng_count ?? 0}</td>
+                         <td className="px-3 py-2 text-center text-status-warning font-bold">{r.warning_count ?? 0}</td>
+                        <td className="px-3 py-2 text-center">
+                          <Badge variant="outline" className={cn("text-[10px]", st.class)}>{st.label}</Badge>
                         </td>
                       </tr>
                     );
