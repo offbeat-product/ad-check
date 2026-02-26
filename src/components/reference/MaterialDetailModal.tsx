@@ -37,6 +37,12 @@ export default function MaterialDetailModal({
 
   const isWCheck = materialType === "wcheck";
 
+  const stripJsonPart = (text: string): string => {
+    if (text.includes('---TEMPLATE_JSON---')) return text.split('---TEMPLATE_JSON---')[0].trim();
+    if (text.includes('---PARSED_JSON---')) return text.split('---PARSED_JSON---')[0].trim();
+    return text;
+  };
+
   const handleToggle = async (id: string, active: boolean) => {
     await supabase.from("reference_materials").update({ is_active: active, updated_at: new Date().toISOString() }).eq("id", id);
     onRefresh();
@@ -101,6 +107,9 @@ export default function MaterialDetailModal({
           <div className="flex items-center gap-2">
             <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
             <span className="text-sm font-medium flex-1 truncate">{m.title || m.file_name || "無題"}</span>
+            {m.source_type === "template" && (
+              <Badge variant="outline" className="text-[9px] h-4 border-primary/30 text-primary">テンプレート</Badge>
+            )}
             <Switch checked={m.is_active} onCheckedChange={(v) => handleToggle(m.id, v)} />
             {!readOnly && (
               <>
@@ -123,12 +132,12 @@ export default function MaterialDetailModal({
           {renderWCheckSummary(m)}
           {!isWCheck && m.content_text && (
             <p className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1 line-clamp-2">
-              抽出テキスト: 「{m.content_text.slice(0, 100)}...」
+              抽出テキスト: 「{stripJsonPart(m.content_text).slice(0, 100)}...」
             </p>
           )}
           {isWCheck && m.content_text && !getWCheckParsedJson(m.content_text) && (
             <p className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1 line-clamp-2">
-              抽出テキスト: 「{m.content_text.slice(0, 100)}...」
+              抽出テキスト: 「{stripJsonPart(m.content_text).slice(0, 100)}...」
             </p>
           )}
         </>
@@ -228,10 +237,7 @@ export default function MaterialDetailModal({
               <div className="border border-border rounded-lg p-3 bg-muted/30 max-h-48 overflow-y-auto text-xs font-mono whitespace-pre-wrap">
                 {allTexts.map((t, i) => {
                   let displayText = t.text || "(テキストなし)";
-                  // Strip parsed JSON for display
-                  if (displayText.includes('---PARSED_JSON---')) {
-                    displayText = displayText.split('---PARSED_JSON---')[0].trim();
-                  }
+                  displayText = stripJsonPart(displayText);
                   return (
                     <div key={i} className="mb-2">
                       <span className="text-primary font-semibold">[{t.label}]</span>
