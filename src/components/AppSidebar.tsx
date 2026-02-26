@@ -2,7 +2,6 @@ import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useProjectTree } from "@/hooks/useProjectTree";
-import { PROJECT_STATUS_CONFIG } from "@/lib/process-config";
 import {
   Home, Zap, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search,
 } from "lucide-react";
@@ -58,10 +57,16 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
     setOpenProducts((s) => { const next = new Set(s); next.has(id) ? next.delete(id) : next.add(id); return next; });
   };
 
-  const productColorMap: Record<string, string> = {
-    "product-ltr": "hsl(193, 100%, 50%)",
-    "product-cta": "hsl(264, 100%, 58%)",
-    "product-tmd": "hsl(166, 100%, 39%)",
+  const DEFAULT_PRODUCT_COLOR = "#3B82F6";
+  const legacyColorMap: Record<string, string> = {
+    "product-ltr": "#06B6D4",
+    "product-cta": "#8B5CF6",
+    "product-tmd": "#14B8A6",
+  };
+  const getProductColor = (color: string | null) => {
+    if (!color) return DEFAULT_PRODUCT_COLOR;
+    if (color.startsWith("#") || color.startsWith("hsl") || color.startsWith("rgb")) return color;
+    return legacyColorMap[color] || DEFAULT_PRODUCT_COLOR;
   };
 
   const navItems = [
@@ -265,13 +270,13 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
                           className="flex-1 flex items-center gap-2 py-1.5 pr-3 text-sm text-muted-foreground hover:text-foreground transition-colors truncate"
                         >
                           <span className="w-2 h-2 rounded-full shrink-0"
-                            style={{ backgroundColor: productColorMap[product.color || ""] || "hsl(193, 100%, 50%)" }} />
+                            style={{ backgroundColor: getProductColor(product.color) }} />
                           <span className="truncate font-medium">{product.name}</span>
                         </button>
                       </div>
 
                       {openProducts.has(product.id) && productProjects.map((project) => {
-                        const stCfg = PROJECT_STATUS_CONFIG[project.status || "in_progress"] || PROJECT_STATUS_CONFIG.in_progress;
+                        const productColor = getProductColor(product.color);
                         const isCompleted = project.status === "completed";
 
                         return (
@@ -297,7 +302,7 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
                                 isCompleted && "opacity-60"
                               )}
                             >
-                              <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", stCfg.dotClass)} />
+                              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: productColor }} />
                               <span className="truncate">{project.name}</span>
                             </button>
                           </div>
