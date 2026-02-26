@@ -62,6 +62,7 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
   const [uploadProgress, setUploadProgress] = useState("");
   const [extractMsg, setExtractMsg] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [wcheckParsed, setWcheckParsed] = useState<WCheckParsedData | null>(null);
   const [autoGenerateRules, setAutoGenerateRules] = useState(true);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
@@ -86,6 +87,7 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     }
 
     setFileName(f.name);
+    setSelectedFile(f);
     if (!title) setTitle(f.name.replace(/\.[^.]+$/, ""));
 
     // Small files → inline base64, large files → upload to Storage on save
@@ -329,17 +331,23 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
 
       if (error) throw new Error(error.message);
 
-      // Upload large file to Storage and update record with public URL
+      // Upload file to Storage for AI parsing when needed
       let uploadedFileUrl: string | undefined;
-      if (pendingFile && result?.id) {
-        uploadedFileUrl = await uploadFileToStorage(pendingFile, result.id);
-        await supabase.from("reference_materials").update({ file_data: uploadedFileUrl }).eq("id", result.id);
+      const fileForUpload = selectedFile ?? pendingFile;
+      if (fileForUpload && result?.id) {
+        const shouldPersistStorageUrl = fileForUpload.size > MAX_INLINE_SIZE;
+        if (shouldPersistStorageUrl || autoGenerateRules) {
+          uploadedFileUrl = await uploadFileToStorage(fileForUpload, result.id);
+        }
+        if (shouldPersistStorageUrl && uploadedFileUrl) {
+          await supabase.from("reference_materials").update({ file_data: uploadedFileUrl }).eq("id", result.id);
+        }
       }
 
       toast({ title: existing ? "更新しました" : "保存しました" });
       onSaved();
-      if (autoGenerateRules && (finalContentText || uploadedFileUrl)) {
-        triggerRuleGeneration(finalContentText || `[ファイル参照] ${fileName}`, uploadedFileUrl);
+      if (autoGenerateRules && (finalContentText || uploadedFileUrl || (method === "file_upload" && !!fileName))) {
+        triggerRuleGeneration(finalContentText || `[ファイル参照] ${fileName || title}`, uploadedFileUrl);
       }
     } catch (err) {
       toast({ title: "エラー", description: err instanceof Error ? err.message : "保存に失敗しました", variant: "destructive" });
