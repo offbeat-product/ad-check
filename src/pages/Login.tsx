@@ -41,7 +41,7 @@ export default function Login() {
             <span className="mr-2">♟</span>
             <span className="gradient-text">CheckMate AI</span>
           </h1>
-          <p className="text-sm text-muted-foreground">v2.0 — Ad Creative Quality Check</p>
+          <p className="text-sm text-muted-foreground">終わらないリテイクに、終止符を。</p>
         </div>
 
         <form onSubmit={handleSubmit} className="glass-card p-8 space-y-6">
