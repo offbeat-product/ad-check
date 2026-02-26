@@ -1,7 +1,8 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import CommentsPanel from "@/components/CommentsPanel";
 import AICheckPanel from "./AICheckPanel";
-import { MessageCircle, Bot } from "lucide-react";
+import ComparisonCheckPanel from "./ComparisonCheckPanel";
+import { MessageCircle, Bot, GitCompare } from "lucide-react";
 import type { CheckItem } from "@/lib/types";
 import type { CheckMarker } from "@/lib/marker-positions";
 
@@ -20,11 +21,16 @@ interface ReviewRightPanelProps {
   onCheckItemClick?: (patternId: string) => void;
   emptyCheckMessage?: React.ReactNode;
   onAnnotationClick?: (annotationData: unknown) => void;
+  /** File info for comparison check */
+  file?: { file_data: string | null; file_type: string; process_type: string } | null;
+  productId?: string;
+  projectId?: string;
 }
 
 export default function ReviewRightPanel({
   rightTab, onTabChange, items, markers, productCode, commentCounts, highlightCard,
   commentFilter, checkResultId, hasCheckResult, onCommentClick, onCheckItemClick, emptyCheckMessage, onAnnotationClick,
+  file, productId, projectId,
 }: ReviewRightPanelProps) {
   return (
     <div className="w-[380px] shrink-0 h-full border-l border-border flex flex-col bg-card">
@@ -32,6 +38,9 @@ export default function ReviewRightPanel({
         <TabsList className="w-full shrink-0 rounded-none border-b border-border bg-transparent h-10 p-0">
           <TabsTrigger value="ai-check" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs h-10">
             AIチェック結果
+          </TabsTrigger>
+          <TabsTrigger value="comparison" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs h-10">
+            比較チェック
           </TabsTrigger>
           <TabsTrigger value="comments" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs h-10">
             コメント
@@ -57,6 +66,21 @@ export default function ReviewRightPanel({
                 <p className="text-sm font-medium">AIチェック未実行</p>
               </div>
             )
+          )}
+        </TabsContent>
+
+        <TabsContent value="comparison" className="flex-1 flex flex-col overflow-hidden mt-0 ring-0 focus-visible:ring-0">
+          {file && productId && projectId ? (
+            <ComparisonCheckPanel
+              file={file}
+              productId={productId}
+              projectId={projectId}
+            />
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
+              <GitCompare className="h-10 w-10 mb-3 opacity-30" />
+              <p className="text-sm">ファイルを開いて比較チェックを利用してください</p>
+            </div>
           )}
         </TabsContent>
 

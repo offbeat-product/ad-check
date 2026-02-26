@@ -8,7 +8,7 @@ import type { Project, Product, Client, ProjectFile, CheckResultRow } from "@/li
 import { FILE_STATUS_CONFIG } from "@/lib/db-types";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { useProjectProcesses, type ProjectProcess } from "@/hooks/useProjectProcesses";
-import { PROJECT_STATUS_CONFIG, PROCESS_STATUS_CONFIG, PROCESS_FILE_CONFIG, getProcessWebhookPath } from "@/lib/process-config";
+import { PROJECT_STATUS_CONFIG, PROCESS_STATUS_CONFIG, PROCESS_FILE_CONFIG, getProcessWebhookPath, AI_CHECK_CONFIG } from "@/lib/process-config";
 import ProcessManagementModal from "@/components/ProcessManagementModal";
 import ProcessTimeline from "@/components/ProcessTimeline";
 import { Badge } from "@/components/ui/badge";
@@ -361,7 +361,7 @@ export default function ProjectPage() {
               const sectionFiles = getFilesForProcess(proc.process_key);
               const psCfg = PROCESS_STATUS_CONFIG[proc.status] || PROCESS_STATUS_CONFIG.not_started;
               const cfg = PROCESS_FILE_CONFIG[proc.process_key];
-              const webhookAvailable = product ? !!getProcessWebhookPath(product.code, proc.process_key) : false;
+              const webhookAvailable = !!AI_CHECK_CONFIG[proc.process_key]?.enabled;
 
               return (
                 <div

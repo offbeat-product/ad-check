@@ -70,6 +70,46 @@ export async function runSfCheck(productId: string, imageBase64: string, mediaTy
   if (referenceContext) body.reference_context = referenceContext;
 
   const url = getWebhookUrl("sf");
+  const res = await fetch(url!, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) throw new Error(`Webhook error: ${res.status}`);
+  const raw = await res.json();
+  return parseResponse(raw);
+}
+
+/** Run comparison check: sends both original and revised content */
+export async function runComparisonCheck(
+  productId: string,
+  processType: string,
+  data: {
+    script_text?: string;
+    original_text?: string;
+    image_base64?: string;
+    media_type?: string;
+    original_image_base64?: string;
+  },
+  referenceContext?: string
+): Promise<CheckResult> {
+  const isImage = !!data.image_base64;
+  const url = getWebhookUrl(isImage ? "sf" : "script");
+  if (!url) throw new Error("この工程のWebhookはまだ準備中です");
+
+  const body: Record<string, string> = {
+    product_id: productId,
+    process_type: processType,
+    check_mode: "comparison",
+  };
+  if (data.script_text) body.script_text = data.script_text;
+  if (data.original_text) body.original_text = data.original_text;
+  if (data.image_base64) body.image_base64 = data.image_base64;
+  if (data.media_type) body.media_type = data.media_type;
+  if (data.original_image_base64) body.original_image_base64 = data.original_image_base64;
+  if (referenceContext) body.reference_context = referenceContext;
+
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },

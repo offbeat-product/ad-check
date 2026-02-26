@@ -2,8 +2,9 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { runScriptCheck, runSfCheck } from "@/lib/webhook";
+import { runScriptCheck, runSfCheck, getWebhookUrl } from "@/lib/webhook";
 import { gatherReferenceMaterials } from "@/lib/reference-materials";
+import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import type { CheckItem } from "@/lib/types";
 import type { Json } from "@/integrations/supabase/types";
 import type { ProjectFile, Product, Project, Client, CheckResultRow } from "@/lib/db-types";
@@ -115,32 +116,35 @@ export default function FileReviewPage() {
     if (!file || !product || !user || !projectId) return;
     setChecking(true);
     try {
-      const processType = file.process_type === "styleframe" ? "sf" : "script";
-      let res: { overall_status: string; detected_case?: string; check_items: CheckItem[]; ng_count: number; warning_count: number; ok_count: number; total_checks: number };
-
-      // Gather reference materials with process-specific filtering
       const processKey = file.process_type || "script";
+      const aiCfg = AI_CHECK_CONFIG[processKey];
+      const isImageMode = aiCfg?.inputMode === "image";
+      const processType = isImageMode ? "sf" : processKey;
+
+      // Gather reference materials
       const refMaterials = await gatherReferenceMaterials(projectId, product.id, processKey);
       const referenceContext = JSON.stringify(refMaterials);
 
-      if (processType === "sf") {
+      let res: { overall_status: string; detected_case?: string; check_items: CheckItem[]; ng_count: number; warning_count: number; ok_count: number; total_checks: number };
+
+      if (isImageMode) {
         const base64 = file.file_data?.replace(/^data:[^;]+;base64,/, "") || "";
         const mediaType = file.file_data?.match(/^data:([^;]+);/)?.[1] || "image/jpeg";
-        res = await runSfCheck(product.id, base64, mediaType, referenceContext);
+        res = await runSfCheck(product.id, base64, mediaType, processKey, referenceContext);
       } else {
-        res = await runScriptCheck(product.id, file.file_data || "", referenceContext);
+        res = await runScriptCheck(product.id, file.file_data || "", processKey, referenceContext);
       }
 
-      const inputData = processType === "sf" ? { image_base64: file.file_data } : { script_text: file.file_data };
+      const inputData = isImageMode ? { image_base64: file.file_data } : { script_text: file.file_data };
 
       const { data: crData, error: insertErr } = await supabase.from("check_results").insert([{
         user_id: user.id,
         client_name: client?.name || "",
         product_code: product.code,
         product_name: product.name,
-        process_type: processType,
-        input_type: processType === "sf" ? "image" : "text",
-        input_text: processType === "sf" ? null : file.file_data,
+        process_type: processKey,
+        input_type: isImageMode ? "image" : "text",
+        input_text: isImageMode ? null : file.file_data,
         overall_status: res.overall_status,
         detected_case: res.detected_case,
         ng_count: res.ng_count,
@@ -254,15 +258,14 @@ export default function FileReviewPage() {
   if (loading) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">読み込み中...</div>;
   if (!file) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">ファイルが見つかりません</div>;
 
-  const isSf = file.file_type === "image" || file.process_type === "styleframe";
+  const isSf = file.file_type === "image" || AI_CHECK_CONFIG[file.process_type]?.inputMode === "image";
   const currentStatus = file.status || "uploaded";
   const sc = FILE_STATUS_CONFIG[currentStatus] ?? FILE_STATUS_CONFIG.uploaded;
   const hasCheckResult = !!record;
   const hasVersions = versions.length > 1;
-  const canCheck = product && (
-    (file.process_type === "script") ||
-    (file.process_type === "styleframe" && product.code === "tmd_aga")
-  );
+  const aiCfg = AI_CHECK_CONFIG[file.process_type];
+  const canCheck = product && aiCfg?.enabled;
+  const checkDisabled = product && aiCfg && !aiCfg.enabled;
 
   return (
     <div className="flex h-[calc(100vh-0px)] overflow-hidden">
@@ -297,8 +300,10 @@ export default function FileReviewPage() {
                 {checking ? "チェック中..." : "AIチェック実行"}
               </Button>
             )}
-            {!canCheck && file.process_type !== "script" && (
-              <Button size="sm" variant="outline" className="text-xs h-8" disabled><Bot className="h-3 w-3 mr-1" />準備中</Button>
+            {checkDisabled && (
+              <Button size="sm" variant="outline" className="text-xs h-8 opacity-50" disabled>
+                <Bot className="h-3 w-3 mr-1" />AIチェック（準備中）
+              </Button>
             )}
             {hasCheckResult && (
               <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => setRightTab("ai-check")}>
@@ -374,6 +379,9 @@ export default function FileReviewPage() {
         onCommentClick={handleCommentClick}
         onCheckItemClick={scrollToCard}
         onAnnotationClick={handleAnnotationClick}
+        file={file}
+        productId={product?.id}
+        projectId={projectId}
         emptyCheckMessage={
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
             <Bot className="h-10 w-10 mb-3 opacity-30" />

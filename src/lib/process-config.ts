@@ -24,6 +24,22 @@ export const PROCESS_FILE_CONFIG: Record<string, { accept: string; allowTextInpu
   'video_vertical':   { accept: '.mp4,.mov', allowTextInput: false, label: '縦動画' },
 };
 
+// AI check capability per process type
+export type InputMode = 'text' | 'image' | 'audio' | 'video';
+
+export const AI_CHECK_CONFIG: Record<string, { inputMode: InputMode; enabled: boolean }> = {
+  'script':           { inputMode: 'text',  enabled: true },
+  'na_script':        { inputMode: 'text',  enabled: true },
+  'sf':               { inputMode: 'image', enabled: true },
+  'styleframe':       { inputMode: 'image', enabled: true },
+  'storyboard':       { inputMode: 'image', enabled: true },
+  'vcon':             { inputMode: 'video', enabled: false },
+  'narration':        { inputMode: 'audio', enabled: false },
+  'bgm':              { inputMode: 'audio', enabled: false },
+  'video_horizontal': { inputMode: 'video', enabled: false },
+  'video_vertical':   { inputMode: 'video', enabled: false },
+};
+
 // Webhook mapping per product × process
 const WEBHOOK_MAP: Record<string, Record<string, string>> = {
   'ltr_expo': {
