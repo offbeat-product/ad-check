@@ -54,14 +54,14 @@ export default function InviteMemberModal({ open, onOpenChange, projectId, proje
         .rpc("lookup_profile_by_email", { p_email: email.trim() });
       const profile = profileRows && profileRows.length > 0 ? profileRows[0] : null;
 
-      // Insert member record
+      // Insert member record (always pending — user must accept via notification)
       const { error } = await supabase.from("project_members").insert({
         project_id: projectId,
         user_id: profile?.id ?? null,
         email: email.trim(),
         role,
         invited_by: user.id,
-        status: profile ? "accepted" : "pending",
+        status: "pending",
       });
 
       if (error) {
@@ -70,7 +70,7 @@ export default function InviteMemberModal({ open, onOpenChange, projectId, proje
         return;
       }
 
-      // Send notification if user exists
+      // Send notification if user exists; otherwise show pending message
       if (profile) {
         await supabase.from("notifications").insert({
           user_id: profile.id,
@@ -79,18 +79,15 @@ export default function InviteMemberModal({ open, onOpenChange, projectId, proje
           message: `${user.email} からの招待（${ROLE_OPTIONS.find(r => r.value === role)?.label}）`,
           data: { project_id: projectId, invited_by: user.id },
         });
+        setStatusMessage("招待通知を送信しました。相手が承認するとプロジェクトに参加します。");
       } else {
-        setStatusMessage("このユーザーはまだ登録されていません。登録後に自動的にプロジェクトに追加されます。");
+        setStatusMessage("このユーザーはまだ登録されていません。登録後に招待通知が届きます。");
       }
 
       toast({ title: "招待を送信しました" });
       onInvited();
-
-      if (profile) {
-        setEmail("");
-        setRole("member");
-        onOpenChange(false);
-      }
+      setEmail("");
+      setRole("member");
     } catch (e: any) {
       toast({ title: "エラー", description: e.message, variant: "destructive" });
     }
