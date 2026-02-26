@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useProjectTree } from "@/hooks/useProjectTree";
 import { PROJECT_STATUS_CONFIG } from "@/lib/process-config";
 import {
-  Home, Zap, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical,
+  Home, Zap, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import { cn } from "@/lib/utils";
@@ -122,6 +122,16 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
         </h1>
         <p className="text-[11px] text-muted-foreground mt-0.5">クリエイティブ品質を、AIで加速。</p>
       </div>
+
+      {/* Search shortcut hint */}
+      <button
+        onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}
+        className="mx-4 mt-3 mb-1 flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted/30 text-muted-foreground hover:bg-muted/50 transition-colors"
+      >
+        <Search className="h-3.5 w-3.5" />
+        <span className="text-xs flex-1 text-left">検索...</span>
+        <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px]">⌘K</kbd>
+      </button>
 
       <div className="px-5 py-3 border-b border-sidebar-border flex items-center gap-3">
         <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">
