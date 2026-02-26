@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import type { Product, Client, Project } from "@/lib/db-types";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,8 +14,28 @@ import {
 } from "@/components/ui/alert-dialog";
 import ReferenceMaterialsSection from "@/components/reference/ReferenceMaterialsSection";
 import CheckRulesTab from "@/components/product/CheckRulesTab";
-import { FolderOpen, Pencil, Trash2, Check, X } from "lucide-react";
+import { FolderOpen, Pencil, Trash2, Check, X, Palette } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+
+const PRODUCT_COLOR_PRESETS = [
+  "#3B82F6", "#6366F1", "#8B5CF6", "#A855F7",
+  "#EC4899", "#EF4444", "#F97316", "#F59E0B",
+  "#22C55E", "#14B8A6", "#06B6D4", "#0EA5E9",
+  "#64748B", "#78716C", "#D946EF", "#0D9488",
+];
+
+const DEFAULT_PRODUCT_COLOR = "#3B82F6";
+const LEGACY_COLOR_MAP: Record<string, string> = {
+  "product-ltr": "#06B6D4",
+  "product-cta": "#8B5CF6",
+  "product-tmd": "#14B8A6",
+};
+const resolveColor = (c: string | null) => {
+  if (!c) return DEFAULT_PRODUCT_COLOR;
+  if (c.startsWith("#") || c.startsWith("hsl") || c.startsWith("rgb")) return c;
+  return LEGACY_COLOR_MAP[c] || DEFAULT_PRODUCT_COLOR;
+};
 
 export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
@@ -106,10 +127,52 @@ export default function ProductPage() {
               </div>
             ) : (
               <>
+                <span className="w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: resolveColor(product.color) }} />
                 <h1 className="text-lg font-bold">{product.name}</h1>
                 <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={() => { setEditName(product.name); setEditing(true); }}>
                   <Pencil className="h-3.5 w-3.5" />
                 </Button>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground">
+                      <Palette className="h-3.5 w-3.5" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-3" align="start">
+                    <p className="text-xs font-medium text-muted-foreground mb-2">カラーを選択</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {PRODUCT_COLOR_PRESETS.map((color) => (
+                        <button
+                          key={color}
+                          className={cn("w-7 h-7 rounded-full border-2 transition-transform hover:scale-110",
+                            resolveColor(product.color) === color ? "border-foreground scale-110" : "border-transparent"
+                          )}
+                          style={{ backgroundColor: color }}
+                          onClick={async () => {
+                            const { error } = await supabase.from("products").update({ color }).eq("id", product.id);
+                            if (!error) {
+                              setProduct({ ...product, color });
+                              toast({ title: "カラーを更新しました" });
+                            }
+                          }}
+                        />
+                      ))}
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <label className="text-[10px] text-muted-foreground">カスタム:</label>
+                      <input
+                        type="color"
+                        value={resolveColor(product.color)}
+                        onChange={async (e) => {
+                          const color = e.target.value;
+                          const { error } = await supabase.from("products").update({ color }).eq("id", product.id);
+                          if (!error) setProduct({ ...product, color });
+                        }}
+                        className="w-6 h-6 rounded cursor-pointer border-0 p-0"
+                      />
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </>
             )}
           </div>
