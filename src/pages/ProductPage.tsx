@@ -26,12 +26,14 @@ export default function ProductPage() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState("");
+  const [editExternalId, setEditExternalId] = useState("");
 
   const fetchData = useCallback(async () => {
     if (!id) return;
     const { data: prod, error: prodErr } = await supabase.from("products").select("*").eq("id", id).maybeSingle();
     if (handleSupabaseError(prodErr, "product") || !prod) { setLoading(false); return; }
     setProduct(prod);
+    setEditExternalId(prod.external_product_id ?? "");
 
     const [clRes, prRes] = await Promise.all([
       prod.client_id ? supabase.from("clients").select("*").eq("id", prod.client_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
@@ -215,8 +217,32 @@ export default function ProductPage() {
                 </div>
               )}
               <div>
-                <label className="text-xs font-medium text-muted-foreground">外部商材ID（n8n側）</label>
-                <p className="text-sm font-mono">{product.external_product_id || "未設定"}</p>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">外部商材ID（n8n側）</label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={editExternalId}
+                    onChange={(e) => setEditExternalId(e.target.value)}
+                    placeholder="例: b0000000-0000-0000-0000-000000000003"
+                    className="h-8 text-sm font-mono max-w-md"
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8"
+                    disabled={editExternalId === (product.external_product_id ?? "")}
+                    onClick={async () => {
+                      const val = editExternalId.trim() || null;
+                      const { error } = await supabase.from("products").update({ external_product_id: val }).eq("id", product.id);
+                      if (error) {
+                        toast({ title: "エラー", description: error.message, variant: "destructive" });
+                      } else {
+                        setProduct({ ...product, external_product_id: val });
+                        toast({ title: "外部商材IDを更新しました" });
+                      }
+                    }}
+                  >
+                    保存
+                  </Button>
+                </div>
               </div>
             </div>
           </TabsContent>
