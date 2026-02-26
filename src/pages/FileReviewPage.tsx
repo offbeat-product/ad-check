@@ -379,6 +379,7 @@ export default function FileReviewPage() {
         onCommentClick={handleCommentClick}
         onCheckItemClick={scrollToCard}
         onAnnotationClick={handleAnnotationClick}
+        overallStatus={record?.overall_status}
         file={file}
         productId={product?.id}
         projectId={projectId}

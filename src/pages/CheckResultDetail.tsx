@@ -246,6 +246,7 @@ export default function CheckResultDetail() {
         onCommentClick={handleCommentClick}
         onCheckItemClick={scrollToCard}
         onAnnotationClick={handleAnnotationClick}
+        overallStatus={record.overall_status}
       />
 
       <CompareView checkResultId={id!} processType={record.process_type} originalText={record.input_text} open={compareOpen} onOpenChange={setCompareOpen} />

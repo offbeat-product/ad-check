@@ -127,25 +127,23 @@ export default function ComparisonCheckPanel({ file, productId, projectId, onChe
     const { check_items, ng_count, warning_count, ok_count, overall_status } = result;
     return (
       <div className="space-y-3">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-medium">比較チェック結果:</span>
-          <span className={cn("text-xs font-bold px-2 py-0.5 rounded",
-            overall_status === "A" ? "bg-status-ok/10 text-status-ok" :
-            overall_status === "B" ? "bg-status-warning/10 text-status-warning" :
-            "bg-status-ng/10 text-status-ng"
-          )}>Grade {overall_status}</span>
+          <span className={cn("text-xs font-bold px-2 py-0.5 rounded text-white",
+            overall_status === "A" || overall_status === "B" ? "bg-[#10B981]" : "bg-[#EF4444]"
+          )}>{overall_status === "A" || overall_status === "B" ? "提出OK" : "提出NG"}</span>
         </div>
         <div className="flex gap-3 text-xs">
-          <span className="text-status-ng font-medium">NG: {ng_count}</span>
-          <span className="text-status-warning font-medium">WARNING: {warning_count}</span>
-          <span className="text-status-ok font-medium">OK: {ok_count}</span>
+          <span className="text-[#EF4444] font-medium">修正必須: {ng_count}</span>
+          <span className="text-[#F59E0B] font-medium">要確認: {warning_count}</span>
+          <span className="text-[#10B981] font-medium">問題なし: {ok_count}</span>
         </div>
         <div className="space-y-2 max-h-[300px] overflow-y-auto">
           {check_items.map((item: CheckItem, i: number) => (
             <div key={i} className={cn("p-2 rounded border text-xs",
-              item.status === "NG" ? "border-status-ng/30 bg-status-ng/5" :
-              item.status === "WARNING" ? "border-status-warning/30 bg-status-warning/5" :
-              "border-status-ok/30 bg-status-ok/5"
+              item.status === "NG" ? "border-[#EF4444]/30 bg-[#EF4444]/5" :
+              item.status === "WARNING" ? "border-[#F59E0B]/30 bg-[#F59E0B]/5" :
+              "border-[#10B981]/30 bg-[#10B981]/5"
             )}>
               <div className="font-medium">{item.pattern_id}: {item.item}</div>
               <div className="text-muted-foreground mt-0.5">{item.detail}</div>

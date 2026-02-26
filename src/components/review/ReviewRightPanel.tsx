@@ -21,6 +21,7 @@ interface ReviewRightPanelProps {
   onCheckItemClick?: (patternId: string) => void;
   emptyCheckMessage?: React.ReactNode;
   onAnnotationClick?: (annotationData: unknown) => void;
+  overallStatus?: string | null;
   /** File info for comparison check */
   file?: { file_data: string | null; file_type: string; process_type: string } | null;
   productId?: string;
@@ -30,7 +31,7 @@ interface ReviewRightPanelProps {
 export default function ReviewRightPanel({
   rightTab, onTabChange, items, markers, productCode, commentCounts, highlightCard,
   commentFilter, checkResultId, hasCheckResult, onCommentClick, onCheckItemClick, emptyCheckMessage, onAnnotationClick,
-  file, productId, projectId,
+  overallStatus, file, productId, projectId,
 }: ReviewRightPanelProps) {
   return (
     <div className="w-[380px] shrink-0 h-full border-l border-border flex flex-col bg-card">
@@ -58,6 +59,7 @@ export default function ReviewRightPanel({
               onCommentClick={onCommentClick}
               checkResultId={checkResultId}
               onTabChange={onTabChange}
+              overallStatus={overallStatus}
             />
           ) : (
             emptyCheckMessage || (
