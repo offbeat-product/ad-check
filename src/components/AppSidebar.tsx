@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { useProfile } from "@/hooks/useProfile";
 import { useProjectTree } from "@/hooks/useProjectTree";
 import {
-  Home, Zap, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search, Users,
+  Home, Zap, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +17,7 @@ interface AppSidebarProps {
 
 export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
   const { user, signOut, role, isAdmin, canEdit } = useAuth();
+  const { profile } = useProfile();
   const navigate = useNavigate();
   const location = useLocation();
   const tree = useProjectTree();
@@ -194,10 +196,10 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
 
       <div className="px-5 py-3 border-b border-sidebar-border flex items-center gap-3">
         <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">
-          {user?.email?.charAt(0).toUpperCase() || "U"}
+          {(profile?.display_name || user?.email || "U").charAt(0).toUpperCase()}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">{user?.email || "User"}</p>
+          <p className="text-sm font-medium truncate">{profile?.display_name || user?.email || "User"}</p>
           <Badge className={cn("text-[10px] h-4 px-1.5", ROLE_LABELS[role]?.color)}>
             {ROLE_LABELS[role]?.label || role}
           </Badge>
@@ -332,15 +334,6 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
             </div>
           ))}
         </div>
-
-        {isAdmin && (
-          <button onClick={() => navigate("/team")}
-            className={cn("w-full flex items-center gap-3 px-5 py-2.5 text-sm font-medium transition-colors",
-              location.pathname === "/team" ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-[3px] border-primary"
-                : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent")}>
-            <Users className="h-4 w-4" />チームメンバー
-          </button>
-        )}
 
         <button onClick={() => navigate("/settings")}
           className={cn("w-full flex items-center gap-3 px-5 py-2.5 text-sm font-medium transition-colors",
