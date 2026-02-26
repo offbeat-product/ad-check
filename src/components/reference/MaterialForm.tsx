@@ -25,7 +25,8 @@ import { Upload, Link2, FileText, Sparkles, LayoutTemplate } from "lucide-react"
 import { resolveWebhookProductId } from "@/lib/resolve-product-id";
 
 const PARSE_REFERENCE_URL = "https://offbeat-inc.app.n8n.cloud/webhook/parse-reference";
-const RULES_LIST_URL = "https://offbeat-inc.app.n8n.cloud/webhook/rules-list";
+const EXTERNAL_SUPABASE_URL = "https://vhvgnslszruyztcoikqq.supabase.co/rest/v1/check_rules";
+const EXTERNAL_SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZodmduc2xzenJ1eXp0Y29pa3FxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NzkxNzksImV4cCI6MjA4NzQ1NTE3OX0.JChqETzSd1HJFuSBJNZ8xJy6lPENql_lprbTVLvTFeA";
 const ALL_PROCESS_TYPES = ["script", "styleframe", "storyboard", "na_script", "bgm", "narration", "vcon", "video_horizontal", "video_vertical"];
 
 interface Props {
@@ -141,24 +142,32 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
 
   const syncRulesToLocalDb = async (): Promise<number> => {
     const webhookPid = await resolveWebhookProductId(productId);
-    const res = await fetch(RULES_LIST_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ product_id: webhookPid }),
-    });
-    if (!res.ok) throw new Error(`rules-list HTTP ${res.status}`);
 
-    const data = await res.json();
-    let rulesArray: any[] = [];
-    if (Array.isArray(data) && data.length > 0 && Array.isArray(data[0]?.rules)) {
-      rulesArray = data[0].rules;
-    } else if (Array.isArray(data?.rules)) {
-      rulesArray = data.rules;
-    } else if (Array.isArray(data)) {
-      rulesArray = data;
+    // Fetch rules directly from external Supabase DB
+    const idsToTry = [webhookPid];
+    if (webhookPid !== productId) idsToTry.push(productId);
+
+    let externalRules: any[] = [];
+    for (const pid of idsToTry) {
+      const res = await fetch(
+        `${EXTERNAL_SUPABASE_URL}?product_id=eq.${pid}&select=*`,
+        {
+          headers: {
+            apikey: EXTERNAL_SUPABASE_ANON,
+            Authorization: `Bearer ${EXTERNAL_SUPABASE_ANON}`,
+          },
+        }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          externalRules = data;
+          break;
+        }
+      }
     }
 
-    const normalizedRules = rulesArray
+    const normalizedRules = externalRules
       .filter((r: any) => r?.rule_id && r?.process_type && r?.category && r?.description)
       .map((r: any) => ({
         product_id: productId,
@@ -173,40 +182,13 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
       }));
 
     if (normalizedRules.length === 0) {
-      throw new Error("同期対象ルールが0件でした");
+      throw new Error("外部DBにルールが見つかりません");
     }
 
-    const { data: existingRows, error: existingError } = await supabase
-      .from("check_rules")
-      .select("id, rule_id")
-      .eq("product_id", productId)
-      .like("rule_id", "AUTO-%");
-    if (existingError) throw existingError;
-
-    const existingByRuleId = new Map((existingRows ?? []).map((row) => [row.rule_id, row.id]));
-    const incomingRuleIds = new Set(normalizedRules.map((r) => r.rule_id));
-
-    const upsertPayload = normalizedRules.map((r) => ({
-      ...r,
-      id: existingByRuleId.get(r.rule_id),
-    }));
-
-    const { error: upsertError } = await supabase
-      .from("check_rules")
-      .upsert(upsertPayload, { onConflict: "id" });
-    if (upsertError) throw upsertError;
-
-    const staleIds = (existingRows ?? [])
-      .filter((row) => !incomingRuleIds.has(row.rule_id))
-      .map((row) => row.id);
-
-    if (staleIds.length > 0) {
-      const { error: deleteError } = await supabase
-        .from("check_rules")
-        .delete()
-        .in("id", staleIds);
-      if (deleteError) throw deleteError;
-    }
+    // Delete existing and insert fresh
+    await supabase.from("check_rules").delete().eq("product_id", productId);
+    const { error: insertError } = await supabase.from("check_rules").insert(normalizedRules);
+    if (insertError) throw insertError;
 
     return normalizedRules.length;
   };
