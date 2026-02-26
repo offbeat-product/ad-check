@@ -503,6 +503,13 @@ export default function CheckPage() {
         <section className="glass-card p-6 space-y-5">
           <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">STEP 1 — コンテキスト選択</h2>
 
+          {clients.length === 0 ? (
+            <div className="border border-dashed border-border rounded-lg p-6 text-center space-y-2">
+              <p className="text-sm text-muted-foreground">クライアント・商材が登録されていません</p>
+              <p className="text-xs text-muted-foreground">先に設定画面からクライアント・商材を登録してください</p>
+            </div>
+          ) : (
+          <>
           {/* ① Client */}
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1.5 block">① クライアント選択（必須）</label>
@@ -527,12 +534,16 @@ export default function CheckPage() {
               disabled={!selectedClientId}
             >
               <SelectTrigger className={`w-full ${!selectedClientId ? "opacity-50" : ""}`}>
-                <SelectValue placeholder={selectedClientId ? "商材を選択" : "クライアントを先に選択してください"} />
+                <SelectValue placeholder={selectedClientId ? (filteredProducts.length === 0 ? "この クライアントに商材がありません" : "商材を選択") : "クライアントを先に選択してください"} />
               </SelectTrigger>
               <SelectContent>
-                {filteredProducts.map(p => (
-                  <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                ))}
+                {filteredProducts.length === 0 ? (
+                  <SelectItem value="__empty__" disabled>商材が登録されていません</SelectItem>
+                ) : (
+                  filteredProducts.map(p => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))
+                )}
               </SelectContent>
             </Select>
           </div>
@@ -607,6 +618,8 @@ export default function CheckPage() {
                 <p className="text-xs text-status-warning font-medium mt-2">{product.warning}</p>
               )}
             </div>
+          )}
+          </>
           )}
         </section>
 
