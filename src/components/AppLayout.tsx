@@ -3,6 +3,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import AppSidebar from "@/components/AppSidebar";
 import CreateProjectModal from "@/components/CreateProjectModal";
 import GlobalSearch from "@/components/GlobalSearch";
+import NotificationBell from "@/components/NotificationBell";
 import { Menu, X, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -43,9 +44,9 @@ export default function AppLayout() {
           <h1 className="text-sm font-bold flex-1">
             <span>♟</span> <span className="gradient-text">CheckMate AI</span>
           </h1>
+          <NotificationBell />
           <button
             onClick={() => {
-              // Trigger Cmd+K
               window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }));
             }}
             className="p-2 rounded-lg hover:bg-muted"

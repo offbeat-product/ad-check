@@ -8,6 +8,7 @@ import { PROJECT_STATUS_CONFIG } from "@/lib/process-config";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Badge } from "@/components/ui/badge";
 import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderOpen, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import NotificationBell from "@/components/NotificationBell";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import { cn } from "@/lib/utils";
 import CreateProjectModal from "@/components/CreateProjectModal";
@@ -151,10 +152,13 @@ export default function Dashboard() {
     <div className="min-h-screen">
       <header className="border-b border-border px-6 py-3 flex items-center justify-between bg-card">
         <div className="text-sm text-muted-foreground">ホーム</div>
-        <button onClick={() => navigate("/check")}
-          className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity">
-          + 新規チェック
-        </button>
+        <div className="flex items-center gap-2">
+          <NotificationBell />
+          <button onClick={() => navigate("/check")}
+            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity">
+            + 新規チェック
+          </button>
+        </div>
       </header>
 
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
