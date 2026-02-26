@@ -135,7 +135,7 @@ export default function SharedViewPage() {
     <div className="flex h-screen overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <header className="border-b border-border px-4 py-3 flex items-center gap-3 bg-card shrink-0">
-          <span className="text-sm font-bold">♟ CheckGo AI</span>
+          <span className="text-sm font-bold">🚀 CheckGo AI</span>
           <Badge variant="outline" className="text-xs">共有ビュー</Badge>
           <span className="text-sm text-muted-foreground ml-2">{record.client_name} / {record.product_name}</span>
         </header>
