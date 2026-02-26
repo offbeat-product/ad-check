@@ -14,8 +14,11 @@ export function getWebhookUrl(processType: string): string | null {
     case "storyboard":
     case "vcon":
       return `${BASE_URL}/check-sf-v2`;
+    case "narration":
+    case "bgm":
+      return `${BASE_URL}/check-audio-v2`;
     default:
-      return null; // narration, bgm, video_horizontal, video_vertical — not yet supported
+      return null; // video_horizontal, video_vertical — not yet supported
   }
 }
 
@@ -71,6 +74,37 @@ export async function runSfCheck(productId: string, imageBase64: string, mediaTy
 
   const url = getWebhookUrl("sf");
   const res = await fetch(url!, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) throw new Error(`Webhook error: ${res.status}`);
+  const raw = await res.json();
+  return parseResponse(raw);
+}
+
+/** Run audio check for narration/bgm processes */
+export async function runAudioCheck(
+  productId: string,
+  processType: string,
+  scriptText: string,
+  metadata?: { file_name?: string; duration?: number | null; format?: string | null },
+  referenceContext?: string
+): Promise<CheckResult> {
+  const url = getWebhookUrl("narration");
+  if (!url) throw new Error("音声チェックのWebhookが見つかりません");
+
+  const body: Record<string, any> = {
+    product_id: productId,
+    process_type: processType,
+    script_text: scriptText,
+    audio_description: "",
+    metadata: metadata || { file_name: "", duration: null, format: null },
+    reference_context: referenceContext ? JSON.parse(referenceContext) : {},
+  };
+
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

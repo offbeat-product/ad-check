@@ -34,8 +34,8 @@ export const AI_CHECK_CONFIG: Record<string, { inputMode: InputMode; enabled: bo
   'styleframe':       { inputMode: 'image', enabled: true },
   'storyboard':       { inputMode: 'image', enabled: true },
   'vcon':             { inputMode: 'video', enabled: false },
-  'narration':        { inputMode: 'audio', enabled: false },
-  'bgm':              { inputMode: 'audio', enabled: false },
+  'narration':        { inputMode: 'audio', enabled: true },
+  'bgm':              { inputMode: 'audio', enabled: true },
   'video_horizontal': { inputMode: 'video', enabled: false },
   'video_vertical':   { inputMode: 'video', enabled: false },
 };
