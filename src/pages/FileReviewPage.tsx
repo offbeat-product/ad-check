@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { runScriptCheck, runSfCheck, runAudioCheck, runVideoCheck, getWebhookUrl } from "@/lib/webhook";
+import { runScriptCheck, getWebhookUrl, webhookFetch } from "@/lib/webhook";
 import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import type { CheckItem } from "@/lib/types";
@@ -126,30 +126,74 @@ export default function FileReviewPage() {
 
       let res: { overall_status: string; detected_case?: string; check_items: CheckItem[]; ng_count: number; warning_count: number; ok_count: number; total_checks: number };
 
-      if (inputMode === "image") {
-        const base64 = file.file_data?.replace(/^data:[^;]+;base64,/, "") || "";
-        const mediaType = file.file_data?.match(/^data:([^;]+);/)?.[1] || "image/jpeg";
-        res = await runSfCheck(product.id, base64, mediaType, processKey, referenceContext);
-      } else if (inputMode === "audio") {
-        // Audio processes: send file_data as script_text (text content of the file)
-        res = await runAudioCheck(product.id, processKey, file.file_data || "", {
-          file_name: file.file_name || "",
-          duration: null,
-          format: null,
-        }, {
-          audioUrl: "",
-          audioMimeType: "",
-        }, referenceContext);
-      } else if (inputMode === "video") {
-        // Video processes: send file_data as script_text
-        res = await runVideoCheck(product.id, processKey, file.file_data || "", {
-          videoUrl: "",
-          videoMimeType: "",
-          videoBase64: "",
-          metadata: { file_name: file.file_name || "" },
-        }, referenceContext);
-      } else {
+      if (inputMode === "text") {
+        // Text processes: send directly (small payload)
         res = await runScriptCheck(product.id, file.file_data || "", processKey, referenceContext);
+      } else {
+        // Media processes: upload to Storage and send public URL instead of base64
+        const webhookUrl = getWebhookUrl(processKey);
+        if (!webhookUrl) throw new Error(`この工程(${processKey})のWebhookが見つかりません`);
+
+        const body: Record<string, any> = {
+          product_id: product.id,
+          process_type: processKey,
+          script_text: "",
+          reference_context: refMaterials,
+        };
+
+        if (inputMode === "image") {
+          // Upload image to deliverables bucket
+          const fileData = file.file_data || "";
+          const mediaType = fileData.match(/^data:([^;]+);/)?.[1] || "image/jpeg";
+          const ext = mediaType.includes("png") ? "png" : "jpg";
+          const storagePath = `${projectId}/${file.id}.${ext}`;
+          const base64Content = fileData.replace(/^data:[^;]+;base64,/, "");
+          const byteChars = atob(base64Content);
+          const byteArray = new Uint8Array(byteChars.length);
+          for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
+          const blob = new Blob([byteArray], { type: mediaType });
+          await supabase.storage.from("deliverables").upload(storagePath, blob, { upsert: true, contentType: mediaType });
+          const { data: urlData } = supabase.storage.from("deliverables").getPublicUrl(storagePath);
+          body.image_url = urlData.publicUrl;
+          body.image_mime_type = mediaType;
+        } else if (inputMode === "audio") {
+          // Upload audio to audios bucket
+          const fileData = file.file_data || "";
+          const mediaType = fileData.match(/^data:([^;]+);/)?.[1] || "audio/mpeg";
+          const ext = mediaType.includes("wav") ? "wav" : mediaType.includes("m4a") ? "m4a" : "mp3";
+          const storagePath = `${projectId}/${file.id}.${ext}`;
+          const base64Content = fileData.replace(/^data:[^;]+;base64,/, "");
+          const byteChars = atob(base64Content);
+          const byteArray = new Uint8Array(byteChars.length);
+          for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
+          const blob = new Blob([byteArray], { type: mediaType });
+          await supabase.storage.from("audios").upload(storagePath, blob, { upsert: true, contentType: mediaType });
+          const { data: urlData } = supabase.storage.from("audios").getPublicUrl(storagePath);
+          body.audio_url = urlData.publicUrl;
+          body.audio_mime_type = mediaType;
+          body.script_text = file.file_data?.startsWith("data:") ? "" : (file.file_data || "");
+        } else if (inputMode === "video") {
+          // Upload video to videos bucket
+          const fileData = file.file_data || "";
+          const mediaType = fileData.match(/^data:([^;]+);/)?.[1] || "video/mp4";
+          const ext = mediaType.includes("webm") ? "webm" : mediaType.includes("mov") ? "mov" : "mp4";
+          const storagePath = `${projectId}/${file.id}.${ext}`;
+          const base64Content = fileData.replace(/^data:[^;]+;base64,/, "");
+          const byteChars = atob(base64Content);
+          const byteArray = new Uint8Array(byteChars.length);
+          for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
+          const blob = new Blob([byteArray], { type: mediaType });
+          await supabase.storage.from("videos").upload(storagePath, blob, { upsert: true, contentType: mediaType });
+          const { data: urlData } = supabase.storage.from("videos").getPublicUrl(storagePath);
+          body.video_url = urlData.publicUrl;
+          body.video_mime_type = mediaType;
+          body.script_text = file.file_data?.startsWith("data:") ? "" : (file.file_data || "");
+        }
+
+        console.log('[CheckMate] Webhook URL:', webhookUrl);
+        console.log('[CheckMate] Body size:', JSON.stringify(body).length, 'bytes');
+        console.log('[CheckMate] Body keys:', Object.keys(body));
+        res = await webhookFetch(webhookUrl, body);
       }
 
       const inputData = inputMode === "image" ? { image_base64: file.file_data } : { script_text: file.file_data };

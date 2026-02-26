@@ -9,7 +9,7 @@ export interface RetryOptions {
 
 const DEFAULT_OPTIONS: Required<Omit<RetryOptions, "onRetry">> = {
   maxRetries: 2,
-  timeoutMs: 120_000, // 2 minutes for AI checks
+  timeoutMs: 180_000, // 3 minutes for AI checks
   initialDelayMs: 1000,
 };
 

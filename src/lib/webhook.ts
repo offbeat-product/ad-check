@@ -54,7 +54,7 @@ function parseResponse(raw: any): CheckResult {
   };
 }
 
-async function webhookFetch(url: string, body: Record<string, any>): Promise<CheckResult> {
+export async function webhookFetch(url: string, body: Record<string, any>): Promise<CheckResult> {
   console.log("[Webhook] Sending request:", { url, body: { ...body, image_base64: body.image_base64 ? `[${body.image_base64.length} chars]` : undefined, video_base64: body.video_base64 ? `[${body.video_base64.length} chars]` : undefined, audio_base64: body.audio_base64 ? `[${body.audio_base64.length} chars]` : undefined } });
   try {
     const res = await fetchWithRetry(
