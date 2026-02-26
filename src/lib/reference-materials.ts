@@ -39,6 +39,7 @@ export const MATERIAL_TEMPLATES: Record<string, string> = {
 };
 
 export async function fetchMaterials(scopeType: string, scopeId: string): Promise<ReferenceMaterial[]> {
+  if (!scopeId) return [];
   const { data, error } = await supabase
     .from("reference_materials")
     .select("*")
