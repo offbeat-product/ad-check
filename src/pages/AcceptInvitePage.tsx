@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { Rocket } from "lucide-react";
 
 const ROLE_LABELS: Record<string, string> = { admin: "管理者", member: "メンバー", viewer: "閲覧者" };
 
@@ -138,7 +139,7 @@ export default function AcceptInvitePage() {
       <div className="flex min-h-screen items-center justify-center bg-muted p-4">
         <div className="w-full max-w-md space-y-6 text-center">
           <h1 className="text-4xl font-bold">
-            <span className="mr-2">🚀</span>
+            <Rocket className="h-8 w-8 mr-2 inline-block" />
             <span className="gradient-text">CheckGo AI</span>
           </h1>
           <div className="glass-card p-8 space-y-4">
@@ -157,7 +158,7 @@ export default function AcceptInvitePage() {
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-2">
           <h1 className="text-4xl font-bold">
-            <span className="mr-2">🚀</span>
+            <Rocket className="h-8 w-8 mr-2 inline-block" />
             <span className="gradient-text">CheckGo AI</span>
           </h1>
           <p className="text-sm text-muted-foreground">制作現場に、最速の「GO」を。</p>
