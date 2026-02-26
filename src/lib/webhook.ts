@@ -12,7 +12,6 @@ export function getWebhookUrl(processType: string): string | null {
     case "sf":
     case "styleframe":
     case "storyboard":
-    case "vcon":
       return `${BASE_URL}/check-sf-v2`;
     case "narration":
     case "bgm":
