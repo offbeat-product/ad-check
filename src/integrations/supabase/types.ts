@@ -138,16 +138,19 @@ export type Database = {
           created_at: string | null
           id: string
           name: string
+          sort_order: number | null
         }
         Insert: {
           created_at?: string | null
           id?: string
           name: string
+          sort_order?: number | null
         }
         Update: {
           created_at?: string | null
           id?: string
           name?: string
+          sort_order?: number | null
         }
         Relationships: []
       }
@@ -344,6 +347,7 @@ export type Database = {
           rules_desc: string | null
           sample_text: string | null
           sf_enabled: boolean | null
+          sort_order: number | null
           warning: string | null
           webhook_paths: Json | null
         }
@@ -360,6 +364,7 @@ export type Database = {
           rules_desc?: string | null
           sample_text?: string | null
           sf_enabled?: boolean | null
+          sort_order?: number | null
           warning?: string | null
           webhook_paths?: Json | null
         }
@@ -376,6 +381,7 @@ export type Database = {
           rules_desc?: string | null
           sample_text?: string | null
           sf_enabled?: boolean | null
+          sort_order?: number | null
           warning?: string | null
           webhook_paths?: Json | null
         }
