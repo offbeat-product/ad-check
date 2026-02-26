@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { compressImage } from "@/lib/image-compress";
 import { useToast } from "@/hooks/use-toast";
+import { validateFileSize, formatFileSize } from "@/lib/file-validation";
 import type { Project, Product, Client, ProjectFile, CheckResultRow } from "@/lib/db-types";
 import { FILE_STATUS_CONFIG } from "@/lib/db-types";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
@@ -19,6 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import ReferenceMaterialsSection from "@/components/reference/ReferenceMaterialsSection";
 import {
@@ -96,6 +98,7 @@ export default function ProjectPage() {
   const [uploadTextInput, setUploadTextInput] = useState("");
   const [useTextInput, setUseTextInput] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [checkResults, setCheckResults] = useState<Record<string, Pick<CheckResultRow, "id" | "overall_status" | "ng_count" | "warning_count">>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -236,6 +239,7 @@ export default function ProjectPage() {
   const handleFileUpload = async () => {
     if (!uploadModal || !id || !user) return;
     setUploading(true);
+    setUploadProgress(0);
 
     let fileData = "";
     let fileType = "text";
@@ -243,71 +247,105 @@ export default function ProjectPage() {
     let fileName = "";
     const cfg = PROCESS_FILE_CONFIG[uploadModal];
 
-    if (useTextInput && cfg?.allowTextInput) {
-      fileData = uploadTextInput;
-      fileSize = new Blob([uploadTextInput]).size;
-      fileName = `${cfg?.label || uploadModal}_${Date.now()}.txt`;
-      fileType = "text";
-    } else if (selectedFile) {
-      fileName = sanitizeFileName(selectedFile.name);
-      fileSize = selectedFile.size;
-      const bucket = getStorageBucket(uploadModal);
-
-      if (bucket) {
-        // Upload to Storage bucket (audio/video)
-        fileType = selectedFile.type.startsWith("audio/") ? "audio" : "video";
-        const storagePath = `${id}/${Date.now()}_${fileName}`;
-        const { error: storageError } = await supabase.storage
-          .from(bucket)
-          .upload(storagePath, selectedFile, { upsert: true });
-
-        if (storageError) {
-          toast({ title: "エラー", description: storageError.message, variant: "destructive" });
+    try {
+      if (useTextInput && cfg?.allowTextInput) {
+        fileData = uploadTextInput;
+        fileSize = new Blob([uploadTextInput]).size;
+        fileName = `${cfg?.label || uploadModal}_${Date.now()}.txt`;
+        fileType = "text";
+        setUploadProgress(50);
+      } else if (selectedFile) {
+        // Validate file size
+        const sizeError = validateFileSize(selectedFile, uploadModal);
+        if (sizeError) {
+          toast({ title: "エラー", description: sizeError, variant: "destructive" });
           setUploading(false);
+          setUploadProgress(null);
           return;
         }
-        const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(storagePath);
-        fileData = urlData.publicUrl;
-      } else if (selectedFile.type.startsWith("image/")) {
-        fileType = "image";
-        try {
+
+        fileName = sanitizeFileName(selectedFile.name);
+        fileSize = selectedFile.size;
+        const bucket = getStorageBucket(uploadModal);
+
+        if (bucket) {
+          fileType = selectedFile.type.startsWith("audio/") ? "audio" : "video";
+          const storagePath = `${id}/${Date.now()}_${fileName}`;
+
+          // Upload with progress using XHR
+          const session = await supabase.auth.getSession();
+          const token = session.data.session?.access_token;
+          if (!token) throw new Error("認証が必要です");
+
+          await new Promise<void>((resolve, reject) => {
+            const xhr = new XMLHttpRequest();
+            xhr.upload.addEventListener("progress", (e) => {
+              if (e.lengthComputable) {
+                setUploadProgress(Math.round((e.loaded / e.total) * 90));
+              }
+            });
+            xhr.addEventListener("load", () => {
+              if (xhr.status >= 200 && xhr.status < 300) resolve();
+              else reject(new Error(`アップロード失敗: ${xhr.status}`));
+            });
+            xhr.addEventListener("error", () => reject(new Error("ネットワークエラー")));
+            xhr.addEventListener("abort", () => reject(new Error("アップロードがキャンセルされました")));
+
+            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+            xhr.open("POST", `${supabaseUrl}/storage/v1/object/${bucket}/${storagePath}`);
+            xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+            xhr.setRequestHeader("x-upsert", "true");
+            xhr.send(selectedFile);
+          });
+
+          const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(storagePath);
+          fileData = urlData.publicUrl;
+        } else if (selectedFile.type.startsWith("image/")) {
+          fileType = "image";
+          setUploadProgress(30);
           const compressed = await compressImage(selectedFile);
           fileData = `data:${compressed.mediaType};base64,${compressed.base64}`;
-        } catch {
-          toast({ title: "エラー", description: "画像の圧縮に失敗しました", variant: "destructive" });
-          setUploading(false);
-          return;
+          setUploadProgress(70);
+        } else {
+          fileType = "text";
+          fileData = await selectedFile.text();
+          setUploadProgress(70);
         }
       } else {
-        fileType = "text";
-        fileData = await selectedFile.text();
+        setUploading(false);
+        setUploadProgress(null);
+        return;
       }
-    } else {
+
+      setUploadProgress(90);
+      const { error } = await supabase.from("project_files").insert({
+        project_id: id,
+        process_type: uploadModal,
+        file_name: fileName,
+        file_type: fileType,
+        file_data: fileData,
+        file_size_bytes: fileSize,
+        created_by: user.email || user.id,
+      });
+
+      if (error) {
+        toast({ title: "エラー", description: error.message, variant: "destructive" });
+      } else {
+        setUploadProgress(100);
+        toast({ title: "アップロード完了" });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "アップロードに失敗しました";
+      toast({ title: "アップロードエラー", description: message, variant: "destructive" });
+    } finally {
+      setUploadModal(null);
+      setSelectedFile(null);
+      setUploadTextInput("");
+      setUseTextInput(false);
       setUploading(false);
-      return;
+      setUploadProgress(null);
+      fetchData();
     }
-
-    const { error } = await supabase.from("project_files").insert({
-      project_id: id,
-      process_type: uploadModal,
-      file_name: fileName,
-      file_type: fileType,
-      file_data: fileData,
-      file_size_bytes: fileSize,
-      created_by: user.email || user.id,
-    });
-
-    if (error) {
-      toast({ title: "エラー", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "アップロード完了" });
-    }
-    setUploadModal(null);
-    setSelectedFile(null);
-    setUploadTextInput("");
-    setUseTextInput(false);
-    setUploading(false);
-    fetchData();
   };
 
   const getFilesForProcess = (processKey: string) =>
@@ -548,14 +586,28 @@ export default function ProjectPage() {
               <Textarea value={uploadTextInput} onChange={(e) => setUploadTextInput(e.target.value)}
                 placeholder="テキストを入力..." className="min-h-[150px] text-sm font-mono" />
             ) : (
-              <div onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-border rounded-xl p-8 text-center cursor-pointer hover:border-primary/50 transition-colors">
+              <div onClick={() => !uploading && fileInputRef.current?.click()}
+                className={cn("border-2 border-dashed border-border rounded-xl p-8 text-center transition-colors",
+                  uploading ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:border-primary/50")}>
                 <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">{selectedFile ? selectedFile.name : "クリックしてファイルを選択"}</p>
+                <p className="text-sm text-muted-foreground">
+                  {selectedFile ? (
+                    <span>{selectedFile.name} <span className="text-muted-foreground/60">({formatFileSize(selectedFile.size)})</span></span>
+                  ) : "クリックしてファイルを選択"}
+                </p>
                 <p className="text-xs text-muted-foreground/60 mt-1">{getFileFormatHint(uploadModal || "")}</p>
                 <input ref={fileInputRef} type="file" className="hidden"
                   accept={PROCESS_FILE_CONFIG[uploadModal || ""]?.accept}
                   onChange={(e) => { const f = e.target.files?.[0]; if (f) setSelectedFile(f); }} />
+              </div>
+            )}
+            {uploading && uploadProgress !== null && (
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>アップロード中...</span>
+                  <span>{uploadProgress}%</span>
+                </div>
+                <Progress value={uploadProgress} className="h-2" />
               </div>
             )}
             <Button onClick={handleFileUpload} disabled={uploading || (!selectedFile && !uploadTextInput.trim())} className="w-full">
