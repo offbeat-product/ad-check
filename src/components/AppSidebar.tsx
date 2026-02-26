@@ -3,9 +3,10 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useProjectTree } from "@/hooks/useProjectTree";
 import {
-  Home, Zap, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search,
+  Home, Zap, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search, Users,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
+import { Badge } from "@/components/ui/badge";
 // NotificationBell is also rendered in AppLayout header for desktop
 import { cn } from "@/lib/utils";
 
@@ -14,7 +15,7 @@ interface AppSidebarProps {
 }
 
 export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
-  const { user, signOut } = useAuth();
+  const { user, signOut, role, isAdmin, canEdit } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const tree = useProjectTree();
@@ -69,9 +70,15 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
     return legacyColorMap[color] || DEFAULT_PRODUCT_COLOR;
   };
 
+  const ROLE_LABELS: Record<string, { label: string; color: string }> = {
+    admin: { label: "管理者", color: "text-red-600 bg-red-100 dark:bg-red-900/30" },
+    member: { label: "メンバー", color: "text-blue-600 bg-blue-100 dark:bg-blue-900/30" },
+    viewer: { label: "閲覧者", color: "text-muted-foreground bg-muted" },
+  };
+
   const navItems = [
     { icon: Home, label: "ホーム", path: "/dashboard" },
-    { icon: Zap, label: "クイックチェック", path: "/check" },
+    ...(canEdit ? [{ icon: Zap, label: "クイックチェック", path: "/check" }] : []),
   ];
 
   const activeProjectId = location.pathname.match(/\/project\/([^/]+)/)?.[1];
@@ -172,7 +179,7 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
           <span>♟</span>
           <span className="gradient-text">CheckMate AI</span>
         </h1>
-        <p className="text-[11px] text-muted-foreground mt-0.5"><p className="text-[11px] text-muted-foreground mt-0.5">終わらないリテイクに、終止符を。</p></p>
+        <p className="text-[11px] text-muted-foreground mt-0.5">終わらないリテイクに、終止符を。</p>
       </div>
 
       {/* Search shortcut hint */}
@@ -191,8 +198,10 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
         </div>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium truncate">{user?.email || "User"}</p>
+          <Badge className={cn("text-[10px] h-4 px-1.5", ROLE_LABELS[role]?.color)}>
+            {ROLE_LABELS[role]?.label || role}
+          </Badge>
         </div>
-        {/* NotificationBell moved to AppLayout header */}
       </div>
 
       <nav className="flex-1 overflow-y-auto py-2">
@@ -323,6 +332,15 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
             </div>
           ))}
         </div>
+
+        {isAdmin && (
+          <button onClick={() => navigate("/team")}
+            className={cn("w-full flex items-center gap-3 px-5 py-2.5 text-sm font-medium transition-colors",
+              location.pathname === "/team" ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-[3px] border-primary"
+                : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent")}>
+            <Users className="h-4 w-4" />チームメンバー
+          </button>
+        )}
 
         <button onClick={() => navigate("/settings")}
           className={cn("w-full flex items-center gap-3 px-5 py-2.5 text-sm font-medium transition-colors",
