@@ -171,10 +171,10 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
           <Badge className={cn("text-xs font-bold px-2.5 py-1", getSubmitBadgeClass(overallStatus))}>
             {submit.label}
           </Badge>
-          <span className="text-[10px] text-[#EF4444] font-bold">修正必須 {counts.NG}</span>
-          <span className="text-[10px] text-[#F59E0B] font-bold">要確認 {counts.WARNING}</span>
-          <span className="text-[10px] text-[#10B981] font-bold">問題なし {counts.OK}</span>
-          {counts.MANUAL > 0 && <span className="text-[10px] text-[#6B7280] font-bold">手動確認 {counts.MANUAL}</span>}
+          <span className="text-[10px] text-status-ng font-bold">修正必須 {counts.NG}</span>
+          <span className="text-[10px] text-status-warning font-bold">要確認 {counts.WARNING}</span>
+          <span className="text-[10px] text-status-ok font-bold">問題なし {counts.OK}</span>
+          {counts.MANUAL > 0 && <span className="text-[10px] text-status-manual font-bold">手動確認 {counts.MANUAL}</span>}
         </div>
 
         {/* Filter buttons */}
@@ -237,7 +237,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
         </div>
         <Button
           size="sm"
-          className="w-full text-xs bg-[#F59E0B] text-black hover:bg-[#F59E0B]/90"
+          className="w-full text-xs bg-status-warning text-black hover:bg-status-warning/90"
           disabled={selectedItems.size === 0 || applying}
           onClick={handleApplyCorrections}
         >

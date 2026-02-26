@@ -6,6 +6,8 @@ import type { CheckItem, CheckStatus } from "@/lib/types";
 import type { Json } from "@/integrations/supabase/types";
 import type { CheckResultRow } from "@/lib/db-types";
 import { useReviewState, useDownload, useExportCsv } from "@/hooks/useReviewState";
+import { exportCheckExcel } from "@/lib/export-excel";
+import { getSubmitLabel, getSubmitBadgeClass } from "@/lib/check-display";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -15,7 +17,7 @@ import ShareLinkModal from "@/components/ShareLinkModal";
 import ImagePreview from "@/components/review/ImagePreview";
 import ScriptDisplay from "@/components/review/ScriptDisplay";
 import ReviewRightPanel from "@/components/review/ReviewRightPanel";
-import { ArrowLeft, Download, GitCompare, Link2, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Download, GitCompare, Link2, CheckCircle2, FileSpreadsheet } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
@@ -87,6 +89,21 @@ export default function CheckResultDetail() {
   const handleExportCsv = () => {
     if (!record) return;
     exportCsv(items, `checkmate_${record.product_code}_${Date.now()}.csv`);
+  };
+
+  const handleExportExcel = () => {
+    if (!record) return;
+    const submit = getSubmitLabel(record.overall_status);
+    exportCheckExcel(
+      items,
+      {
+        productName: record.product_name,
+        processType: record.process_type,
+        overallStatus: submit.label,
+        date: record.created_at ? new Date(record.created_at).toLocaleString("ja-JP") : "",
+      },
+      `checkmate_${record.product_code}_${Date.now()}.xlsx`
+    );
   };
 
   // Fetch saved annotations from comments
@@ -201,6 +218,9 @@ export default function CheckResultDetail() {
               <Download className="h-3 w-3 mr-1" />DL
             </Button>
             <Button size="sm" variant="outline" className="text-xs h-8" onClick={handleExportCsv}>CSV</Button>
+            <Button size="sm" variant="outline" className="text-xs h-8" onClick={handleExportExcel}>
+              <FileSpreadsheet className="h-3 w-3 mr-1" />Excel
+            </Button>
             <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => setCompareOpen(true)}>
               <GitCompare className="h-3 w-3 mr-1" />比較
             </Button>

@@ -668,8 +668,8 @@ function CheckHistory({ projectId, files, checkResults }: {
                     {getSubmitLabel(cr?.overall_status).label}
                   </Badge>
                 </td>
-                <td className="px-4 py-2.5 text-center text-[#EF4444] font-bold">{cr?.ng_count ?? 0}</td>
-                <td className="px-4 py-2.5 text-center text-[#F59E0B] font-bold">{cr?.warning_count ?? 0}</td>
+                <td className="px-4 py-2.5 text-center text-status-ng font-bold">{cr?.ng_count ?? 0}</td>
+                <td className="px-4 py-2.5 text-center text-status-warning font-bold">{cr?.warning_count ?? 0}</td>
               </tr>
             );
           })}

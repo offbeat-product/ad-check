@@ -18,7 +18,7 @@ const ITEMS_PER_PAGE = 10;
 const statusBadgeMap: Record<string, { label: string; class: string }> = {
   pending: { label: "チェック済", class: "bg-muted text-muted-foreground" },
   in_progress: { label: "修正中", class: "bg-primary/10 text-primary" },
-  resolved: { label: "修正完了", class: "bg-[#10B981]/10 text-[#10B981]" },
+  resolved: { label: "修正完了", class: "bg-status-ok/10 text-status-ok" },
   approved: { label: "承認済", class: "bg-product-cta/10 text-product-cta" },
 };
 
@@ -47,6 +47,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
+  const [refetchKey, setRefetchKey] = useState(0);
 
   // Fetch paginated records
   useEffect(() => {
@@ -105,7 +106,22 @@ export default function Dashboard() {
 
     fetchData();
     return () => { cancelled = true; };
-  }, [user, page]);
+  }, [user, page, refetchKey]);
+
+  // Realtime: auto-refresh when check_results change
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel("dashboard-check-results")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "check_results", filter: `user_id=eq.${user.id}` },
+        () => { setRefetchKey((k) => k + 1); }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
 
@@ -144,8 +160,8 @@ export default function Dashboard() {
       <div className="p-6 space-y-6 max-w-7xl mx-auto">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={ClipboardCheck} label="今日のチェック数" value={stats.todayChecks} color="text-primary" />
-          <StatCard icon={AlertTriangle} label="修正必須（累計）" value={stats.totalNg} color="text-[#EF4444]" />
-          <StatCard icon={BarChart3} label="提出OK率" value={`${stats.okRate}%`} color="text-[#10B981]" />
+          <StatCard icon={AlertTriangle} label="修正必須（累計）" value={stats.totalNg} color="text-status-ng" />
+          <StatCard icon={BarChart3} label="提出OK率" value={`${stats.okRate}%`} color="text-status-ok" />
           <StatCard icon={TrendingUp} label="直近7日" value={`${stats.weekChecks} 件`} color="text-primary" />
         </div>
 
@@ -232,8 +248,8 @@ export default function Dashboard() {
                              {getSubmitLabel(r.overall_status).label}
                            </Badge>
                          </td>
-                         <td className="px-4 py-2.5 text-center text-[#EF4444] font-bold">{r.ng_count ?? 0}</td>
-                         <td className="px-4 py-2.5 text-center text-[#F59E0B] font-bold">{r.warning_count ?? 0}</td>
+                         <td className="px-4 py-2.5 text-center text-status-ng font-bold">{r.ng_count ?? 0}</td>
+                         <td className="px-4 py-2.5 text-center text-status-warning font-bold">{r.warning_count ?? 0}</td>
                         <td className="px-4 py-2.5 text-center">
                           <Badge variant="outline" className={st.class}>{st.label}</Badge>
                         </td>
@@ -270,8 +286,8 @@ export default function Dashboard() {
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <span>{r.process_type}</span>
                         <span>·</span>
-                        <span className="text-[#EF4444]">修正必須 {r.ng_count ?? 0}</span>
-                        <span className="text-[#F59E0B]">要確認 {r.warning_count ?? 0}</span>
+                        <span className="text-status-ng">修正必須 {r.ng_count ?? 0}</span>
+                        <span className="text-status-warning">要確認 {r.warning_count ?? 0}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-[10px] text-muted-foreground">

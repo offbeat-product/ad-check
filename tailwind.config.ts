@@ -65,6 +65,7 @@ export default {
           warning: "hsl(var(--status-warning))",
           ng: "hsl(var(--status-ng))",
           info: "hsl(var(--status-info))",
+          manual: "hsl(var(--status-manual))",
         },
         grade: {
           a: "hsl(var(--grade-a))",
