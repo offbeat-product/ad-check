@@ -93,6 +93,7 @@ export async function runAudioCheck(
   processType: string,
   scriptText: string,
   metadata?: { file_name?: string; duration?: number | null; format?: string | null },
+  options?: { audioUrl?: string; audioMimeType?: string },
   referenceContext?: string
 ): Promise<CheckResult> {
   const url = getWebhookUrl("narration");
@@ -102,6 +103,8 @@ export async function runAudioCheck(
     product_id: productId,
     process_type: processType,
     script_text: scriptText,
+    audio_url: options?.audioUrl || "",
+    audio_mime_type: options?.audioMimeType || "",
     audio_description: "",
     metadata: metadata || { file_name: "", duration: null, format: null },
     reference_context: referenceContext ? JSON.parse(referenceContext) : {},
