@@ -18,6 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Upload, X, Info, RefreshCw, Download, Music, Film, CheckCircle2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 export default function CheckPage() {
   const { user } = useAuth();
@@ -68,6 +69,7 @@ export default function CheckPage() {
   // Execution
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<CheckResult | null>(null);
+  const [showAudioConfirm, setShowAudioConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // ── Fetch clients & products ──
@@ -347,9 +349,28 @@ export default function CheckPage() {
         if (selectedProcess === "video_vertical") {
           metadata.aspect_ratio = "9:16";
         }
+
+        // Convert video file to base64 if available
+        let videoBase64 = "";
+        let videoMimeType = mediaFile?.type || "";
+        if (mediaFile) {
+          videoBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const result = reader.result as string;
+              // Remove data URL prefix to get raw base64
+              const base64 = result.split(",")[1] || result;
+              resolve(base64);
+            };
+            reader.onerror = () => reject(new Error("動画の読み込みに失敗しました"));
+            reader.readAsDataURL(mediaFile);
+          });
+        }
+
         res = await runVideoCheck(product.id, selectedProcess, videoScriptText, {
           videoUrl: videoStorageUrl || "",
-          videoMimeType: mediaFile?.type || "",
+          videoMimeType,
+          videoBase64,
           metadata,
         });
       } else {
@@ -583,7 +604,7 @@ export default function CheckPage() {
               <div className="space-y-5">
                 {/* Audio file upload */}
                 <div>
-                  <Label className="text-xs font-medium text-muted-foreground mb-2 block">音声ファイル（任意）</Label>
+                  <Label className="text-xs font-medium text-muted-foreground mb-2 block">音声ファイル（推奨 — アップロードするとAIが音声を直接分析します）</Label>
                   <MediaInput
                     mediaFile={mediaFile}
                     mediaPreviewUrl={mediaPreviewUrl}
@@ -658,8 +679,7 @@ export default function CheckPage() {
 
                 {/* Video file upload — optional */}
                 <div>
-                  <Label className="text-xs font-medium text-muted-foreground mb-2 block">動画ファイル（任意・管理用）</Label>
-                  <p className="text-xs text-muted-foreground/70 mb-2">※現段階ではAIチェックにはテキスト情報を使用します</p>
+                  <Label className="text-xs font-medium text-muted-foreground mb-2 block">動画ファイル（推奨 — アップロードするとAIが動画を直接分析します）</Label>
                   <MediaInput
                     mediaFile={mediaFile}
                     mediaPreviewUrl={mediaPreviewUrl}
@@ -737,15 +757,24 @@ export default function CheckPage() {
               </div>
             ) : processConfig.inputMode === "text" ? (
               <div className="space-y-3">
-                <Textarea
-                  value={scriptText}
-                  onChange={e => setScriptText(e.target.value)}
-                  placeholder={"冒頭：\n前半：\n中盤：\n後半：\n締め："}
-                  className="min-h-[200px] resize-y border-border font-mono text-sm"
-                />
-                <Button variant="outline" size="sm" onClick={handleLoadSample} className="text-xs" disabled={!product?.sample_text}>
-                  サンプル読込
-                </Button>
+                <div className="relative">
+                  <Textarea
+                    value={scriptText}
+                    onChange={e => setScriptText(e.target.value)}
+                    placeholder="テキストを貼り付けてください"
+                    className="min-h-[200px] resize-y border-border font-mono text-sm"
+                  />
+                  {product?.sample_text && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleLoadSample}
+                      className="absolute top-2 right-2 text-[10px] h-6 px-2 opacity-70 hover:opacity-100"
+                    >
+                      テンプレート挿入
+                    </Button>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="border-2 border-dashed border-border rounded-xl p-12 text-center text-muted-foreground">
@@ -758,7 +787,13 @@ export default function CheckPage() {
         {/* ── Execute & Result ── */}
         <section className="space-y-6">
           <Button
-            onClick={handleExecute}
+            onClick={() => {
+              if (processConfig.inputMode === "audio" && !mediaFile) {
+                setShowAudioConfirm(true);
+                return;
+              }
+              handleExecute();
+            }}
             disabled={loading || !canExecute}
             className="w-full bg-primary text-primary-foreground font-bold text-base py-6 hover:opacity-90 transition-opacity disabled:opacity-40"
           >
@@ -790,6 +825,23 @@ export default function CheckPage() {
           )}
         </section>
       </div>
+
+      <AlertDialog open={showAudioConfirm} onOpenChange={setShowAudioConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>音声ファイルなしでチェックしますか？</AlertDialogTitle>
+            <AlertDialogDescription>
+              音声ファイルなしの場合、テキストのみの簡易チェックになります。音声関連の項目は手動確認が必要になりますが、よろしいですか？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>戻る</AlertDialogCancel>
+            <AlertDialogAction onClick={() => { setShowAudioConfirm(false); handleExecute(); }}>
+              チェック実行
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

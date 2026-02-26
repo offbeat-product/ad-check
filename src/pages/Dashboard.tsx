@@ -290,7 +290,7 @@ export default function Dashboard() {
           </div>
 
           <div className="lg:col-span-2 space-y-4">
-            <TopCorrectionPatterns limit={5} />
+            <TopCorrectionPatterns limit={3} />
             <div className="glass-card overflow-hidden">
               <div className="px-4 py-3 border-b border-border">
                 <h2 className="text-sm font-semibold">最近のファイル</h2>

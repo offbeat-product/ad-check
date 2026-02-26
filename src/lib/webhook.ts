@@ -135,6 +135,7 @@ export async function runVideoCheck(
   options?: {
     videoUrl?: string;
     videoMimeType?: string;
+    videoBase64?: string;
     metadata?: Record<string, any>;
   },
   referenceContext?: string
@@ -148,6 +149,7 @@ export async function runVideoCheck(
     script_text: scriptText,
     video_url: options?.videoUrl || "",
     video_mime_type: options?.videoMimeType || "",
+    video_base64: options?.videoBase64 || "",
     metadata: options?.metadata || {},
     reference_context: referenceContext ? JSON.parse(referenceContext) : {},
   };
