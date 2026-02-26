@@ -5,6 +5,7 @@ export const MATERIAL_TYPES = [
   { id: "wcheck", label: "Wチェックシート", icon: "✅", color: "#22C55E", description: "社内QMチェック用・CL確認用チェックリスト" },
   { id: "brand_guideline", label: "ブランドガイドライン", icon: "🎨", color: "#8B5CF6", description: "トンマナ・カラー・フォント・ロゴ使用規定" },
   { id: "legal_rule", label: "法令レギュレーション", icon: "⚖️", color: "#EF4444", description: "薬機法・景表法・業界固有の広告規制" },
+  { id: "media_regulation", label: "広告媒体別レギュレーション", icon: "📱", color: "#06B6D4", description: "配信媒体の入稿規定・審査ポリシー" },
   { id: "correction_history", label: "修正履歴", icon: "📝", color: "#F59E0B", description: "過去の修正指示・フィードバック・学び" },
 ] as const;
 
@@ -33,6 +34,7 @@ export const MATERIAL_TEMPLATES: Record<string, string> = {
   wcheck: `【チェック項目一覧】\n□ \n□ \n□ \n\n【特に注意すべきポイント】\n\n【クライアント固有のルール】`,
   brand_guideline: `【ブランドカラー】\nメイン: \nサブ: \nアクセント: \n\n【フォント】\n和文: \n欧文: \n\n【ロゴ使用規定】\n\n【トンマナ】\n\n【NG事項】\n\n【その他ビジュアルルール】`,
   legal_rule: `【適用法令】\n\n【広告表現の禁止事項】\n\n【必須記載事項】\n\n【注意が必要な表現】\n\n【参考条文・ガイドライン】`,
+  media_regulation: `【配信媒体】\n\n【入稿規定】\n\n【審査ポリシー】\n\n【セーフゾーン】`,
   correction_history: `【日付】\n\n【修正依頼元】\n\n【修正内容】\n\n【修正理由】`,
 };
 
