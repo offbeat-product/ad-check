@@ -142,51 +142,67 @@ export default function FileReviewPage() {
         };
 
         if (inputMode === "image") {
-          // Upload image to deliverables bucket
+          // Send image as base64 (n8n expects image_base64)
           const fileData = file.file_data || "";
-          const mediaType = fileData.match(/^data:([^;]+);/)?.[1] || "image/jpeg";
-          const ext = mediaType.includes("png") ? "png" : "jpg";
-          const storagePath = `${projectId}/${file.id}.${ext}`;
-          const base64Content = fileData.replace(/^data:[^;]+;base64,/, "");
-          const byteChars = atob(base64Content);
-          const byteArray = new Uint8Array(byteChars.length);
-          for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
-          const blob = new Blob([byteArray], { type: mediaType });
-          await supabase.storage.from("deliverables").upload(storagePath, blob, { upsert: true, contentType: mediaType });
-          const { data: urlData } = supabase.storage.from("deliverables").getPublicUrl(storagePath);
-          body.image_url = urlData.publicUrl;
-          body.image_mime_type = mediaType;
+          if (fileData.startsWith("data:")) {
+            const mediaType = fileData.match(/^data:([^;]+);/)?.[1] || "image/jpeg";
+            // Only send base64 if under 20MB
+            if (fileData.length < 20 * 1024 * 1024) {
+              body.image_base64 = fileData;
+            } else {
+              // Fallback: upload to storage and send URL for very large files
+              const ext = mediaType.includes("png") ? "png" : "jpg";
+              const storagePath = `${projectId}/${file.id}.${ext}`;
+              const base64Content = fileData.replace(/^data:[^;]+;base64,/, "");
+              const byteChars = atob(base64Content);
+              const byteArray = new Uint8Array(byteChars.length);
+              for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
+              const blob = new Blob([byteArray], { type: mediaType });
+              await supabase.storage.from("deliverables").upload(storagePath, blob, { upsert: true, contentType: mediaType });
+              const { data: urlData } = supabase.storage.from("deliverables").getPublicUrl(storagePath);
+              body.image_url = urlData.publicUrl;
+            }
+            body.image_mime_type = mediaType;
+          }
         } else if (inputMode === "audio") {
-          // Upload audio to audios bucket
+          // Send audio as base64 (n8n expects audio_base64)
           const fileData = file.file_data || "";
-          const mediaType = fileData.match(/^data:([^;]+);/)?.[1] || "audio/mpeg";
-          const ext = mediaType.includes("wav") ? "wav" : mediaType.includes("m4a") ? "m4a" : "mp3";
-          const storagePath = `${projectId}/${file.id}.${ext}`;
-          const base64Content = fileData.replace(/^data:[^;]+;base64,/, "");
-          const byteChars = atob(base64Content);
-          const byteArray = new Uint8Array(byteChars.length);
-          for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
-          const blob = new Blob([byteArray], { type: mediaType });
-          await supabase.storage.from("audios").upload(storagePath, blob, { upsert: true, contentType: mediaType });
-          const { data: urlData } = supabase.storage.from("audios").getPublicUrl(storagePath);
-          body.audio_url = urlData.publicUrl;
-          body.audio_mime_type = mediaType;
+          if (fileData.startsWith("data:")) {
+            const mediaType = fileData.match(/^data:([^;]+);/)?.[1] || "audio/mpeg";
+            if (fileData.length < 20 * 1024 * 1024) {
+              body.audio_base64 = fileData;
+            } else {
+              const ext = mediaType.includes("wav") ? "wav" : mediaType.includes("m4a") ? "m4a" : "mp3";
+              const storagePath = `${projectId}/${file.id}.${ext}`;
+              const base64Content = fileData.replace(/^data:[^;]+;base64,/, "");
+              const byteChars = atob(base64Content);
+              const byteArray = new Uint8Array(byteChars.length);
+              for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
+              const blob = new Blob([byteArray], { type: mediaType });
+              await supabase.storage.from("audios").upload(storagePath, blob, { upsert: true, contentType: mediaType });
+              const { data: urlData } = supabase.storage.from("audios").getPublicUrl(storagePath);
+              body.audio_url = urlData.publicUrl;
+            }
+            body.audio_mime_type = mediaType;
+          }
           body.script_text = file.file_data?.startsWith("data:") ? "" : (file.file_data || "");
         } else if (inputMode === "video") {
-          // Upload video to videos bucket
+          // Video: too large for base64, upload to storage and send URL only
           const fileData = file.file_data || "";
-          const mediaType = fileData.match(/^data:([^;]+);/)?.[1] || "video/mp4";
-          const ext = mediaType.includes("webm") ? "webm" : mediaType.includes("mov") ? "mov" : "mp4";
-          const storagePath = `${projectId}/${file.id}.${ext}`;
-          const base64Content = fileData.replace(/^data:[^;]+;base64,/, "");
-          const byteChars = atob(base64Content);
-          const byteArray = new Uint8Array(byteChars.length);
-          for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
-          const blob = new Blob([byteArray], { type: mediaType });
-          await supabase.storage.from("videos").upload(storagePath, blob, { upsert: true, contentType: mediaType });
-          const { data: urlData } = supabase.storage.from("videos").getPublicUrl(storagePath);
-          body.video_url = urlData.publicUrl;
-          body.video_mime_type = mediaType;
+          if (fileData.startsWith("data:")) {
+            const mediaType = fileData.match(/^data:([^;]+);/)?.[1] || "video/mp4";
+            const ext = mediaType.includes("webm") ? "webm" : mediaType.includes("mov") ? "mov" : "mp4";
+            const storagePath = `${projectId}/${file.id}.${ext}`;
+            const base64Content = fileData.replace(/^data:[^;]+;base64,/, "");
+            const byteChars = atob(base64Content);
+            const byteArray = new Uint8Array(byteChars.length);
+            for (let i = 0; i < byteChars.length; i++) byteArray[i] = byteChars.charCodeAt(i);
+            const blob = new Blob([byteArray], { type: mediaType });
+            await supabase.storage.from("videos").upload(storagePath, blob, { upsert: true, contentType: mediaType });
+            const { data: urlData } = supabase.storage.from("videos").getPublicUrl(storagePath);
+            body.video_url = urlData.publicUrl;
+            body.video_mime_type = mediaType;
+          }
           body.script_text = file.file_data?.startsWith("data:") ? "" : (file.file_data || "");
         }
 
