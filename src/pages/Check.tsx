@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Upload, X, Info, RefreshCw, Download } from "lucide-react";
+import { Loader2, Upload, X, Info, RefreshCw, Download, Music, Film } from "lucide-react";
 
 export default function CheckPage() {
   const { user } = useAuth();
@@ -36,6 +36,9 @@ export default function CheckPage() {
   const [scriptText, setScriptText] = useState("");
   const [imageData, setImageData] = useState<CompressResult | null>(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [mediaPreviewUrl, setMediaPreviewUrl] = useState<string | null>(null);
+  const mediaInputRef = useRef<HTMLInputElement>(null);
 
   // Rule info
   const [ruleCount, setRuleCount] = useState<number | null>(null);
@@ -189,8 +192,28 @@ export default function CheckPage() {
   }, [handleImageUpload]);
 
   useEffect(() => {
-    return () => { if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl); };
-  }, [imagePreviewUrl]);
+    return () => {
+      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+      if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
+    };
+  }, [imagePreviewUrl, mediaPreviewUrl]);
+
+  const handleMediaUpload = useCallback((file: File) => {
+    const maxSize = 50 * 1024 * 1024; // 50MB
+    if (file.size > maxSize) {
+      toast({ title: "エラー", description: "ファイルサイズは50MB以下にしてください", variant: "destructive" });
+      return;
+    }
+    setMediaFile(file);
+    const url = URL.createObjectURL(file);
+    setMediaPreviewUrl(url);
+  }, [toast]);
+
+  const clearMedia = useCallback(() => {
+    setMediaFile(null);
+    if (mediaPreviewUrl) URL.revokeObjectURL(mediaPreviewUrl);
+    setMediaPreviewUrl(null);
+  }, [mediaPreviewUrl]);
 
   const handleExecute = async () => {
     if (!user) return;
@@ -265,10 +288,16 @@ export default function CheckPage() {
 
   const loadingText = processConfig.inputMode === "image"
     ? "🎨 Vision APIによるチェック実行中..."
+    : processConfig.inputMode === "audio"
+    ? "🎵 音声解析中..."
+    : processConfig.inputMode === "video"
+    ? "🎬 動画解析中..."
     : "AIチェック実行中...";
 
   const canExecute = !!product && processConfig.enabled && (
-    processConfig.inputMode === "image" ? !!imageData : !!scriptText.trim()
+    processConfig.inputMode === "image" ? !!imageData
+    : processConfig.inputMode === "audio" || processConfig.inputMode === "video" ? !!mediaFile
+    : !!scriptText.trim()
   );
 
   return (
@@ -420,6 +449,24 @@ export default function CheckPage() {
                   setImagePreviewUrl(null);
                 }}
               />
+            ) : processConfig.inputMode === "audio" ? (
+              <MediaInput
+                mediaFile={mediaFile}
+                mediaPreviewUrl={mediaPreviewUrl}
+                inputRef={mediaInputRef}
+                onUpload={handleMediaUpload}
+                onClear={clearMedia}
+                mode="audio"
+              />
+            ) : processConfig.inputMode === "video" ? (
+              <MediaInput
+                mediaFile={mediaFile}
+                mediaPreviewUrl={mediaPreviewUrl}
+                inputRef={mediaInputRef}
+                onUpload={handleMediaUpload}
+                onClear={clearMedia}
+                mode="video"
+              />
             ) : processConfig.inputMode === "text" ? (
               <div className="space-y-3">
                 <Textarea
@@ -531,6 +578,93 @@ function ImageInput({
       <div className="flex gap-4 text-xs text-muted-foreground">
         <span>元サイズ: {(imageData.originalSize / 1024).toFixed(0)}KB</span>
         <span>→ 圧縮後: {(imageData.compressedSize / 1024).toFixed(0)}KB</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Media (Audio/Video) Input Sub-component ──
+function MediaInput({
+  mediaFile,
+  mediaPreviewUrl,
+  inputRef,
+  onUpload,
+  onClear,
+  mode,
+}: {
+  mediaFile: File | null;
+  mediaPreviewUrl: string | null;
+  inputRef: React.RefObject<HTMLInputElement>;
+  onUpload: (file: File) => void;
+  onClear: () => void;
+  mode: "audio" | "video";
+}) {
+  const isAudio = mode === "audio";
+  const accept = isAudio ? ".mp3,.wav,.m4a,.aac,.ogg" : ".mp4,.mov,.webm,.avi";
+  const Icon = isAudio ? Music : Film;
+  const label = isAudio ? "音声ファイル" : "動画ファイル";
+  const formats = isAudio ? "MP3 / WAV / M4A" : "MP4 / MOV / WebM";
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file) onUpload(file);
+  };
+
+  if (!mediaFile) {
+    return (
+      <div
+        onDrop={handleDrop}
+        onDragOver={e => e.preventDefault()}
+        onClick={() => inputRef.current?.click()}
+        className="border-2 border-dashed border-border rounded-xl p-12 text-center cursor-pointer hover:border-primary/50 transition-colors bg-muted/30"
+      >
+        <Icon className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+        <p className="text-sm text-muted-foreground">{label}をドラッグ＆ドロップ、またはクリックして選択</p>
+        <p className="text-xs text-muted-foreground/60 mt-1">{formats}・最大50MB</p>
+        <input
+          ref={inputRef}
+          type="file"
+          accept={accept}
+          className="hidden"
+          onChange={e => e.target.files?.[0] && onUpload(e.target.files[0])}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="relative">
+        <div className="border border-border rounded-lg p-4 bg-muted/30">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+              <Icon className="h-5 w-5 text-primary" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{mediaFile.name}</p>
+              <p className="text-xs text-muted-foreground">
+                {(mediaFile.size / (1024 * 1024)).toFixed(1)} MB
+              </p>
+            </div>
+            <button
+              onClick={onClear}
+              className="bg-destructive rounded-full p-1 hover:opacity-80 shrink-0"
+            >
+              <X className="h-3 w-3 text-destructive-foreground" />
+            </button>
+          </div>
+          {mediaPreviewUrl && isAudio && (
+            <audio controls className="w-full" src={mediaPreviewUrl}>
+              お使いのブラウザは音声再生に対応していません。
+            </audio>
+          )}
+          {mediaPreviewUrl && !isAudio && (
+            <video controls className="w-full max-h-64 rounded-lg" src={mediaPreviewUrl}>
+              お使いのブラウザは動画再生に対応していません。
+            </video>
+          )}
+        </div>
       </div>
     </div>
   );
