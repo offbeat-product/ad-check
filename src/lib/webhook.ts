@@ -1,5 +1,6 @@
 import type { CheckResult } from "./types";
 import { fetchWithRetry, type RetryOptions } from "./fetch-with-retry";
+import { resolveWebhookProductId } from "./resolve-product-id";
 
 const BASE_URL = "https://offbeat-inc.app.n8n.cloud/webhook";
 
@@ -76,7 +77,8 @@ export async function webhookFetch(url: string, body: Record<string, any>): Prom
 }
 
 export async function runScriptCheck(productId: string, scriptText: string, processType: string = "script", referenceContext?: string): Promise<CheckResult> {
-  const body: Record<string, any> = { product_id: productId, process_type: processType, script_text: scriptText };
+  const webhookProductId = await resolveWebhookProductId(productId);
+  const body: Record<string, any> = { product_id: webhookProductId, process_type: processType, script_text: scriptText };
   if (referenceContext) {
     try { body.reference_context = JSON.parse(referenceContext); } catch { body.reference_context = referenceContext; }
   }
@@ -86,7 +88,8 @@ export async function runScriptCheck(productId: string, scriptText: string, proc
 }
 
 export async function runSfCheck(productId: string, imageBase64: string, mediaType: string, processType: string = "styleframe", referenceContext?: string): Promise<CheckResult> {
-  const body: Record<string, any> = { product_id: productId, process_type: processType, image_base64: imageBase64, media_type: mediaType };
+  const webhookProductId = await resolveWebhookProductId(productId);
+  const body: Record<string, any> = { product_id: webhookProductId, process_type: processType, image_base64: imageBase64, media_type: mediaType };
   if (referenceContext) {
     try { body.reference_context = JSON.parse(referenceContext); } catch { body.reference_context = referenceContext; }
   }
@@ -106,8 +109,9 @@ export async function runAudioCheck(
   const url = getWebhookUrl(processType);
   if (!url) throw new Error(`音声チェックのWebhookが見つかりません (${processType})`);
 
+  const webhookProductId = await resolveWebhookProductId(productId);
   const body: Record<string, any> = {
-    product_id: productId,
+    product_id: webhookProductId,
     process_type: processType,
     script_text: scriptText,
     audio_url: options?.audioUrl || "",
@@ -137,8 +141,9 @@ export async function runVideoCheck(
   const url = getWebhookUrl(processType);
   if (!url) throw new Error(`動画チェックのWebhookが見つかりません (${processType})`);
 
+  const webhookProductId = await resolveWebhookProductId(productId);
   const body: Record<string, any> = {
-    product_id: productId,
+    product_id: webhookProductId,
     process_type: processType,
     script_text: scriptText,
     video_url: options?.videoUrl || "",
@@ -168,8 +173,9 @@ export async function runComparisonCheck(
   const url = getWebhookUrl(isImage ? "styleframe" : "script");
   if (!url) throw new Error("この工程のWebhookはまだ準備中です");
 
+  const webhookProductId = await resolveWebhookProductId(productId);
   const body: Record<string, any> = {
-    product_id: productId,
+    product_id: webhookProductId,
     process_type: processType,
     check_mode: "comparison",
   };
