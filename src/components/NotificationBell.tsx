@@ -25,22 +25,33 @@ export default function NotificationBell() {
 
   const handleAcceptInvite = async (n: (typeof notifications)[0], accept: boolean) => {
     const data = n.data as Record<string, string> | null;
-    if (!data?.project_id) return;
-
     const { supabase } = await import("@/integrations/supabase/client");
-    const { useAuth } = await import("@/hooks/useAuth");
 
-    // Update via direct query - find the member record
-    await supabase
-      .from("project_members")
-      .update({ status: accept ? "accepted" : "declined" })
-      .eq("project_id", data.project_id)
-      .eq("user_id", (n as any).user_id);
+    if (n.type === "workspace_invitation") {
+      // Accept/decline workspace invitation
+      const userEmail = (await supabase.auth.getUser()).data.user?.email;
+      if (userEmail) {
+        await supabase
+          .from("workspace_members")
+          .update({ status: accept ? "accepted" : "declined", user_id: (await supabase.auth.getUser()).data.user?.id })
+          .eq("email", userEmail);
+      }
+    } else if (data?.project_id) {
+      // Accept/decline project invitation
+      await supabase
+        .from("project_members")
+        .update({ status: accept ? "accepted" : "declined" })
+        .eq("project_id", data.project_id)
+        .eq("user_id", (n as any).user_id);
+    }
 
     markAsRead(n.id);
-    if (accept) {
+    if (accept && data?.project_id) {
       navigate(`/project/${data.project_id}`);
       setOpen(false);
+    } else if (accept) {
+      setOpen(false);
+      window.location.reload();
     }
   };
 
@@ -86,7 +97,7 @@ export default function NotificationBell() {
                   "px-4 py-3 border-b border-border/50 hover:bg-muted/50 transition-colors cursor-pointer",
                   !n.is_read && "bg-primary/5"
                 )}
-                onClick={() => n.type !== "invitation" && handleClick(n)}
+                onClick={() => n.type !== "invitation" && n.type !== "workspace_invitation" && handleClick(n)}
               >
                 <div className="flex items-start gap-2">
                   <span
@@ -100,7 +111,7 @@ export default function NotificationBell() {
                     {n.message && (
                       <p className="text-xs text-muted-foreground mt-0.5">{n.message}</p>
                     )}
-                    {n.type === "invitation" && !n.is_read && (
+                    {(n.type === "invitation" || n.type === "workspace_invitation") && !n.is_read && (
                       <div className="flex gap-2 mt-2">
                         <button
                           onClick={(e) => { e.stopPropagation(); handleAcceptInvite(n, true); }}
