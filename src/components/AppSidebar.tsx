@@ -172,7 +172,7 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
           <span>♟</span>
           <span className="gradient-text">CheckMate AI</span>
         </h1>
-        <p className="text-[11px] text-muted-foreground mt-0.5">クリエイティブ品質を、AIで加速。</p>
+        <p className="text-[11px] text-muted-foreground mt-0.5"><p className="text-[11px] text-muted-foreground mt-0.5">終わらないリテイクに、終止符を。</p></p>
       </div>
 
       {/* Search shortcut hint */}
