@@ -369,7 +369,7 @@ export default function CheckRulesTab({ productId }: Props) {
                 <TableHead className="w-[100px]">カテゴリ</TableHead>
                 <TableHead>説明</TableHead>
                 <TableHead className="w-[70px]">重要度</TableHead>
-                <TableHead className="w-[100px]">工程</TableHead>
+                <TableHead className="w-[140px]">工程</TableHead>
                 <TableHead className="w-[90px] text-right">操作</TableHead>
               </TableRow>
             </TableHeader>
@@ -397,7 +397,30 @@ export default function CheckRulesTab({ productId }: Props) {
                           {sev.label}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-xs">{getProcessLabels(r.process_type).join(" / ")}</TableCell>
+                      <TableCell className="text-xs">
+                        {(() => {
+                          const labels = getProcessLabels(r.process_type);
+                          if (labels.length <= 2) {
+                            return (
+                              <div className="flex flex-wrap gap-1">
+                                {labels.map((l) => (
+                                  <Badge key={l} variant="secondary" className="text-[10px] px-1.5 py-0 font-normal whitespace-nowrap">
+                                    {l}
+                                  </Badge>
+                                ))}
+                              </div>
+                            );
+                          }
+                          return (
+                            <div className="flex items-center gap-1">
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 font-normal whitespace-nowrap">
+                                {labels[0]}
+                              </Badge>
+                              <span className="text-[10px] text-muted-foreground whitespace-nowrap">+{labels.length - 1}</span>
+                            </div>
+                          );
+                        })()}
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Button
