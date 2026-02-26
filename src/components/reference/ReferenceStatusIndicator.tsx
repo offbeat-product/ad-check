@@ -1,10 +1,9 @@
 import { useState, useEffect } from "react";
 import { fetchMaterials, MATERIAL_TYPES, type ReferenceMaterial } from "@/lib/reference-materials";
-import { getWCheckParsedJson, getWCheckTotalCount, extractWCheckForProcess } from "@/lib/wcheck-parser";
+import { getWCheckParsedJson } from "@/lib/wcheck-parser";
 import { supabase } from "@/integrations/supabase/client";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { ClipboardList, ChevronDown } from "lucide-react";
+import { Paperclip } from "lucide-react";
 
 interface Props {
   projectId: string;
@@ -33,12 +32,10 @@ export default function ReferenceStatusIndicator({ projectId, productId, process
   const totalMats = productMats.length + projectMats.length;
   const totalAll = totalMats + (patternCount > 0 ? 1 : 0);
 
-  // Calculate W-check process-specific items
   const getWCheckInfo = () => {
     const allWCheck = [...productMats, ...projectMats].filter(m => m.material_type === "wcheck");
     let processItemCount = 0;
     let processLabel = "";
-
     for (const mat of allWCheck) {
       if (!mat.content_text) continue;
       const parsed = getWCheckParsedJson(mat.content_text);
@@ -67,7 +64,6 @@ export default function ReferenceStatusIndicator({ projectId, productId, process
       refItems.push({ label: mt.label, detail: "未登録", active: false });
       continue;
     }
-
     if (mt.id === "wcheck" && wcheckInfo.processItemCount > 0 && processKey) {
       refItems.push({
         label: mt.label,
@@ -90,10 +86,9 @@ export default function ReferenceStatusIndicator({ projectId, productId, process
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-md hover:bg-muted/50">
-          <ClipboardList className="h-3.5 w-3.5" />
-          📋 {activeCount}種の参考資料がAIチェックに反映
-          <ChevronDown className="h-3 w-3" />
+        <button className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-950/60 transition-colors whitespace-nowrap">
+          <Paperclip className="h-3 w-3 shrink-0" />
+          参考資料 {activeCount}件反映中
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-80 p-3" align="start">
