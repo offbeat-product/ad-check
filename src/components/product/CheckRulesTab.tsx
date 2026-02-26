@@ -117,6 +117,20 @@ function generateRuleId(processType: string, existingRules: CheckRule[]): string
   return `${prefix}-${String(next).padStart(2, "0")}`;
 }
 
+const splitProcessTypes = (processType: string | undefined): string[] => {
+  if (!processType) return [];
+  return processType
+    .split("/")
+    .map((p) => p.trim())
+    .filter(Boolean);
+};
+
+const getProcessLabels = (processType: string | undefined): string[] => {
+  const keys = splitProcessTypes(processType);
+  if (keys.length === 0) return ["—"];
+  return keys.map((key) => PROCESS_LABELS[key] ?? key);
+};
+
 const emptyForm: RuleFormData = {
   category: "その他",
   description: "",
@@ -269,11 +283,15 @@ export default function CheckRulesTab({ productId }: Props) {
   // No guard needed — productId (internal UUID) is always available
 
   const filtered = rules.filter((r) => {
-    if (processFilter !== "all" && r.process_type !== processFilter) return false;
+    const ruleProcesses = splitProcessTypes(r.process_type);
+
+    if (processFilter !== "all" && !ruleProcesses.includes(processFilter)) return false;
+
     if (search) {
       const q = search.toLowerCase();
       return r.rule_id?.toLowerCase().includes(q) || r.description?.toLowerCase().includes(q) || r.title?.toLowerCase().includes(q);
     }
+
     return true;
   });
 
@@ -379,7 +397,7 @@ export default function CheckRulesTab({ productId }: Props) {
                           {sev.label}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-xs">{PROCESS_LABELS[r.process_type] ?? r.process_type}</TableCell>
+                      <TableCell className="text-xs">{getProcessLabels(r.process_type).join(" / ")}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                           <Button
@@ -450,7 +468,13 @@ export default function CheckRulesTab({ productId }: Props) {
                 </div>
                 <div>
                   <label className="text-xs font-medium text-muted-foreground">工程</label>
-                  <p>{PROCESS_LABELS[selectedRule.process_type] ?? selectedRule.process_type}</p>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {getProcessLabels(selectedRule.process_type).map((label) => (
+                      <Badge key={label} variant="outline" className="text-[10px]">
+                        {label}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
