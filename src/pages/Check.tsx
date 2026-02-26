@@ -311,6 +311,21 @@ export default function CheckPage() {
         if (!imageData) throw new Error("画像を選択してください");
         res = await runSfCheck(product.id, imageData.base64, imageData.mediaType, selectedProcess);
       } else if (processConfig.inputMode === "audio") {
+        // Convert audio file to base64 if available
+        let audioBase64 = "";
+        if (mediaFile) {
+          audioBase64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const result = reader.result as string;
+              const base64 = result.split(",")[1] || result;
+              resolve(base64);
+            };
+            reader.onerror = () => reject(new Error("音声の読み込みに失敗しました"));
+            reader.readAsDataURL(mediaFile);
+          });
+        }
+
         if (selectedProcess === "narration") {
           if (!naScriptText.trim()) throw new Error("NA原稿テキストを入力してください");
           res = await runAudioCheck(product.id, "narration", naScriptText, {
@@ -320,6 +335,7 @@ export default function CheckPage() {
           }, {
             audioUrl: audioStorageUrl || "",
             audioMimeType: mediaFile?.type || "",
+            audioBase64,
           });
         } else {
           // BGM
@@ -333,6 +349,7 @@ export default function CheckPage() {
           }, {
             audioUrl: audioStorageUrl || "",
             audioMimeType: mediaFile?.type || "",
+            audioBase64,
           });
         }
       } else if (processConfig.inputMode === "video") {
@@ -408,7 +425,8 @@ export default function CheckPage() {
       handleSupabaseError(error, "check_results insert");
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "不明なエラー";
-      toast({ title: "チェックエラー", description: message, variant: "destructive" });
+      console.error("[QuickCheck] AIチェックエラー:", err);
+      toast({ title: "チェック送信に失敗しました。再度お試しください", description: message, variant: "destructive" });
     } finally {
       setLoading(false);
     }

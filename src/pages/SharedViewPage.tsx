@@ -127,7 +127,7 @@ export default function SharedViewPage() {
 
   if (!record) return null;
 
-  const isSf = record.process_type === "sf";
+  const isSf = record.process_type === "sf" || record.process_type === "styleframe" || record.process_type === "storyboard";
   const inputData = record.input_data as { image_base64?: string; script_text?: string } | null;
   const canReadComments = shareLink?.allow_comment_read;
 

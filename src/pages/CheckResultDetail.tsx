@@ -79,7 +79,7 @@ export default function CheckResultDetail() {
     if (!record) return;
     const inputData = record.input_data as { image_base64?: string; script_text?: string } | null;
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    if (record.process_type === "sf" && inputData?.image_base64) {
+    if ((record.process_type === "sf" || record.process_type === "styleframe" || record.process_type === "storyboard") && inputData?.image_base64) {
       downloadFile(inputData.image_base64, `${record.product_code}_${record.process_type}_${date}.jpg`, true);
     } else {
       downloadFile(inputData?.script_text || record.input_text || "", `${record.product_code}_${record.process_type}_${date}.txt`, false);
