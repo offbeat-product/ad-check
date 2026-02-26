@@ -77,7 +77,20 @@ export function TopCorrectionPatterns({ limit = 5, productCode }: TopPatternsPro
     });
   }, [limit, productCode]);
 
-  if (patterns.length === 0) return null;
+  if (patterns.length === 0) {
+    return (
+      <div className="glass-card overflow-hidden">
+        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+          <Lightbulb className="h-4 w-4 text-status-warning" />
+          <h2 className="text-sm font-semibold">よくある修正パターン</h2>
+        </div>
+        <div className="p-8 text-center text-muted-foreground">
+          <Lightbulb className="h-10 w-10 mx-auto mb-3 opacity-30" />
+          <p className="text-sm">チェック結果が蓄積されると、よくある修正パターンが表示されます</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="glass-card overflow-hidden">
