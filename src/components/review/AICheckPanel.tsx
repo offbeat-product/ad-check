@@ -250,8 +250,8 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
         )}
       </div>
 
-      {/* Bottom sticky */}
-      <div className="shrink-0 border-t border-border p-3 space-y-2 bg-card">
+      {/* Bottom sticky action bar */}
+      <div className="sticky bottom-0 shrink-0 border-t border-border p-3 space-y-2 bg-card z-10">
         <div className="flex items-center justify-between text-xs">
           <span className="text-muted-foreground">{selectedItems.size}件選択済み</span>
           <div className="flex gap-2">
