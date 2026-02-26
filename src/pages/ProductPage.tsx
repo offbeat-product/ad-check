@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
@@ -17,6 +18,7 @@ import CheckRulesTab from "@/components/product/CheckRulesTab";
 import CreateProjectModal from "@/components/CreateProjectModal";
 import { FolderOpen, Pencil, Trash2, Check, X, Palette, Plus } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { PROJECT_TREE_QUERY_KEY } from "@/hooks/useProjectTree";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 const PRODUCT_COLOR_PRESETS = [
@@ -42,6 +44,7 @@ export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [product, setProduct] = useState<Product | null>(null);
   const [client, setClient] = useState<Client | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -79,6 +82,7 @@ export default function ProductPage() {
     } else {
       setProduct({ ...product, name: editName.trim() });
       toast({ title: "商材名を更新しました" });
+      queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
     }
     setEditing(false);
   };
@@ -98,6 +102,7 @@ export default function ProductPage() {
       toast({ title: "削除エラー", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "商材を削除しました" });
+      queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
       navigate(client ? `/client/${client.id}` : "/dashboard");
     }
   };
@@ -155,6 +160,7 @@ export default function ProductPage() {
                             if (!error) {
                               setProduct({ ...product, color });
                               toast({ title: "カラーを更新しました" });
+                              queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
                             }
                           }}
                         />
@@ -168,7 +174,10 @@ export default function ProductPage() {
                         onChange={async (e) => {
                           const color = e.target.value;
                           const { error } = await supabase.from("products").update({ color }).eq("id", product.id);
-                          if (!error) setProduct({ ...product, color });
+                          if (!error) {
+                            setProduct({ ...product, color });
+                            queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
+                          }
                         }}
                         className="w-6 h-6 rounded cursor-pointer border-0 p-0"
                       />

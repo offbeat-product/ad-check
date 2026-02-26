@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,6 +11,7 @@ import { FILE_STATUS_CONFIG } from "@/lib/db-types";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { useProjectProcesses, type ProjectProcess } from "@/hooks/useProjectProcesses";
 import { PROJECT_STATUS_CONFIG, PROCESS_STATUS_CONFIG, PROCESS_FILE_CONFIG, getProcessWebhookPath, AI_CHECK_CONFIG } from "@/lib/process-config";
+import { PROJECT_TREE_QUERY_KEY } from "@/hooks/useProjectTree";
 import ProcessManagementModal from "@/components/ProcessManagementModal";
 import ProcessTimeline from "@/components/ProcessTimeline";
 import { Badge } from "@/components/ui/badge";
@@ -93,6 +95,7 @@ export default function ProjectPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const [project, setProject] = useState<Project | null>(null);
   const [product, setProduct] = useState<Product | null>(null);
@@ -188,6 +191,7 @@ export default function ProjectPage() {
     if (!handleSupabaseError(error, "status update")) {
       setProject({ ...project, status: newStatus });
       toast({ title: "ステータスを更新しました" });
+      queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
     }
   };
 
@@ -223,6 +227,7 @@ export default function ProjectPage() {
       toast({ title: "削除エラー", description: error.message, variant: "destructive" });
     } else {
       toast({ title: "プロジェクトを削除しました" });
+      queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
       navigate("/dashboard");
     }
   };

@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { DEFAULT_PROCESSES } from "@/lib/process-config";
+import { PROJECT_TREE_QUERY_KEY } from "@/hooks/useProjectTree";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +26,7 @@ interface Props {
 export default function CreateProjectModal({ open, onOpenChange, onCreated, defaultClientId, defaultProductId }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [clients, setClients] = useState<Client[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [clientId, setClientId] = useState(defaultClientId || "");
@@ -82,6 +85,7 @@ export default function CreateProjectModal({ open, onOpenChange, onCreated, defa
       setShowNewClient(false);
       setNewClientName("");
       toast({ title: "クライアントを追加しました" });
+      queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
     }
     setCreatingClient(false);
   };
@@ -105,6 +109,7 @@ export default function CreateProjectModal({ open, onOpenChange, onCreated, defa
       setNewProductCode("");
       setNewProductLabel("");
       toast({ title: "商材を追加しました" });
+      queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
     }
     setCreatingProduct(false);
   };
@@ -133,6 +138,7 @@ export default function CreateProjectModal({ open, onOpenChange, onCreated, defa
       handleSupabaseError(procErr, "default processes");
 
       toast({ title: "案件を作成しました" });
+      queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
       onCreated(data.id);
       onOpenChange(false);
       setName(""); setCode(""); setDescription("");
