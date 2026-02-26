@@ -19,7 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Search, RefreshCw, AlertTriangle, Plus, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { resolveWebhookProductId } from "@/lib/resolve-product-id";
+import { supabase } from "@/integrations/supabase/client";
 
 // ── Types ──
 interface CheckRule {
@@ -45,15 +45,6 @@ interface RuleFormData {
 }
 
 // ── Constants ──
-const N8N_REST_URL = "https://vhvgnslszruyztcoikqq.supabase.co/rest/v1/check_rules";
-const N8N_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZodmduc2xzenJ1eXp0Y29pa3FxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDA1NTQyMTIsImV4cCI6MjA1NjEzMDIxMn0.TRBxSFVFpJOkzVkFbOOBbE7J3MRfRriSbN1AXBdKvKc";
-
-const restHeaders = {
-  apikey: N8N_API_KEY,
-  Authorization: `Bearer ${N8N_API_KEY}`,
-  "Content-Type": "application/json",
-  Prefer: "return=representation",
-};
 
 const PROCESS_FILTERS = [
   { key: "all", label: "全て" },
@@ -173,24 +164,13 @@ export default function CheckRulesTab({ productId }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const webhookProductId = await resolveWebhookProductId(productId);
-      const res = await fetch("https://offbeat-inc.app.n8n.cloud/webhook/rules-list", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product_id: webhookProductId }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      // Response can be: [{rules:[...]}, ...] or {rules:[...]} or [rule, rule, ...]
-      let rulesArray: CheckRule[] = [];
-      if (Array.isArray(data) && data.length > 0 && Array.isArray(data[0]?.rules)) {
-        rulesArray = data[0].rules;
-      } else if (Array.isArray(data?.rules)) {
-        rulesArray = data.rules;
-      } else if (Array.isArray(data)) {
-        rulesArray = data;
-      }
-      setRules(rulesArray);
+      const { data, error: fetchError } = await supabase
+        .from("check_rules")
+        .select("*")
+        .eq("product_id", productId)
+        .order("sort_order", { ascending: true });
+      if (fetchError) throw new Error(fetchError.message);
+      setRules((data as CheckRule[]) ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "取得に失敗しました");
     } finally {
@@ -205,18 +185,17 @@ export default function CheckRulesTab({ productId }: Props) {
     if (!editRule?.id) return;
     setSaving(true);
     try {
-      const res = await fetch(`${N8N_REST_URL}?id=eq.${editRule.id}`, {
-        method: "PATCH",
-        headers: restHeaders,
-        body: JSON.stringify({
+      const { error: updateError } = await supabase
+        .from("check_rules")
+        .update({
           category: editForm.category,
           description: editForm.description,
           severity: editForm.severity,
           process_type: editForm.process_type,
           title: editForm.title,
-        }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        })
+        .eq("id", editRule.id);
+      if (updateError) throw new Error(updateError.message);
       toast({ title: "ルールを更新しました" });
       setEditRule(null);
       await fetchRules();
@@ -231,11 +210,11 @@ export default function CheckRulesTab({ productId }: Props) {
     if (!deleteRule?.id) return;
     setSaving(true);
     try {
-      const res = await fetch(`${N8N_REST_URL}?id=eq.${deleteRule.id}`, {
-        method: "DELETE",
-        headers: restHeaders,
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const { error: deleteError } = await supabase
+        .from("check_rules")
+        .delete()
+        .eq("id", deleteRule.id);
+      if (deleteError) throw new Error(deleteError.message);
       toast({ title: "ルールを削除しました" });
       setDeleteRule(null);
       await fetchRules();
@@ -251,12 +230,10 @@ export default function CheckRulesTab({ productId }: Props) {
     setSaving(true);
     try {
       const ruleId = generateRuleId(addForm.process_type, rules);
-      const webhookProductId = await resolveWebhookProductId(productId);
-      const res = await fetch(N8N_REST_URL, {
-        method: "POST",
-        headers: restHeaders,
-        body: JSON.stringify({
-          product_id: webhookProductId,
+      const { error: insertError } = await supabase
+        .from("check_rules")
+        .insert({
+          product_id: productId,
           process_type: addForm.process_type,
           rule_id: ruleId,
           category: addForm.category,
@@ -265,9 +242,8 @@ export default function CheckRulesTab({ productId }: Props) {
           severity: addForm.severity,
           sort_order: 999,
           is_active: true,
-        }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        });
+      if (insertError) throw new Error(insertError.message);
       toast({ title: `ルール ${ruleId} を追加しました` });
       setAddOpen(false);
       setAddForm(emptyForm);
