@@ -12,6 +12,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import ReferenceMaterialsSection from "@/components/reference/ReferenceMaterialsSection";
+import CheckRulesTab from "@/components/product/CheckRulesTab";
 import { FolderOpen, Pencil, Trash2, Check, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -146,6 +147,7 @@ export default function ProductPage() {
           <TabsList className="mb-6">
             <TabsTrigger value="projects">案件一覧</TabsTrigger>
             <TabsTrigger value="materials">参考資料（商材ベース）</TabsTrigger>
+            <TabsTrigger value="rules">チェックルール</TabsTrigger>
             <TabsTrigger value="settings">設定</TabsTrigger>
           </TabsList>
 
@@ -188,6 +190,10 @@ export default function ProductPage() {
             />
           </TabsContent>
 
+          <TabsContent value="rules">
+            <CheckRulesTab externalProductId={product.external_product_id} />
+          </TabsContent>
+
           <TabsContent value="settings" className="space-y-4">
             <div className="glass-card p-4 space-y-3">
               <div>
@@ -208,6 +214,10 @@ export default function ProductPage() {
                   <p className="text-sm whitespace-pre-wrap">{product.rules_desc}</p>
                 </div>
               )}
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">外部商材ID（n8n側）</label>
+                <p className="text-sm font-mono">{product.external_product_id || "未設定"}</p>
+              </div>
             </div>
           </TabsContent>
         </Tabs>
