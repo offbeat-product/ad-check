@@ -11,7 +11,7 @@ export async function exportCheckExcel(
 
   // Summary sheet data
   const summaryData = [
-    ["CheckMate AI チェックレポート"],
+    ["CheckGo AI チェックレポート"],
     [],
     ["商材名", meta.productName],
     ["工程", meta.processType],
