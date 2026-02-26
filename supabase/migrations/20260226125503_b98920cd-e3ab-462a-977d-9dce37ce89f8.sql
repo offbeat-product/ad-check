@@ -1,0 +1,1 @@
+ALTER TABLE public.products ADD COLUMN external_product_id text;

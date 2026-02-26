@@ -339,6 +339,7 @@ export type Database = {
           code: string
           color: string | null
           created_at: string | null
+          external_product_id: string | null
           id: string
           info_lines: string[] | null
           label: string
@@ -356,6 +357,7 @@ export type Database = {
           code: string
           color?: string | null
           created_at?: string | null
+          external_product_id?: string | null
           id?: string
           info_lines?: string[] | null
           label: string
@@ -373,6 +375,7 @@ export type Database = {
           code?: string
           color?: string | null
           created_at?: string | null
+          external_product_id?: string | null
           id?: string
           info_lines?: string[] | null
           label?: string
