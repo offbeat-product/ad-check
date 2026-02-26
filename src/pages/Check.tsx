@@ -138,9 +138,9 @@ export default function CheckPage() {
     });
     supabase
       .from("check_rules")
-      .select("id, title, severity", { count: "exact" })
+      .select("id, title, severity, process_type", { count: "exact" })
       .eq("product_id", selectedProductId)
-      .eq("process_type", processTypeCode)
+      .like("process_type", `%${processTypeCode}%`)
       .eq("is_active", true)
       .then((res) => {
         if (cancelled) return;
