@@ -17,9 +17,13 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Search, RefreshCw, AlertTriangle, Plus, Pencil, Trash2 } from "lucide-react";
+import { Search, RefreshCw, AlertTriangle, Plus, Pencil, Trash2, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveWebhookProductId } from "@/lib/resolve-product-id";
+
+const EXTERNAL_SUPABASE_URL = "https://vhvgnslszruyztcoikqq.supabase.co/rest/v1/check_rules";
+const EXTERNAL_SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZodmduc2xzenJ1eXp0Y29pa3FxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NzkxNzksImV4cCI6MjA4NzQ1NTE3OX0.JChqETzSd1HJFuSBJNZ8xJy6lPENql_lprbTVLvTFeA";
 
 // ── Types ──
 interface CheckRule {
@@ -143,6 +147,7 @@ export default function CheckRulesTab({ productId }: Props) {
   const [processFilter, setProcessFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   // Detail view
   const [selectedRule, setSelectedRule] = useState<CheckRule | null>(null);
@@ -255,6 +260,73 @@ export default function CheckRulesTab({ productId }: Props) {
     }
   };
 
+  // ── Sync from external DB ──
+  const handleSyncFromExternal = async () => {
+    setSyncing(true);
+    try {
+      // Resolve the product ID used in the external DB
+      const webhookPid = await resolveWebhookProductId(productId);
+
+      // Try both the internal UUID and external ID
+      const idsToTry = [webhookPid];
+      if (webhookPid !== productId) idsToTry.push(productId);
+
+      let externalRules: any[] = [];
+
+      for (const pid of idsToTry) {
+        const res = await fetch(
+          `${EXTERNAL_SUPABASE_URL}?product_id=eq.${pid}&select=*`,
+          {
+            headers: {
+              apikey: EXTERNAL_SUPABASE_ANON,
+              Authorization: `Bearer ${EXTERNAL_SUPABASE_ANON}`,
+            },
+          }
+        );
+        if (res.ok) {
+          const data = await res.json();
+          if (Array.isArray(data) && data.length > 0) {
+            externalRules = data;
+            break;
+          }
+        }
+      }
+
+      if (externalRules.length === 0) {
+        toast({ title: "外部DBにルールが見つかりません", description: `product_id: ${webhookPid}`, variant: "destructive" });
+        setSyncing(false);
+        return;
+      }
+
+      // Map to local schema and upsert
+      const localRules = externalRules
+        .filter((r: any) => r.rule_id && r.process_type && r.category && r.description)
+        .map((r: any) => ({
+          product_id: productId, // Always use internal UUID
+          process_type: String(r.process_type),
+          rule_id: String(r.rule_id),
+          category: String(r.category),
+          title: String(r.title || ""),
+          description: String(r.description),
+          severity: String(r.severity || "medium"),
+          sort_order: Number.isFinite(r.sort_order) ? r.sort_order : 999,
+          is_active: r.is_active ?? true,
+        }));
+
+      // Delete existing rules for this product and insert fresh
+      await supabase.from("check_rules").delete().eq("product_id", productId);
+      const { error: insertError } = await supabase.from("check_rules").insert(localRules);
+      if (insertError) throw new Error(insertError.message);
+
+      toast({ title: "外部DBから同期完了", description: `${localRules.length}件のルールを同期しました` });
+      await fetchRules();
+    } catch (e) {
+      toast({ title: "同期エラー", description: e instanceof Error ? e.message : "不明なエラー", variant: "destructive" });
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   // ── Empty state ──
   // No guard needed — productId (internal UUID) is always available
 
@@ -290,7 +362,7 @@ export default function CheckRulesTab({ productId }: Props) {
         ))}
       </div>
 
-      {/* Search + Add button */}
+      {/* Search + Sync + Add buttons */}
       <div className="flex gap-2">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -301,6 +373,10 @@ export default function CheckRulesTab({ productId }: Props) {
             className="pl-9"
           />
         </div>
+        <Button size="sm" variant="outline" onClick={handleSyncFromExternal} disabled={syncing}>
+          <Download className="h-4 w-4 mr-1" />
+          {syncing ? "同期中..." : "外部DB同期"}
+        </Button>
         <Button size="sm" onClick={() => { setAddForm({ ...emptyForm, process_type: processFilter !== "all" ? processFilter : "script" }); setAddOpen(true); }}>
           <Plus className="h-4 w-4 mr-1" />
           新規追加
