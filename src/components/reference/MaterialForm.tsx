@@ -129,14 +129,9 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     }
   };
 
-  const getExternalProductId = async (): Promise<string | null> => {
-    const { data } = await supabase.from("products").select("external_product_id").eq("id", productId).single();
-    return data?.external_product_id || null;
-  };
-
-  const checkExistingReferenceRules = async (extProductId: string): Promise<number> => {
+  const checkExistingReferenceRules = async (): Promise<number> => {
     const res = await fetch(
-      `${N8N_REST_URL}?product_id=eq.${extProductId}&source_type=eq.reference&select=id`,
+      `${N8N_REST_URL}?product_id=eq.${productId}&source_type=eq.reference&select=id`,
       { headers: { apikey: N8N_API_KEY, Authorization: `Bearer ${N8N_API_KEY}` } }
     );
     if (!res.ok) return 0;
@@ -144,20 +139,20 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     return Array.isArray(data) ? data.length : 0;
   };
 
-  const deleteExistingReferenceRules = async (extProductId: string) => {
+  const deleteExistingReferenceRules = async () => {
     await fetch(
-      `${N8N_REST_URL}?product_id=eq.${extProductId}&source_type=eq.reference`,
+      `${N8N_REST_URL}?product_id=eq.${productId}&source_type=eq.reference`,
       { method: "DELETE", headers: { apikey: N8N_API_KEY, Authorization: `Bearer ${N8N_API_KEY}` } }
     );
   };
 
-  const callParseReferenceWebhook = async (extProductId: string, text: string) => {
+  const callParseReferenceWebhook = async (text: string) => {
     toast({ title: "AIルール生成中...", description: "参考資料からチェックルールを自動生成しています" });
     try {
       const res = await fetch(PARSE_REFERENCE_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product_id: extProductId, material_type: materialType, content_text: text, process_types: ALL_PROCESS_TYPES }),
+        body: JSON.stringify({ product_id: productId, material_type: materialType, content_text: text, process_types: ALL_PROCESS_TYPES }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const result = await res.json();
@@ -169,27 +164,22 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
   };
 
   const triggerRuleGeneration = async (savedContentText: string) => {
-    const extId = await getExternalProductId();
-    if (!extId) {
-      toast({ title: "外部商材IDが未設定です", description: "この商材のexternal_product_idを設定してください", variant: "destructive" });
-      return;
-    }
-    const existingCount = await checkExistingReferenceRules(extId);
+    const existingCount = await checkExistingReferenceRules();
     if (existingCount > 0) {
       setDuplicateCount(existingCount);
-      setPendingSaveResult({ extId, text: savedContentText });
+      setPendingSaveResult({ text: savedContentText });
       setShowDuplicateDialog(true);
     } else {
-      await callParseReferenceWebhook(extId, savedContentText);
+      await callParseReferenceWebhook(savedContentText);
     }
   };
 
   const handleDuplicateConfirm = async () => {
     setShowDuplicateDialog(false);
     if (!pendingSaveResult) return;
-    const { extId, text } = pendingSaveResult;
-    await deleteExistingReferenceRules(extId);
-    await callParseReferenceWebhook(extId, text);
+    const { text } = pendingSaveResult;
+    await deleteExistingReferenceRules();
+    await callParseReferenceWebhook(text);
     setPendingSaveResult(null);
   };
 
