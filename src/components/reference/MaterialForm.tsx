@@ -22,6 +22,7 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Upload, Link2, FileText, Sparkles, LayoutTemplate } from "lucide-react";
+import { resolveWebhookProductId } from "@/lib/resolve-product-id";
 
 const N8N_REST_URL = "https://vhvgnslszruyztcoikqq.supabase.co/rest/v1/check_rules";
 const N8N_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZodmduc2xzenJ1eXp0Y29pa3FxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NzkxNzksImV4cCI6MjA4NzQ1NTE3OX0.JChqETzSd1HJFuSBJNZ8xJy6lPENql_lprbTVLvTFeA";
@@ -130,8 +131,9 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
   };
 
   const checkExistingReferenceRules = async (): Promise<number> => {
+    const webhookPid = await resolveWebhookProductId(productId);
     const res = await fetch(
-      `${N8N_REST_URL}?product_id=eq.${productId}&source_type=eq.reference&select=id`,
+      `${N8N_REST_URL}?product_id=eq.${webhookPid}&source_type=eq.reference&select=id`,
       { headers: { apikey: N8N_API_KEY, Authorization: `Bearer ${N8N_API_KEY}` } }
     );
     if (!res.ok) return 0;
@@ -140,8 +142,9 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
   };
 
   const deleteExistingReferenceRules = async () => {
+    const webhookPid = await resolveWebhookProductId(productId);
     await fetch(
-      `${N8N_REST_URL}?product_id=eq.${productId}&source_type=eq.reference`,
+      `${N8N_REST_URL}?product_id=eq.${webhookPid}&source_type=eq.reference`,
       { method: "DELETE", headers: { apikey: N8N_API_KEY, Authorization: `Bearer ${N8N_API_KEY}` } }
     );
   };
@@ -152,7 +155,7 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
       const res = await fetch(PARSE_REFERENCE_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product_id: productId, material_type: materialType, content_text: text, process_types: ALL_PROCESS_TYPES }),
+        body: JSON.stringify({ product_id: await resolveWebhookProductId(productId), material_type: materialType, content_text: text, process_types: ALL_PROCESS_TYPES }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const result = await res.json();

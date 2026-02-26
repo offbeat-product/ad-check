@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/select";
 import { Search, RefreshCw, AlertTriangle, Plus, Pencil, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { resolveWebhookProductId } from "@/lib/resolve-product-id";
 
 // ── Types ──
 interface CheckRule {
@@ -158,10 +159,11 @@ export default function CheckRulesTab({ productId }: Props) {
     setLoading(true);
     setError(null);
     try {
+      const webhookProductId = await resolveWebhookProductId(productId);
       const res = await fetch("https://offbeat-inc.app.n8n.cloud/webhook/rules-list", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ product_id: productId }),
+        body: JSON.stringify({ product_id: webhookProductId }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
@@ -226,11 +228,12 @@ export default function CheckRulesTab({ productId }: Props) {
     setSaving(true);
     try {
       const ruleId = generateRuleId(addForm.process_type, rules);
+      const webhookProductId = await resolveWebhookProductId(productId);
       const res = await fetch(N8N_REST_URL, {
         method: "POST",
         headers: restHeaders,
         body: JSON.stringify({
-          product_id: productId,
+          product_id: webhookProductId,
           process_type: addForm.process_type,
           rule_id: ruleId,
           category: addForm.category,
