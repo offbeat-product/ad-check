@@ -14,7 +14,6 @@ export interface WCheckItem {
 export interface WCheckData {
   template_type: "w_check";
   process_type: string;
-  check_type: string;
   items: WCheckItem[];
 }
 
@@ -30,10 +29,7 @@ const PROCESS_OPTIONS = [
   { value: "video_vertical", label: "縦動画" },
 ];
 
-const CHECK_TYPE_OPTIONS = [
-  { value: "ob_internal", label: "OB社内QMチェック" },
-  { value: "cl_review", label: "CL確認依頼" },
-];
+
 
 const CATEGORY_OPTIONS = ["構成", "テキスト", "デザイン", "音声", "動き・演出", "薬事・法規", "トンマナ", "素材・権利", "その他"];
 const SEVERITY_OPTIONS = [
@@ -51,7 +47,6 @@ export default function WCheckTemplate({ initialData, onChange }: Props) {
   const [data, setData] = useState<WCheckData>(initialData || {
     template_type: "w_check",
     process_type: "script",
-    check_type: "ob_internal",
     items: [{ category: "構成", content: "", severity: "medium" }],
   });
   const [bulkMode, setBulkMode] = useState(false);
@@ -107,15 +102,8 @@ export default function WCheckTemplate({ initialData, onChange }: Props) {
             </SelectContent>
           </Select>
         </div>
-        <div>
-          <label className="text-xs font-medium text-muted-foreground mb-0.5 block">チェック種別</label>
-          <Select value={data.check_type} onValueChange={v => updateAndNotify({ ...data, check_type: v })}>
-            <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {CHECK_TYPE_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
+
+
       </div>
 
       <div className="space-y-2">
@@ -179,11 +167,9 @@ export function wcheckDataToText(d: WCheckData): string {
     video_horizontal: "横動画", video_vertical: "縦動画",
   }[d.process_type] || d.process_type;
 
-  const checkLabel = d.check_type === "ob_internal" ? "OB社内QMチェック" : "CL確認依頼";
   const lines: string[] = [];
   lines.push(`【Wチェックシート】`);
   lines.push(`対象工程: ${processLabel}`);
-  lines.push(`チェック種別: ${checkLabel}`);
   lines.push("");
   lines.push("【チェック項目】");
   d.items.filter(i => i.content.trim()).forEach((item, idx) => {
