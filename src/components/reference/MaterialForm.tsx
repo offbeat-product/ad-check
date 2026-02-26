@@ -338,8 +338,8 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
 
       toast({ title: existing ? "更新しました" : "保存しました" });
       onSaved();
-      if (autoGenerateRules && finalContentText) {
-        triggerRuleGeneration(finalContentText, uploadedFileUrl);
+      if (autoGenerateRules && (finalContentText || uploadedFileUrl)) {
+        triggerRuleGeneration(finalContentText || `[ファイル参照] ${fileName}`, uploadedFileUrl);
       }
     } catch (err) {
       toast({ title: "エラー", description: err instanceof Error ? err.message : "保存に失敗しました", variant: "destructive" });
