@@ -78,3 +78,12 @@ export const PROCESS_STATUS_CONFIG: Record<string, { label: string; dotClass: st
   revision:     { label: '修正中', dotClass: 'bg-status-warning',      badgeClass: 'bg-status-warning/10 text-status-warning' },
   completed:    { label: '完了',   dotClass: 'bg-status-ok',           badgeClass: 'bg-status-ok/10 text-status-ok' },
 };
+
+// Helper to get Japanese label for a process key
+const PROCESS_LABEL_MAP: Record<string, string> = Object.fromEntries(
+  DEFAULT_PROCESSES.map(p => [p.process_key, p.process_label])
+);
+
+export function getProcessLabel(processKey: string): string {
+  return PROCESS_LABEL_MAP[processKey] || processKey;
+}
