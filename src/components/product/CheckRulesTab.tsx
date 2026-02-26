@@ -167,7 +167,8 @@ export default function CheckRulesTab({ productId }: Props) {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      setRules(Array.isArray(data) ? data : []);
+      const rulesArray = Array.isArray(data) ? data : Array.isArray(data?.rules) ? data.rules : [];
+      setRules(rulesArray);
     } catch (e) {
       setError(e instanceof Error ? e.message : "取得に失敗しました");
     } finally {
