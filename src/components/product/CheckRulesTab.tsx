@@ -23,15 +23,15 @@ interface CheckRule {
 
 const PROCESS_FILTERS = [
   { key: "all", label: "全て" },
-  { key: "script", label: "スクリプト" },
-  { key: "styleframe", label: "SF" },
-  { key: "video_horizontal", label: "動画横" },
-  { key: "video_vertical", label: "動画縦" },
-  { key: "vcon", label: "Vコン" },
-  { key: "narration", label: "ナレーション" },
-  { key: "bgm", label: "BGM" },
+  { key: "script", label: "構成/字コンテ" },
   { key: "na_script", label: "NA原稿" },
+  { key: "bgm", label: "BGM" },
+  { key: "narration", label: "ナレーション" },
+  { key: "vcon", label: "Vコン" },
+  { key: "styleframe", label: "スタイルフレーム" },
   { key: "storyboard", label: "絵コンテ" },
+  { key: "video_horizontal", label: "横動画" },
+  { key: "video_vertical", label: "縦動画" },
 ] as const;
 
 const SEVERITY_CONFIG: Record<string, { class: string; label: string }> = {
@@ -41,15 +41,15 @@ const SEVERITY_CONFIG: Record<string, { class: string; label: string }> = {
 };
 
 const PROCESS_LABELS: Record<string, string> = {
-  script: "スクリプト",
-  styleframe: "SF",
-  video_horizontal: "動画横",
-  video_vertical: "動画縦",
-  vcon: "Vコン",
-  narration: "ナレーション",
-  bgm: "BGM",
+  script: "構成/字コンテ",
   na_script: "NA原稿",
+  bgm: "BGM",
+  narration: "ナレーション",
+  vcon: "Vコン",
+  styleframe: "スタイルフレーム",
   storyboard: "絵コンテ",
+  video_horizontal: "横動画",
+  video_vertical: "縦動画",
 };
 
 interface Props {
