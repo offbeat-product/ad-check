@@ -350,10 +350,15 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
       }
 
       toast({ title: existing ? "更新しました" : "保存しました" });
-      onSaved();
+
+      // Trigger webhook BEFORE onSaved() which may unmount this component
       if (autoGenerateRules && (finalContentText || uploadedFileUrl || (method === "file_upload" && !!fileName))) {
-        triggerRuleGeneration(finalContentText || `[ファイル参照] ${fileName || title}`, uploadedFileUrl);
+        // Fire and forget - don't await so onSaved can proceed
+        const textForWebhook = finalContentText || `[ファイル参照] ${fileName || title}`;
+        triggerRuleGeneration(textForWebhook, uploadedFileUrl);
       }
+
+      onSaved();
     } catch (err) {
       toast({ title: "エラー", description: err instanceof Error ? err.message : "保存に失敗しました", variant: "destructive" });
     } finally {
