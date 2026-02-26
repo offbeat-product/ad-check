@@ -91,13 +91,13 @@ export interface ProcessConfig {
 export const PROCESS_LIST: ProcessConfig[] = [
   { id: "script", label: "構成/字コンテ", enabled: true, inputMode: "text" },
   { id: "na_script", label: "NA原稿", enabled: true, inputMode: "text" },
-  { id: "narration", label: "ナレーション", enabled: false, inputMode: "audio" },
-  { id: "bgm", label: "BGM", enabled: false, inputMode: "audio" },
+  { id: "narration", label: "ナレーション", enabled: true, inputMode: "audio" },
+  { id: "bgm", label: "BGM", enabled: true, inputMode: "audio" },
   { id: "vcon", label: "Vコン", enabled: true, inputMode: "image" },
   { id: "sf", label: "スタイルフレーム", enabled: true, inputMode: "image" },
   { id: "storyboard", label: "絵コンテ", enabled: true, inputMode: "image" },
-  { id: "video_horizontal", label: "横動画", enabled: false, inputMode: "video" },
-  { id: "video_vertical", label: "縦動画", enabled: false, inputMode: "video" },
+  { id: "video_horizontal", label: "横動画", enabled: true, inputMode: "video" },
+  { id: "video_vertical", label: "縦動画", enabled: true, inputMode: "video" },
 ];
 
 export interface ProductConfig {
