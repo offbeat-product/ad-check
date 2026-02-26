@@ -34,8 +34,8 @@ export default function ReviewRightPanel({
   overallStatus, file, productId, projectId,
 }: ReviewRightPanelProps) {
   return (
-    <div className="w-[380px] shrink-0 h-full border-l border-border flex flex-col bg-card">
-      <Tabs value={rightTab} onValueChange={onTabChange} className="flex flex-col h-full">
+    <div className="w-[380px] shrink-0 h-screen border-l border-border flex flex-col bg-card overflow-hidden">
+      <Tabs value={rightTab} onValueChange={onTabChange} className="relative flex-1 flex flex-col min-h-0">
         <TabsList className="w-full shrink-0 rounded-none border-b border-border bg-transparent h-10 p-0">
           <TabsTrigger value="ai-check" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs h-10">
             AIチェック結果
@@ -48,7 +48,7 @@ export default function ReviewRightPanel({
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="ai-check" className="flex-1 flex flex-col overflow-hidden mt-0 ring-0 focus-visible:ring-0">
+        <TabsContent value="ai-check" className="absolute inset-0 top-10 flex flex-col overflow-hidden mt-0 ring-0 focus-visible:ring-0 data-[state=inactive]:hidden">
           {hasCheckResult ? (
             <AICheckPanel
               items={items}
@@ -71,7 +71,7 @@ export default function ReviewRightPanel({
           )}
         </TabsContent>
 
-        <TabsContent value="comparison" className="flex-1 flex flex-col overflow-hidden mt-0 ring-0 focus-visible:ring-0">
+        <TabsContent value="comparison" className="absolute inset-0 top-10 flex flex-col overflow-hidden mt-0 ring-0 focus-visible:ring-0 data-[state=inactive]:hidden">
           {file && productId && projectId ? (
             <ComparisonCheckPanel
               file={file}
@@ -86,7 +86,7 @@ export default function ReviewRightPanel({
           )}
         </TabsContent>
 
-        <TabsContent value="comments" className="flex-1 overflow-hidden mt-0 ring-0 focus-visible:ring-0">
+        <TabsContent value="comments" className="absolute inset-0 top-10 overflow-hidden mt-0 ring-0 focus-visible:ring-0 data-[state=inactive]:hidden">
           {checkResultId ? (
             <CommentsPanel checkResultId={checkResultId} filterItemId={commentFilter} onAnnotationClick={onAnnotationClick} onCheckItemClick={onCheckItemClick} />
           ) : (

@@ -13,7 +13,7 @@ export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex min-h-screen w-full">
+    <div className="flex h-screen w-full overflow-hidden">
       {/* Desktop sidebar */}
       <div className="hidden md:block">
         <AppSidebar onCreateProject={() => setCreateOpen(true)} />
