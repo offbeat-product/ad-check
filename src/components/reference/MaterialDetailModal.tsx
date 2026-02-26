@@ -92,6 +92,7 @@ export default function MaterialDetailModal({
           scopeType={m.scope_type}
           scopeId={m.scope_id}
           existing={m}
+          productId={productId}
           onSaved={() => { setEditingId(null); onRefresh(); }}
           onCancel={() => setEditingId(null)}
         />
@@ -179,6 +180,7 @@ export default function MaterialDetailModal({
                   materialType={materialType}
                   scopeType="product"
                   scopeId={productId}
+                  productId={productId}
                   onSaved={() => { setAddingProduct(false); onRefresh(); }}
                   onCancel={() => setAddingProduct(false)}
                 />
@@ -205,6 +207,7 @@ export default function MaterialDetailModal({
                   materialType={materialType}
                   scopeType="project"
                   scopeId={projectId}
+                  productId={productId}
                   onSaved={() => { setAdding(false); onRefresh(); }}
                   onCancel={() => setAdding(false)}
                 />
