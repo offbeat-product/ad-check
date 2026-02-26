@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +26,23 @@ export default function Login() {
         setResetMode(false);
       } else {
         await signIn(email, password);
+        
+        // Check if user is active
+        const { data: { user: u } } = await supabase.auth.getUser();
+        if (u) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("is_active")
+            .eq("id", u.id)
+            .single();
+          
+          if (profile && !profile.is_active) {
+            await supabase.auth.signOut();
+            toast({ title: "エラー", description: "このアカウントは無効化されています。管理者にお問い合わせください。", variant: "destructive" });
+            return;
+          }
+        }
+        
         navigate("/dashboard");
       }
     } catch (err: any) {
