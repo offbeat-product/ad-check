@@ -53,7 +53,17 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
   const hasTemplate = TEMPLATE_TYPES.includes(materialType);
   const defaultMethod = existing?.source_type as InputMethod || (hasTemplate && !existing ? "template" : "file_upload");
 
-  const [title, setTitle] = useState(existing?.title || "");
+  // Auto-fill title for template mode
+  const getDefaultTitle = () => {
+    if (existing?.title) return existing.title;
+    if (hasTemplate && !existing) {
+      const mt = MATERIAL_TYPES.find(t => t.id === materialType);
+      return mt?.label || "";
+    }
+    return "";
+  };
+
+  const [title, setTitle] = useState(getDefaultTitle());
   const [method, setMethod] = useState<InputMethod>(defaultMethod);
   const [contentText, setContentText] = useState(existing?.content_text || "");
   const [sourceUrl, setSourceUrl] = useState(existing?.source_url || "");
@@ -344,20 +354,15 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
       setSaving(false);
     } else {
       toast({ title: existing ? "更新しました" : "保存しました" });
-      console.log("[MaterialForm] autoGenerateRules:", autoGenerateRules, "finalContentText length:", finalContentText?.length, "finalContentText truthy:", !!finalContentText);
-      let dialogShown = false;
-      if (autoGenerateRules && finalContentText) {
-        console.log("[MaterialForm] Starting triggerRuleGeneration...");
-        try {
-          dialogShown = await triggerRuleGeneration(finalContentText);
-        } catch (err) {
-          console.error("[MaterialForm] triggerRuleGeneration error:", err);
-        }
-      }
       setSaving(false);
-      // Don't call onSaved if duplicate dialog is shown — wait for user decision
-      if (!dialogShown) {
-        onSaved();
+      onSaved();
+
+      // Trigger AI rule generation in background (after save completes)
+      if (autoGenerateRules && finalContentText) {
+        console.log("[MaterialForm] Starting triggerRuleGeneration in background...");
+        triggerRuleGeneration(finalContentText).catch(err => {
+          console.error("[MaterialForm] triggerRuleGeneration error:", err);
+        });
       }
     }
   };
