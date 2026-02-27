@@ -390,6 +390,47 @@ export type Database = {
         }
         Relationships: []
       }
+      patterns: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          project_id: string
+          sort_order: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          project_id: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          project_id?: string
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "patterns_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           client_id: string | null
@@ -519,6 +560,7 @@ export type Database = {
           fixed_by: string | null
           id: string
           parent_file_id: string | null
+          pattern_id: string | null
           process_type: string
           project_id: string | null
           status: string | null
@@ -537,6 +579,7 @@ export type Database = {
           fixed_by?: string | null
           id?: string
           parent_file_id?: string | null
+          pattern_id?: string | null
           process_type: string
           project_id?: string | null
           status?: string | null
@@ -555,6 +598,7 @@ export type Database = {
           fixed_by?: string | null
           id?: string
           parent_file_id?: string | null
+          pattern_id?: string | null
           process_type?: string
           project_id?: string | null
           status?: string | null
@@ -562,6 +606,13 @@ export type Database = {
           version_number?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "project_files_pattern_id_fkey"
+            columns: ["pattern_id"]
+            isOneToOne: false
+            referencedRelation: "patterns"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "project_files_project_id_fkey"
             columns: ["project_id"]

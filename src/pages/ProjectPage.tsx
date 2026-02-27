@@ -12,8 +12,12 @@ import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { useProjectProcesses, type ProjectProcess } from "@/hooks/useProjectProcesses";
 import { PROJECT_STATUS_CONFIG, PROCESS_STATUS_CONFIG, PROCESS_FILE_CONFIG, getProcessWebhookPath, AI_CHECK_CONFIG } from "@/lib/process-config";
 import { PROJECT_TREE_QUERY_KEY } from "@/hooks/useProjectTree";
+import { usePatterns } from "@/hooks/usePatterns";
 import ProcessManagementModal from "@/components/ProcessManagementModal";
 import ProcessTimeline from "@/components/ProcessTimeline";
+import PatternMatrix from "@/components/patterns/PatternMatrix";
+import AddPatternDialog from "@/components/patterns/AddPatternDialog";
+import BulkPatternDialog from "@/components/patterns/BulkPatternDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,11 +27,14 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import ReferenceMaterialsSection from "@/components/reference/ReferenceMaterialsSection";
 import {
   Upload, FileText, Image, Film, MessageCircle, Plus, Settings, GripVertical,
-  ChevronDown, CalendarIcon, AlertTriangle, Users, Trash2,
+  ChevronDown, CalendarIcon, AlertTriangle, Users, Trash2, Grid3X3,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import {
@@ -103,6 +110,8 @@ export default function ProjectPage() {
   const [files, setFiles] = useState<ProjectFile[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadModal, setUploadModal] = useState<string | null>(null);
+  const [uploadPatternId, setUploadPatternId] = useState<string | null>(null);
+  const [uploadPatternMode, setUploadPatternMode] = useState<"common" | "specific">("common");
   const [uploadTextInput, setUploadTextInput] = useState("");
   const [useTextInput, setUseTextInput] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -112,6 +121,10 @@ export default function ProjectPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [processModalOpen, setProcessModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ file: ProjectFile; hasCheck: boolean } | null>(null);
+  const [addPatternOpen, setAddPatternOpen] = useState(false);
+  const [bulkPatternOpen, setBulkPatternOpen] = useState(false);
+
+  const { patterns, addPattern, addPatternsBulk, deletePattern } = usePatterns(id);
 
   const { processes, updateProcess, reorderProcesses, addProcess, deleteProcess, resetToDefaults } = useProjectProcesses(id);
 
@@ -346,6 +359,7 @@ export default function ProjectPage() {
       }
 
       setUploadProgress(90);
+      const resolvedPatternId = (patterns.length > 0 && uploadPatternMode === "specific") ? uploadPatternId : null;
       const { error } = await supabase.from("project_files").insert({
         project_id: id,
         process_type: uploadModal,
@@ -354,7 +368,8 @@ export default function ProjectPage() {
         file_data: fileData,
         file_size_bytes: fileSize,
         created_by: user.email || user.id,
-      });
+        pattern_id: resolvedPatternId,
+      } as any);
 
       if (error) {
         toast({ title: "エラー", description: error.message, variant: "destructive" });
@@ -372,6 +387,8 @@ export default function ProjectPage() {
       setUseTextInput(false);
       setUploading(false);
       setUploadProgress(null);
+      setUploadPatternId(null);
+      setUploadPatternMode("common");
       fetchData();
     }
   };
@@ -479,144 +496,183 @@ export default function ProjectPage() {
               />
             )}
 
+            {/* Pattern management section */}
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-semibold">工程</h2>
-              <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => setProcessModalOpen(true)}>
-                <Settings className="h-3 w-3 mr-1" />工程管理
-              </Button>
+              <div className="flex items-center gap-2">
+                <Grid3X3 className="h-4 w-4 text-muted-foreground" />
+                <h2 className="text-sm font-semibold">パターン管理</h2>
+                {patterns.length > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    {patterns.length}パターン
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => setBulkPatternOpen(true)}>
+                  一括生成
+                </Button>
+                <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => setAddPatternOpen(true)}>
+                  <Plus className="h-3 w-3 mr-1" />パターン追加
+                </Button>
+                <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => setProcessModalOpen(true)}>
+                  <Settings className="h-3 w-3 mr-1" />工程管理
+                </Button>
+              </div>
             </div>
 
-            {activeProcesses.map((proc, index) => {
-              const sectionFiles = getFilesForProcess(proc.process_key);
-              const psCfg = PROCESS_STATUS_CONFIG[proc.status] || PROCESS_STATUS_CONFIG.not_started;
-              const cfg = PROCESS_FILE_CONFIG[proc.process_key];
-              const webhookAvailable = !!AI_CHECK_CONFIG[proc.process_key]?.enabled;
+            {/* Conditional: matrix view vs legacy list */}
+            {patterns.length > 0 ? (
+              <PatternMatrix
+                projectId={id!}
+                patterns={patterns}
+                processes={processes}
+                files={files}
+                checkResults={checkResults}
+                onUpload={(processKey, patternId) => {
+                  setUploadModal(processKey);
+                  setUploadPatternId(patternId);
+                  setUploadPatternMode(patternId ? "specific" : "common");
+                  setUseTextInput(false);
+                  setSelectedFile(null);
+                }}
+              />
+            ) : (
+              /* Legacy list view (no patterns) */
+              <>
+                {activeProcesses.map((proc, index) => {
+                  const sectionFiles = getFilesForProcess(proc.process_key);
+                  const psCfg = PROCESS_STATUS_CONFIG[proc.status] || PROCESS_STATUS_CONFIG.not_started;
+                  const cfg = PROCESS_FILE_CONFIG[proc.process_key];
+                  const webhookAvailable = !!AI_CHECK_CONFIG[proc.process_key]?.enabled;
 
-              return (
-                <div
-                  key={proc.id}
-                  draggable
-                  onDragStart={() => handleProcessDragStart(index)}
-                  onDragEnter={() => handleProcessDragEnter(index)}
-                  onDragEnd={handleProcessDragEnd}
-                  onDragOver={(e) => e.preventDefault()}
-                  className={cn("glass-card overflow-hidden transition-all",
-                    dragOverIdx === index && "ring-2 ring-primary/30")}
-                >
-                  <div className="px-4 py-3 border-b border-border flex items-center gap-2">
-                    <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab shrink-0" />
-                    <span className="text-xs text-muted-foreground shrink-0">
-                      {String.fromCodePoint(0x2460 + index)}
-                    </span>
-                    <h2 className="text-sm font-semibold">{proc.process_label}</h2>
+                  return (
+                    <div
+                      key={proc.id}
+                      draggable
+                      onDragStart={() => handleProcessDragStart(index)}
+                      onDragEnter={() => handleProcessDragEnter(index)}
+                      onDragEnd={handleProcessDragEnd}
+                      onDragOver={(e) => e.preventDefault()}
+                      className={cn("glass-card overflow-hidden transition-all",
+                        dragOverIdx === index && "ring-2 ring-primary/30")}
+                    >
+                      <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+                        <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab shrink-0" />
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          {String.fromCodePoint(0x2460 + index)}
+                        </span>
+                        <h2 className="text-sm font-semibold">{proc.process_label}</h2>
 
-                    <DeadlinePicker
-                      deadline={proc.deadline}
-                      onChange={(d) => handleProcessDeadlineChange(proc.id, d)}
-                    />
+                        <DeadlinePicker
+                          deadline={proc.deadline}
+                          onChange={(d) => handleProcessDeadlineChange(proc.id, d)}
+                        />
 
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <button className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium border flex items-center gap-1", psCfg.badgeClass)}>
-                          <span className={cn("w-1.5 h-1.5 rounded-full", psCfg.dotClass)} />
-                          {psCfg.label}
-                          <ChevronDown className="h-2.5 w-2.5" />
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-36 p-1.5" align="start">
-                        {Object.entries(PROCESS_STATUS_CONFIG).map(([key, c]) => (
-                          <button key={key} onClick={() => handleProcessStatusChange(proc.id, key)}
-                            className={cn("w-full text-left px-2 py-1 rounded text-[11px] font-medium transition-colors flex items-center gap-1.5",
-                              proc.status === key ? "bg-muted" : "hover:bg-muted/50")}>
-                            <span className={cn("w-1.5 h-1.5 rounded-full", c.dotClass)} />
-                            {c.label}
-                          </button>
-                        ))}
-                      </PopoverContent>
-                    </Popover>
-
-                    {!webhookAvailable && (
-                      <Badge variant="outline" className="text-[9px] ml-1 text-muted-foreground">準備中</Badge>
-                    )}
-                    {sectionFiles.some(f => f.status === "fixed") && (
-                      <Badge variant="outline" className="text-[9px] ml-1 border-status-ok text-status-ok">✅ FIX</Badge>
-                    )}
-
-                    <div className="ml-auto">
-                      <Button size="sm" variant="outline" className="text-xs h-7"
-                        onClick={() => {
-                          setUploadModal(proc.process_key);
-                          setUseTextInput(false);
-                           setSelectedFile(null);
-                        }}>
-                        <Plus className="h-3 w-3 mr-1" />アップロード
-                      </Button>
-                    </div>
-                  </div>
-                  <div className="p-4">
-                    {sectionFiles.length === 0 ? (
-                      <p className="text-xs text-muted-foreground/60 italic py-4 text-center">ファイルなし — アップロードしてください</p>
-                    ) : (
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                        {sectionFiles.map((file) => {
-                          const cr = file.check_result_id ? checkResults[file.check_result_id] : null;
-                          const st = FILE_STATUS_CONFIG[file.status ?? "uploaded"] ?? FILE_STATUS_CONFIG.uploaded;
-                          const cc = file.check_result_id ? (commentCounts[file.check_result_id] || 0) : 0;
-                          const isImageFile = file.file_type === "image";
-                          const childVersions = files.filter(f => f.parent_file_id === file.id);
-                          const versionLabel = file.parent_file_id ? `v${file.version_number}` : childVersions.length > 0 ? "v1" : null;
-
-                          return (
-                            <div key={file.id} className="relative group">
-                              <button onClick={() => navigate(`/project/${id}/file/${file.id}`)}
-                                className="glass-card p-3 text-left hover:border-primary/30 transition-colors w-full">
-                                <div className="h-20 rounded-md bg-muted/50 flex items-center justify-center mb-2 overflow-hidden">
-                                  {isImageFile && file.file_data ? (
-                                    <img src={file.file_data} alt="" className="w-full h-full object-cover" />
-                                  ) : proc.process_key.includes("video") || proc.process_key === "vcon" ? (
-                                    <Film className="h-8 w-8 text-muted-foreground/30" />
-                                  ) : proc.process_key.includes("script") || proc.process_key === "na_script" ? (
-                                    <FileText className="h-8 w-8 text-muted-foreground/30" />
-                                  ) : (
-                                    <Image className="h-8 w-8 text-muted-foreground/30" />
-                                  )}
-                                </div>
-                                <p className="text-xs font-medium truncate">{file.file_name}</p>
-                                <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                                  <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
-                                  {cr && (
-                                    <Badge className={cn("text-[10px] h-4 px-1.5", getSubmitBadgeClass(cr.overall_status))}>
-                                      {getSubmitLabel(cr.overall_status).isOk ? "OK" : "NG"}
-                                    </Badge>
-                                  )}
-                                  {versionLabel && <span className="text-[10px] text-muted-foreground">{versionLabel}</span>}
-                                </div>
-                                {cc > 0 && (
-                                  <div className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground">
-                                    <MessageCircle className="h-3 w-3" />{cc}
-                                  </div>
-                                )}
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium border flex items-center gap-1", psCfg.badgeClass)}>
+                              <span className={cn("w-1.5 h-1.5 rounded-full", psCfg.dotClass)} />
+                              {psCfg.label}
+                              <ChevronDown className="h-2.5 w-2.5" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-36 p-1.5" align="start">
+                            {Object.entries(PROCESS_STATUS_CONFIG).map(([key, c]) => (
+                              <button key={key} onClick={() => handleProcessStatusChange(proc.id, key)}
+                                className={cn("w-full text-left px-2 py-1 rounded text-[11px] font-medium transition-colors flex items-center gap-1.5",
+                                  proc.status === key ? "bg-muted" : "hover:bg-muted/50")}>
+                                <span className={cn("w-1.5 h-1.5 rounded-full", c.dotClass)} />
+                                {c.label}
                               </button>
-                              {/* Delete button */}
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setDeleteTarget({ file, hasCheck: !!cr });
-                                }}
-                                className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:scale-110 z-10"
-                                title="削除"
-                              >
-                                <span className="text-xs font-bold leading-none">×</span>
-                              </button>
-                            </div>
-                          );
-                        })}
+                            ))}
+                          </PopoverContent>
+                        </Popover>
+
+                        {!webhookAvailable && (
+                          <Badge variant="outline" className="text-[9px] ml-1 text-muted-foreground">準備中</Badge>
+                        )}
+                        {sectionFiles.some(f => f.status === "fixed") && (
+                          <Badge variant="outline" className="text-[9px] ml-1 border-status-ok text-status-ok">✅ FIX</Badge>
+                        )}
+
+                        <div className="ml-auto">
+                          <Button size="sm" variant="outline" className="text-xs h-7"
+                            onClick={() => {
+                              setUploadModal(proc.process_key);
+                              setUploadPatternId(null);
+                              setUploadPatternMode("common");
+                              setUseTextInput(false);
+                              setSelectedFile(null);
+                            }}>
+                            <Plus className="h-3 w-3 mr-1" />アップロード
+                          </Button>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+                      <div className="p-4">
+                        {sectionFiles.length === 0 ? (
+                          <p className="text-xs text-muted-foreground/60 italic py-4 text-center">ファイルなし — アップロードしてください</p>
+                        ) : (
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                            {sectionFiles.map((file) => {
+                              const cr = file.check_result_id ? checkResults[file.check_result_id] : null;
+                              const st = FILE_STATUS_CONFIG[file.status ?? "uploaded"] ?? FILE_STATUS_CONFIG.uploaded;
+                              const cc = file.check_result_id ? (commentCounts[file.check_result_id] || 0) : 0;
+                              const isImageFile = file.file_type === "image";
+                              const childVersions = files.filter(f => f.parent_file_id === file.id);
+                              const versionLabel = file.parent_file_id ? `v${file.version_number}` : childVersions.length > 0 ? "v1" : null;
+
+                              return (
+                                <div key={file.id} className="relative group">
+                                  <button onClick={() => navigate(`/project/${id}/file/${file.id}`)}
+                                    className="glass-card p-3 text-left hover:border-primary/30 transition-colors w-full">
+                                    <div className="h-20 rounded-md bg-muted/50 flex items-center justify-center mb-2 overflow-hidden">
+                                      {isImageFile && file.file_data ? (
+                                        <img src={file.file_data} alt="" className="w-full h-full object-cover" />
+                                      ) : proc.process_key.includes("video") || proc.process_key === "vcon" ? (
+                                        <Film className="h-8 w-8 text-muted-foreground/30" />
+                                      ) : proc.process_key.includes("script") || proc.process_key === "na_script" ? (
+                                        <FileText className="h-8 w-8 text-muted-foreground/30" />
+                                      ) : (
+                                        <Image className="h-8 w-8 text-muted-foreground/30" />
+                                      )}
+                                    </div>
+                                    <p className="text-xs font-medium truncate">{file.file_name}</p>
+                                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                      <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
+                                      {cr && (
+                                        <Badge className={cn("text-[10px] h-4 px-1.5", getSubmitBadgeClass(cr.overall_status))}>
+                                          {getSubmitLabel(cr.overall_status).isOk ? "OK" : "NG"}
+                                        </Badge>
+                                      )}
+                                      {versionLabel && <span className="text-[10px] text-muted-foreground">{versionLabel}</span>}
+                                    </div>
+                                    {cc > 0 && (
+                                      <div className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground">
+                                        <MessageCircle className="h-3 w-3" />{cc}
+                                      </div>
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setDeleteTarget({ file, hasCheck: !!cr });
+                                    }}
+                                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:scale-110 z-10"
+                                    title="削除"
+                                  >
+                                    <span className="text-xs font-bold leading-none">×</span>
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </>
+            )}
           </TabsContent>
 
           <TabsContent value="history">
@@ -707,6 +763,35 @@ export default function ProjectPage() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>ファイルアップロード</DialogTitle></DialogHeader>
           <div className="space-y-4">
+            {/* Pattern selection (only when patterns exist) */}
+            {patterns.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">対象</Label>
+                <RadioGroup value={uploadPatternMode} onValueChange={(v) => setUploadPatternMode(v as "common" | "specific")} className="flex gap-4">
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="common" id="pattern-common" />
+                    <Label htmlFor="pattern-common" className="text-xs">全パターン共通</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="specific" id="pattern-specific" />
+                    <Label htmlFor="pattern-specific" className="text-xs">特定パターン</Label>
+                  </div>
+                </RadioGroup>
+                {uploadPatternMode === "specific" && (
+                  <Select value={uploadPatternId || ""} onValueChange={setUploadPatternId}>
+                    <SelectTrigger className="h-8 text-xs">
+                      <SelectValue placeholder="パターンを選択" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {patterns.map(p => (
+                        <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}{p.description ? ` — ${p.description}` : ""}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            )}
+
             {PROCESS_FILE_CONFIG[uploadModal || ""]?.allowTextInput && (
               <div className="flex gap-2">
                 <Button size="sm" variant={useTextInput ? "outline" : "default"} onClick={() => setUseTextInput(false)} className="text-xs">ファイル選択</Button>
@@ -747,6 +832,10 @@ export default function ProjectPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Pattern dialogs */}
+      <AddPatternDialog open={addPatternOpen} onOpenChange={setAddPatternOpen} onAdd={addPattern} />
+      <BulkPatternDialog open={bulkPatternOpen} onOpenChange={setBulkPatternOpen} onGenerate={addPatternsBulk} />
 
       {/* Process management modal */}
       <ProcessManagementModal
