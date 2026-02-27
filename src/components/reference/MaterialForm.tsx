@@ -59,10 +59,7 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
   const [fileName, setFileName] = useState(existing?.file_name || "");
   const [fileData, setFileData] = useState(existing?.file_data || "");
   const [saving, setSaving] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState("");
   const [extractMsg, setExtractMsg] = useState("");
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [wcheckParsed, setWcheckParsed] = useState<WCheckParsedData | null>(null);
   const [autoGenerateRules, setAutoGenerateRules] = useState(true);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
@@ -74,32 +71,15 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
 
   const isWCheck = materialType === "wcheck";
 
-  const MAX_UPLOAD_SIZE = 50 * 1024 * 1024; // 50MB
-  const MAX_INLINE_SIZE = 512 * 1024; // 512KB – inline base64 in DB; larger → Storage
-
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
     if (!f) return;
-
-    if (f.size > MAX_UPLOAD_SIZE) {
-      toast({ title: "ファイルサイズ超過", description: "50MBまでのファイルに対応しています", variant: "destructive" });
-      return;
-    }
-
     setFileName(f.name);
-    setSelectedFile(f);
     if (!title) setTitle(f.name.replace(/\.[^.]+$/, ""));
 
-    // Small files → inline base64, large files → upload to Storage on save
-    if (f.size <= MAX_INLINE_SIZE) {
-      const reader = new FileReader();
-      reader.onload = () => setFileData(reader.result as string);
-      reader.readAsDataURL(f);
-      setPendingFile(null);
-    } else {
-      setFileData("");
-      setPendingFile(f);
-    }
+    const reader = new FileReader();
+    reader.onload = () => setFileData(reader.result as string);
+    reader.readAsDataURL(f);
 
     const ext = f.name.split(".").pop()?.toLowerCase() || "";
 
@@ -213,22 +193,13 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     return normalizedRules.length;
   };
 
-  const callParseReferenceWebhook = async (text: string, fileUrl?: string) => {
+  const callParseReferenceWebhook = async (text: string) => {
     toast({ title: "AIルール生成中...", description: "参考資料からチェックルールを自動生成しています" });
     try {
-      const webhookPayload: Record<string, any> = {
-        product_id: await resolveWebhookProductId(productId),
-        material_type: materialType,
-        content_text: text,
-        process_types: ALL_PROCESS_TYPES,
-      };
-      if (fileUrl) {
-        webhookPayload.file_url = fileUrl;
-      }
       const res = await fetch(PARSE_REFERENCE_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(webhookPayload),
+        body: JSON.stringify({ product_id: await resolveWebhookProductId(productId), material_type: materialType, content_text: text, process_types: ALL_PROCESS_TYPES }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const result = await res.json();
@@ -243,27 +214,22 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     }
   };
 
-  const triggerRuleGeneration = async (savedContentText: string, fileUrl?: string) => {
-    try {
-      const existingCount = await checkExistingReferenceRules();
-      if (existingCount > 0) {
-        setDuplicateCount(existingCount);
-        setPendingSaveResult({ text: savedContentText, fileUrl });
-        setShowDuplicateDialog(true);
-      } else {
-        await callParseReferenceWebhook(savedContentText, fileUrl);
-      }
-    } catch (err) {
-      console.error("[parse-reference] duplicate check failed, fallback to webhook:", err);
-      await callParseReferenceWebhook(savedContentText, fileUrl);
+  const triggerRuleGeneration = async (savedContentText: string) => {
+    const existingCount = await checkExistingReferenceRules();
+    if (existingCount > 0) {
+      setDuplicateCount(existingCount);
+      setPendingSaveResult({ text: savedContentText });
+      setShowDuplicateDialog(true);
+    } else {
+      await callParseReferenceWebhook(savedContentText);
     }
   };
 
   const handleDuplicateConfirm = async () => {
     setShowDuplicateDialog(false);
     if (!pendingSaveResult) return;
-    const { text, fileUrl } = pendingSaveResult;
-    await callParseReferenceWebhook(text, fileUrl);
+    const { text } = pendingSaveResult;
+    await callParseReferenceWebhook(text);
     setPendingSaveResult(null);
   };
 
@@ -288,83 +254,49 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     return contentText;
   };
 
-  const uploadFileToStorage = async (file: File, materialId: string): Promise<string> => {
-    const ext = file.name.split(".").pop()?.toLowerCase() || "bin";
-    const path = `${scopeType}/${scopeId}/${materialId}.${ext}`;
-    setUploadProgress("ファイルをアップロード中...");
-    const { error } = await supabase.storage.from("reference-files").upload(path, file, { upsert: true });
-    if (error) throw new Error(`Storage upload failed: ${error.message}`);
-    // Return public URL so external systems (n8n) can access the file
-    const { data: urlData } = supabase.storage.from("reference-files").getPublicUrl(path);
-    return urlData.publicUrl;
-  };
-
   const handleSave = async () => {
     if (!title.trim()) { toast({ title: "タイトルを入力してください", variant: "destructive" }); return; }
     setSaving(true);
-    setUploadProgress("");
 
-    try {
-      const finalContentText = buildContentText();
+    const finalContentText = buildContentText();
 
-      const payload: Record<string, any> = {
-        scope_type: scopeType,
-        scope_id: scopeId,
-        material_type: materialType,
-        title: title.trim(),
-        content_text: finalContentText || null,
-        file_name: fileName || null,
-        file_data: method === "file_upload" ? fileData || null : null,
-        source_url: method === "url_reference" ? sourceUrl || null : null,
-        source_type: method === "template" ? "template" : method,
-        is_active: true,
-        sort_order: 0,
-        created_by: user?.email || user?.id || null,
-        updated_at: new Date().toISOString(),
-      };
+    const payload = {
+      scope_type: scopeType,
+      scope_id: scopeId,
+      material_type: materialType,
+      title: title.trim(),
+      content_text: finalContentText || null,
+      file_name: fileName || null,
+      file_data: method === "file_upload" ? fileData || null : null,
+      source_url: method === "url_reference" ? sourceUrl || null : null,
+      source_type: method === "template" ? "template" : method,
+      is_active: true,
+      sort_order: 0,
+      created_by: user?.email || user?.id || null,
+      updated_at: new Date().toISOString(),
+    };
 
-      let result, error;
-      if (existing) {
-        const res = await supabase.from("reference_materials").update(payload).eq("id", existing.id).select().single();
-        result = res.data;
-        error = res.error;
-      } else {
-        const res = await supabase.from("reference_materials").insert(payload as any).select().single();
-        result = res.data;
-        error = res.error;
-      }
-
-      if (error) throw new Error(error.message);
-
-      // Upload file to Storage for AI parsing when needed
-      let uploadedFileUrl: string | undefined;
-      const fileForUpload = selectedFile ?? pendingFile;
-      if (fileForUpload && result?.id) {
-        const shouldPersistStorageUrl = fileForUpload.size > MAX_INLINE_SIZE;
-        if (shouldPersistStorageUrl || autoGenerateRules) {
-          uploadedFileUrl = await uploadFileToStorage(fileForUpload, result.id);
-        }
-        if (shouldPersistStorageUrl && uploadedFileUrl) {
-          await supabase.from("reference_materials").update({ file_data: uploadedFileUrl }).eq("id", result.id);
-        }
-      }
-
-      toast({ title: existing ? "更新しました" : "保存しました" });
-
-      // Trigger webhook BEFORE onSaved() which may unmount this component
-      if (autoGenerateRules && (finalContentText || uploadedFileUrl || (method === "file_upload" && !!fileName))) {
-        // Fire and forget - don't await so onSaved can proceed
-        const textForWebhook = finalContentText || `[ファイル参照] ${fileName || title}`;
-        triggerRuleGeneration(textForWebhook, uploadedFileUrl);
-      }
-
-      onSaved();
-    } catch (err) {
-      toast({ title: "エラー", description: err instanceof Error ? err.message : "保存に失敗しました", variant: "destructive" });
-    } finally {
-      setSaving(false);
-      setUploadProgress("");
+    let result, error;
+    if (existing) {
+      const res = await supabase.from("reference_materials").update(payload).eq("id", existing.id).select().single();
+      result = res.data;
+      error = res.error;
+    } else {
+      const res = await supabase.from("reference_materials").insert(payload).select().single();
+      result = res.data;
+      error = res.error;
     }
+
+    if (error) {
+      toast({ title: "エラー", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: existing ? "更新しました" : "保存しました" });
+      onSaved();
+      if (autoGenerateRules && finalContentText) {
+        triggerRuleGeneration(finalContentText);
+      }
+    }
+    setSaving(false);
   };
 
   const handleMethodChange = (m: InputMethod) => {
@@ -432,10 +364,9 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
             >
               <Upload className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
               <p className="text-xs text-muted-foreground">{fileName || "クリックしてファイルを選択"}</p>
-              <p className="text-[10px] text-muted-foreground/60 mt-0.5">対応: .xlsx .xls .csv .pdf .png .jpg .pptx .txt（最大50MB）</p>
+              <p className="text-[10px] text-muted-foreground/60 mt-0.5">対応: .xlsx .xls .csv .pdf .png .jpg .pptx .txt</p>
               <input ref={fileInputRef} type="file" className="hidden" accept=".xlsx,.xls,.csv,.pdf,.png,.jpg,.jpeg,.pptx,.txt" onChange={handleFile} />
             </div>
-            {uploadProgress && <p className="text-xs text-primary mt-1">{uploadProgress}</p>}
             {extractMsg && <p className="text-xs text-amber-600 mt-1">{extractMsg}</p>}
           </div>
         )}

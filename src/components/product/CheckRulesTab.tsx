@@ -298,11 +298,11 @@ export default function CheckRulesTab({ productId }: Props) {
         return;
       }
 
-      // Map to local schema
+      // Map to local schema and upsert
       const localRules = externalRules
         .filter((r: any) => r.rule_id && r.process_type && r.category && r.description)
         .map((r: any) => ({
-          product_id: productId,
+          product_id: productId, // Always use internal UUID
           process_type: String(r.process_type),
           rule_id: String(r.rule_id),
           category: String(r.category),
@@ -313,36 +313,12 @@ export default function CheckRulesTab({ productId }: Props) {
           is_active: r.is_active ?? true,
         }));
 
-      // Get existing rules to find duplicates by rule_id
-      const { data: existingRules } = await supabase
-        .from("check_rules")
-        .select("id, rule_id")
-        .eq("product_id", productId);
-
-      const incomingRuleIds = new Set(localRules.map((r) => r.rule_id));
-      const duplicateIds = (existingRules ?? [])
-        .filter((r) => incomingRuleIds.has(r.rule_id))
-        .map((r) => r.id);
-
-      // Delete only duplicates (preserves manually added rules)
-      if (duplicateIds.length > 0) {
-        const { error: delError } = await supabase
-          .from("check_rules")
-          .delete()
-          .in("id", duplicateIds);
-        if (delError) throw new Error(delError.message);
-      }
-
-      // Insert external rules
+      // Delete existing rules for this product and insert fresh
+      await supabase.from("check_rules").delete().eq("product_id", productId);
       const { error: insertError } = await supabase.from("check_rules").insert(localRules);
       if (insertError) throw new Error(insertError.message);
 
-      const keptCount = (existingRules ?? []).length - duplicateIds.length;
-      const msg = duplicateIds.length > 0
-        ? `${localRules.length}件同期（重複${duplicateIds.length}件を上書き、手動ルール${keptCount}件を保持）`
-        : `${localRules.length}件同期`;
-
-      toast({ title: "外部DBから同期完了", description: msg });
+      toast({ title: "外部DBから同期完了", description: `${localRules.length}件のルールを同期しました` });
       await fetchRules();
     } catch (e) {
       toast({ title: "同期エラー", description: e instanceof Error ? e.message : "不明なエラー", variant: "destructive" });
