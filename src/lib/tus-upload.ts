@@ -78,7 +78,22 @@ export async function tusUpload(options: TusUploadOptions): Promise<TusUploadRes
       },
       onError: (error) => {
         console.error("[tus-upload] Upload failed:", error);
-        reject(new Error(`アップロードに失敗しました: ${error.message}`));
+        console.error("[tus-upload] Error details:", {
+          message: error.message,
+          originalRequest: (error as any).originalRequest,
+          originalResponse: (error as any).originalResponse,
+          causingError: (error as any).causingError,
+        });
+        // Try to extract HTTP status from the error
+        const originalResponse = (error as any).originalResponse;
+        let detail = error.message;
+        if (originalResponse) {
+          const status = originalResponse.getStatus?.();
+          const body = originalResponse.getBody?.();
+          console.error("[tus-upload] HTTP status:", status, "body:", body);
+          detail = `HTTP ${status}: ${body || error.message}`;
+        }
+        reject(new Error(`アップロードに失敗しました: ${detail}`));
       },
       onProgress: (bytesUploaded, bytesTotal) => {
         const percentage = Math.round((bytesUploaded / bytesTotal) * 100);
