@@ -6,7 +6,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_MODEL = "gemini-3-flash-preview";
 
 const EXTRACT_PROMPT = `あなたはドキュメントからテキストを正確に抽出する専門AIです。
 以下のファイルの内容をすべてテキストとして抽出してください。
@@ -72,7 +72,7 @@ serve(async (req) => {
 
       const body = {
         contents: [{ parts: [{ inlineData: { mimeType, data: base64Data } }, { text: EXTRACT_PROMPT }] }],
-        generationConfig: { maxOutputTokens: 8192, temperature: 0.1 },
+        generationConfig: { maxOutputTokens: 8192, temperature: 1.0 },
       };
 
       const res = await fetch(endpoint, {
@@ -158,7 +158,7 @@ serve(async (req) => {
       // Step 4: Generate content
       const body = {
         contents: [{ parts: [{ fileData: { mimeType, fileUri: fileInfo.uri } }, { text: EXTRACT_PROMPT }] }],
-        generationConfig: { maxOutputTokens: 8192, temperature: 0.1 },
+        generationConfig: { maxOutputTokens: 8192, temperature: 1.0 },
       };
 
       const res = await fetch(endpoint, {
