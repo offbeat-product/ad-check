@@ -8,8 +8,9 @@ import { getWCheckParsedJson, getWCheckTotalCount } from "@/lib/wcheck-parser";
 import WCheckPreview from "./WCheckPreview";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, FileText } from "lucide-react";
+import { Plus, Pencil, Trash2, FileText, Copy } from "lucide-react";
 import MaterialForm from "./MaterialForm";
+import CopyMaterialToProductDialog from "./CopyMaterialToProductDialog";
 
 interface Props {
   open: boolean;
@@ -34,6 +35,8 @@ export default function MaterialDetailModal({
   const [adding, setAdding] = useState(false);
   const [addingProduct, setAddingProduct] = useState(false);
   const [expandedWCheck, setExpandedWCheck] = useState<string | null>(null);
+  const [copyMaterial, setCopyMaterial] = useState<ReferenceMaterial | null>(null);
+  const [copyAllScope, setCopyAllScope] = useState<"product" | "project" | null>(null);
 
   const isWCheck = materialType === "wcheck";
 
@@ -113,6 +116,9 @@ export default function MaterialDetailModal({
             <Switch checked={m.is_active} onCheckedChange={(v) => handleToggle(m.id, v)} />
             {!readOnly && (
               <>
+                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" title="他商材にコピー" onClick={() => setCopyMaterial(m)}>
+                  <Copy className="h-3 w-3" />
+                </Button>
                 <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditingId(m.id)}>
                   <Pencil className="h-3 w-3" />
                 </Button>
@@ -251,10 +257,37 @@ export default function MaterialDetailModal({
           )}
         </div>
 
-        <div className="flex justify-end pt-2">
+        <div className="flex justify-between pt-2">
+          <div className="flex gap-2">
+            {productMaterials.length > 0 && (
+              <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => setCopyAllScope("product")}>
+                <Copy className="h-3 w-3 mr-1" />商材資料を他商材にコピー
+              </Button>
+            )}
+          </div>
           <Button variant="outline" onClick={() => onOpenChange(false)}>閉じる</Button>
         </div>
       </DialogContent>
+
+      {/* Single material copy dialog */}
+      {copyMaterial && (
+        <CopyMaterialToProductDialog
+          open={!!copyMaterial}
+          onOpenChange={(o) => !o && setCopyMaterial(null)}
+          materials={[copyMaterial]}
+          currentProductId={productId}
+        />
+      )}
+
+      {/* Bulk copy dialog */}
+      {copyAllScope && (
+        <CopyMaterialToProductDialog
+          open={!!copyAllScope}
+          onOpenChange={(o) => !o && setCopyAllScope(null)}
+          materials={copyAllScope === "product" ? productMaterials : projectMaterials}
+          currentProductId={productId}
+        />
+      )}
     </Dialog>
   );
 }
