@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useProjectTree } from "@/hooks/useProjectTree";
 import {
-  Home, Zap, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search, Rocket,
+  Home, Zap, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search, Rocket, PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import { Badge } from "@/components/ui/badge";
@@ -13,9 +13,11 @@ import { cn } from "@/lib/utils";
 
 interface AppSidebarProps {
   onCreateProject?: () => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
-export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
+export default function AppSidebar({ onCreateProject, collapsed = false, onToggleCollapse }: AppSidebarProps) {
   const { user, signOut, role, isAdmin, canEdit } = useAuth();
   const { profile } = useProfile();
   const navigate = useNavigate();
@@ -171,24 +173,57 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
   };
 
   return (
-    <aside className="w-[260px] min-w-[260px] h-screen bg-sidebar border-r border-sidebar-border flex flex-col overflow-hidden">
-      <div className="px-5 py-5 border-b border-sidebar-border">
-        <h1 className="text-lg font-bold flex items-center gap-2">
-          <Rocket className="h-5 w-5" fill="currentColor" />
-          <span className="gradient-text">CheckGo AI</span>
+    <aside className={cn(
+      "h-screen bg-sidebar border-r border-sidebar-border flex flex-col overflow-hidden transition-all duration-200",
+      collapsed ? "w-[60px] min-w-[60px]" : "w-[260px] min-w-[260px]"
+    )}>
+      <div className={cn("px-5 py-5 border-b border-sidebar-border", collapsed && "px-3 py-4 flex flex-col items-center")}>
+        <h1 className={cn("text-lg font-bold flex items-center gap-2", collapsed && "justify-center")}>
+          <Rocket className="h-5 w-5 shrink-0" fill="currentColor" />
+          {!collapsed && <span className="gradient-text">CheckGo AI</span>}
         </h1>
-        <p className="text-[11px] text-muted-foreground mt-0.5">制作現場に、最速の「GO」を。</p>
+        {!collapsed && (
+          <div className="flex items-center justify-between mt-0.5">
+            <p className="text-[11px] text-muted-foreground">制作現場に、最速の「GO」を。</p>
+            <button
+              onClick={onToggleCollapse}
+              className="p-1 rounded hover:bg-muted/50 text-muted-foreground transition-colors"
+              title="サイドバーを閉じる"
+            >
+              <PanelLeftClose className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+        {collapsed && onToggleCollapse && (
+          <button
+            onClick={onToggleCollapse}
+            className="mt-2 p-1 rounded hover:bg-muted/50 text-muted-foreground transition-colors"
+            title="サイドバーを開く"
+          >
+            <PanelLeftOpen className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
 
       {/* Search shortcut hint */}
-      <button
-        onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}
-        className="mx-4 mt-3 mb-1 flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted/30 text-muted-foreground hover:bg-muted/50 transition-colors"
-      >
-        <Search className="h-3.5 w-3.5" />
-        <span className="text-xs flex-1 text-left">検索...</span>
-        <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px]">⌘K</kbd>
-      </button>
+      {!collapsed ? (
+        <button
+          onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}
+          className="mx-4 mt-3 mb-1 flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted/30 text-muted-foreground hover:bg-muted/50 transition-colors"
+        >
+          <Search className="h-3.5 w-3.5" />
+          <span className="text-xs flex-1 text-left">検索...</span>
+          <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px]">⌘K</kbd>
+        </button>
+      ) : (
+        <button
+          onClick={() => window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}
+          className="mx-auto mt-3 mb-1 p-2 rounded-lg text-muted-foreground hover:bg-muted/50 transition-colors"
+          title="検索 (⌘K)"
+        >
+          <Search className="h-4 w-4" />
+        </button>
+      )}
 
       {/* profile section moved to bottom */}
 
@@ -197,14 +232,26 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
           const isActive = location.pathname === item.path;
           return (
             <button key={item.path} onClick={() => navigate(item.path)}
-              className={cn("w-full flex items-center gap-3 px-5 py-2.5 text-sm font-medium transition-colors",
+              title={collapsed ? item.label : undefined}
+              className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium transition-colors",
+                collapsed ? "justify-center px-0" : "px-5",
                 isActive ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-[3px] border-primary"
                   : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent")}>
-              <item.icon className="h-4 w-4" />{item.label}
+              <item.icon className="h-4 w-4 shrink-0" />
+              {!collapsed && item.label}
             </button>
           );
         })}
 
+        {collapsed ? (
+          <button
+            onClick={() => navigate("/dashboard")}
+            title="プロジェクト"
+            className="w-full flex items-center justify-center py-2.5 text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent"
+          >
+            <FolderOpen className="h-4 w-4" />
+          </button>
+        ) : (
         <div className="mt-1">
           <button onClick={() => setProjectsOpen(!projectsOpen)}
             className="w-full flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent">
@@ -320,16 +367,20 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
             </div>
           ))}
         </div>
+        )}
 
         <button onClick={() => navigate("/settings")}
-          className={cn("w-full flex items-center gap-3 px-5 py-2.5 text-sm font-medium transition-colors",
+          title={collapsed ? "設定" : undefined}
+          className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium transition-colors",
+            collapsed ? "justify-center px-0" : "px-5",
             location.pathname === "/settings" ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-[3px] border-primary"
               : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent")}>
-          <Settings className="h-4 w-4" />設定
+          <Settings className="h-4 w-4 shrink-0" />
+          {!collapsed && "設定"}
         </button>
       </nav>
 
-      <div className="border-t border-sidebar-border p-3 flex items-center gap-2">
+      <div className={cn("border-t border-sidebar-border p-3 flex items-center", collapsed ? "justify-center flex-col gap-2" : "gap-2")}>
         <Popover>
           <PopoverTrigger asChild>
             <button className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold hover:bg-primary/20 transition-colors shrink-0" title={profile?.display_name || user?.email || "User"}>
@@ -346,7 +397,7 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
             </div>
           </PopoverContent>
         </Popover>
-        <div className="flex-1" />
+        {!collapsed && <div className="flex-1" />}
         <button onClick={handleSignOut}
           className="p-2 text-muted-foreground hover:bg-muted/50 rounded-lg transition-colors" title="ログアウト">
           <LogOut className="h-4 w-4" />
