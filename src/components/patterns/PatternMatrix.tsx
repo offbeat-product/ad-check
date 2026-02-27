@@ -75,10 +75,12 @@ export default function PatternMatrix({ projectId, patterns, processes, files, c
   );
 
   // Build a lookup: pattern_id -> process_type -> latest file
-  const matrixData = useMemo(() => {
+  const { matrixData, fileCounts } = useMemo(() => {
     const map = new Map<string, Map<string, ProjectFile>>();
+    const counts = new Map<string, Map<string, number>>();
     for (const p of patterns) {
       map.set(p.id, new Map());
+      counts.set(p.id, new Map());
     }
     const patternFiles = files
       .filter(f => f.pattern_id && !commonProcessKeys.has(f.process_type))
@@ -86,11 +88,15 @@ export default function PatternMatrix({ projectId, patterns, processes, files, c
 
     for (const f of patternFiles) {
       const patMap = map.get(f.pattern_id!);
+      const cntMap = counts.get(f.pattern_id!);
       if (patMap && !patMap.has(f.process_type)) {
         patMap.set(f.process_type, f);
       }
+      if (cntMap) {
+        cntMap.set(f.process_type, (cntMap.get(f.process_type) || 0) + 1);
+      }
     }
-    return map;
+    return { matrixData: map, fileCounts: counts };
   }, [patterns, files, commonProcessKeys]);
 
   return (
@@ -198,17 +204,23 @@ export default function PatternMatrix({ projectId, patterns, processes, files, c
                       {patternProcesses.map(proc => {
                         const f = patMap?.get(proc.process_key);
                         const cell = getCellStatus(f, checkResults);
+                        const count = fileCounts.get(pattern.id)?.get(proc.process_key) || 0;
                         return (
                           <td key={proc.id} className="px-1 py-1 text-center">
                             <button
                               onClick={() => f ? navigate(`/project/${projectId}/file/${f.id}`) : onUpload(proc.process_key, pattern.id)}
                               className={cn(
-                                "w-full rounded-md px-2 py-1.5 transition-colors text-[10px] font-medium",
+                                "w-full rounded-md px-2 py-1.5 transition-colors text-[10px] font-medium relative",
                                 f ? cell.colorClass : "bg-muted/30 text-muted-foreground/40 hover:bg-muted/60",
                               )}
                             >
                               {f ? cell.label : (
                                 <Plus className="h-3 w-3 mx-auto opacity-40" />
+                              )}
+                              {count > 1 && (
+                                <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-[8px] font-bold rounded-full w-3.5 h-3.5 flex items-center justify-center">
+                                  {count}
+                                </span>
                               )}
                             </button>
                           </td>
