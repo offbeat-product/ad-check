@@ -57,11 +57,11 @@ export async function tusUpload(options: TusUploadOptions): Promise<TusUploadRes
   const accessToken = sessionData.session?.access_token;
   if (!accessToken) throw new Error("認証が必要です");
 
-  const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 
   return new Promise<TusUploadResult>((resolve, reject) => {
     const upload = new tus.Upload(file, {
-      endpoint: `https://${projectId}.supabase.co/storage/v1/upload/resumable`,
+      endpoint: `${supabaseUrl}/storage/v1/upload/resumable`,
       retryDelays: RETRY_DELAYS,
       chunkSize: CHUNK_SIZE,
       headers: {
