@@ -1,0 +1,1 @@
+ALTER TABLE public.project_processes ALTER COLUMN status SET DEFAULT 'preparing';
