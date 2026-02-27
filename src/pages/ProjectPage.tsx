@@ -512,18 +512,18 @@ export default function ProjectPage() {
                 {patterns.length > 0 && (
                   <div className="flex items-center border border-border rounded-md h-7 overflow-hidden">
                     <button
-                      onClick={() => setViewMode("matrix")}
-                      className={cn("px-2 h-full flex items-center text-xs transition-colors", viewMode === "matrix" ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
-                      title="マトリクス表示"
-                    >
-                      <Grid3X3 className="h-3.5 w-3.5" />
-                    </button>
-                    <button
                       onClick={() => setViewMode("list")}
                       className={cn("px-2 h-full flex items-center text-xs transition-colors", viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
                       title="リスト表示"
                     >
                       <List className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setViewMode("matrix")}
+                      className={cn("px-2 h-full flex items-center text-xs transition-colors", viewMode === "matrix" ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
+                      title="パターン管理"
+                    >
+                      <Grid3X3 className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 )}
