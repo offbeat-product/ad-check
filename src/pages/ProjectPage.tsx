@@ -763,7 +763,7 @@ export default function ProjectPage() {
                                     className={cn("glass-card p-3 text-left hover:border-primary/30 transition-colors w-full relative", file.status === "fixed" && "border-status-ok/50 ring-1 ring-status-ok/20")}>
                                     {file.status === "fixed" && (
                                       <>
-                                        <div className="absolute inset-0 bg-muted/40 backdrop-blur-[1px] rounded-lg z-[1] pointer-events-none" />
+                                        <div className="absolute inset-0 bg-muted/60 backdrop-blur-[2px] rounded-lg z-[1] pointer-events-none" />
                                         <div className="absolute top-1.5 right-1.5 z-10 bg-status-ok text-white rounded-full p-0.5">
                                           <Lock className="h-3 w-3" />
                                         </div>
