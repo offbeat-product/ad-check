@@ -515,6 +515,8 @@ export type Database = {
           file_name: string
           file_size_bytes: number | null
           file_type: string
+          fixed_at: string | null
+          fixed_by: string | null
           id: string
           parent_file_id: string | null
           process_type: string
@@ -531,6 +533,8 @@ export type Database = {
           file_name: string
           file_size_bytes?: number | null
           file_type: string
+          fixed_at?: string | null
+          fixed_by?: string | null
           id?: string
           parent_file_id?: string | null
           process_type: string
@@ -547,6 +551,8 @@ export type Database = {
           file_name?: string
           file_size_bytes?: number | null
           file_type?: string
+          fixed_at?: string | null
+          fixed_by?: string | null
           id?: string
           parent_file_id?: string | null
           process_type?: string

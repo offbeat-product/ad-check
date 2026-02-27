@@ -146,7 +146,7 @@ export async function getRelatedProcessData(
     .select("process_type, file_data, file_name, file_type")
     .eq("project_id", projectId)
     .in("process_type", targetTypes)
-    .not("status", "eq", "deleted")
+    .eq("status", "fixed")
     .order("created_at", { ascending: false });
 
   if (!files || files.length === 0) return {};

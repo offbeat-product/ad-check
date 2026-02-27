@@ -846,6 +846,11 @@ export default function CheckPage() {
           </section>
         )}
 
+        {/* ── Fix status pre-flight for video processes ── */}
+        {selectedProductId && processConfig.inputMode === "video" && selectedProjectId && (
+          <FixStatusPreFlight projectId={selectedProjectId} currentProcessType={selectedProcess} />
+        )}
+
         {/* ── Execute & Result ── */}
         <section className="space-y-6">
           <Button
@@ -1076,5 +1081,68 @@ function MediaInput({
         </div>
       </div>
     </div>
+  );
+}
+
+// ── Fix Status Pre-flight for Video Checks ──
+function FixStatusPreFlight({ projectId, currentProcessType }: { projectId: string; currentProcessType: string }) {
+  const [fixedTypes, setFixedTypes] = useState<Set<string>>(new Set());
+  const [loaded, setLoaded] = useState(false);
+
+  const relatedProcessTypes = ["script", "storyboard", "styleframe", "na_script", "vcon"]
+    .filter(pt => pt !== currentProcessType);
+
+  const processLabels: Record<string, string> = {
+    script: "字コンテ",
+    storyboard: "絵コンテ",
+    styleframe: "スタイルフレーム",
+    na_script: "NAスクリプト",
+    vcon: "Vコン",
+  };
+
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    supabase
+      .from("project_files")
+      .select("process_type")
+      .eq("project_id", projectId)
+      .eq("status", "fixed")
+      .in("process_type", relatedProcessTypes)
+      .then(({ data }) => {
+        if (cancelled) return;
+        setFixedTypes(new Set(data?.map(f => f.process_type) || []));
+        setLoaded(true);
+      });
+    return () => { cancelled = true; };
+  }, [projectId, currentProcessType]);
+
+  if (!loaded) return null;
+
+  return (
+    <section className="glass-card p-4 space-y-2">
+      <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">■ 照合データの状況</h3>
+      <div className="space-y-1">
+        {relatedProcessTypes.map(pt => {
+          const isFixed = fixedTypes.has(pt);
+          return (
+            <div key={pt} className="flex items-center gap-2 text-xs">
+              <span className={isFixed ? "text-status-ok" : "text-status-warning"}>
+                {isFixed ? "✅" : "⚠️"}
+              </span>
+              <span className="font-medium w-32">{processLabels[pt] || pt}</span>
+              <span className={isFixed ? "text-status-ok" : "text-muted-foreground"}>
+                {isFixed ? "FIX済み（照合に使用します）" : "未FIX（照合スキップ）"}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      {fixedTypes.size === 0 && (
+        <p className="text-xs text-muted-foreground mt-1">
+          ※ 照合に使用できるFIXデータがありません。各工程でFIX確定してからチェックすることを推奨します。
+        </p>
+      )}
+    </section>
   );
 }
