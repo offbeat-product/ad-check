@@ -48,19 +48,20 @@ serve(async (req) => {
       });
     }
 
-    // Fetch file from storage URL
-    const fileRes = await fetch(fileUrl);
-    if (!fileRes.ok) throw new Error(`Failed to fetch file: ${fileRes.status}`);
-    const fileBytes = new Uint8Array(await fileRes.arrayBuffer());
-    const fileSizeMB = fileBytes.length / (1024 * 1024);
-
-    console.log(`Processing file: ${fileSizeMB.toFixed(1)}MB, type: ${mimeType}`);
+    // Get file size via HEAD request first
+    const headRes = await fetch(fileUrl, { method: "HEAD" });
+    const contentLength = parseInt(headRes.headers.get("content-length") || "0", 10);
+    const fileSizeMB = contentLength / (1024 * 1024);
+    console.log(`Processing file: ~${fileSizeMB.toFixed(1)}MB, type: ${mimeType}`);
 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
-    if (fileBytes.length <= 10 * 1024 * 1024) {
-      // Small file: inlineData (≤10MB to stay safe with memory)
-      // Convert to base64
+    if (contentLength <= 8 * 1024 * 1024) {
+      // Small file (≤8MB): inlineData - safe for edge function memory
+      const fileRes = await fetch(fileUrl);
+      if (!fileRes.ok) throw new Error(`Failed to fetch file: ${fileRes.status}`);
+      const fileBytes = new Uint8Array(await fileRes.arrayBuffer());
+
       let binary = "";
       const chunkSize = 8192;
       for (let i = 0; i < fileBytes.length; i += chunkSize) {
@@ -91,15 +92,17 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     } else {
-      // Large file: Gemini File API upload
+      // Large file (>8MB): Use Gemini File API with streaming upload
+      // Stream from storage → Gemini without buffering full file in memory
       const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${GEMINI_API_KEY}`;
 
+      // Step 1: Initiate resumable upload
       const initiateRes = await fetch(uploadUrl, {
         method: "POST",
         headers: {
           "X-Goog-Upload-Protocol": "resumable",
           "X-Goog-Upload-Command": "start",
-          "X-Goog-Upload-Header-Content-Length": String(fileBytes.length),
+          "X-Goog-Upload-Header-Content-Length": String(contentLength),
           "X-Goog-Upload-Header-Content-Type": mimeType,
           "Content-Type": "application/json",
         },
@@ -115,6 +118,10 @@ serve(async (req) => {
       const resumeUrl = initiateRes.headers.get("X-Goog-Upload-URL");
       if (!resumeUrl) throw new Error("No upload URL returned");
 
+      // Step 2: Stream file directly from storage to Gemini
+      const fileRes = await fetch(fileUrl);
+      if (!fileRes.ok) throw new Error(`Failed to fetch file: ${fileRes.status}`);
+
       const uploadRes = await fetch(resumeUrl, {
         method: "PUT",
         headers: {
@@ -122,7 +129,8 @@ serve(async (req) => {
           "X-Goog-Upload-Offset": "0",
           "Content-Type": mimeType,
         },
-        body: fileBytes,
+        // Stream the body directly without buffering
+        body: fileRes.body,
       });
 
       if (!uploadRes.ok) {
@@ -135,7 +143,7 @@ serve(async (req) => {
       const fileInfo = uploadResult.file;
       if (!fileInfo?.name || !fileInfo?.uri) throw new Error("Invalid upload response");
 
-      // Poll until ACTIVE
+      // Step 3: Poll until ACTIVE
       const filesBase = `https://generativelanguage.googleapis.com/v1beta`;
       const startTime = Date.now();
       while (Date.now() - startTime < 120000) {
@@ -147,6 +155,7 @@ serve(async (req) => {
         await new Promise((r) => setTimeout(r, 3000));
       }
 
+      // Step 4: Generate content
       const body = {
         contents: [{ parts: [{ fileData: { mimeType, fileUri: fileInfo.uri } }, { text: EXTRACT_PROMPT }] }],
         generationConfig: { maxOutputTokens: 8192, temperature: 0.1 },
