@@ -150,18 +150,18 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-border px-6 py-3 flex items-center justify-between bg-card">
+      <header className="border-b border-border px-4 md:px-6 py-3 flex items-center justify-between bg-card">
         <div className="text-sm text-muted-foreground">ホーム</div>
         <div className="flex items-center gap-2">
           <NotificationBell />
           <button onClick={() => navigate("/check")}
-            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity">
+            className="px-3 md:px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs md:text-sm font-semibold hover:opacity-90 transition-opacity">
             + 新規チェック
           </button>
         </div>
       </header>
 
-      <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={ClipboardCheck} label="今日のチェック数" value={stats.todayChecks} color="text-primary" />
           <StatCard icon={AlertTriangle} label="修正必須（累計）" value={stats.totalNg} color="text-status-ng" />
@@ -180,7 +180,7 @@ export default function Dashboard() {
                 <Plus className="h-3.5 w-3.5" />新規プロジェクト
               </button>
             </div>
-            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {projects.map((pr) => {
                 const stCfg = PROJECT_STATUS_CONFIG[pr.status || "in_progress"] || PROJECT_STATUS_CONFIG.in_progress;
                 return (
@@ -202,7 +202,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        <div className="grid lg:grid-cols-5 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           <div className="lg:col-span-3 glass-card overflow-hidden">
             <div className="px-4 py-3 border-b border-border flex items-center justify-between">
               <h2 className="text-sm font-semibold">最近のチェック結果</h2>
