@@ -67,7 +67,7 @@ export const PROJECT_STATUS_CONFIG: Record<string, { label: string; color: strin
   in_progress:    { label: '進行中',     color: 'blue',   dotClass: 'bg-primary',             badgeClass: 'bg-primary/10 text-primary' },
   revision:       { label: '修正中',     color: 'orange', dotClass: 'bg-status-warning',      badgeClass: 'bg-status-warning/10 text-status-warning' },
   client_review:  { label: '先方確認中', color: 'purple', dotClass: 'bg-[hsl(264,100%,58%)]', badgeClass: 'bg-[hsl(264,100%,58%)]/10 text-[hsl(264,100%,58%)]' },
-  completed:      { label: '完了',       color: 'green',  dotClass: 'bg-status-ok',           badgeClass: 'bg-status-ok/10 text-status-ok' },
+  completed:      { label: '完了',       color: 'blue',   dotClass: 'bg-primary',              badgeClass: 'bg-primary/10 text-primary' },
 };
 
 // Process status config (aligned with PROJECT_STATUS_CONFIG)

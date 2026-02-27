@@ -72,8 +72,8 @@ export default function MaterialDetailModal({
 
     return (
       <div className="mt-1.5">
-        <p className="text-xs text-status-ok font-medium">
-          ✅ {sheetCount}工程 / {totalItems}項目
+        <p className="text-xs text-primary font-medium">
+          ● {sheetCount}工程 / {totalItems}項目
         </p>
         {expandedWCheck === m.id ? (
           <>
