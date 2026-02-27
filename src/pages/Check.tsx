@@ -293,7 +293,7 @@ export default function CheckPage() {
         toast({ title: "アップロードエラー", description: err instanceof Error ? err.message : "アップロードに失敗しました", variant: "destructive" });
       }
     }
-  }, [toast, user]);
+  }, [toast, user, product]);
 
   const clearMedia = useCallback(() => {
     setMediaFile(null);
@@ -389,6 +389,7 @@ export default function CheckPage() {
 
         // Video files: always use Storage URL, never send base64 (too large for webhook payload)
         const videoMimeType = mediaFile?.type || "";
+        console.log("[QuickCheck] video webhook payload:", { videoStorageUrl, videoMimeType, process: selectedProcess });
 
         res = await runVideoCheck(product.id, selectedProcess, videoScriptText, {
           videoUrl: videoStorageUrl || "",
