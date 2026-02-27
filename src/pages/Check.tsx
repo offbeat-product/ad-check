@@ -251,7 +251,11 @@ export default function CheckPage() {
 
       try {
         const productId = product?.id || user.id;
-        const path = `${productId}/${Date.now()}_${file.name}`;
+        // Sanitize filename to avoid URL encoding issues with special characters
+        const sanitizedName = file.name
+          .replace(/[^\w\d._-]/g, "_")
+          .replace(/_+/g, "_");
+        const path = `${productId}/${Date.now()}_${sanitizedName}`;
 
         const { data: { session } } = await supabase.auth.getSession();
         const token = session?.access_token;
@@ -265,10 +269,11 @@ export default function CheckPage() {
             }
           });
           xhr.addEventListener("load", () => {
-            if (xhr.status >= 200 && xhr.status < 300) resolve();
-            else reject(new Error(`Upload failed: ${xhr.status}`));
+            // Supabase Storage returns 200 (upsert) or 201 (new), treat both as success
+            if (xhr.status >= 200 && xhr.status < 400) resolve();
+            else reject(new Error(`Upload failed: ${xhr.status} ${xhr.responseText?.slice(0, 200)}`));
           });
-          xhr.addEventListener("error", () => reject(new Error("Upload failed")));
+          xhr.addEventListener("error", () => reject(new Error("ネットワークエラーが発生しました")));
 
           const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
           xhr.open("POST", `${supabaseUrl}/storage/v1/object/${bucketName}/${path}`);
@@ -282,6 +287,7 @@ export default function CheckPage() {
         if (isVideo) setVideoUploadProgress(100);
         toast({ title: "アップロード完了", description: `${file.name} をアップロードしました` });
       } catch (err) {
+        console.error("[MediaUpload] error:", err);
         if (isVideo) setVideoUploadProgress(null);
         setStorageUrl(null);
         toast({ title: "アップロードエラー", description: err instanceof Error ? err.message : "アップロードに失敗しました", variant: "destructive" });
