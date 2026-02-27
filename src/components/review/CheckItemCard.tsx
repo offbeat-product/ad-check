@@ -94,12 +94,9 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
             <p className="text-xs text-foreground/80 mt-1">{item.detail}</p>
 
             {item.suggestion && item.status !== "OK" && (
-              <div className="text-xs rounded-md p-2 mt-2 space-y-1 border border-status-ng/20 bg-status-ng/5">
-                <div className="flex items-center gap-1.5 text-status-ng font-bold">
-                  <Lightbulb className="h-3 w-3 shrink-0" />
-                  修正案
-                </div>
-                <p className="text-status-ng font-medium whitespace-pre-wrap pl-[18px]">{item.suggestion}</p>
+              <div className="text-xs text-primary bg-primary/5 rounded-md p-2 mt-2 flex items-start gap-1.5">
+                <Lightbulb className="h-3 w-3 shrink-0 mt-0.5" />
+                <span>修正案: {item.suggestion}</span>
               </div>
             )}
 
