@@ -1,6 +1,7 @@
 import type { CheckResult } from "./types";
 import { fetchWithRetry, type RetryOptions } from "./fetch-with-retry";
 import { resolveWebhookProductId } from "./resolve-product-id";
+import { supabase } from "@/integrations/supabase/client";
 
 const BASE_URL = "https://offbeat-inc.app.n8n.cloud/webhook";
 
@@ -126,6 +127,47 @@ export async function runAudioCheck(
   return webhookFetch(url, body);
 }
 
+/**
+ * Fetch related process files for video checks.
+ * Returns data from script, storyboard, styleframe, na_script, vcon
+ * (excluding the current process type) for the same project.
+ */
+export async function getRelatedProcessData(
+  projectId: string,
+  currentProcessType: string
+): Promise<Record<string, { file_data: string; file_name: string; file_type: string }>> {
+  if (!projectId) return {};
+
+  const relatedProcessTypes = ["script", "storyboard", "styleframe", "na_script", "vcon"];
+  const targetTypes = relatedProcessTypes.filter((pt) => pt !== currentProcessType);
+
+  const { data: files } = await supabase
+    .from("project_files")
+    .select("process_type, file_data, file_name, file_type")
+    .eq("project_id", projectId)
+    .in("process_type", targetTypes)
+    .not("status", "eq", "deleted")
+    .order("created_at", { ascending: false });
+
+  if (!files || files.length === 0) return {};
+
+  const relatedData: Record<string, { file_data: string; file_name: string; file_type: string }> = {};
+  const seen = new Set<string>();
+
+  for (const f of files) {
+    if (seen.has(f.process_type)) continue;
+    if (!f.file_data) continue;
+    seen.add(f.process_type);
+    relatedData[f.process_type] = {
+      file_data: f.file_data,
+      file_name: f.file_name,
+      file_type: f.file_type,
+    };
+  }
+
+  return relatedData;
+}
+
 export async function runVideoCheck(
   productId: string,
   processType: string,
@@ -136,7 +178,8 @@ export async function runVideoCheck(
     videoBase64?: string;
     metadata?: Record<string, any>;
   },
-  referenceContext?: string
+  referenceContext?: string,
+  projectId?: string
 ): Promise<CheckResult> {
   const url = getWebhookUrl(processType);
   if (!url) throw new Error(`動画チェックのWebhookが見つかりません (${processType})`);
@@ -154,6 +197,16 @@ export async function runVideoCheck(
   if (referenceContext) {
     try { body.reference_context = JSON.parse(referenceContext); } catch { body.reference_context = referenceContext; }
   }
+
+  // Fetch related process data for cross-reference checking
+  if (projectId) {
+    const relatedFiles = await getRelatedProcessData(projectId, processType);
+    if (Object.keys(relatedFiles).length > 0) {
+      body.related_files = relatedFiles;
+      console.log("[Webhook] Including related_files:", Object.keys(relatedFiles));
+    }
+  }
+
   return webhookFetch(url, body);
 }
 

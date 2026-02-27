@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { runScriptCheck, getWebhookUrl, webhookFetch } from "@/lib/webhook";
+import { runScriptCheck, getWebhookUrl, webhookFetch, getRelatedProcessData } from "@/lib/webhook";
 import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import type { CheckItem } from "@/lib/types";
@@ -247,6 +247,16 @@ export default function FileReviewPage() {
           }
           body.script_text = file.file_data?.startsWith("data:") ? "" : (file.file_data || "");
           inputData = { script_text: body.script_text, video_url: body.video_url || "" };
+        }
+
+        // For video processes, include related files from the same project
+        const isVideoProcess = ["vcon", "video_horizontal", "video_vertical"].includes(processKey);
+        if (isVideoProcess && projectId) {
+          const relatedFiles = await getRelatedProcessData(projectId, processKey);
+          if (Object.keys(relatedFiles).length > 0) {
+            body.related_files = relatedFiles;
+            console.log("[CheckMate] Including related_files:", Object.keys(relatedFiles));
+          }
         }
 
         console.log('[CheckMate] Webhook URL:', webhookUrl);
