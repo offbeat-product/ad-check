@@ -326,14 +326,24 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
 
     if (error) {
       toast({ title: "エラー", description: error.message, variant: "destructive" });
+      setSaving(false);
     } else {
       toast({ title: existing ? "更新しました" : "保存しました" });
-      onSaved();
+      console.log("[MaterialForm] autoGenerateRules:", autoGenerateRules, "finalContentText length:", finalContentText?.length, "finalContentText truthy:", !!finalContentText);
       if (autoGenerateRules && finalContentText) {
-        triggerRuleGeneration(finalContentText);
+        console.log("[MaterialForm] Starting triggerRuleGeneration...");
+        // Run rule generation BEFORE onSaved to prevent unmount
+        try {
+          await triggerRuleGeneration(finalContentText);
+        } catch (err) {
+          console.error("[MaterialForm] triggerRuleGeneration error:", err);
+        }
+      } else {
+        console.log("[MaterialForm] Skipping rule generation - autoGenerateRules:", autoGenerateRules, "hasText:", !!finalContentText);
       }
+      setSaving(false);
+      onSaved();
     }
-    setSaving(false);
   };
 
   const handleMethodChange = (m: InputMethod) => {
