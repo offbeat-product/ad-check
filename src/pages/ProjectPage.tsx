@@ -18,6 +18,7 @@ import ProcessTimeline from "@/components/ProcessTimeline";
 import PatternMatrix from "@/components/patterns/PatternMatrix";
 import AddPatternDialog from "@/components/patterns/AddPatternDialog";
 import BulkPatternDialog from "@/components/patterns/BulkPatternDialog";
+import CopyToPatternDialog from "@/components/patterns/CopyToPatternDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -124,6 +125,14 @@ export default function ProjectPage() {
   const [addPatternOpen, setAddPatternOpen] = useState(false);
   const [bulkPatternOpen, setBulkPatternOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"matrix" | "list">("list");
+  const [copyToPatternInfo, setCopyToPatternInfo] = useState<{
+    sourcePatternId: string;
+    processType: string;
+    fileData: string;
+    fileName: string;
+    fileType: string;
+    fileSizeBytes: number;
+  } | null>(null);
 
   const { patterns, addPattern, addPatternsBulk, deletePattern, updatePattern, refetch: refetchPatterns } = usePatterns(id);
 
@@ -377,6 +386,17 @@ export default function ProjectPage() {
       } else {
         setUploadProgress(100);
         toast({ title: "アップロード完了" });
+        // Offer to copy to other patterns if uploaded to a specific pattern
+        if (resolvedPatternId && patterns.length > 1) {
+          setCopyToPatternInfo({
+            sourcePatternId: resolvedPatternId,
+            processType: uploadModal,
+            fileData,
+            fileName,
+            fileType,
+            fileSizeBytes: fileSize,
+          });
+        }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "アップロードに失敗しました";
@@ -874,6 +894,40 @@ export default function ProjectPage() {
         onDelete={deleteProcess}
         onReset={resetToDefaults}
       />
+
+      {/* Copy to other patterns dialog */}
+      {copyToPatternInfo && (
+        <CopyToPatternDialog
+          open={!!copyToPatternInfo}
+          onOpenChange={(o) => { if (!o) setCopyToPatternInfo(null); }}
+          sourcePattern={patterns.find(p => p.id === copyToPatternInfo.sourcePatternId)!}
+          allPatterns={patterns}
+          processLabel={
+            processes.find(p => p.process_key === copyToPatternInfo.processType)?.process_label || copyToPatternInfo.processType
+          }
+          onConfirm={async (targetIds) => {
+            if (!id || !user) return;
+            const rows = targetIds.map(patId => ({
+              project_id: id,
+              process_type: copyToPatternInfo.processType,
+              file_name: copyToPatternInfo.fileName,
+              file_type: copyToPatternInfo.fileType,
+              file_data: copyToPatternInfo.fileData,
+              file_size_bytes: copyToPatternInfo.fileSizeBytes,
+              created_by: user.email || user.id,
+              pattern_id: patId,
+            }));
+            const { error } = await supabase.from("project_files").insert(rows as any);
+            if (error) {
+              toast({ title: "コピーエラー", description: error.message, variant: "destructive" });
+            } else {
+              toast({ title: `${targetIds.length}件のパターンにコピーしました` });
+              fetchData();
+            }
+            setCopyToPatternInfo(null);
+          }}
+        />
+      )}
     </div>
   );
 }
