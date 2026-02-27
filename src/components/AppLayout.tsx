@@ -11,12 +11,27 @@ export default function AppLayout() {
   const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem("sidebar_collapsed") === "true"; }
+    catch { return false; }
+  });
+
+  const toggleCollapsed = () => {
+    setCollapsed((prev) => {
+      localStorage.setItem("sidebar_collapsed", String(!prev));
+      return !prev;
+    });
+  };
 
   return (
     <div className="flex h-screen w-full overflow-hidden">
       {/* Desktop sidebar */}
       <div className="hidden md:block">
-        <AppSidebar onCreateProject={() => setCreateOpen(true)} />
+        <AppSidebar
+          onCreateProject={() => setCreateOpen(true)}
+          collapsed={collapsed}
+          onToggleCollapse={toggleCollapsed}
+        />
       </div>
 
       {/* Mobile overlay */}
@@ -24,7 +39,7 @@ export default function AppLayout() {
         <div className="fixed inset-0 z-50 md:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
           <div className="relative w-[280px] h-full animate-in slide-in-from-left duration-200">
-            <AppSidebar onCreateProject={() => { setCreateOpen(true); setMobileOpen(false); }} />
+            <AppSidebar onCreateProject={() => { setCreateOpen(true); setMobileOpen(false); }} collapsed={false} />
             <button
               onClick={() => setMobileOpen(false)}
               className="absolute top-4 right-[-40px] p-2 rounded-full bg-background/80 backdrop-blur border border-border"
