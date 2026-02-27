@@ -35,7 +35,7 @@ import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import ReferenceMaterialsSection from "@/components/reference/ReferenceMaterialsSection";
 import {
   Upload, FileText, Image, Film, MessageCircle, Plus, Settings, GripVertical,
-  ChevronDown, CalendarIcon, AlertTriangle, Trash2, Grid3X3, List, Bot, Loader2, Pencil,
+  ChevronDown, CalendarIcon, AlertTriangle, Trash2, Grid3X3, List, Bot, Loader2, Pencil, Lock,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import {
@@ -141,6 +141,50 @@ export default function ProjectPage() {
   const { processes, updateProcess, reorderProcesses, addProcess, deleteProcess, resetToDefaults } = useProjectProcesses(id);
 
   const { progress: batchProgress, runBatchCheck, resetProgress: resetBatchProgress } = useBatchCheck();
+  const [batchFixing, setBatchFixing] = useState(false);
+
+  const handleBatchFix = async (processFiles: ProjectFile[], processKey: string) => {
+    if (!id || !user) return;
+    // Only fix files that are checked and have check_result_id
+    const fixableFiles = processFiles.filter(f => 
+      f.check_result_id && !f.parent_file_id && f.status !== "fixed"
+    );
+    if (fixableFiles.length === 0) {
+      toast({ title: "FIX対象のファイルがありません", description: "チェック済みのファイルが必要です" });
+      return;
+    }
+    const confirmed = window.confirm(
+      `この工程の${fixableFiles.length}件のチェック済みファイルを一括FIX（最終確定）しますか？\nFIXしたデータは他工程のAIチェック時に照合用として使用されます。`
+    );
+    if (!confirmed) return;
+
+    setBatchFixing(true);
+    try {
+      // Unfix any currently fixed files in this process
+      await supabase.from("project_files")
+        .update({ status: "checked", fixed_at: null, fixed_by: null } as any)
+        .eq("project_id", id)
+        .eq("process_type", processKey)
+        .eq("status", "fixed");
+
+      // Fix all target files
+      const now = new Date().toISOString();
+      const fixBy = user.email || user.id || null;
+      for (const f of fixableFiles) {
+        await supabase.from("project_files")
+          .update({ status: "fixed", fixed_at: now, fixed_by: fixBy } as any)
+          .eq("id", f.id);
+      }
+
+      toast({ title: `✅ ${fixableFiles.length}件を一括FIXしました`, description: "他工程のAIチェック時にこれらのデータが照合用として使用されます" });
+      fetchData();
+    } catch (err) {
+      console.error("[BatchFix] error:", err);
+      toast({ title: "一括FIXに失敗しました", variant: "destructive" });
+    } finally {
+      setBatchFixing(false);
+    }
+  };
 
   const handleRenameFile = async (fileId: string, newName: string) => {
     if (!newName.trim()) { setEditingFileId(null); return; }
@@ -676,6 +720,22 @@ export default function ProjectPage() {
                                 <Bot className="h-3 w-3" />
                               )}
                               一括AIチェック ({sectionFiles.filter(f => f.file_data && !f.parent_file_id).length})
+                            </Button>
+                          )}
+                          {sectionFiles.some(f => f.check_result_id && !f.parent_file_id && f.status !== "fixed") && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7 gap-1 border-status-ok text-status-ok hover:bg-status-ok/10"
+                              disabled={batchFixing}
+                              onClick={() => handleBatchFix(sectionFiles, proc.process_key)}
+                            >
+                              {batchFixing ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Lock className="h-3 w-3" />
+                              )}
+                              一括FIX ({sectionFiles.filter(f => f.check_result_id && !f.parent_file_id && f.status !== "fixed").length})
                             </Button>
                           )}
                           <Button size="sm" variant="outline" className="text-xs h-7"
