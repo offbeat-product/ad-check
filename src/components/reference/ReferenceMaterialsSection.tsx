@@ -75,14 +75,14 @@ export default function ReferenceMaterialsSection({ projectId, productId, produc
               const isWCheck = mt.id === "wcheck" && wcheckInfo.totalItems > 0;
               const IconComponent = ICON_MAP[mt.icon];
 
-              return (
+                return (
                 <button
                   key={mt.id}
                   onClick={() => setOpenType(mt.id)}
-                  className="glass-card p-3 text-left hover:border-primary/30 transition-colors group"
+                  className="glass-card p-3 text-left hover:border-primary/30 transition-colors group flex flex-col h-full min-h-[96px]"
                   style={{ borderLeft: `3px solid ${mt.color}` }}
                 >
-                  <div className="mb-1">
+                  <div className="h-5 mb-1 flex items-center">
                     {IconComponent ? (
                       <IconComponent className="h-5 w-5 text-foreground" />
                     ) : (
@@ -90,21 +90,21 @@ export default function ReferenceMaterialsSection({ projectId, productId, produc
                     )}
                   </div>
                   <p className="text-xs font-medium leading-tight">{mt.label}</p>
-                  {isWCheck ? (
-                    <>
-                      <p className="text-[10px] text-primary mt-1.5 font-medium">
-                        ● {wcheckInfo.totalSheets}工程 / {wcheckInfo.totalItems}項目
-                      </p>
-                      <p className="text-[10px] text-muted-foreground">({sourceLabel})</p>
-                    </>
-                  ) : total > 0 ? (
-                    <>
-                      <p className="text-[10px] text-primary mt-1.5 font-medium">● {total}件登録</p>
-                      <p className="text-[10px] text-muted-foreground">({sourceLabel})</p>
-                    </>
-                  ) : (
-                    <p className="text-[10px] text-muted-foreground/60 mt-1.5">○ 未登録</p>
-                  )}
+                  <div className="mt-auto pt-1.5">
+                    {isWCheck ? (
+                      <>
+                        <p className="text-[10px] text-primary font-medium">● {wcheckInfo.totalSheets}工程 / {wcheckInfo.totalItems}項目</p>
+                        <p className="text-[10px] text-muted-foreground">({sourceLabel})</p>
+                      </>
+                    ) : total > 0 ? (
+                      <>
+                        <p className="text-[10px] text-primary font-medium">● {total}件登録</p>
+                        <p className="text-[10px] text-muted-foreground">({sourceLabel})</p>
+                      </>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground/60">○ 未登録</p>
+                    )}
+                  </div>
                 </button>
               );
             })}
