@@ -19,10 +19,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Plus, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
-
-// Commonly shared processes (shown in a separate section above the matrix)
-const COMMON_PROCESS_KEYS = new Set(["na_script", "bgm", "narration"]);
+import { Plus, MoreHorizontal, Pencil, Trash2, ArrowRightLeft } from "lucide-react";
 
 interface Props {
   projectId: string;
@@ -33,6 +30,7 @@ interface Props {
   onUpload: (processKey: string, patternId: string | null) => void;
   onUpdatePattern?: (id: string, updates: Partial<Pick<Pattern, "name" | "description">>) => Promise<void>;
   onDeletePattern?: (id: string) => Promise<void>;
+  onToggleProcessCommon?: (processId: string, isCommon: boolean) => Promise<boolean>;
 }
 
 function getCellStatus(file: ProjectFile | undefined, checkResults: Props["checkResults"]): {
@@ -56,7 +54,7 @@ function getCellStatus(file: ProjectFile | undefined, checkResults: Props["check
   return { label: cfg?.label || status, colorClass: cfg?.class || "bg-muted" };
 }
 
-export default function PatternMatrix({ projectId, patterns, processes, files, checkResults, onUpload, onUpdatePattern, onDeletePattern }: Props) {
+export default function PatternMatrix({ projectId, patterns, processes, files, checkResults, onUpload, onUpdatePattern, onDeletePattern, onToggleProcessCommon }: Props) {
   const navigate = useNavigate();
   const [editPattern, setEditPattern] = useState<Pattern | null>(null);
   const [editName, setEditName] = useState("");
@@ -64,27 +62,26 @@ export default function PatternMatrix({ projectId, patterns, processes, files, c
   const [editSaving, setEditSaving] = useState(false);
   const [deletePatternTarget, setDeletePatternTarget] = useState<Pattern | null>(null);
 
-  // Split processes into common and pattern-specific
+  // Split processes into common and pattern-specific using DB flag
   const activeProcesses = processes.filter(p => p.is_active);
-  const commonProcesses = activeProcesses.filter(p => COMMON_PROCESS_KEYS.has(p.process_key));
-  const patternProcesses = activeProcesses.filter(p => !COMMON_PROCESS_KEYS.has(p.process_key));
+  const commonProcessKeys = useMemo(() => new Set(activeProcesses.filter(p => p.is_common).map(p => p.process_key)), [activeProcesses]);
+  const commonProcesses = activeProcesses.filter(p => p.is_common);
+  const patternProcesses = activeProcesses.filter(p => !p.is_common);
 
   // Common files (pattern_id is null)
   const commonFiles = useMemo(() =>
-    files.filter(f => !f.pattern_id && COMMON_PROCESS_KEYS.has(f.process_type)),
-    [files]
+    files.filter(f => !f.pattern_id && commonProcessKeys.has(f.process_type)),
+    [files, commonProcessKeys]
   );
 
   // Build a lookup: pattern_id -> process_type -> latest file
   const matrixData = useMemo(() => {
     const map = new Map<string, Map<string, ProjectFile>>();
-    // Init patterns
     for (const p of patterns) {
       map.set(p.id, new Map());
     }
-    // Fill with files that have pattern_id
     const patternFiles = files
-      .filter(f => f.pattern_id && !COMMON_PROCESS_KEYS.has(f.process_type))
+      .filter(f => f.pattern_id && !commonProcessKeys.has(f.process_type))
       .sort((a, b) => new Date(b.created_at || "").getTime() - new Date(a.created_at || "").getTime());
 
     for (const f of patternFiles) {
@@ -94,7 +91,7 @@ export default function PatternMatrix({ projectId, patterns, processes, files, c
       }
     }
     return map;
-  }, [patterns, files]);
+  }, [patterns, files, commonProcessKeys]);
 
   return (
     <div className="space-y-4">
@@ -107,16 +104,24 @@ export default function PatternMatrix({ projectId, patterns, processes, files, c
               const f = commonFiles.find(cf => cf.process_type === proc.process_key);
               const cell = getCellStatus(f, checkResults);
               return (
-                <button
-                  key={proc.id}
-                  onClick={() => f ? navigate(`/project/${projectId}/file/${f.id}`) : onUpload(proc.process_key, null)}
-                  className={cn(
-                    "glass-card px-3 py-2 text-left transition-colors hover:border-primary/30 min-w-[120px]",
+                <div key={proc.id} className="glass-card px-3 py-2 text-left min-w-[120px] relative group">
+                  <button
+                    onClick={() => f ? navigate(`/project/${projectId}/file/${f.id}`) : onUpload(proc.process_key, null)}
+                    className="w-full text-left"
+                  >
+                    <p className="text-xs font-medium mb-1">{proc.process_label}</p>
+                    <Badge variant="outline" className={cn("text-[10px]", cell.colorClass)}>{cell.label}</Badge>
+                  </button>
+                  {onToggleProcessCommon && (
+                    <button
+                      onClick={() => onToggleProcessCommon(proc.id, false)}
+                      title="パターン別に移動"
+                      className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted text-muted-foreground"
+                    >
+                      <ArrowRightLeft className="h-3 w-3" />
+                    </button>
                   )}
-                >
-                  <p className="text-xs font-medium mb-1">{proc.process_label}</p>
-                  <Badge variant="outline" className={cn("text-[10px]", cell.colorClass)}>{cell.label}</Badge>
-                </button>
+                </div>
               );
             })}
           </div>
@@ -133,8 +138,19 @@ export default function PatternMatrix({ projectId, patterns, processes, files, c
                 <tr className="border-b border-border">
                   <th className="px-2 py-2 text-left font-medium text-muted-foreground w-28 sticky left-0 bg-background z-10">パターン</th>
                   {patternProcesses.map(proc => (
-                    <th key={proc.id} className="px-2 py-2 text-center font-medium text-muted-foreground min-w-[80px]">
-                      {proc.process_label}
+                    <th key={proc.id} className="px-2 py-2 text-center font-medium text-muted-foreground min-w-[80px] group/th">
+                      <div className="flex items-center justify-center gap-0.5">
+                        <span>{proc.process_label}</span>
+                        {onToggleProcessCommon && (
+                          <button
+                            onClick={() => onToggleProcessCommon(proc.id, true)}
+                            title="共通素材に移動"
+                            className="opacity-0 group-hover/th:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted"
+                          >
+                            <ArrowRightLeft className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
                     </th>
                   ))}
                 </tr>

@@ -672,6 +672,7 @@ export type Database = {
           deadline: string | null
           id: string
           is_active: boolean
+          is_common: boolean
           process_key: string
           process_label: string
           project_id: string
@@ -684,6 +685,7 @@ export type Database = {
           deadline?: string | null
           id?: string
           is_active?: boolean
+          is_common?: boolean
           process_key: string
           process_label: string
           project_id: string
@@ -696,6 +698,7 @@ export type Database = {
           deadline?: string | null
           id?: string
           is_active?: boolean
+          is_common?: boolean
           process_key?: string
           process_label?: string
           project_id?: string
