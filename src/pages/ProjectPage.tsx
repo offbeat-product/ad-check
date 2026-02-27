@@ -707,7 +707,11 @@ export default function ProjectPage() {
                                       )}
                                     </div>
                                     <p className="text-xs font-medium truncate">{file.file_name}</p>
-                                    <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                                    <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
+                                      {file.created_at && <span>{format(new Date(file.created_at), "MM/dd HH:mm")}</span>}
+                                      {file.created_by && <span>/ {(file.created_by as string).includes("@") ? (file.created_by as string).split("@")[0] : file.created_by}</span>}
+                                    </div>
+                                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                                       <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
                                       {cr && (
                                         <Badge className={cn("text-[10px] h-4 px-1.5", getSubmitBadgeClass(cr.overall_status))}>
