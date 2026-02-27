@@ -34,6 +34,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import ReferenceMaterialsSection from "@/components/reference/ReferenceMaterialsSection";
+import CheckRulesTab from "@/components/product/CheckRulesTab";
 import {
   Upload, FileText, Image, Film, MessageCircle, Plus, Settings, GripVertical,
   ChevronDown, CalendarIcon, AlertTriangle, Trash2, Grid3X3, List, Bot, Loader2, Pencil, Lock,
@@ -553,10 +554,11 @@ export default function ProjectPage() {
 
       <div className="p-4 md:p-6 max-w-6xl mx-auto">
         <Tabs defaultValue="files">
-          <TabsList className="mb-6">
+          <TabsList className="mb-6 flex-wrap">
             <TabsTrigger value="files">ファイル</TabsTrigger>
             <TabsTrigger value="history">チェック履歴</TabsTrigger>
             <TabsTrigger value="patterns">修正パターン</TabsTrigger>
+            <TabsTrigger value="rules">チェックルール</TabsTrigger>
           </TabsList>
 
           <TabsContent value="files" className="space-y-6">
@@ -850,6 +852,10 @@ export default function ProjectPage() {
 
           <TabsContent value="patterns">
             <TopCorrectionPatterns productCode={product.code} limit={10} />
+          </TabsContent>
+
+          <TabsContent value="rules">
+            {product && <CheckRulesTab productId={product.id} />}
           </TabsContent>
 
         </Tabs>
