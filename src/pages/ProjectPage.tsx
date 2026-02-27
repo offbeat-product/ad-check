@@ -760,11 +760,17 @@ export default function ProjectPage() {
                               return (
                                 <div key={file.id} className="relative group">
                                   <button onClick={() => navigate(`/project/${id}/file/${file.id}`)}
-                                    className={cn("glass-card p-3 text-left hover:border-primary/30 transition-colors w-full", file.status === "fixed" && "border-status-ok/50 ring-1 ring-status-ok/20")}>
+                                    className={cn("glass-card p-3 text-left hover:border-primary/30 transition-colors w-full relative", file.status === "fixed" && "border-status-ok/50 ring-1 ring-status-ok/20")}>
                                     {file.status === "fixed" && (
-                                      <div className="absolute top-1.5 right-1.5 z-10 bg-status-ok text-white rounded-full p-0.5">
-                                        <Lock className="h-3 w-3" />
-                                      </div>
+                                      <>
+                                        <div className="absolute inset-0 bg-muted/40 backdrop-blur-[1px] rounded-lg z-[1] pointer-events-none" />
+                                        <div className="absolute top-1.5 right-1.5 z-10 bg-status-ok text-white rounded-full p-0.5">
+                                          <Lock className="h-3 w-3" />
+                                        </div>
+                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex items-center gap-1 bg-status-ok/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm pointer-events-none">
+                                          <Lock className="h-2.5 w-2.5" /> FIX済
+                                        </div>
+                                      </>
                                     )}
                                     <div className="h-20 rounded-md bg-muted/50 flex items-center justify-center mb-2 overflow-hidden">
                                       {isImageFile && file.file_data ? (
