@@ -150,7 +150,7 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-border px-4 md:px-6 py-3 flex items-center justify-between bg-card">
+      <header className="sticky top-0 z-30 border-b border-border px-4 md:px-6 py-3 flex items-center justify-between bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
         <div />
         <div className="flex items-center gap-2">
           <NotificationBell />
