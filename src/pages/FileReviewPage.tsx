@@ -236,6 +236,9 @@ export default function FileReviewPage() {
             body.video_mime_type = mediaType;
           } else if (fileData.startsWith("http")) {
             body.video_url = fileData;
+            // Derive mime type from URL extension
+            const urlExt = fileData.split('.').pop()?.split('?')[0]?.toLowerCase() || "mp4";
+            body.video_mime_type = urlExt === "webm" ? "video/webm" : urlExt === "mov" ? "video/quicktime" : "video/mp4";
           }
           body.script_text = file.file_data?.startsWith("data:") ? "" : (file.file_data || "");
           inputData = { script_text: body.script_text, video_url: body.video_url || "" };
