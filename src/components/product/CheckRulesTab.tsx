@@ -63,7 +63,7 @@ const PROCESS_FILTERS = [
 const SEVERITY_CONFIG: Record<string, { class: string; label: string }> = {
   high: { class: "bg-red-100 text-red-700 border-red-200", label: "高" },
   medium: { class: "bg-yellow-100 text-yellow-700 border-yellow-200", label: "中" },
-  low: { class: "bg-green-100 text-green-700 border-green-200", label: "低" },
+  low: { class: "bg-blue-100 text-blue-700 border-blue-200", label: "低" },
 };
 
 const PROCESS_LABELS: Record<string, string> = {

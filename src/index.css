@@ -37,7 +37,7 @@
     --radius: 0.75rem;
 
     /* Status colors */
-    --status-ok: 142 71% 45%;
+    --status-ok: 224 76% 53%;
     --status-ok-foreground: 0 0% 100%;
     --status-warning: 38 92% 50%;
     --status-warning-foreground: 0 0% 0%;
@@ -47,8 +47,8 @@
     --status-manual: 220 9% 46%;
 
     /* Grade colors */
-    --grade-a: 142 71% 45%;
-    --grade-b: 85 62% 45%;
+    --grade-a: 224 76% 53%;
+    --grade-b: 210 60% 55%;
     --grade-c: 38 92% 50%;
     --grade-d: 0 84% 60%;
 
@@ -60,7 +60,7 @@
     /* Context bar */
     --context-client: 28 100% 57%;
     --context-product: 193 100% 50%;
-    --context-process: 142 71% 45%;
+    --context-process: 224 76% 48%;
 
     /* Sidebar */
     --sidebar-background: 0 0% 100%;

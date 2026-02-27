@@ -1,13 +1,13 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export const MATERIAL_TYPES = [
-  { id: "orientation", label: "オリエンシート", icon: "📋", color: "#3B82F6", description: "クライアントからの制作依頼・要件定義" },
-  { id: "wcheck", label: "Wチェックシート", icon: "✅", color: "#22C55E", description: "社内QMチェック用・CL確認用チェックリスト" },
-  { id: "brand_guideline", label: "ブランドガイドライン", icon: "🎨", color: "#8B5CF6", description: "トンマナ・カラー・フォント・ロゴ使用規定" },
-  { id: "legal_rule", label: "法令レギュレーション", icon: "⚖️", color: "#EF4444", description: "薬機法・景表法・業界固有の広告規制" },
-  { id: "media_regulation", label: "広告媒体別レギュレーション", icon: "📱", color: "#06B6D4", description: "配信媒体の入稿規定・審査ポリシー" },
-  { id: "correction_history", label: "修正履歴", icon: "📝", color: "#F59E0B", description: "過去の修正指示・フィードバック・学び" },
-  { id: "meeting_minutes", label: "会議議事録", icon: "🗒️", color: "#64748B", description: "クライアントMTG・社内会議の議事録・決定事項" },
+  { id: "orientation", label: "オリエンシート", icon: "ClipboardList", color: "#3B82F6", description: "クライアントからの制作依頼・要件定義" },
+  { id: "wcheck", label: "Wチェックシート", icon: "ListChecks", color: "#3B82F6", description: "社内QMチェック用・CL確認用チェックリスト" },
+  { id: "brand_guideline", label: "ブランドガイドライン", icon: "Palette", color: "#8B5CF6", description: "トンマナ・カラー・フォント・ロゴ使用規定" },
+  { id: "legal_rule", label: "法令レギュレーション", icon: "Scale", color: "#EF4444", description: "薬機法・景表法・業界固有の広告規制" },
+  { id: "media_regulation", label: "広告媒体別レギュレーション", icon: "Smartphone", color: "#06B6D4", description: "配信媒体の入稿規定・審査ポリシー" },
+  { id: "correction_history", label: "修正履歴", icon: "FileEdit", color: "#F59E0B", description: "過去の修正指示・フィードバック・学び" },
+  { id: "meeting_minutes", label: "会議議事録", icon: "NotebookPen", color: "#64748B", description: "クライアントMTG・社内会議の議事録・決定事項" },
 ] as const;
 
 export type MaterialType = (typeof MATERIAL_TYPES)[number]["id"];
