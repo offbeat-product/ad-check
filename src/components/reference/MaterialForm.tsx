@@ -222,12 +222,30 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
       throw new Error("外部DBにルールが見つかりません");
     }
 
-    // Delete existing and insert fresh
-    await supabase.from("check_rules").delete().eq("product_id", productId);
-    const { error: insertError } = await supabase.from("check_rules").insert(normalizedRules);
-    if (insertError) throw insertError;
+    // Upsert: add new rules, update duplicates (by rule_id + process_type), keep existing non-duplicate rules
+    let upsertedCount = 0;
+    for (const rule of normalizedRules) {
+      // Check if rule with same rule_id and process_type already exists
+      const { data: existing } = await supabase
+        .from("check_rules")
+        .select("id")
+        .eq("product_id", productId)
+        .eq("rule_id", rule.rule_id)
+        .eq("process_type", rule.process_type)
+        .maybeSingle();
 
-    return normalizedRules.length;
+      if (existing) {
+        // Update existing rule
+        await supabase.from("check_rules").update(rule).eq("id", existing.id);
+      } else {
+        // Insert new rule
+        const { error } = await supabase.from("check_rules").insert(rule);
+        if (error) console.error("[syncRules] insert error:", error);
+      }
+      upsertedCount++;
+    }
+
+    return upsertedCount;
   };
 
   const callParseReferenceWebhook = async (text: string) => {
