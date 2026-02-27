@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from "react";
+import { format } from "date-fns";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -26,7 +27,8 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight, Lock, Unlock, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight, Lock, Unlock, Trash2, Pencil, CalendarDays, User } from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -63,7 +65,8 @@ export default function FileReviewPage() {
   const [savedAnnotations, setSavedAnnotations] = useState<AnnotationData[]>([]);
   const [highlightAnnotation, setHighlightAnnotation] = useState<AnnotationData | null>(null);
   const [siblingFiles, setSiblingFiles] = useState<ProjectFile[]>([]);
-
+  const [editingName, setEditingName] = useState(false);
+  const [editName, setEditName] = useState("");
 
   const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
   const { items, markers, commentCounts, paintMode, setPaintMode, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
@@ -408,7 +411,7 @@ export default function FileReviewPage() {
             <ArrowLeft className="h-4 w-4" />
           </button>
 
-          {/* File navigation */}
+          {/* File navigation & info */}
           <div className="flex items-center gap-1 min-w-0">
             <button
               onClick={() => prevFile && navigateToFile(prevFile.id)}
@@ -418,7 +421,39 @@ export default function FileReviewPage() {
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
-            <span className="text-sm font-medium truncate">{file.file_name}</span>
+            {editingName ? (
+              <form
+                className="flex items-center gap-1"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!file || !editName.trim()) return;
+                  const { error } = await supabase.from("project_files").update({ file_name: editName.trim() }).eq("id", file.id);
+                  if (!handleSupabaseError(error, "rename")) {
+                    setFile({ ...file, file_name: editName.trim() });
+                    toast({ title: "ファイル名を変更しました" });
+                  }
+                  setEditingName(false);
+                }}
+              >
+                <Input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="h-6 text-sm w-48"
+                  autoFocus
+                  onBlur={() => setEditingName(false)}
+                  onKeyDown={(e) => { if (e.key === "Escape") setEditingName(false); }}
+                />
+              </form>
+            ) : (
+              <button
+                className="text-sm font-medium truncate hover:text-primary transition-colors flex items-center gap-1"
+                onClick={() => { setEditName(file?.file_name || ""); setEditingName(true); }}
+                title="クリックして名前を編集"
+              >
+                {file?.file_name}
+                <Pencil className="h-3 w-3 text-muted-foreground/50" />
+              </button>
+            )}
             {siblingFiles.length > 1 && (
               <span className="text-xs text-muted-foreground shrink-0">({currentIndex + 1}/{siblingFiles.length})</span>
             )}
@@ -430,6 +465,22 @@ export default function FileReviewPage() {
             >
               <ChevronRight className="h-4 w-4" />
             </button>
+          </div>
+
+          {/* Upload date & uploader */}
+          <div className="flex items-center gap-3 text-[10px] text-muted-foreground shrink-0">
+            {file?.created_at && (
+              <span className="flex items-center gap-1">
+                <CalendarDays className="h-3 w-3" />
+                {format(new Date(file.created_at), "yyyy/MM/dd HH:mm")}
+              </span>
+            )}
+            {file?.created_by && (
+              <span className="flex items-center gap-1">
+                <User className="h-3 w-3" />
+                {file.created_by.includes("@") ? file.created_by.split("@")[0] : file.created_by}
+              </span>
+            )}
           </div>
           <Popover>
             <PopoverTrigger asChild>
