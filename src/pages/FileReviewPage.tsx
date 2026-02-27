@@ -406,97 +406,100 @@ export default function FileReviewPage() {
   return (
     <div className="flex h-screen overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-        <header className="border-b border-border px-4 py-2 flex items-center gap-3 bg-card shrink-0">
-          <button onClick={() => navigate(`/project/${projectId}`)} className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
-            <ArrowLeft className="h-4 w-4" />
-          </button>
-
-          {/* File navigation & info */}
-          <div className="flex items-center gap-1 min-w-0">
-            <button
-              onClick={() => prevFile && navigateToFile(prevFile.id)}
-              disabled={!prevFile}
-              className={cn("shrink-0 p-1 rounded transition-colors", prevFile ? "hover:bg-muted text-muted-foreground hover:text-foreground" : "text-muted-foreground/30 cursor-not-allowed")}
-              title={prevFile ? `← ${prevFile.file_name}` : undefined}
-            >
-              <ChevronLeft className="h-4 w-4" />
+        <header className="border-b border-border bg-card shrink-0">
+          {/* Row 1: File info */}
+          <div className="flex items-center gap-2 px-4 pt-2 pb-1">
+            <button onClick={() => navigate(`/project/${projectId}`)} className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
+              <ArrowLeft className="h-4 w-4" />
             </button>
-            {editingName ? (
-              <form
-                className="flex items-center gap-1"
-                onSubmit={async (e) => {
-                  e.preventDefault();
-                  if (!file || !editName.trim()) return;
-                  const { error } = await supabase.from("project_files").update({ file_name: editName.trim() }).eq("id", file.id);
-                  if (!handleSupabaseError(error, "rename")) {
-                    setFile({ ...file, file_name: editName.trim() });
-                    toast({ title: "ファイル名を変更しました" });
-                  }
-                  setEditingName(false);
-                }}
-              >
-                <Input
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="h-6 text-sm w-48"
-                  autoFocus
-                  onBlur={() => setEditingName(false)}
-                  onKeyDown={(e) => { if (e.key === "Escape") setEditingName(false); }}
-                />
-              </form>
-            ) : (
+
+            <div className="flex items-center gap-1 min-w-0 flex-1">
               <button
-                className="text-sm font-medium truncate hover:text-primary transition-colors flex items-center gap-1"
-                onClick={() => { setEditName(file?.file_name || ""); setEditingName(true); }}
-                title="クリックして名前を編集"
+                onClick={() => prevFile && navigateToFile(prevFile.id)}
+                disabled={!prevFile}
+                className={cn("shrink-0 p-1 rounded transition-colors", prevFile ? "hover:bg-muted text-muted-foreground hover:text-foreground" : "text-muted-foreground/30 cursor-not-allowed")}
+                title={prevFile ? `← ${prevFile.file_name}` : undefined}
               >
-                {file?.file_name}
-                <Pencil className="h-3 w-3 text-muted-foreground/50" />
+                <ChevronLeft className="h-4 w-4" />
               </button>
-            )}
-            {siblingFiles.length > 1 && (
-              <span className="text-xs text-muted-foreground shrink-0">({currentIndex + 1}/{siblingFiles.length})</span>
-            )}
-            <button
-              onClick={() => nextFile && navigateToFile(nextFile.id)}
-              disabled={!nextFile}
-              className={cn("shrink-0 p-1 rounded transition-colors", nextFile ? "hover:bg-muted text-muted-foreground hover:text-foreground" : "text-muted-foreground/30 cursor-not-allowed")}
-              title={nextFile ? `→ ${nextFile.file_name}` : undefined}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Upload date & uploader */}
-          <div className="flex items-center gap-3 text-[10px] text-muted-foreground shrink-0">
-            {file?.created_at && (
-              <span className="flex items-center gap-1">
-                <CalendarDays className="h-3 w-3" />
-                {format(new Date(file.created_at), "yyyy/MM/dd HH:mm")}
-              </span>
-            )}
-            {file?.created_by && (
-              <span className="flex items-center gap-1">
-                <User className="h-3 w-3" />
-                {file.created_by.includes("@") ? file.created_by.split("@")[0] : file.created_by}
-              </span>
-            )}
-          </div>
-          <Popover>
-            <PopoverTrigger asChild>
-              <button className={cn("px-3 py-1 rounded-full text-xs font-medium border shrink-0", sc.class)}>{sc.label}</button>
-            </PopoverTrigger>
-            <PopoverContent className="w-40 p-2" align="start">
-              {Object.entries(FILE_STATUS_CONFIG).map(([key, cfg]) => (
-                <button key={key} onClick={() => handleStatusChange(key)}
-                  className={cn("w-full text-left px-3 py-1.5 rounded text-xs font-medium transition-colors", currentStatus === key ? "bg-muted" : "hover:bg-muted/50")}>
-                  {cfg.label}
+              {editingName ? (
+                <form
+                  className="flex items-center gap-1"
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!file || !editName.trim()) return;
+                    const { error } = await supabase.from("project_files").update({ file_name: editName.trim() }).eq("id", file.id);
+                    if (!handleSupabaseError(error, "rename")) {
+                      setFile({ ...file, file_name: editName.trim() });
+                      toast({ title: "ファイル名を変更しました" });
+                    }
+                    setEditingName(false);
+                  }}
+                >
+                  <Input
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    className="h-6 text-sm w-48"
+                    autoFocus
+                    onBlur={() => setEditingName(false)}
+                    onKeyDown={(e) => { if (e.key === "Escape") setEditingName(false); }}
+                  />
+                </form>
+              ) : (
+                <button
+                  className="text-sm font-medium truncate hover:text-primary transition-colors flex items-center gap-1"
+                  onClick={() => { setEditName(file?.file_name || ""); setEditingName(true); }}
+                  title={`${file?.file_name} — クリックして名前を編集`}
+                >
+                  <span className="truncate">{file?.file_name}</span>
+                  <Pencil className="h-3 w-3 text-muted-foreground/50 shrink-0" />
                 </button>
-              ))}
-            </PopoverContent>
-          </Popover>
+              )}
+              {siblingFiles.length > 1 && (
+                <span className="text-xs text-muted-foreground shrink-0">({currentIndex + 1}/{siblingFiles.length})</span>
+              )}
+              <button
+                onClick={() => nextFile && navigateToFile(nextFile.id)}
+                disabled={!nextFile}
+                className={cn("shrink-0 p-1 rounded transition-colors", nextFile ? "hover:bg-muted text-muted-foreground hover:text-foreground" : "text-muted-foreground/30 cursor-not-allowed")}
+                title={nextFile ? `→ ${nextFile.file_name}` : undefined}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
 
-          <div className="ml-auto flex items-center gap-1.5">
+            <div className="flex items-center gap-2 text-[10px] text-muted-foreground shrink-0">
+              {file?.created_at && (
+                <span className="flex items-center gap-1 whitespace-nowrap">
+                  <CalendarDays className="h-3 w-3 shrink-0" />
+                  {format(new Date(file.created_at), "MM/dd HH:mm")}
+                </span>
+              )}
+              {file?.created_by && (
+                <span className="flex items-center gap-1 whitespace-nowrap">
+                  <User className="h-3 w-3 shrink-0" />
+                  {file.created_by.includes("@") ? file.created_by.split("@")[0] : file.created_by}
+                </span>
+              )}
+            </div>
+
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className={cn("px-3 py-1 rounded-full text-xs font-medium border shrink-0", sc.class)}>{sc.label}</button>
+              </PopoverTrigger>
+              <PopoverContent className="w-40 p-2" align="start">
+                {Object.entries(FILE_STATUS_CONFIG).map(([key, cfg]) => (
+                  <button key={key} onClick={() => handleStatusChange(key)}
+                    className={cn("w-full text-left px-3 py-1.5 rounded text-xs font-medium transition-colors", currentStatus === key ? "bg-muted" : "hover:bg-muted/50")}>
+                    {cfg.label}
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Row 2: Action buttons */}
+          <div className="flex items-center gap-1 px-4 pb-2 overflow-x-auto">
             {canCheck && (
               <Button size="sm" className="text-xs h-8" onClick={handleRunCheck} disabled={checking}>
                 {checking ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Bot className="h-3 w-3 mr-1" />}
