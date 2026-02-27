@@ -22,7 +22,11 @@ import ImagePreview from "@/components/review/ImagePreview";
 import ScriptDisplay from "@/components/review/ScriptDisplay";
 import MediaPreview from "@/components/review/MediaPreview";
 import ReviewRightPanel from "@/components/review/ReviewRightPanel";
-import { ArrowLeft, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight, Lock, Unlock } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { ArrowLeft, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight, Lock, Unlock, Trash2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -519,6 +523,59 @@ export default function FileReviewPage() {
             <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => setUploadRevisionOpen(true)}>
               <Upload className="h-3 w-3 mr-1" />修正版
             </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="sm" variant="ghost" className="text-xs h-8 text-destructive hover:text-destructive hover:bg-destructive/10">
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>ファイルを削除</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    「{file?.file_name}」を削除します。{record ? "関連するチェック結果・コメントも全て削除されます。" : ""}この操作は元に戻せません。
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                  <AlertDialogAction
+                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    onClick={async () => {
+                      if (!file || !projectId) return;
+                      // Delete related check results, comments, versions
+                      if (record?.id) {
+                        await Promise.all([
+                          supabase.from("comments").delete().eq("check_result_id", record.id),
+                          supabase.from("file_versions").delete().eq("check_result_id", record.id),
+                        ]);
+                        await supabase.from("check_results").delete().eq("id", record.id);
+                      }
+                      // Delete storage file if applicable
+                      if (file.file_data?.includes("/storage/v1/object/public/")) {
+                        try {
+                          const url = new URL(file.file_data);
+                          const pathMatch = url.pathname.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)/);
+                          if (pathMatch) {
+                            await supabase.storage.from(pathMatch[1]).remove([pathMatch[2]]);
+                          }
+                        } catch {}
+                      }
+                      // Delete child versions
+                      await supabase.from("project_files").delete().eq("parent_file_id", file.id);
+                      const { error } = await supabase.from("project_files").delete().eq("id", file.id);
+                      if (error) {
+                        toast({ title: "削除に失敗しました", description: error.message, variant: "destructive" });
+                      } else {
+                        toast({ title: "ファイルを削除しました" });
+                        navigate(`/project/${projectId}`);
+                      }
+                    }}
+                  >
+                    削除する
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </header>
 
