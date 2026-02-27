@@ -381,27 +381,13 @@ export default function CheckPage() {
           metadata.aspect_ratio = "9:16";
         }
 
-        // Convert video file to base64 if available
-        let videoBase64 = "";
-        let videoMimeType = mediaFile?.type || "";
-        if (mediaFile) {
-          videoBase64 = await new Promise<string>((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              const result = reader.result as string;
-              // Remove data URL prefix to get raw base64
-              const base64 = result.split(",")[1] || result;
-              resolve(base64);
-            };
-            reader.onerror = () => reject(new Error("動画の読み込みに失敗しました"));
-            reader.readAsDataURL(mediaFile);
-          });
-        }
+        // Video files: always use Storage URL, never send base64 (too large for webhook payload)
+        const videoMimeType = mediaFile?.type || "";
 
         res = await runVideoCheck(product.id, selectedProcess, videoScriptText, {
           videoUrl: videoStorageUrl || "",
           videoMimeType,
-          videoBase64,
+          videoBase64: "", // Always empty - n8n fetches video via URL
           metadata,
         }, referenceContext);
       } else {
