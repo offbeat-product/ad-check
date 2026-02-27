@@ -252,7 +252,7 @@ export default function FileReviewPage() {
         // For video processes, include related files from the same project
         const isVideoProcess = ["vcon", "video_horizontal", "video_vertical"].includes(processKey);
         if (isVideoProcess && projectId) {
-          const relatedFiles = await getRelatedProcessData(projectId, processKey);
+          const relatedFiles = await getRelatedProcessData(projectId, processKey, file.pattern_id);
           if (Object.keys(relatedFiles).length > 0) {
             body.related_files = relatedFiles;
             console.log("[CheckMate] Including related_files:", Object.keys(relatedFiles));
