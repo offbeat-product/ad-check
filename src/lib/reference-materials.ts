@@ -7,6 +7,7 @@ export const MATERIAL_TYPES = [
   { id: "legal_rule", label: "法令レギュレーション", icon: "⚖️", color: "#EF4444", description: "薬機法・景表法・業界固有の広告規制" },
   { id: "media_regulation", label: "広告媒体別レギュレーション", icon: "📱", color: "#06B6D4", description: "配信媒体の入稿規定・審査ポリシー" },
   { id: "correction_history", label: "修正履歴", icon: "📝", color: "#F59E0B", description: "過去の修正指示・フィードバック・学び" },
+  { id: "meeting_minutes", label: "会議議事録", icon: "🗒️", color: "#64748B", description: "クライアントMTG・社内会議の議事録・決定事項" },
 ] as const;
 
 export type MaterialType = (typeof MATERIAL_TYPES)[number]["id"];
@@ -36,6 +37,7 @@ export const MATERIAL_TEMPLATES: Record<string, string> = {
   legal_rule: `【適用法令】\n\n【広告表現の禁止事項】\n\n【必須記載事項】\n\n【注意が必要な表現】\n\n【参考条文・ガイドライン】`,
   media_regulation: `【配信媒体】\n\n【入稿規定】\n\n【審査ポリシー】\n\n【セーフゾーン】`,
   correction_history: `【日付】\n\n【修正依頼元】\n\n【修正内容】\n\n【修正理由】`,
+  meeting_minutes: `【会議名】\n\n【日時】\n\n【参加者】\n\n【議題・アジェンダ】\n\n【決定事項】\n\n【TODO・アクションアイテム】\n\n【備考・補足】`,
 };
 
 export async function fetchMaterials(scopeType: string, scopeId: string): Promise<ReferenceMaterial[]> {
