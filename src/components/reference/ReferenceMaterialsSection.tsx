@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { MATERIAL_TYPES, fetchMaterials, type ReferenceMaterial } from "@/lib/reference-materials";
 import { getWCheckParsedJson, getWCheckTotalCount } from "@/lib/wcheck-parser";
+import { Skeleton } from "@/components/ui/skeleton";
 import MaterialDetailModal from "./MaterialDetailModal";
 import { ClipboardList, ListChecks, Palette, Scale, Smartphone, FileEdit, NotebookPen } from "lucide-react";
 
@@ -25,6 +26,7 @@ export default function ReferenceMaterialsSection({ projectId, productId, produc
   const [productMaterials, setProductMaterials] = useState<ReferenceMaterial[]>([]);
   const [projectMaterials, setProjectMaterials] = useState<ReferenceMaterial[]>([]);
   const [openType, setOpenType] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
 
   const refresh = useCallback(async () => {
     const [pm, prm] = await Promise.all([
@@ -33,9 +35,10 @@ export default function ReferenceMaterialsSection({ projectId, productId, produc
     ]);
     setProductMaterials(pm);
     setProjectMaterials(prm);
+    setLoaded(true);
   }, [productId, projectId]);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => { setLoaded(false); refresh(); }, [refresh]);
 
   const getWCheckCardInfo = () => {
     const allWCheck = [...productMaterials, ...projectMaterials]
@@ -90,7 +93,9 @@ export default function ReferenceMaterialsSection({ projectId, productId, produc
                   </div>
                   <p className="text-xs font-medium leading-tight">{mt.label}</p>
                   <div className="mt-auto pt-1.5">
-                    {isWCheck ? (
+                    {!loaded ? (
+                      <Skeleton className="h-3 w-16" />
+                    ) : isWCheck ? (
                       <>
                         <p className="text-[10px] text-primary font-medium">● {wcheckInfo.totalSheets}工程 / {wcheckInfo.totalItems}項目</p>
                         <p className="text-[10px] text-muted-foreground">({sourceLabel})</p>
