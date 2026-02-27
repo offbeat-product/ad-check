@@ -64,9 +64,6 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
   const [extracting, setExtracting] = useState(false);
   const [wcheckParsed, setWcheckParsed] = useState<WCheckParsedData | null>(null);
   const [autoGenerateRules, setAutoGenerateRules] = useState(true);
-  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
-  const [duplicateCount, setDuplicateCount] = useState(0);
-  const [pendingSaveResult, setPendingSaveResult] = useState<any>(null);
 
   // Template data states
   const [templateData, setTemplateData] = useState<OrientationData | WCheckData | BrandGuidelineData | LegalRegulationData | MediaRegulationData | CorrectionHistoryData | null>(null);
@@ -167,14 +164,6 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     }
   };
 
-  const checkExistingReferenceRules = async (): Promise<number> => {
-    const { count } = await supabase
-      .from("check_rules")
-      .select("id", { count: "exact", head: true })
-      .eq("product_id", productId)
-      .like("rule_id", "AUTO-%");
-    return count ?? 0;
-  };
 
 
   const syncRulesToLocalDb = async (): Promise<number> => {
@@ -290,27 +279,10 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     }
   };
 
-  // Returns true if dialog is shown (caller should NOT call onSaved yet)
+  // Always proceed directly — upsert logic preserves existing rules
   const triggerRuleGeneration = async (savedContentText: string): Promise<boolean> => {
-    const existingCount = await checkExistingReferenceRules();
-    if (existingCount > 0) {
-      setDuplicateCount(existingCount);
-      setPendingSaveResult({ text: savedContentText });
-      setShowDuplicateDialog(true);
-      return true; // dialog shown, don't unmount yet
-    } else {
-      await callParseReferenceWebhook(savedContentText);
-      return false;
-    }
-  };
-
-  const handleDuplicateConfirm = async () => {
-    setShowDuplicateDialog(false);
-    if (!pendingSaveResult) return;
-    const { text } = pendingSaveResult;
-    await callParseReferenceWebhook(text);
-    setPendingSaveResult(null);
-    onSaved(); // Now safe to close the form
+    await callParseReferenceWebhook(savedContentText);
+    return false;
   };
 
   const buildContentText = (): string => {
@@ -508,22 +480,6 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
           <Button size="sm" variant="outline" className="text-xs h-7" onClick={onCancel}>キャンセル</Button>
         </div>
       </div>
-
-      {/* Duplicate Rules Confirmation Dialog */}
-      <AlertDialog open={showDuplicateDialog} onOpenChange={setShowDuplicateDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>AI生成ルールの再生成</AlertDialogTitle>
-            <AlertDialogDescription>
-              この商材には既にAI生成ルールが{duplicateCount}件あります。再生成すると既存のAI生成ルールは削除されます。続行しますか？
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setPendingSaveResult(null); onSaved(); }}>キャンセル</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDuplicateConfirm}>続行</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 }
