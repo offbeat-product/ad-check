@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -24,6 +24,7 @@ import {
 import { Upload, Link2, FileText, Sparkles, LayoutTemplate, Loader2 } from "lucide-react";
 import { extractTextFromPdf, extractTextFromImage, extractTextFromPptx } from "@/lib/file-extractors";
 import { resolveWebhookProductId } from "@/lib/resolve-product-id";
+import CopyMaterialToProductDialog from "./CopyMaterialToProductDialog";
 
 const PARSE_REFERENCE_URL = "https://offbeat-inc.app.n8n.cloud/webhook/parse-reference";
 const EXTERNAL_SUPABASE_URL = "https://vhvgnslszruyztcoikqq.supabase.co/rest/v1/check_rules";
@@ -74,6 +75,8 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
   const [extracting, setExtracting] = useState(false);
   const [wcheckParsed, setWcheckParsed] = useState<WCheckParsedData | null>(null);
   const [autoGenerateRules, setAutoGenerateRules] = useState(true);
+  const [savedMaterials, setSavedMaterials] = useState<ReferenceMaterial[]>([]);
+  const [showCopyDialog, setShowCopyDialog] = useState(false);
 
   // Multi-file upload state
   interface QueuedFile {
@@ -371,14 +374,20 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
         updated_at: new Date().toISOString(),
       }));
 
-      const { error } = await supabase.from("reference_materials").insert(payloads);
+      const { data: insertedData, error } = await supabase.from("reference_materials").insert(payloads).select();
       if (error) {
         toast({ title: "エラー", description: error.message, variant: "destructive" });
         setSaving(false);
       } else {
         toast({ title: `${payloads.length}件の資料を保存しました` });
         setSaving(false);
-        onSaved();
+        // Show copy dialog before calling onSaved
+        if (insertedData && insertedData.length > 0 && scopeType === "product") {
+          setSavedMaterials(insertedData as ReferenceMaterial[]);
+          setShowCopyDialog(true);
+        } else {
+          onSaved();
+        }
         // AI rule generation on combined text
         if (autoGenerateRules) {
           const combinedText = payloads.map(p => p.content_text).filter(Boolean).join("\n\n");
@@ -429,7 +438,13 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     } else {
       toast({ title: existing ? "更新しました" : "保存しました" });
       setSaving(false);
-      onSaved();
+      // Show copy dialog for new product-level materials
+      if (!existing && scopeType === "product" && result) {
+        setSavedMaterials([result as ReferenceMaterial]);
+        setShowCopyDialog(true);
+      } else {
+        onSaved();
+      }
 
       if (autoGenerateRules && finalContentText) {
         triggerRuleGeneration(finalContentText).catch(console.error);
@@ -583,6 +598,21 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
           <Button size="sm" variant="outline" className="text-xs h-7" onClick={onCancel}>キャンセル</Button>
         </div>
       </div>
+
+      {showCopyDialog && savedMaterials.length > 0 && (
+        <CopyMaterialToProductDialog
+          open={showCopyDialog}
+          onOpenChange={(o) => {
+            if (!o) {
+              setShowCopyDialog(false);
+              setSavedMaterials([]);
+              onSaved();
+            }
+          }}
+          materials={savedMaterials}
+          currentProductId={productId}
+        />
+      )}
     </>
   );
 }
