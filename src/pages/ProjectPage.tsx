@@ -35,7 +35,7 @@ import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import ReferenceMaterialsSection from "@/components/reference/ReferenceMaterialsSection";
 import {
   Upload, FileText, Image, Film, MessageCircle, Plus, Settings, GripVertical,
-  ChevronDown, CalendarIcon, AlertTriangle, Trash2, Grid3X3, List, Bot, Loader2,
+  ChevronDown, CalendarIcon, AlertTriangle, Trash2, Grid3X3, List, Bot, Loader2, Pencil,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import {
@@ -122,6 +122,8 @@ export default function ProjectPage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [processModalOpen, setProcessModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ file: ProjectFile; hasCheck: boolean } | null>(null);
+  const [editingFileId, setEditingFileId] = useState<string | null>(null);
+  const [editFileName, setEditFileName] = useState("");
   const [addPatternOpen, setAddPatternOpen] = useState(false);
   const [bulkPatternOpen, setBulkPatternOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"matrix" | "list">("list");
@@ -139,6 +141,16 @@ export default function ProjectPage() {
   const { processes, updateProcess, reorderProcesses, addProcess, deleteProcess, resetToDefaults } = useProjectProcesses(id);
 
   const { progress: batchProgress, runBatchCheck, resetProgress: resetBatchProgress } = useBatchCheck();
+
+  const handleRenameFile = async (fileId: string, newName: string) => {
+    if (!newName.trim()) { setEditingFileId(null); return; }
+    const { error } = await supabase.from("project_files").update({ file_name: newName.trim() }).eq("id", fileId);
+    if (!handleSupabaseError(error, "rename")) {
+      setFiles(prev => prev.map(f => f.id === fileId ? { ...f, file_name: newName.trim() } : f));
+      toast({ title: "ファイル名を変更しました" });
+    }
+    setEditingFileId(null);
+  };
 
   // Drag state for process sections
   const dragItem = useRef<number | null>(null);
@@ -706,7 +718,23 @@ export default function ProjectPage() {
                                         <Image className="h-8 w-8 text-muted-foreground/30" />
                                       )}
                                     </div>
-                                    <p className="text-xs font-medium truncate">{file.file_name}</p>
+                                    {editingFileId === file.id ? (
+                                      <form onSubmit={(e) => { e.preventDefault(); handleRenameFile(file.id, editFileName); }}
+                                        onClick={(e) => e.stopPropagation()}>
+                                        <Input value={editFileName} onChange={(e) => setEditFileName(e.target.value)}
+                                          className="h-5 text-xs w-full" autoFocus
+                                          onBlur={() => handleRenameFile(file.id, editFileName)}
+                                          onKeyDown={(e) => { if (e.key === "Escape") setEditingFileId(null); }} />
+                                      </form>
+                                    ) : (
+                                      <p className="text-xs font-medium truncate flex items-center gap-1 group/name">
+                                        <span className="truncate">{file.file_name}</span>
+                                        <button onClick={(e) => { e.stopPropagation(); setEditingFileId(file.id); setEditFileName(file.file_name); }}
+                                          className="opacity-0 group-hover/name:opacity-100 shrink-0 text-muted-foreground/50 hover:text-primary transition-all">
+                                          <Pencil className="h-2.5 w-2.5" />
+                                        </button>
+                                      </p>
+                                    )}
                                     <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
                                       {file.created_at && <span>{format(new Date(file.created_at), "MM/dd HH:mm")}</span>}
                                       {file.created_by && <span>/ {(file.created_by as string).includes("@") ? (file.created_by as string).split("@")[0] : file.created_by}</span>}
@@ -750,7 +778,7 @@ export default function ProjectPage() {
           </TabsContent>
 
           <TabsContent value="history">
-            <CheckHistory projectId={id!} files={files} checkResults={checkResults} />
+            <CheckHistory projectId={id!} files={files} checkResults={checkResults} onRenameFile={handleRenameFile} />
           </TabsContent>
 
           <TabsContent value="patterns">
@@ -1013,12 +1041,15 @@ export default function ProjectPage() {
   );
 }
 
-function CheckHistory({ projectId, files, checkResults }: {
+function CheckHistory({ projectId, files, checkResults, onRenameFile }: {
   projectId: string;
   files: ProjectFile[];
   checkResults: Record<string, Pick<CheckResultRow, "id" | "overall_status" | "ng_count" | "warning_count">>;
+  onRenameFile: (fileId: string, newName: string) => Promise<void>;
 }) {
   const navigate = useNavigate();
+  const [editingFileId, setEditingFileId] = useState<string | null>(null);
+  const [editFileName, setEditFileName] = useState("");
   const filesWithChecks = files.filter(f => f.check_result_id && checkResults[f.check_result_id]);
 
   if (filesWithChecks.length === 0) {
@@ -1042,7 +1073,25 @@ function CheckHistory({ projectId, files, checkResults }: {
             const cr = checkResults[f.check_result_id!];
             return (
               <tr key={f.id} onClick={() => navigate(`/project/${projectId}/file/${f.id}`)} className="border-b border-border/50 hover:bg-muted/50 cursor-pointer">
-                <td className="px-4 py-2.5 font-medium">{f.file_name}</td>
+                <td className="px-4 py-2.5 font-medium">
+                  {editingFileId === f.id ? (
+                    <form onSubmit={(e) => { e.preventDefault(); onRenameFile(f.id, editFileName).then(() => setEditingFileId(null)); }}
+                      onClick={(e) => e.stopPropagation()}>
+                      <Input value={editFileName} onChange={(e) => setEditFileName(e.target.value)}
+                        className="h-6 text-sm w-48" autoFocus
+                        onBlur={() => onRenameFile(f.id, editFileName).then(() => setEditingFileId(null))}
+                        onKeyDown={(e) => { if (e.key === "Escape") setEditingFileId(null); }} />
+                    </form>
+                  ) : (
+                    <span className="flex items-center gap-1 group/name">
+                      <span>{f.file_name}</span>
+                      <button onClick={(e) => { e.stopPropagation(); setEditingFileId(f.id); setEditFileName(f.file_name); }}
+                        className="opacity-0 group-hover/name:opacity-100 text-muted-foreground/50 hover:text-primary transition-all">
+                        <Pencil className="h-3 w-3" />
+                      </button>
+                    </span>
+                  )}
+                </td>
                 <td className="px-4 py-2.5">{f.process_type}</td>
                 <td className="px-4 py-2.5 text-center">
                   <Badge className={cn("text-[10px] font-bold", getSubmitBadgeClass(cr?.overall_status))}>
