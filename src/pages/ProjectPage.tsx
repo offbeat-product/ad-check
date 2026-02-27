@@ -35,7 +35,7 @@ import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import ReferenceMaterialsSection from "@/components/reference/ReferenceMaterialsSection";
 import {
   Upload, FileText, Image, Film, MessageCircle, Plus, Settings, GripVertical,
-  ChevronDown, CalendarIcon, AlertTriangle, Trash2, Grid3X3, List,
+  ChevronDown, CalendarIcon, AlertTriangle, Trash2, Grid3X3, List, Bot, Loader2,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import {
@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { format, differenceInDays, isPast } from "date-fns";
+import { useBatchCheck } from "@/hooks/useBatchCheck";
 
 import { getSubmitBadgeClass, getSubmitLabel } from "@/lib/check-display";
 
@@ -136,6 +137,8 @@ export default function ProjectPage() {
   const { patterns, addPattern, addPatternsBulk, deletePattern, updatePattern, refetch: refetchPatterns } = usePatterns(id);
 
   const { processes, updateProcess, reorderProcesses, addProcess, deleteProcess, resetToDefaults } = useProjectProcesses(id);
+
+  const { progress: batchProgress, runBatchCheck, resetProgress: resetBatchProgress } = useBatchCheck();
 
   // Drag state for process sections
   const dragItem = useRef<number | null>(null);
@@ -642,7 +645,27 @@ export default function ProjectPage() {
                           <Badge variant="outline" className="text-[9px] ml-1 border-status-ok text-status-ok">✅ FIX</Badge>
                         )}
 
-                        <div className="ml-auto">
+                        <div className="ml-auto flex items-center gap-2">
+                          {webhookAvailable && sectionFiles.filter(f => f.file_data && !f.parent_file_id).length > 0 && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-xs h-7 gap-1"
+                              disabled={batchProgress.status === "running"}
+                              onClick={() => {
+                                if (!product || !id) return;
+                                const targetFiles = sectionFiles.filter(f => f.file_data && !f.parent_file_id);
+                                runBatchCheck(targetFiles, product, client, id, () => fetchData());
+                              }}
+                            >
+                              {batchProgress.status === "running" ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Bot className="h-3 w-3" />
+                              )}
+                              一括AIチェック ({sectionFiles.filter(f => f.file_data && !f.parent_file_id).length})
+                            </Button>
+                          )}
                           <Button size="sm" variant="outline" className="text-xs h-7"
                             onClick={() => {
                               setUploadModal(proc.process_key);
@@ -903,6 +926,51 @@ export default function ProjectPage() {
         onDelete={deleteProcess}
         onReset={resetToDefaults}
       />
+
+      {/* Batch check progress dialog */}
+      <Dialog open={batchProgress.status === "running" || batchProgress.status === "done"} onOpenChange={(o) => { if (!o) resetBatchProgress(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {batchProgress.status === "running" ? "一括AIチェック実行中..." : "一括AIチェック完了"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {batchProgress.status === "running" && (
+              <>
+                <div className="flex items-center gap-2 text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  <span>
+                    {batchProgress.current} / {batchProgress.total} — {batchProgress.currentFileName}
+                  </span>
+                </div>
+                <Progress value={(batchProgress.current / batchProgress.total) * 100} className="h-2" />
+              </>
+            )}
+            {batchProgress.results.length > 0 && (
+              <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                {batchProgress.results.map((r, i) => (
+                  <div key={i} className={cn("flex items-center justify-between text-xs px-2 py-1.5 rounded",
+                    r.success ? "bg-status-ok/10" : "bg-destructive/10"
+                  )}>
+                    <span className="truncate mr-2">{r.fileName}</span>
+                    {r.success ? (
+                      <Badge className={cn("text-[10px] shrink-0", getSubmitBadgeClass(r.grade))}>
+                        {getSubmitLabel(r.grade).label}
+                      </Badge>
+                    ) : (
+                      <span className="text-destructive text-[10px] shrink-0">エラー</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            {batchProgress.status === "done" && (
+              <Button onClick={resetBatchProgress} className="w-full">閉じる</Button>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Copy to other patterns dialog */}
       {copyToPatternInfo && (
