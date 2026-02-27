@@ -65,6 +65,7 @@ import CompareView from "@/components/CompareView";
 import ShareLinkModal from "@/components/ShareLinkModal";
 import ImagePreview from "@/components/review/ImagePreview";
 import ScriptDisplay from "@/components/review/ScriptDisplay";
+import MediaPreview from "@/components/review/MediaPreview";
 import ReviewRightPanel from "@/components/review/ReviewRightPanel";
 import { ArrowLeft, Download, GitCompare, Link2, CheckCircle2, FileSpreadsheet } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -210,10 +211,12 @@ function FallbackCheckResultView({ id }: { id: string }) {
   if (loading) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">読み込み中...</div>;
   if (!record) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">結果が見つかりません</div>;
 
+  const isAudio = record.process_type === "narration" || record.process_type === "bgm";
+  const isVideo = record.process_type === "vcon" || record.process_type === "video_horizontal" || record.process_type === "video_vertical";
   const isSf = record.process_type === "sf" || record.process_type === "styleframe" || record.process_type === "storyboard";
   const currentStatus = record.status || "pending";
   const sc = statusConfig[currentStatus] || statusConfig.pending;
-  const inputData = record.input_data as { image_base64?: string; script_text?: string } | null;
+  const inputData = record.input_data as { image_base64?: string; script_text?: string; audio_base64?: string; video_url?: string; audio_url?: string } | null;
   const processLabel = getProcessLabel(record.process_type);
 
   return (
@@ -272,6 +275,17 @@ function FallbackCheckResultView({ id }: { id: string }) {
                 noDataMessage="プレビュー不可（旧バージョン）。再チェックしてください。"
                 savedAnnotations={savedAnnotations}
                 highlightAnnotation={highlightAnnotation}
+              />
+            ) : isAudio || isVideo ? (
+              <MediaPreview
+                src={isAudio
+                  ? (inputData?.audio_base64 || inputData?.audio_url || null)
+                  : (inputData?.video_url || null)
+                }
+                mediaType={isAudio ? "audio" : "video"}
+                label={`${record.client_name} / ${record.product_name} / ${processLabel}`}
+                noDataMessage="メディアファイルなし（旧バージョン）"
+                scriptText={inputData?.script_text || record.input_text || undefined}
               />
             ) : (
               <div>

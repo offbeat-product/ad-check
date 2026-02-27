@@ -406,9 +406,9 @@ export default function CheckPage() {
       const inputData = processConfig.inputMode === "image" && imageData
         ? { image_base64: `data:${imageData.mediaType};base64,${imageData.base64}` }
         : processConfig.inputMode === "audio"
-        ? { script_text: selectedProcess === "narration" ? naScriptText : bgmDescription }
+        ? { script_text: selectedProcess === "narration" ? naScriptText : bgmDescription, audio_url: audioStorageUrl || "" }
         : processConfig.inputMode === "video"
-        ? { script_text: videoScriptText }
+        ? { script_text: videoScriptText, video_url: videoStorageUrl || "" }
         : { script_text: scriptText };
 
       const { error } = await supabase.from("check_results").insert([{
