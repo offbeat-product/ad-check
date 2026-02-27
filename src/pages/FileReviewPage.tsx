@@ -20,6 +20,7 @@ import CompareView from "@/components/CompareView";
 import ShareLinkModal from "@/components/ShareLinkModal";
 import ImagePreview from "@/components/review/ImagePreview";
 import ScriptDisplay from "@/components/review/ScriptDisplay";
+import MediaPreview from "@/components/review/MediaPreview";
 import ReviewRightPanel from "@/components/review/ReviewRightPanel";
 import { ArrowLeft, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight } from "lucide-react";
 
@@ -167,10 +168,12 @@ export default function FileReviewPage() {
       const referenceContext = JSON.stringify(refMaterials);
 
       let res: { overall_status: string; detected_case?: string; check_items: CheckItem[]; ng_count: number; warning_count: number; ok_count: number; total_checks: number };
+      let inputData: Record<string, any> = {};
 
       if (inputMode === "text") {
         // Text processes: send directly (small payload)
         res = await runScriptCheck(product.id, file.file_data || "", processKey, referenceContext);
+        inputData = { script_text: file.file_data };
       } else {
         // Media processes: upload to Storage and send public URL instead of base64
         const webhookUrl = getWebhookUrl(processKey);
@@ -184,15 +187,12 @@ export default function FileReviewPage() {
         };
 
         if (inputMode === "image") {
-          // Send image as base64 (n8n expects image_base64)
           const fileData = file.file_data || "";
           if (fileData.startsWith("data:")) {
             const mediaType = fileData.match(/^data:([^;]+);/)?.[1] || "image/jpeg";
-            // Only send base64 if under 20MB
             if (fileData.length < 20 * 1024 * 1024) {
               body.image_base64 = fileData;
             } else {
-              // Fallback: upload to storage and send URL for very large files
               const ext = mediaType.includes("png") ? "png" : "jpg";
               const storagePath = `${projectId}/${file.id}.${ext}`;
               const base64Content = fileData.replace(/^data:[^;]+;base64,/, "");
@@ -206,8 +206,8 @@ export default function FileReviewPage() {
             }
             body.image_mime_type = mediaType;
           }
+          inputData = { image_base64: file.file_data };
         } else if (inputMode === "audio") {
-          // Send audio as base64 (n8n expects audio_base64)
           const fileData = file.file_data || "";
           if (fileData.startsWith("data:")) {
             const mediaType = fileData.match(/^data:([^;]+);/)?.[1] || "audio/mpeg";
@@ -228,8 +228,8 @@ export default function FileReviewPage() {
             body.audio_mime_type = mediaType;
           }
           body.script_text = file.file_data?.startsWith("data:") ? "" : (file.file_data || "");
+          inputData = { script_text: body.script_text, audio_url: body.audio_url || "", audio_base64: body.audio_base64 || file.file_data || "" };
         } else if (inputMode === "video") {
-          // Video: too large for base64, upload to storage and send URL only
           const fileData = file.file_data || "";
           if (fileData.startsWith("data:")) {
             const mediaType = fileData.match(/^data:([^;]+);/)?.[1] || "video/mp4";
@@ -246,6 +246,7 @@ export default function FileReviewPage() {
             body.video_mime_type = mediaType;
           }
           body.script_text = file.file_data?.startsWith("data:") ? "" : (file.file_data || "");
+          inputData = { script_text: body.script_text, video_url: body.video_url || "" };
         }
 
         console.log('[CheckMate] Webhook URL:', webhookUrl);
@@ -253,8 +254,6 @@ export default function FileReviewPage() {
         console.log('[CheckMate] Body keys:', Object.keys(body));
         res = await webhookFetch(webhookUrl, body);
       }
-
-      const inputData = inputMode === "image" ? { image_base64: file.file_data } : { script_text: file.file_data };
 
       const { data: crData, error: insertErr } = await supabase.from("check_results").insert([{
         user_id: user.id,
@@ -489,6 +488,20 @@ export default function FileReviewPage() {
                   </div>
                 ) : undefined}
               />
+            ) : aiCfg?.inputMode === "audio" || aiCfg?.inputMode === "video" ? (
+              <div>
+                {!hasCheckResult && !checking && canCheck && (
+                  <div className="mb-4 flex justify-center">
+                    <Button onClick={handleRunCheck}><Bot className="h-4 w-4 mr-2" />AIチェック実行</Button>
+                  </div>
+                )}
+                <MediaPreview
+                  src={file.file_data}
+                  mediaType={aiCfg.inputMode as "audio" | "video"}
+                  label={`${client?.name} / ${product?.name} / ${aiCfg.inputMode === "audio" ? "音声" : "動画"}`}
+                  noDataMessage="メディアファイルなし"
+                />
+              </div>
             ) : (
               <div>
                 <span className="text-xs text-muted-foreground mb-2 block">{client?.name} / {product?.name} / 字コンテ</span>
