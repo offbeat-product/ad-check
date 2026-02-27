@@ -1,10 +1,10 @@
 // Shared helpers for check result display labels & colors
 
-/** Map overall_status (A/B/C/D) to 提出OK / 提出NG */
+/** Map overall_status (A/B/C/D) to GO / NG */
 export function getSubmitLabel(status: string | null | undefined): { label: string; isOk: boolean } {
   const s = (status || "").toUpperCase();
   const isOk = s === "A" || s === "B";
-  return { label: isOk ? "提出OK" : "提出NG", isOk };
+  return { label: isOk ? "GO" : "NG", isOk };
 }
 
 export function getSubmitBadgeClass(status: string | null | undefined): string {

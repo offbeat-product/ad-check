@@ -131,7 +131,7 @@ export default function ComparisonCheckPanel({ file, productId, projectId, onChe
           <span className="text-xs font-medium">比較チェック結果:</span>
           <span className={cn("text-xs font-bold px-2 py-0.5 rounded text-white",
             overall_status === "A" || overall_status === "B" ? "bg-[#10B981]" : "bg-[#EF4444]"
-          )}>{overall_status === "A" || overall_status === "B" ? "提出OK" : "提出NG"}</span>
+          )}>{overall_status === "A" || overall_status === "B" ? "GO" : "NG"}</span>
         </div>
         <div className="flex gap-3 text-xs">
           <span className="text-[#EF4444] font-medium">修正必須: {ng_count}</span>
