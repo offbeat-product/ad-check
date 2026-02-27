@@ -779,10 +779,20 @@ export default function ProjectPage() {
                                     <div className="h-20 rounded-md bg-muted/50 flex items-center justify-center mb-2 overflow-hidden">
                                       {isImageFile && file.file_data ? (
                                         <img src={file.file_data} alt="" className="w-full h-full object-cover" />
-                                      ) : proc.process_key.includes("video") || proc.process_key === "vcon" ? (
+                                      ) : (file.file_type === "video" || proc.process_key.includes("video") || proc.process_key === "vcon") && file.file_data ? (
+                                        file.file_data.startsWith("http") ? (
+                                          <video src={file.file_data} className="w-full h-full object-cover" muted preload="metadata" />
+                                        ) : (
+                                          <video src={file.file_data} className="w-full h-full object-cover" muted preload="metadata" />
+                                        )
+                                      ) : file.file_type === "video" || proc.process_key.includes("video") || proc.process_key === "vcon" ? (
                                         <Film className="h-8 w-8 text-muted-foreground/30" />
+                                      ) : file.file_type === "audio" || proc.process_key === "na_narration" || proc.process_key === "bgm" ? (
+                                        <FileText className="h-8 w-8 text-muted-foreground/30" />
                                       ) : proc.process_key.includes("script") || proc.process_key === "na_script" ? (
                                         <FileText className="h-8 w-8 text-muted-foreground/30" />
+                                      ) : file.file_data && (file.file_data.startsWith("data:image") || file.file_data.match(/\.(jpg|jpeg|png|gif|webp)(\?|$)/i)) ? (
+                                        <img src={file.file_data} alt="" className="w-full h-full object-cover" />
                                       ) : (
                                         <Image className="h-8 w-8 text-muted-foreground/30" />
                                       )}
