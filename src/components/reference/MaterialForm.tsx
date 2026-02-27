@@ -75,102 +75,133 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
   const [wcheckParsed, setWcheckParsed] = useState<WCheckParsedData | null>(null);
   const [autoGenerateRules, setAutoGenerateRules] = useState(true);
 
+  // Multi-file upload state
+  interface QueuedFile {
+    file: File;
+    name: string;
+    dataUrl: string;
+    contentText: string;
+    extracting: boolean;
+  }
+  const [multiFiles, setMultiFiles] = useState<QueuedFile[]>([]);
+
   // Template data states
   const [templateData, setTemplateData] = useState<OrientationData | WCheckData | BrandGuidelineData | LegalRegulationData | MediaRegulationData | CorrectionHistoryData | null>(null);
 
   const isWCheck = materialType === "wcheck";
 
-  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    setFileName(f.name);
-    if (!title) setTitle(f.name.replace(/\.[^.]+$/, ""));
+  const readFileAsDataUrl = (f: File): Promise<string> =>
+    new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.readAsDataURL(f);
+    });
 
-    const reader = new FileReader();
-    reader.onload = () => setFileData(reader.result as string);
-    reader.readAsDataURL(f);
-
+  const extractTextFromFile = async (f: File): Promise<string> => {
     const ext = f.name.split(".").pop()?.toLowerCase() || "";
+    if (["xlsx", "xls"].includes(ext)) {
+      if (isWCheck) {
+        try {
+          const parsed = await parseWCheckFile(f);
+          if (Object.keys(parsed).length > 0) {
+            setWcheckParsed(parsed);
+            return buildWCheckContentText(parsed);
+          }
+        } catch { /* fall through */ }
+      }
+      return await extractTextFromXlsx(f);
+    }
+    if (ext === "csv") return await f.text();
+    if (ext === "txt") return await f.text();
+    if (ext === "pdf") {
+      try { return await extractTextFromPdf(f); } catch { return ""; }
+    }
+    if (ext === "pptx") {
+      try { return await extractTextFromPptx(f); } catch { return ""; }
+    }
+    if (["png", "jpg", "jpeg", "webp"].includes(ext)) {
+      try { return await extractTextFromImage(f); } catch { return ""; }
+    }
+    return "";
+  };
 
-    if (isWCheck && ["xlsx", "xls"].includes(ext)) {
-      setExtractMsg("Wチェックシートを解析中...");
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    // Single file (existing or editing) - use legacy single-file flow
+    if (files.length === 1 && existing) {
+      const f = files[0];
+      setFileName(f.name);
+      if (!title) setTitle(f.name.replace(/\.[^.]+$/, ""));
+      const dataUrl = await readFileAsDataUrl(f);
+      setFileData(dataUrl);
+      setExtracting(true);
+      setExtractMsg("テキストを抽出中...");
       try {
-        const parsed = await parseWCheckFile(f);
-        const entries = Object.keys(parsed);
-        if (entries.length > 0) {
-          setWcheckParsed(parsed);
-          const builtText = buildWCheckContentText(parsed);
-          setContentText(builtText);
-          setExtractMsg("");
-        } else {
-          setWcheckParsed(null);
-          const text = await extractTextFromXlsx(f);
-          setContentText(text);
-          setExtractMsg("Wチェック形式として解析できませんでした。通常のテキスト抽出を行いました。");
-        }
+        const text = await extractTextFromFile(f);
+        setContentText(text);
+        setExtractMsg(text ? "テキストを自動抽出しました。" : "");
       } catch {
-        setWcheckParsed(null);
-        setExtractMsg("解析に失敗しました。手動で入力してください。");
+        setExtractMsg("テキスト抽出に失敗しました。");
+      } finally {
+        setExtracting(false);
       }
       return;
     }
 
-    if (["xlsx", "xls", "csv"].includes(ext)) {
-      setExtractMsg("テキストを抽出中...");
-      try {
-        if (ext === "csv") {
-          const text = await f.text();
-          setContentText(text);
-        } else {
-          const text = await extractTextFromXlsx(f);
-          setContentText(text);
+    // Multi-file: queue all files
+    const newQueued: QueuedFile[] = [];
+    for (let i = 0; i < files.length; i++) {
+      newQueued.push({
+        file: files[i],
+        name: files[i].name,
+        dataUrl: "",
+        contentText: "",
+        extracting: true,
+      });
+    }
+    setMultiFiles(prev => [...prev, ...newQueued]);
+
+    // Auto-fill title if empty
+    if (!title && files.length === 1) {
+      setTitle(files[0].name.replace(/\.[^.]+$/, ""));
+    } else if (!title && files.length > 1) {
+      const mt = MATERIAL_TYPES.find(t => t.id === materialType);
+      setTitle(`${mt?.label || "参考資料"}（${files.length}件）`);
+    }
+
+    // Process each file in background
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const idx = multiFiles.length + i; // index in the combined array
+      (async () => {
+        try {
+          const [dataUrl, text] = await Promise.all([
+            readFileAsDataUrl(f),
+            extractTextFromFile(f),
+          ]);
+          setMultiFiles(prev => prev.map((q, j) =>
+            j === idx ? { ...q, dataUrl, contentText: text, extracting: false } : q
+          ));
+        } catch {
+          setMultiFiles(prev => prev.map((q, j) =>
+            j === idx ? { ...q, extracting: false } : q
+          ));
         }
-        setExtractMsg("");
-      } catch {
-        setExtractMsg("テキスト抽出に失敗しました。手動で入力してください。");
-      }
-    } else if (ext === "txt") {
-      const text = await f.text();
-      setContentText(text);
-    } else if (ext === "pdf") {
-      setExtractMsg("PDFからテキストを抽出中...");
-      setExtracting(true);
+      })();
+    }
+
+    // Also set single-file state for backward compat (first file)
+    if (!existing) {
+      const f = files[0];
+      setFileName(f.name);
+      const dataUrl = await readFileAsDataUrl(f);
+      setFileData(dataUrl);
       try {
-        const text = await extractTextFromPdf(f);
+        const text = await extractTextFromFile(f);
         setContentText(text);
-        setExtractMsg("PDFからテキストを自動抽出しました。内容を確認してください。");
-      } catch (err) {
-        console.error("[PDF extract]", err);
-        setExtractMsg("PDF抽出に失敗しました。下のテキストエリアに手動で内容を入力してください。");
-      } finally {
-        setExtracting(false);
-      }
-    } else if (ext === "pptx") {
-      setExtractMsg("PowerPointからテキストを抽出中...");
-      setExtracting(true);
-      try {
-        const text = await extractTextFromPptx(f);
-        setContentText(text);
-        setExtractMsg("PowerPointからテキストを自動抽出しました。内容を確認してください。");
-      } catch (err) {
-        console.error("[PPTX extract]", err);
-        setExtractMsg("PPTX抽出に失敗しました。下のテキストエリアに手動で内容を入力してください。");
-      } finally {
-        setExtracting(false);
-      }
-    } else if (["png", "jpg", "jpeg", "webp"].includes(ext)) {
-      setExtractMsg("画像からテキストを抽出中（OCR）...");
-      setExtracting(true);
-      try {
-        const text = await extractTextFromImage(f);
-        setContentText(text);
-        setExtractMsg("画像からテキストを自動抽出しました。内容を確認してください。");
-      } catch (err) {
-        console.error("[Image extract]", err);
-        setExtractMsg("画像からのテキスト抽出に失敗しました。下のテキストエリアに手動で内容を入力してください。");
-      } finally {
-        setExtracting(false);
-      }
+      } catch { /* ignore */ }
     }
   };
 
@@ -317,6 +348,49 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
   };
 
   const handleSave = async () => {
+    // Multi-file mode: save each file as a separate record
+    if (method === "file_upload" && multiFiles.length > 1 && !existing) {
+      const anyExtracting = multiFiles.some(q => q.extracting);
+      if (anyExtracting) {
+        toast({ title: "ファイルの処理中です。少々お待ちください。", variant: "destructive" });
+        return;
+      }
+      setSaving(true);
+      const payloads = multiFiles.map((q, i) => ({
+        scope_type: scopeType,
+        scope_id: scopeId,
+        material_type: materialType,
+        title: multiFiles.length === 1 ? title.trim() : q.name.replace(/\.[^.]+$/, ""),
+        content_text: q.contentText || null,
+        file_name: q.name,
+        file_data: q.dataUrl || null,
+        source_type: "file_upload" as const,
+        is_active: true,
+        sort_order: i,
+        created_by: user?.email || user?.id || null,
+        updated_at: new Date().toISOString(),
+      }));
+
+      const { error } = await supabase.from("reference_materials").insert(payloads);
+      if (error) {
+        toast({ title: "エラー", description: error.message, variant: "destructive" });
+        setSaving(false);
+      } else {
+        toast({ title: `${payloads.length}件の資料を保存しました` });
+        setSaving(false);
+        onSaved();
+        // AI rule generation on combined text
+        if (autoGenerateRules) {
+          const combinedText = payloads.map(p => p.content_text).filter(Boolean).join("\n\n");
+          if (combinedText) {
+            triggerRuleGeneration(combinedText).catch(console.error);
+          }
+        }
+      }
+      return;
+    }
+
+    // Single file / template / text / URL mode
     if (!title.trim()) { toast({ title: "タイトルを入力してください", variant: "destructive" }); return; }
     setSaving(true);
 
@@ -357,12 +431,8 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
       setSaving(false);
       onSaved();
 
-      // Trigger AI rule generation in background (after save completes)
       if (autoGenerateRules && finalContentText) {
-        console.log("[MaterialForm] Starting triggerRuleGeneration in background...");
-        triggerRuleGeneration(finalContentText).catch(err => {
-          console.error("[MaterialForm] triggerRuleGeneration error:", err);
-        });
+        triggerRuleGeneration(finalContentText).catch(console.error);
       }
     }
   };
@@ -431,10 +501,38 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
               className="border-2 border-dashed border-border rounded-lg p-4 text-center cursor-pointer hover:border-primary/50 transition-colors"
             >
               <Upload className="h-6 w-6 mx-auto mb-1 text-muted-foreground" />
-              <p className="text-xs text-muted-foreground">{fileName || "クリックしてファイルを選択"}</p>
+              <p className="text-xs text-muted-foreground">
+                {multiFiles.length > 0
+                  ? `${multiFiles.length}件のファイルを選択済み（追加可能）`
+                  : fileName || "クリックしてファイルを選択（複数選択可）"}
+              </p>
               <p className="text-[10px] text-muted-foreground/60 mt-0.5">対応: .xlsx .xls .csv .pdf .png .jpg .pptx .txt</p>
-              <input ref={fileInputRef} type="file" className="hidden" accept=".xlsx,.xls,.csv,.pdf,.png,.jpg,.jpeg,.pptx,.txt" onChange={handleFile} />
+              <input ref={fileInputRef} type="file" className="hidden" accept=".xlsx,.xls,.csv,.pdf,.png,.jpg,.jpeg,.pptx,.txt,.webp" multiple onChange={handleFile} />
             </div>
+
+            {/* Queued file list */}
+            {multiFiles.length > 1 && (
+              <div className="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                {multiFiles.map((q, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs bg-muted/50 rounded px-2 py-1">
+                    {q.extracting ? (
+                      <Loader2 className="h-3 w-3 animate-spin text-primary shrink-0" />
+                    ) : (
+                      <FileText className="h-3 w-3 text-muted-foreground shrink-0" />
+                    )}
+                    <span className="truncate flex-1">{q.name}</span>
+                    <button
+                      type="button"
+                      className="text-destructive hover:text-destructive/80 text-[10px] shrink-0"
+                      onClick={(e) => { e.stopPropagation(); setMultiFiles(prev => prev.filter((_, j) => j !== i)); }}
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {extractMsg && (
               <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
                 {extracting && <Loader2 className="h-3 w-3 animate-spin" />}
@@ -455,8 +553,8 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
           </div>
         )}
 
-        {/* Text area for non-template methods */}
-        {method !== "template" && (
+        {/* Text area for non-template methods - hide when multi-file */}
+        {method !== "template" && multiFiles.length <= 1 && (
           <div>
             <label className="text-xs font-medium text-muted-foreground mb-1 block">AIに送信するテキスト（自動抽出 or 手動入力）</label>
             <Textarea
@@ -479,8 +577,8 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
         </div>
 
         <div className="flex gap-2">
-          <Button size="sm" className="text-xs h-7" onClick={handleSave} disabled={saving || extracting || !title.trim()}>
-            {saving ? "保存中..." : extracting ? "テキスト抽出中..." : "保存"}
+          <Button size="sm" className="text-xs h-7" onClick={handleSave} disabled={saving || extracting || multiFiles.some(q => q.extracting) || (multiFiles.length <= 1 && !title.trim())}>
+            {saving ? "保存中..." : extracting || multiFiles.some(q => q.extracting) ? "テキスト抽出中..." : multiFiles.length > 1 ? `${multiFiles.length}件を保存` : "保存"}
           </Button>
           <Button size="sm" variant="outline" className="text-xs h-7" onClick={onCancel}>キャンセル</Button>
         </div>
