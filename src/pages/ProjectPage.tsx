@@ -118,7 +118,7 @@ export default function ProjectPage() {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [checkResults, setCheckResults] = useState<Record<string, Pick<CheckResultRow, "id" | "overall_status" | "ng_count" | "warning_count">>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [processModalOpen, setProcessModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ file: ProjectFile; hasCheck: boolean } | null>(null);
   const [addPatternOpen, setAddPatternOpen] = useState(false);
@@ -286,123 +286,128 @@ export default function ProjectPage() {
     return hints[processType] || "";
   };
 
+  const isImageProcess = (processType: string) => ["styleframe", "storyboard"].includes(processType);
+
   const handleFileUpload = async () => {
     if (!uploadModal || !id || !user) return;
     setUploading(true);
     setUploadProgress(0);
 
-    let fileData = "";
-    let fileType = "text";
-    let fileSize = 0;
-    let fileName = "";
     const cfg = PROCESS_FILE_CONFIG[uploadModal];
+    const resolvedPatternId = (patterns.length > 0 && uploadPatternMode === "specific") ? uploadPatternId : null;
 
     try {
       if (useTextInput && cfg?.allowTextInput) {
-        fileData = uploadTextInput;
-        fileSize = new Blob([uploadTextInput]).size;
-        fileName = `${cfg?.label || uploadModal}_${Date.now()}.txt`;
-        fileType = "text";
+        const fileData = uploadTextInput;
+        const fileSize = new Blob([uploadTextInput]).size;
+        const fileName = `${cfg?.label || uploadModal}_${Date.now()}.txt`;
         setUploadProgress(50);
-      } else if (selectedFile) {
-        // Validate file size
-        const sizeError = validateFileSize(selectedFile, uploadModal);
-        if (sizeError) {
-          toast({ title: "エラー", description: sizeError, variant: "destructive" });
-          setUploading(false);
-          setUploadProgress(null);
-          return;
+
+        const { error } = await supabase.from("project_files").insert({
+          project_id: id, process_type: uploadModal, file_name: fileName,
+          file_type: "text", file_data: fileData, file_size_bytes: fileSize,
+          created_by: user.email || user.id, pattern_id: resolvedPatternId,
+        } as any);
+        if (error) throw error;
+        setUploadProgress(100);
+        toast({ title: "アップロード完了" });
+      } else if (selectedFiles.length > 0) {
+        const total = selectedFiles.length;
+        let lastFileData = "";
+        let lastFileName = "";
+        let lastFileType = "";
+        let lastFileSize = 0;
+
+        for (let i = 0; i < total; i++) {
+          const file = selectedFiles[i];
+          const sizeError = validateFileSize(file, uploadModal);
+          if (sizeError) {
+            toast({ title: "エラー", description: `${file.name}: ${sizeError}`, variant: "destructive" });
+            continue;
+          }
+
+          const fileName = sanitizeFileName(file.name);
+          const fileSize = file.size;
+          let fileData = "";
+          let fileType = "text";
+          const bucket = getStorageBucket(uploadModal);
+
+          if (bucket) {
+            fileType = file.type.startsWith("audio/") ? "audio" : "video";
+            const storagePath = `${id}/${Date.now()}_${i}_${fileName}`;
+            const session = await supabase.auth.getSession();
+            const token = session.data.session?.access_token;
+            if (!token) throw new Error("認証が必要です");
+
+            await new Promise<void>((resolve, reject) => {
+              const xhr = new XMLHttpRequest();
+              xhr.upload.addEventListener("progress", (e) => {
+                if (e.lengthComputable) {
+                  const fileProgress = (e.loaded / e.total);
+                  setUploadProgress(Math.round(((i + fileProgress) / total) * 90));
+                }
+              });
+              xhr.addEventListener("load", () => {
+                if (xhr.status >= 200 && xhr.status < 400) resolve();
+                else reject(new Error(`アップロード失敗: ${xhr.status}`));
+              });
+              xhr.addEventListener("error", () => reject(new Error("ネットワークエラー")));
+              const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+              xhr.open("POST", `${supabaseUrl}/storage/v1/object/${bucket}/${storagePath}`);
+              xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+              xhr.setRequestHeader("x-upsert", "true");
+              xhr.send(file);
+            });
+            const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(storagePath);
+            fileData = urlData.publicUrl;
+          } else if (file.type.startsWith("image/")) {
+            fileType = "image";
+            const compressed = await compressImage(file);
+            fileData = `data:${compressed.mediaType};base64,${compressed.base64}`;
+          } else {
+            fileType = "text";
+            fileData = await file.text();
+          }
+
+          const { error } = await supabase.from("project_files").insert({
+            project_id: id, process_type: uploadModal, file_name: fileName,
+            file_type: fileType, file_data: fileData, file_size_bytes: fileSize,
+            created_by: user.email || user.id, pattern_id: resolvedPatternId,
+          } as any);
+          if (error) throw error;
+
+          lastFileData = fileData;
+          lastFileName = fileName;
+          lastFileType = fileType;
+          lastFileSize = fileSize;
+          setUploadProgress(Math.round(((i + 1) / total) * 95));
         }
 
-        fileName = sanitizeFileName(selectedFile.name);
-        fileSize = selectedFile.size;
-        const bucket = getStorageBucket(uploadModal);
+        setUploadProgress(100);
+        toast({ title: `${total}件アップロード完了` });
 
-        if (bucket) {
-          fileType = selectedFile.type.startsWith("audio/") ? "audio" : "video";
-          const storagePath = `${id}/${Date.now()}_${fileName}`;
-
-          // Upload with progress using XHR
-          const session = await supabase.auth.getSession();
-          const token = session.data.session?.access_token;
-          if (!token) throw new Error("認証が必要です");
-
-          await new Promise<void>((resolve, reject) => {
-            const xhr = new XMLHttpRequest();
-            xhr.upload.addEventListener("progress", (e) => {
-              if (e.lengthComputable) {
-                setUploadProgress(Math.round((e.loaded / e.total) * 90));
-              }
-            });
-            xhr.addEventListener("load", () => {
-              if (xhr.status >= 200 && xhr.status < 300) resolve();
-              else reject(new Error(`アップロード失敗: ${xhr.status}`));
-            });
-            xhr.addEventListener("error", () => reject(new Error("ネットワークエラー")));
-            xhr.addEventListener("abort", () => reject(new Error("アップロードがキャンセルされました")));
-
-            const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-            xhr.open("POST", `${supabaseUrl}/storage/v1/object/${bucket}/${storagePath}`);
-            xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-            xhr.setRequestHeader("x-upsert", "true");
-            xhr.send(selectedFile);
+        // Offer to copy to other patterns (uses last file info for single, skips for multi)
+        if (resolvedPatternId && patterns.length > 1 && total === 1) {
+          setCopyToPatternInfo({
+            sourcePatternId: resolvedPatternId,
+            processType: uploadModal,
+            fileData: lastFileData,
+            fileName: lastFileName,
+            fileType: lastFileType,
+            fileSizeBytes: lastFileSize,
           });
-
-          const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(storagePath);
-          fileData = urlData.publicUrl;
-        } else if (selectedFile.type.startsWith("image/")) {
-          fileType = "image";
-          setUploadProgress(30);
-          const compressed = await compressImage(selectedFile);
-          fileData = `data:${compressed.mediaType};base64,${compressed.base64}`;
-          setUploadProgress(70);
-        } else {
-          fileType = "text";
-          fileData = await selectedFile.text();
-          setUploadProgress(70);
         }
       } else {
         setUploading(false);
         setUploadProgress(null);
         return;
       }
-
-      setUploadProgress(90);
-      const resolvedPatternId = (patterns.length > 0 && uploadPatternMode === "specific") ? uploadPatternId : null;
-      const { error } = await supabase.from("project_files").insert({
-        project_id: id,
-        process_type: uploadModal,
-        file_name: fileName,
-        file_type: fileType,
-        file_data: fileData,
-        file_size_bytes: fileSize,
-        created_by: user.email || user.id,
-        pattern_id: resolvedPatternId,
-      } as any);
-
-      if (error) {
-        toast({ title: "エラー", description: error.message, variant: "destructive" });
-      } else {
-        setUploadProgress(100);
-        toast({ title: "アップロード完了" });
-        // Offer to copy to other patterns if uploaded to a specific pattern
-        if (resolvedPatternId && patterns.length > 1) {
-          setCopyToPatternInfo({
-            sourcePatternId: resolvedPatternId,
-            processType: uploadModal,
-            fileData,
-            fileName,
-            fileType,
-            fileSizeBytes: fileSize,
-          });
-        }
-      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "アップロードに失敗しました";
       toast({ title: "アップロードエラー", description: message, variant: "destructive" });
     } finally {
       setUploadModal(null);
-      setSelectedFile(null);
+      setSelectedFiles([]);
       setUploadTextInput("");
       setUseTextInput(false);
       setUploading(false);
@@ -568,7 +573,7 @@ export default function ProjectPage() {
                   setUploadPatternId(patternId);
                   setUploadPatternMode(patternId ? "specific" : "common");
                   setUseTextInput(false);
-                  setSelectedFile(null);
+                  setSelectedFiles([]);
                 }}
                 onUpdatePattern={updatePattern}
                 onDeletePattern={deletePattern}
@@ -644,7 +649,7 @@ export default function ProjectPage() {
                               setUploadPatternId(null);
                               setUploadPatternMode("common");
                               setUseTextInput(false);
-                              setSelectedFile(null);
+                              setSelectedFiles([]);
                             }}>
                             <Plus className="h-3 w-3 mr-1" />アップロード
                           </Button>
@@ -842,14 +847,29 @@ export default function ProjectPage() {
                   uploading ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:border-primary/50")}>
                 <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
-                  {selectedFile ? (
-                    <span>{selectedFile.name} <span className="text-muted-foreground/60">({formatFileSize(selectedFile.size)})</span></span>
-                  ) : "クリックしてファイルを選択"}
+                  {selectedFiles.length > 0 ? (
+                    selectedFiles.length === 1
+                      ? <span>{selectedFiles[0].name} <span className="text-muted-foreground/60">({formatFileSize(selectedFiles[0].size)})</span></span>
+                      : <span>{selectedFiles.length}件のファイルを選択中</span>
+                  ) : (
+                    isImageProcess(uploadModal || "") ? "クリックしてファイルを選択（複数可）" : "クリックしてファイルを選択"
+                  )}
                 </p>
+                {selectedFiles.length > 1 && (
+                  <div className="mt-2 text-xs text-muted-foreground/60 space-y-0.5">
+                    {selectedFiles.map((f, i) => (
+                      <p key={i}>{f.name} ({formatFileSize(f.size)})</p>
+                    ))}
+                  </div>
+                )}
                 <p className="text-xs text-muted-foreground/60 mt-1">{getFileFormatHint(uploadModal || "")}</p>
                 <input ref={fileInputRef} type="file" className="hidden"
                   accept={PROCESS_FILE_CONFIG[uploadModal || ""]?.accept}
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) setSelectedFile(f); }} />
+                  multiple={isImageProcess(uploadModal || "")}
+                  onChange={(e) => {
+                    const files = e.target.files;
+                    if (files && files.length > 0) setSelectedFiles(Array.from(files));
+                  }} />
               </div>
             )}
             {uploading && uploadProgress !== null && (
@@ -861,7 +881,7 @@ export default function ProjectPage() {
                 <Progress value={uploadProgress} className="h-2" />
               </div>
             )}
-            <Button onClick={handleFileUpload} disabled={uploading || (!selectedFile && !uploadTextInput.trim())} className="w-full">
+            <Button onClick={handleFileUpload} disabled={uploading || (selectedFiles.length === 0 && !uploadTextInput.trim())} className="w-full">
               {uploading ? "アップロード中..." : "アップロード"}
             </Button>
           </div>
