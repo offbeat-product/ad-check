@@ -21,7 +21,8 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Upload, Link2, FileText, Sparkles, LayoutTemplate } from "lucide-react";
+import { Upload, Link2, FileText, Sparkles, LayoutTemplate, Loader2 } from "lucide-react";
+import { extractTextFromPdf, extractTextFromImage, extractTextFromPptx } from "@/lib/file-extractors";
 import { resolveWebhookProductId } from "@/lib/resolve-product-id";
 
 const PARSE_REFERENCE_URL = "https://offbeat-inc.app.n8n.cloud/webhook/parse-reference";
@@ -60,6 +61,7 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
   const [fileData, setFileData] = useState(existing?.file_data || "");
   const [saving, setSaving] = useState(false);
   const [extractMsg, setExtractMsg] = useState("");
+  const [extracting, setExtracting] = useState(false);
   const [wcheckParsed, setWcheckParsed] = useState<WCheckParsedData | null>(null);
   const [autoGenerateRules, setAutoGenerateRules] = useState(true);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
@@ -123,10 +125,45 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     } else if (ext === "txt") {
       const text = await f.text();
       setContentText(text);
-    } else if (["pdf", "pptx"].includes(ext)) {
-      setExtractMsg("PDFのテキスト抽出は自動では行えません。下のテキストエリアに内容をコピペしてください。");
+    } else if (ext === "pdf") {
+      setExtractMsg("PDFからテキストを抽出中...");
+      setExtracting(true);
+      try {
+        const text = await extractTextFromPdf(f);
+        setContentText(text);
+        setExtractMsg("PDFからテキストを自動抽出しました。内容を確認してください。");
+      } catch (err) {
+        console.error("[PDF extract]", err);
+        setExtractMsg("PDF抽出に失敗しました。下のテキストエリアに手動で内容を入力してください。");
+      } finally {
+        setExtracting(false);
+      }
+    } else if (ext === "pptx") {
+      setExtractMsg("PowerPointからテキストを抽出中...");
+      setExtracting(true);
+      try {
+        const text = await extractTextFromPptx(f);
+        setContentText(text);
+        setExtractMsg("PowerPointからテキストを自動抽出しました。内容を確認してください。");
+      } catch (err) {
+        console.error("[PPTX extract]", err);
+        setExtractMsg("PPTX抽出に失敗しました。下のテキストエリアに手動で内容を入力してください。");
+      } finally {
+        setExtracting(false);
+      }
     } else if (["png", "jpg", "jpeg", "webp"].includes(ext)) {
-      setExtractMsg("画像からのテキスト抽出は自動では行えません。下のテキストエリアに内容を記載してください。");
+      setExtractMsg("画像からテキストを抽出中（OCR）...");
+      setExtracting(true);
+      try {
+        const text = await extractTextFromImage(f);
+        setContentText(text);
+        setExtractMsg("画像からテキストを自動抽出しました。内容を確認してください。");
+      } catch (err) {
+        console.error("[Image extract]", err);
+        setExtractMsg("画像からのテキスト抽出に失敗しました。下のテキストエリアに手動で内容を入力してください。");
+      } finally {
+        setExtracting(false);
+      }
     }
   };
 
@@ -367,7 +404,12 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
               <p className="text-[10px] text-muted-foreground/60 mt-0.5">対応: .xlsx .xls .csv .pdf .png .jpg .pptx .txt</p>
               <input ref={fileInputRef} type="file" className="hidden" accept=".xlsx,.xls,.csv,.pdf,.png,.jpg,.jpeg,.pptx,.txt" onChange={handleFile} />
             </div>
-            {extractMsg && <p className="text-xs text-amber-600 mt-1">{extractMsg}</p>}
+            {extractMsg && (
+              <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                {extracting && <Loader2 className="h-3 w-3 animate-spin" />}
+                {extractMsg}
+              </p>
+            )}
           </div>
         )}
 
@@ -406,8 +448,8 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
         </div>
 
         <div className="flex gap-2">
-          <Button size="sm" className="text-xs h-7" onClick={handleSave} disabled={saving || !title.trim()}>
-            {saving ? "保存中..." : "保存"}
+          <Button size="sm" className="text-xs h-7" onClick={handleSave} disabled={saving || extracting || !title.trim()}>
+            {saving ? "保存中..." : extracting ? "テキスト抽出中..." : "保存"}
           </Button>
           <Button size="sm" variant="outline" className="text-xs h-7" onClick={onCancel}>キャンセル</Button>
         </div>
