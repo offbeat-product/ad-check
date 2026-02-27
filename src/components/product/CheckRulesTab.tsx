@@ -17,7 +17,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Search, RefreshCw, AlertTriangle, Plus, Pencil, Trash2, Download } from "lucide-react";
+import { Search, RefreshCw, AlertTriangle, Plus, Pencil, Trash2, Download, Copy } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveWebhookProductId } from "@/lib/resolve-product-id";
@@ -148,6 +148,10 @@ export default function CheckRulesTab({ productId }: Props) {
   const [search, setSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [copyTargetId, setCopyTargetId] = useState("");
+  const [allProducts, setAllProducts] = useState<{ id: string; name: string; client_name?: string }[]>([]);
+  const [copying, setCopying] = useState(false);
 
   // Detail view
   const [selectedRule, setSelectedRule] = useState<CheckRule | null>(null);
@@ -327,6 +331,78 @@ export default function CheckRulesTab({ productId }: Props) {
     }
   };
 
+  // ── Copy rules to another product ──
+  const openCopyDialog = async () => {
+    // Fetch all products (excluding current)
+    const { data } = await supabase
+      .from("products")
+      .select("id, name, client_id")
+      .neq("id", productId)
+      .order("name");
+    
+    if (data && data.length > 0) {
+      // Fetch client names
+      const clientIds = [...new Set(data.map(p => p.client_id).filter(Boolean))] as string[];
+      let clientMap: Record<string, string> = {};
+      if (clientIds.length > 0) {
+        const { data: clients } = await supabase.from("clients").select("id, name").in("id", clientIds);
+        clientMap = Object.fromEntries((clients ?? []).map(c => [c.id, c.name]));
+      }
+      setAllProducts(data.map(p => ({
+        id: p.id,
+        name: p.name,
+        client_name: p.client_id ? clientMap[p.client_id] : undefined,
+      })));
+    } else {
+      setAllProducts([]);
+    }
+    setCopyTargetId("");
+    setCopyOpen(true);
+  };
+
+  const handleCopyRules = async () => {
+    if (!copyTargetId || rules.length === 0) return;
+    setCopying(true);
+    try {
+      let copiedCount = 0;
+      for (const rule of rules) {
+        const { data: existing } = await supabase
+          .from("check_rules")
+          .select("id")
+          .eq("product_id", copyTargetId)
+          .eq("rule_id", rule.rule_id)
+          .eq("process_type", rule.process_type)
+          .maybeSingle();
+
+        const payload = {
+          product_id: copyTargetId,
+          process_type: rule.process_type,
+          rule_id: rule.rule_id,
+          category: rule.category,
+          title: rule.title ?? "",
+          description: rule.description,
+          severity: rule.severity,
+          sort_order: rule.sort_order ?? 999,
+          is_active: rule.is_active ?? true,
+        };
+
+        if (existing) {
+          await supabase.from("check_rules").update(payload).eq("id", existing.id);
+        } else {
+          await supabase.from("check_rules").insert(payload);
+        }
+        copiedCount++;
+      }
+      const targetName = allProducts.find(p => p.id === copyTargetId)?.name ?? "";
+      toast({ title: "コピー完了", description: `${copiedCount}件のルールを「${targetName}」にコピーしました` });
+      setCopyOpen(false);
+    } catch (e) {
+      toast({ title: "コピーエラー", description: e instanceof Error ? e.message : "不明なエラー", variant: "destructive" });
+    } finally {
+      setCopying(false);
+    }
+  };
+
   // ── Empty state ──
   // No guard needed — productId (internal UUID) is always available
 
@@ -376,6 +452,10 @@ export default function CheckRulesTab({ productId }: Props) {
         <Button size="sm" variant="outline" onClick={handleSyncFromExternal} disabled={syncing}>
           <Download className="h-4 w-4 mr-1" />
           {syncing ? "同期中..." : "外部DB同期"}
+        </Button>
+        <Button size="sm" variant="outline" onClick={openCopyDialog} disabled={rules.length === 0}>
+          <Copy className="h-4 w-4 mr-1" />
+          他の商材にコピー
         </Button>
         <Button size="sm" onClick={() => { setAddForm({ ...emptyForm, process_type: processFilter !== "all" ? processFilter : "script" }); setAddOpen(true); }}>
           <Plus className="h-4 w-4 mr-1" />
@@ -613,6 +693,40 @@ export default function CheckRulesTab({ productId }: Props) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ── Copy to another product dialog ── */}
+      <Dialog open={copyOpen} onOpenChange={setCopyOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>チェックルールを他の商材にコピー</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            現在の{rules.length}件のルールをコピー先の商材に追加します。重複するルール（同じルールID・工程）は上書きされます。
+          </p>
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">コピー先の商材</label>
+            <Select value={copyTargetId} onValueChange={setCopyTargetId}>
+              <SelectTrigger><SelectValue placeholder="商材を選択..." /></SelectTrigger>
+              <SelectContent>
+                {allProducts.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.client_name ? `${p.client_name} / ` : ""}{p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {allProducts.length === 0 && (
+              <p className="text-xs text-muted-foreground mt-2">コピー先の商材がありません</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCopyOpen(false)}>キャンセル</Button>
+            <Button onClick={handleCopyRules} disabled={copying || !copyTargetId}>
+              {copying ? "コピー中..." : "コピーする"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
