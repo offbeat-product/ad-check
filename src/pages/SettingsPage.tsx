@@ -204,6 +204,11 @@ export default function SettingsPage() {
     if (error) {
       toast({ title: "エラー", description: error.message, variant: "destructive" });
     } else {
+      // Also sync workspace_members role
+      const profile = profiles.find(m => m.id === profileId);
+      if (profile?.email) {
+        await supabase.from("workspace_members").update({ role: newRole }).eq("email", profile.email);
+      }
       toast({ title: "権限を変更しました" });
       fetchMembers();
     }
