@@ -690,7 +690,7 @@ export default function ProjectPage() {
                           <Badge variant="outline" className="text-[9px] ml-1 text-muted-foreground">準備中</Badge>
                         )}
                         {sectionFiles.some(f => f.status === "fixed") && (
-                          <Badge variant="outline" className="text-[9px] ml-1 border-status-ok text-status-ok bg-status-ok/10 font-bold gap-0.5">
+                          <Badge variant="outline" className="text-[9px] ml-1 border-muted-foreground text-muted-foreground bg-muted font-bold gap-0.5">
                             <Lock className="h-2.5 w-2.5" /> FIX済 ({sectionFiles.filter(f => f.status === "fixed").length})
                           </Badge>
                         )}
@@ -720,7 +720,7 @@ export default function ProjectPage() {
                             <Button
                               size="sm"
                               variant="outline"
-                              className="text-xs h-7 gap-1 border-status-ok text-status-ok hover:bg-status-ok/10"
+                              className="text-xs h-7 gap-1 border-muted-foreground text-muted-foreground hover:bg-muted"
                               disabled={batchFixing}
                               onClick={() => handleBatchFix(sectionFiles, proc.process_key)}
                             >
