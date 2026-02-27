@@ -314,12 +314,16 @@ export default function ProjectPage() {
     }
   };
 
-  // Sanitize filename for storage paths
+  // Sanitize filename for storage paths (ASCII only for Supabase Storage compatibility)
   const sanitizeFileName = (name: string): string => {
-    return name
-      .replace(/[^\w\s.\-\u3000-\u9FFF\uF900-\uFAFF]/g, "_")
-      .replace(/\s+/g, "_")
-      .replace(/_+/g, "_");
+    const lastDot = name.lastIndexOf(".");
+    const ext = lastDot > 0 ? name.slice(lastDot) : "";
+    const base = lastDot > 0 ? name.slice(0, lastDot) : name;
+    const safeName = base
+      .replace(/[^a-zA-Z0-9_\-]/g, "_")
+      .replace(/_+/g, "_")
+      .replace(/^_|_$/g, "");
+    return (safeName || `file_${Date.now()}`) + ext;
   };
 
   // Determine storage bucket by process type
