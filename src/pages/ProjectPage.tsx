@@ -35,14 +35,13 @@ import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import ReferenceMaterialsSection from "@/components/reference/ReferenceMaterialsSection";
 import {
   Upload, FileText, Image, Film, MessageCircle, Plus, Settings, GripVertical,
-  ChevronDown, CalendarIcon, AlertTriangle, Users, Trash2, Grid3X3, List,
+  ChevronDown, CalendarIcon, AlertTriangle, Trash2, Grid3X3, List,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import ProjectMembersTab from "@/components/ProjectMembersTab";
 import { cn } from "@/lib/utils";
 import { format, differenceInDays, isPast } from "date-fns";
 
@@ -500,9 +499,6 @@ export default function ProjectPage() {
             <TabsTrigger value="files">ファイル</TabsTrigger>
             <TabsTrigger value="history">チェック履歴</TabsTrigger>
             <TabsTrigger value="patterns">修正パターン</TabsTrigger>
-            <TabsTrigger value="members" className="flex items-center gap-1">
-              <Users className="h-3.5 w-3.5" />メンバー
-            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="files" className="space-y-6">
@@ -729,13 +725,6 @@ export default function ProjectPage() {
             <TopCorrectionPatterns productCode={product.code} limit={10} />
           </TabsContent>
 
-          <TabsContent value="members">
-            <ProjectMembersTab
-              projectId={id!}
-              projectName={project.name}
-              ownerId={project.created_by}
-            />
-          </TabsContent>
         </Tabs>
       </div>
 
