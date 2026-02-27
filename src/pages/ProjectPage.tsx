@@ -124,7 +124,7 @@ export default function ProjectPage() {
   const [addPatternOpen, setAddPatternOpen] = useState(false);
   const [bulkPatternOpen, setBulkPatternOpen] = useState(false);
 
-  const { patterns, addPattern, addPatternsBulk, deletePattern } = usePatterns(id);
+  const { patterns, addPattern, addPatternsBulk, deletePattern, updatePattern, refetch: refetchPatterns } = usePatterns(id);
 
   const { processes, updateProcess, reorderProcesses, addProcess, deleteProcess, resetToDefaults } = useProjectProcesses(id);
 
@@ -535,6 +535,8 @@ export default function ProjectPage() {
                   setUseTextInput(false);
                   setSelectedFile(null);
                 }}
+                onUpdatePattern={updatePattern}
+                onDeletePattern={deletePattern}
               />
             ) : (
               /* Legacy list view (no patterns) */
