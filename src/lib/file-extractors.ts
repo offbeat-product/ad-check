@@ -1,15 +1,12 @@
 /**
  * PDF・画像ファイルからテキストを自動抽出するユーティリティ
- * Edge Function (extract-text) 経由でGemini APIを使用
- *
- * - 15MB以下: inlineData方式（高速）
- * - 15MB〜50MB: File APIアップロード → URI参照方式
- * - 50MB超: エラー
+ * ファイルをSupabase Storageにアップロード後、Edge Function経由でGemini APIを使用
  */
+
+import { supabase } from "@/integrations/supabase/client";
 
 const MAX_FILE_SIZE_MB = 50;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
-const INLINE_LIMIT_BYTES = 15 * 1024 * 1024;
 
 function validateFileSize(file: File): void {
   if (file.size > MAX_FILE_SIZE_BYTES) {
@@ -17,29 +14,40 @@ function validateFileSize(file: File): void {
   }
 }
 
-function parseDataUri(dataUri: string): { base64: string; mimeType: string } {
-  const match = dataUri.match(/^data:(.+?);base64,(.+)$/);
-  if (!match) throw new Error("Invalid data URI format");
-  return { mimeType: match[1], base64: match[2] };
+async function uploadToStorage(file: File): Promise<string> {
+  const path = `extract-temp/${Date.now()}_${file.name}`;
+  const { error } = await supabase.storage
+    .from("reference-files")
+    .upload(path, file, { upsert: true });
+
+  if (error) throw new Error(`Storage upload failed: ${error.message}`);
+
+  const { data } = supabase.storage
+    .from("reference-files")
+    .getPublicUrl(path);
+
+  return data.publicUrl;
 }
 
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error("File read failed"));
-    reader.readAsDataURL(file);
-  });
+async function cleanupStorage(fileUrl: string): Promise<void> {
+  try {
+    const match = fileUrl.match(/reference-files\/(.+)$/);
+    if (match) {
+      await supabase.storage.from("reference-files").remove([match[1]]);
+    }
+  } catch {
+    // cleanup is best-effort
+  }
 }
 
-async function callExtractFunction(base64Data: string, mimeType: string, method: "inline" | "fileApi"): Promise<string> {
+async function callExtractFunction(fileUrl: string, mimeType: string): Promise<string> {
   const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
   const url = `https://${projectId}.supabase.co/functions/v1/extract-text`;
 
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ base64Data, mimeType, method }),
+    body: JSON.stringify({ fileUrl, mimeType }),
   });
 
   if (!res.ok) {
@@ -56,14 +64,14 @@ async function callExtractFunction(base64Data: string, mimeType: string, method:
 async function extractText(file: File): Promise<string> {
   validateFileSize(file);
 
-  const dataUri = await readFileAsDataUrl(file);
-  const { base64, mimeType } = parseDataUri(dataUri);
+  console.log(`[file-extractors] Uploading ${(file.size / 1024 / 1024).toFixed(1)}MB to storage...`);
+  const fileUrl = await uploadToStorage(file);
 
-  if (file.size <= INLINE_LIMIT_BYTES) {
-    return callExtractFunction(base64, mimeType, "inline");
-  } else {
-    console.log(`[file-extractors] Large file (${(file.size / 1024 / 1024).toFixed(1)}MB), using File API upload`);
-    return callExtractFunction(base64, mimeType, "fileApi");
+  try {
+    const text = await callExtractFunction(fileUrl, file.type);
+    return text;
+  } finally {
+    await cleanupStorage(fileUrl);
   }
 }
 

@@ -6,7 +6,7 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-const GEMINI_MODEL = "gemini-2.5-pro";
+const GEMINI_MODEL = "gemini-2.5-flash";
 
 const EXTRACT_PROMPT = `あなたはドキュメントからテキストを正確に抽出する専門AIです。
 以下のファイルの内容をすべてテキストとして抽出してください。
@@ -36,28 +36,64 @@ serve(async (req) => {
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     if (!GEMINI_API_KEY) {
       return new Response(JSON.stringify({ error: "GEMINI_API_KEY not configured" }), {
-        status: 500,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const { base64Data, mimeType, method } = await req.json();
+    const { fileUrl, mimeType } = await req.json();
 
-    if (!base64Data || !mimeType) {
-      return new Response(JSON.stringify({ error: "Missing base64Data or mimeType" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    if (!fileUrl || !mimeType) {
+      return new Response(JSON.stringify({ error: "Missing fileUrl or mimeType" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Fetch file from storage URL
+    const fileRes = await fetch(fileUrl);
+    if (!fileRes.ok) throw new Error(`Failed to fetch file: ${fileRes.status}`);
+    const fileBytes = new Uint8Array(await fileRes.arrayBuffer());
+    const fileSizeMB = fileBytes.length / (1024 * 1024);
+
+    console.log(`Processing file: ${fileSizeMB.toFixed(1)}MB, type: ${mimeType}`);
 
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
-    if (method === "fileApi") {
-      // Large file: upload via File API first
-      const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${GEMINI_API_KEY}`;
-      const fileBytes = Uint8Array.from(atob(base64Data), (c) => c.charCodeAt(0));
+    if (fileBytes.length <= 10 * 1024 * 1024) {
+      // Small file: inlineData (≤10MB to stay safe with memory)
+      // Convert to base64
+      let binary = "";
+      const chunkSize = 8192;
+      for (let i = 0; i < fileBytes.length; i += chunkSize) {
+        const chunk = fileBytes.subarray(i, Math.min(i + chunkSize, fileBytes.length));
+        binary += String.fromCharCode(...chunk);
+      }
+      const base64Data = btoa(binary);
 
-      // Step 1: Initiate resumable upload
+      const body = {
+        contents: [{ parts: [{ inlineData: { mimeType, data: base64Data } }, { text: EXTRACT_PROMPT }] }],
+        generationConfig: { maxOutputTokens: 8192, temperature: 0.1 },
+      };
+
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("Gemini inlineData error:", res.status, errText);
+        throw new Error(`Gemini API error: ${res.status}`);
+      }
+
+      const data = await res.json();
+      return new Response(JSON.stringify({ text: parseGeminiResponse(data) }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    } else {
+      // Large file: Gemini File API upload
+      const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${GEMINI_API_KEY}`;
+
       const initiateRes = await fetch(uploadUrl, {
         method: "POST",
         headers: {
@@ -79,7 +115,6 @@ serve(async (req) => {
       const resumeUrl = initiateRes.headers.get("X-Goog-Upload-URL");
       if (!resumeUrl) throw new Error("No upload URL returned");
 
-      // Step 2: Upload bytes
       const uploadRes = await fetch(resumeUrl, {
         method: "PUT",
         headers: {
@@ -100,19 +135,18 @@ serve(async (req) => {
       const fileInfo = uploadResult.file;
       if (!fileInfo?.name || !fileInfo?.uri) throw new Error("Invalid upload response");
 
-      // Step 3: Poll until ACTIVE
-      const filesUrl = `https://generativelanguage.googleapis.com/v1beta`;
+      // Poll until ACTIVE
+      const filesBase = `https://generativelanguage.googleapis.com/v1beta`;
       const startTime = Date.now();
       while (Date.now() - startTime < 120000) {
-        const statusRes = await fetch(`${filesUrl}/${fileInfo.name}?key=${GEMINI_API_KEY}`);
+        const statusRes = await fetch(`${filesBase}/${fileInfo.name}?key=${GEMINI_API_KEY}`);
         if (!statusRes.ok) throw new Error(`File status check failed: ${statusRes.status}`);
         const statusData = await statusRes.json();
         if (statusData.state === "ACTIVE") break;
-        if (statusData.state === "FAILED") throw new Error("File processing failed on Gemini side");
+        if (statusData.state === "FAILED") throw new Error("File processing failed");
         await new Promise((r) => setTimeout(r, 3000));
       }
 
-      // Step 4: Generate content with fileData
       const body = {
         contents: [{ parts: [{ fileData: { mimeType, fileUri: fileInfo.uri } }, { text: EXTRACT_PROMPT }] }],
         generationConfig: { maxOutputTokens: 8192, temperature: 0.1 },
@@ -131,40 +165,14 @@ serve(async (req) => {
       }
 
       const data = await res.json();
-      const text = parseGeminiResponse(data);
-      return new Response(JSON.stringify({ text }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    } else {
-      // Small file: inlineData
-      const body = {
-        contents: [{ parts: [{ inlineData: { mimeType, data: base64Data } }, { text: EXTRACT_PROMPT }] }],
-        generationConfig: { maxOutputTokens: 8192, temperature: 0.1 },
-      };
-
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const errText = await res.text();
-        console.error("Gemini inlineData error:", res.status, errText);
-        throw new Error(`Gemini API error: ${res.status}`);
-      }
-
-      const data = await res.json();
-      const text = parseGeminiResponse(data);
-      return new Response(JSON.stringify({ text }), {
+      return new Response(JSON.stringify({ text: parseGeminiResponse(data) }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
   } catch (error) {
     console.error("extract-text error:", error);
     return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
