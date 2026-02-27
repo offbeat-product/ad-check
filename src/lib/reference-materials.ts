@@ -52,9 +52,13 @@ export async function fetchMaterials(scopeType: string, scopeId: string): Promis
 }
 
 export async function gatherReferenceMaterials(projectId: string, productId: string, currentProcessKey?: string) {
+  const projectQuery = projectId
+    ? supabase.from("reference_materials").select("*").eq("scope_type", "project").eq("scope_id", projectId).eq("is_active", true).order("sort_order")
+    : Promise.resolve({ data: [], error: null });
+
   const [productRes, projectRes, patternsRes] = await Promise.all([
     supabase.from("reference_materials").select("*").eq("scope_type", "product").eq("scope_id", productId).eq("is_active", true).order("sort_order"),
-    supabase.from("reference_materials").select("*").eq("scope_type", "project").eq("scope_id", projectId).eq("is_active", true).order("sort_order"),
+    projectQuery,
     supabase.from("correction_patterns").select("*").eq("product_code", productId).eq("auto_apply", true).order("frequency", { ascending: false }).limit(20),
   ]);
 
