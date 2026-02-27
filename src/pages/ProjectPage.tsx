@@ -698,7 +698,9 @@ export default function ProjectPage() {
                           <Badge variant="outline" className="text-[9px] ml-1 text-muted-foreground">準備中</Badge>
                         )}
                         {sectionFiles.some(f => f.status === "fixed") && (
-                          <Badge variant="outline" className="text-[9px] ml-1 border-status-ok text-status-ok">✅ FIX</Badge>
+                          <Badge variant="outline" className="text-[9px] ml-1 border-status-ok text-status-ok bg-status-ok/10 font-bold gap-0.5">
+                            <Lock className="h-2.5 w-2.5" /> FIX済 ({sectionFiles.filter(f => f.status === "fixed").length})
+                          </Badge>
                         )}
 
                         <div className="ml-auto flex items-center gap-2">
@@ -766,7 +768,12 @@ export default function ProjectPage() {
                               return (
                                 <div key={file.id} className="relative group">
                                   <button onClick={() => navigate(`/project/${id}/file/${file.id}`)}
-                                    className="glass-card p-3 text-left hover:border-primary/30 transition-colors w-full">
+                                    className={cn("glass-card p-3 text-left hover:border-primary/30 transition-colors w-full", file.status === "fixed" && "border-status-ok/50 ring-1 ring-status-ok/20")}>
+                                    {file.status === "fixed" && (
+                                      <div className="absolute top-1.5 right-1.5 z-10 bg-status-ok text-white rounded-full p-0.5">
+                                        <Lock className="h-3 w-3" />
+                                      </div>
+                                    )}
                                     <div className="h-20 rounded-md bg-muted/50 flex items-center justify-center mb-2 overflow-hidden">
                                       {isImageFile && file.file_data ? (
                                         <img src={file.file_data} alt="" className="w-full h-full object-cover" />
