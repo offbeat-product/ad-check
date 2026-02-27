@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import { Badge } from "@/components/ui/badge";
-// NotificationBell is also rendered in AppLayout header for desktop
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
 interface AppSidebarProps {
@@ -190,17 +190,7 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
         <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px]">⌘K</kbd>
       </button>
 
-      <div className="px-5 py-3 border-b border-sidebar-border flex items-center gap-3">
-        <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold">
-          {(profile?.display_name || user?.email || "U").charAt(0).toUpperCase()}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">{profile?.display_name || user?.email || "User"}</p>
-          <Badge className={cn("text-[10px] h-4 px-1.5", ROLE_LABELS[role]?.color)}>
-            {ROLE_LABELS[role]?.label || role}
-          </Badge>
-        </div>
-      </div>
+      {/* profile section moved to bottom */}
 
       <nav className="flex-1 overflow-y-auto py-2">
         {navItems.map((item) => {
@@ -339,10 +329,27 @@ export default function AppSidebar({ onCreateProject }: AppSidebarProps) {
         </button>
       </nav>
 
-      <div className="border-t border-sidebar-border p-3">
+      <div className="border-t border-sidebar-border p-3 flex items-center gap-2">
+        <Popover>
+          <PopoverTrigger asChild>
+            <button className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center text-sm font-bold hover:bg-primary/20 transition-colors shrink-0" title={profile?.display_name || user?.email || "User"}>
+              {(profile?.display_name || user?.email || "U").charAt(0).toUpperCase()}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-56 p-3" side="top" align="start">
+            <div className="space-y-2">
+              <p className="text-sm font-medium truncate">{profile?.display_name || user?.email || "User"}</p>
+              <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
+              <Badge className={cn("text-[10px] h-4 px-1.5", ROLE_LABELS[role]?.color)}>
+                {ROLE_LABELS[role]?.label || role}
+              </Badge>
+            </div>
+          </PopoverContent>
+        </Popover>
+        <div className="flex-1" />
         <button onClick={handleSignOut}
-          className="w-full flex items-center gap-3 px-3 py-2 text-sm text-muted-foreground hover:bg-muted/50 rounded-lg transition-colors">
-          <LogOut className="h-4 w-4" />ログアウト
+          className="p-2 text-muted-foreground hover:bg-muted/50 rounded-lg transition-colors" title="ログアウト">
+          <LogOut className="h-4 w-4" />
         </button>
       </div>
     </aside>
