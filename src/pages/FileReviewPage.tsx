@@ -490,11 +490,6 @@ export default function FileReviewPage() {
               />
             ) : aiCfg?.inputMode === "audio" || aiCfg?.inputMode === "video" ? (
               <div>
-                {!hasCheckResult && !checking && canCheck && (
-                  <div className="mb-4 flex justify-center">
-                    <Button onClick={handleRunCheck}><Bot className="h-4 w-4 mr-2" />AIチェック実行</Button>
-                  </div>
-                )}
                 <MediaPreview
                   src={file.file_data}
                   mediaType={aiCfg.inputMode as "audio" | "video"}
@@ -509,12 +504,6 @@ export default function FileReviewPage() {
               </div>
             ) : (
               <div>
-                <span className="text-xs text-muted-foreground mb-2 block">{client?.name} / {product?.name} / 字コンテ</span>
-                {!hasCheckResult && !checking && canCheck && (
-                  <div className="mb-4 flex justify-center">
-                    <Button onClick={handleRunCheck}><Bot className="h-4 w-4 mr-2" />AIチェック実行</Button>
-                  </div>
-                )}
                 <ScriptDisplay text={file.file_data || ""} items={items} markers={markers} onItemClick={scrollToCard} />
               </div>
             )}
