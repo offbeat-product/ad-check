@@ -234,6 +234,8 @@ export default function FileReviewPage() {
             const publicUrl = await tusUploadBlob("videos", storagePath, fileData, mediaType);
             body.video_url = publicUrl;
             body.video_mime_type = mediaType;
+          } else if (fileData.startsWith("http")) {
+            body.video_url = fileData;
           }
           body.script_text = file.file_data?.startsWith("data:") ? "" : (file.file_data || "");
           inputData = { script_text: body.script_text, video_url: body.video_url || "" };
