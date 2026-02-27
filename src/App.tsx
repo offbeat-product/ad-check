@@ -3,6 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { ThemeProvider } from "next-themes";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
@@ -36,31 +37,33 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-            <Route path="/accept-invite" element={<AcceptInvitePage />} />
-            <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
-              <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/check" element={<Check />} />
-              <Route path="/check-result/:id" element={<CheckResultDetail />} />
-              <Route path="/client/:id" element={<ClientPage />} />
-              <Route path="/product/:id" element={<ProductPage />} />
-              <Route path="/project/:id" element={<ProjectPage />} />
-              <Route path="/project/:projectId/file/:fileId" element={<FileReviewPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-            </Route>
-            <Route path="/shared/:token" element={<SharedViewPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} storageKey="checkgo-theme">
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <Routes>
+              <Route path="/" element={<Navigate to="/dashboard" replace />} />
+              <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+              <Route path="/accept-invite" element={<AcceptInvitePage />} />
+              <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+                <Route path="/dashboard" element={<Dashboard />} />
+                <Route path="/check" element={<Check />} />
+                <Route path="/check-result/:id" element={<CheckResultDetail />} />
+                <Route path="/client/:id" element={<ClientPage />} />
+                <Route path="/product/:id" element={<ProductPage />} />
+                <Route path="/project/:id" element={<ProjectPage />} />
+                <Route path="/project/:projectId/file/:fileId" element={<FileReviewPage />} />
+                <Route path="/settings" element={<SettingsPage />} />
+              </Route>
+              <Route path="/shared/:token" element={<SharedViewPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </ThemeProvider>
   </QueryClientProvider>
 );
 

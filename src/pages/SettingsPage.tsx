@@ -20,7 +20,8 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { Trash2, UserPlus, Users, Mail, Shield, ShieldCheck, Eye, Copy, Check, MoreHorizontal, Link2, XCircle, Ban, RotateCcw } from "lucide-react";
+import { Trash2, UserPlus, Users, Mail, Shield, ShieldCheck, Eye, Copy, Check, MoreHorizontal, Link2, XCircle, Ban, RotateCcw, Sun, Moon, Monitor } from "lucide-react";
+import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -42,6 +43,7 @@ const ROLE_ICON: Record<string, React.ElementType> = {
 export default function SettingsPage() {
   const { user, isAdmin, canEdit } = useAuth();
   const { profile, loading: profileLoading, updateProfile } = useProfile();
+  const { theme, setTheme } = useTheme();
   const { toast } = useToast();
 
   // Profile state
@@ -274,11 +276,11 @@ export default function SettingsPage() {
           <TabsList className="mb-6">
             <TabsTrigger value="profile">プロフィール</TabsTrigger>
             <TabsTrigger value="notifications">通知設定</TabsTrigger>
-            <TabsTrigger value="members" className="flex items-center gap-1">
-              <Users className="h-3.5 w-3.5" />メンバー
-            </TabsTrigger>
-            
-          </TabsList>
+              <TabsTrigger value="members" className="flex items-center gap-1">
+                <Users className="h-3.5 w-3.5" />メンバー
+              </TabsTrigger>
+              <TabsTrigger value="appearance">表示</TabsTrigger>
+            </TabsList>
 
           {/* Profile Tab */}
           <TabsContent value="profile">
@@ -479,6 +481,37 @@ export default function SettingsPage() {
                     </div>
                   );
                 })}
+              </div>
+            </div>
+          </TabsContent>
+
+          {/* Appearance Tab */}
+          <TabsContent value="appearance">
+            <div className="glass-card p-6 space-y-6">
+              <h2 className="text-sm font-semibold">表示設定</h2>
+              <div>
+                <p className="text-sm font-medium mb-3">テーマ</p>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { value: "light", label: "ライト", icon: Sun },
+                    { value: "dark", label: "ダーク", icon: Moon },
+                    { value: "system", label: "システム", icon: Monitor },
+                  ].map(({ value, label, icon: Icon }) => (
+                    <button
+                      key={value}
+                      onClick={() => setTheme(value)}
+                      className={cn(
+                        "flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors",
+                        theme === value
+                          ? "border-primary bg-primary/10 text-primary"
+                          : "border-border bg-card hover:border-primary/30 text-muted-foreground"
+                      )}
+                    >
+                      <Icon className="h-5 w-5" />
+                      <span className="text-xs font-medium">{label}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </TabsContent>
