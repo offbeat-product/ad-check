@@ -15,7 +15,10 @@ function validateFileSize(file: File): void {
 }
 
 async function uploadToStorage(file: File): Promise<string> {
-  const path = `extract-temp/${Date.now()}_${file.name}`;
+  // Sanitize filename: remove non-ASCII, spaces, and special chars
+  const ext = file.name.split('.').pop() || 'bin';
+  const safeName = `${Date.now()}_${crypto.randomUUID().slice(0, 8)}.${ext}`;
+  const path = `extract-temp/${safeName}`;
   const { error } = await supabase.storage
     .from("reference-files")
     .upload(path, file, { upsert: true });
