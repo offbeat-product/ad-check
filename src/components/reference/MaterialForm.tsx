@@ -251,14 +251,17 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     }
   };
 
-  const triggerRuleGeneration = async (savedContentText: string) => {
+  // Returns true if dialog is shown (caller should NOT call onSaved yet)
+  const triggerRuleGeneration = async (savedContentText: string): Promise<boolean> => {
     const existingCount = await checkExistingReferenceRules();
     if (existingCount > 0) {
       setDuplicateCount(existingCount);
       setPendingSaveResult({ text: savedContentText });
       setShowDuplicateDialog(true);
+      return true; // dialog shown, don't unmount yet
     } else {
       await callParseReferenceWebhook(savedContentText);
+      return false;
     }
   };
 
@@ -268,6 +271,7 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     const { text } = pendingSaveResult;
     await callParseReferenceWebhook(text);
     setPendingSaveResult(null);
+    onSaved(); // Now safe to close the form
   };
 
   const buildContentText = (): string => {
@@ -330,19 +334,20 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
     } else {
       toast({ title: existing ? "更新しました" : "保存しました" });
       console.log("[MaterialForm] autoGenerateRules:", autoGenerateRules, "finalContentText length:", finalContentText?.length, "finalContentText truthy:", !!finalContentText);
+      let dialogShown = false;
       if (autoGenerateRules && finalContentText) {
         console.log("[MaterialForm] Starting triggerRuleGeneration...");
-        // Run rule generation BEFORE onSaved to prevent unmount
         try {
-          await triggerRuleGeneration(finalContentText);
+          dialogShown = await triggerRuleGeneration(finalContentText);
         } catch (err) {
           console.error("[MaterialForm] triggerRuleGeneration error:", err);
         }
-      } else {
-        console.log("[MaterialForm] Skipping rule generation - autoGenerateRules:", autoGenerateRules, "hasText:", !!finalContentText);
       }
       setSaving(false);
-      onSaved();
+      // Don't call onSaved if duplicate dialog is shown — wait for user decision
+      if (!dialogShown) {
+        onSaved();
+      }
     }
   };
 
@@ -475,7 +480,7 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setPendingSaveResult(null)}>キャンセル</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => { setPendingSaveResult(null); onSaved(); }}>キャンセル</AlertDialogCancel>
             <AlertDialogAction onClick={handleDuplicateConfirm}>続行</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
