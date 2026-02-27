@@ -500,6 +500,11 @@ export default function FileReviewPage() {
                   mediaType={aiCfg.inputMode as "audio" | "video"}
                   label={`${client?.name} / ${product?.name} / ${aiCfg.inputMode === "audio" ? "音声" : "動画"}`}
                   noDataMessage="メディアファイルなし"
+                  paintMode={paintMode}
+                  onPaintModeToggle={() => setPaintMode(!paintMode)}
+                  onAnnotationSave={handleAnnotationSave}
+                  savedAnnotations={savedAnnotations}
+                  highlightAnnotation={highlightAnnotation}
                 />
               </div>
             ) : (

@@ -286,6 +286,11 @@ function FallbackCheckResultView({ id }: { id: string }) {
                 label={`${record.client_name} / ${record.product_name} / ${processLabel}`}
                 noDataMessage="メディアファイルなし（旧バージョン）"
                 scriptText={inputData?.script_text || record.input_text || undefined}
+                paintMode={paintMode}
+                onPaintModeToggle={() => setPaintMode(!paintMode)}
+                onAnnotationSave={handleAnnotationSave}
+                savedAnnotations={savedAnnotations}
+                highlightAnnotation={highlightAnnotation}
               />
             ) : (
               <div>
