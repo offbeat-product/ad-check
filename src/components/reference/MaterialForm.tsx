@@ -261,11 +261,32 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
       const generatedCount = result.count || 0;
       toast({ title: "AIルールが生成されました", description: `${generatedCount}件のチェックルールが追加されました。同期中...` });
 
-      const syncedCount = await syncRulesToLocalDb();
-      toast({ title: "ルール同期完了", description: `${syncedCount}件を反映しました。` });
+      // Wait for n8n to finish writing to external DB, then sync with retries
+      let syncedCount = 0;
+      let lastError: Error | null = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        // Wait before each attempt (10s, 15s, 20s)
+        const delay = 10000 + attempt * 5000;
+        toast({ title: "ルール同期待機中...", description: `外部DBの反映を待っています（${attempt + 1}/3）` });
+        await new Promise(r => setTimeout(r, delay));
+        try {
+          syncedCount = await syncRulesToLocalDb();
+          lastError = null;
+          break;
+        } catch (err) {
+          lastError = err as Error;
+          console.warn(`[syncRules] attempt ${attempt + 1} failed:`, err);
+        }
+      }
+      if (lastError) {
+        console.error("[syncRules] all attempts failed:", lastError);
+        toast({ title: "ルール同期に失敗しました", description: "n8nでのルール生成は完了していますが、ローカルDBへの同期に失敗しました。チェックルールタブから手動同期してください。", variant: "destructive" });
+      } else {
+        toast({ title: "ルール同期完了", description: `${syncedCount}件を反映しました。` });
+      }
     } catch (err) {
       console.error("[parse-reference] error:", err);
-      toast({ title: "ルール自動生成に失敗しました", description: "既存ルールは保持されています。再実行してください", variant: "destructive" });
+      toast({ title: "ルール自動生成に失敗しました", description: "n8nへのリクエストに失敗しました。再実行してください。", variant: "destructive" });
     }
   };
 
