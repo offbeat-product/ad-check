@@ -812,7 +812,7 @@ export default function ProjectPage() {
                                       <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
                                       {cr && (
                                         <Badge className={cn("text-[10px] h-4 px-1.5", getSubmitBadgeClass(cr.overall_status))}>
-                                          {getSubmitLabel(cr.overall_status).isOk ? "OK" : "NG"}
+                                          {getSubmitLabel(cr.overall_status).label}
                                         </Badge>
                                       )}
                                       {versionLabel && <span className="text-[10px] text-muted-foreground">{versionLabel}</span>}
