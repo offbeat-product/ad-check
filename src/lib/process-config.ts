@@ -70,13 +70,13 @@ export const PROJECT_STATUS_CONFIG: Record<string, { label: string; color: strin
   completed:      { label: '完了',       color: 'green',  dotClass: 'bg-status-ok',           badgeClass: 'bg-status-ok/10 text-status-ok' },
 };
 
-// Process status config
+// Process status config (aligned with PROJECT_STATUS_CONFIG)
 export const PROCESS_STATUS_CONFIG: Record<string, { label: string; dotClass: string; badgeClass: string }> = {
-  not_started:  { label: '未着手', dotClass: 'bg-muted-foreground/30', badgeClass: 'bg-muted text-muted-foreground' },
-  in_progress:  { label: '進行中', dotClass: 'bg-primary',             badgeClass: 'bg-primary/10 text-primary' },
-  review:       { label: '確認中', dotClass: 'bg-[hsl(264,100%,58%)]', badgeClass: 'bg-[hsl(264,100%,58%)]/10 text-[hsl(264,100%,58%)]' },
-  revision:     { label: '修正中', dotClass: 'bg-status-warning',      badgeClass: 'bg-status-warning/10 text-status-warning' },
-  completed:    { label: '完了',   dotClass: 'bg-status-ok',           badgeClass: 'bg-status-ok/10 text-status-ok' },
+  preparing:      { label: '準備中',     dotClass: 'bg-muted-foreground/50', badgeClass: 'bg-muted text-muted-foreground' },
+  in_progress:    { label: '進行中',     dotClass: 'bg-primary',             badgeClass: 'bg-primary/10 text-primary' },
+  revision:       { label: '修正中',     dotClass: 'bg-status-warning',      badgeClass: 'bg-status-warning/10 text-status-warning' },
+  client_review:  { label: '先方確認中', dotClass: 'bg-[hsl(264,100%,58%)]', badgeClass: 'bg-[hsl(264,100%,58%)]/10 text-[hsl(264,100%,58%)]' },
+  completed:      { label: '完了',       dotClass: 'bg-status-ok',           badgeClass: 'bg-status-ok/10 text-status-ok' },
 };
 
 // Helper to get Japanese label for a process key

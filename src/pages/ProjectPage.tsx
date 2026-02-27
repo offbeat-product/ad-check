@@ -639,7 +639,7 @@ export default function ProjectPage() {
               <>
                 {activeProcesses.map((proc, index) => {
                   const sectionFiles = getFilesForProcess(proc.process_key);
-                  const psCfg = PROCESS_STATUS_CONFIG[proc.status] || PROCESS_STATUS_CONFIG.not_started;
+                  const psCfg = PROCESS_STATUS_CONFIG[proc.status] || PROCESS_STATUS_CONFIG.preparing;
                   const cfg = PROCESS_FILE_CONFIG[proc.process_key];
                   const webhookAvailable = !!AI_CHECK_CONFIG[proc.process_key]?.enabled;
 
