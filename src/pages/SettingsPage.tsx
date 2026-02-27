@@ -267,13 +267,13 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-border px-6 py-3 flex items-center bg-card">
+      <header className="border-b border-border px-4 md:px-6 py-3 flex items-center bg-card">
         <div className="text-sm text-muted-foreground">設定</div>
       </header>
 
-      <div className="p-6 max-w-3xl mx-auto">
+      <div className="p-4 md:p-6 max-w-3xl mx-auto">
         <Tabs defaultValue="profile">
-          <TabsList className="mb-6">
+          <TabsList className="mb-6 flex-wrap h-auto gap-1">
             <TabsTrigger value="profile">プロフィール</TabsTrigger>
             <TabsTrigger value="notifications">通知設定</TabsTrigger>
               <TabsTrigger value="members" className="flex items-center gap-1">
@@ -470,7 +470,7 @@ export default function SettingsPage() {
               </div>
 
               {/* Role explanation */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {Object.entries(ROLE_CONFIG).map(([key, cfg]) => {
                   const Icon = ROLE_ICON[key] || Shield;
                   return (

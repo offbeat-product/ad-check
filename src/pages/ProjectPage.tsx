@@ -494,62 +494,64 @@ export default function ProjectPage() {
 
   return (
     <div className="min-h-screen">
-      <header className="border-b border-border px-6 py-3 flex items-center justify-between bg-card">
-        <div>
-          <div className="text-xs text-muted-foreground">
-            {client?.name} &gt; {product.name} &gt; {project.name}
+      <header className="border-b border-border px-4 md:px-6 py-3 bg-card">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-xs text-muted-foreground truncate">
+              {client?.name} &gt; {product.name} &gt; {project.name}
+            </div>
+            <h1 className="text-base md:text-lg font-bold mt-0.5 truncate">{project.name}</h1>
           </div>
-          <h1 className="text-lg font-bold mt-0.5">{project.name}</h1>
-        </div>
-        <div className="flex items-center gap-3">
-          <DeadlinePicker
-            deadline={(project as any).overall_deadline ?? null}
-            onChange={handleDeadlineChange}
-          />
-          <NotificationBell />
-          <Popover>
-            <PopoverTrigger asChild>
-              <button className={cn("px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1 transition-colors hover:opacity-80", statusCfg.badgeClass)}>
-                {statusCfg.label}
-                <ChevronDown className="h-3 w-3" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-44 p-2" align="end">
-              {Object.entries(PROJECT_STATUS_CONFIG).map(([key, cfg]) => (
-                <button key={key} onClick={() => handleStatusChange(key)}
-                  className={cn("w-full text-left px-3 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-2",
-                    project.status === key ? "bg-muted" : "hover:bg-muted/50")}>
-                  <span className={cn("w-2 h-2 rounded-full shrink-0", cfg.dotClass)} />
-                  {cfg.label}
+          <div className="flex items-center gap-2 flex-wrap shrink-0">
+            <DeadlinePicker
+              deadline={(project as any).overall_deadline ?? null}
+              onChange={handleDeadlineChange}
+            />
+            <NotificationBell />
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className={cn("px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1 transition-colors hover:opacity-80", statusCfg.badgeClass)}>
+                  {statusCfg.label}
+                  <ChevronDown className="h-3 w-3" />
                 </button>
-              ))}
-            </PopoverContent>
-          </Popover>
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8 p-0">
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>プロジェクトを削除</AlertDialogTitle>
-                <AlertDialogDescription>
-                  「{project.name}」を削除します。関連するファイル・工程データも全て削除されます。この操作は元に戻せません。
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                <AlertDialogAction onClick={handleDeleteProject} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-                  削除する
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+              </PopoverTrigger>
+              <PopoverContent className="w-44 p-2" align="end">
+                {Object.entries(PROJECT_STATUS_CONFIG).map(([key, cfg]) => (
+                  <button key={key} onClick={() => handleStatusChange(key)}
+                    className={cn("w-full text-left px-3 py-1.5 rounded text-xs font-medium transition-colors flex items-center gap-2",
+                      project.status === key ? "bg-muted" : "hover:bg-muted/50")}>
+                    <span className={cn("w-2 h-2 rounded-full shrink-0", cfg.dotClass)} />
+                    {cfg.label}
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10 h-8 w-8 p-0">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>プロジェクトを削除</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    「{project.name}」を削除します。関連するファイル・工程データも全て削除されます。この操作は元に戻せません。
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeleteProject} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    削除する
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
         </div>
       </header>
 
-      <div className="p-6 max-w-6xl mx-auto">
+      <div className="p-4 md:p-6 max-w-6xl mx-auto">
         <Tabs defaultValue="files">
           <TabsList className="mb-6">
             <TabsTrigger value="files">ファイル</TabsTrigger>
@@ -570,7 +572,7 @@ export default function ProjectPage() {
             )}
 
             {/* Pattern management section */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Grid3X3 className="h-4 w-4 text-muted-foreground" />
                 <h2 className="text-sm font-semibold">パターン管理</h2>
@@ -580,7 +582,7 @@ export default function ProjectPage() {
                   </span>
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 {patterns.length > 0 && (
                   <div className="flex items-center border border-border rounded-md h-7 overflow-hidden">
                     <button
@@ -654,7 +656,7 @@ export default function ProjectPage() {
                       className={cn("glass-card overflow-hidden transition-all",
                         dragOverIdx === index && "ring-2 ring-primary/30")}
                     >
-                      <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+                      <div className="px-4 py-3 border-b border-border flex flex-wrap items-center gap-2">
                         <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab shrink-0" />
                         <span className="text-xs text-muted-foreground shrink-0">
                           {String.fromCodePoint(0x2460 + index)}
@@ -695,7 +697,7 @@ export default function ProjectPage() {
                           </Badge>
                         )}
 
-                        <div className="ml-auto flex items-center gap-2">
+                        <div className="ml-auto flex items-center gap-2 flex-wrap">
                           {webhookAvailable && sectionFiles.filter(f => f.file_data && !f.parent_file_id).length > 0 && (
                             <Button
                               size="sm"
@@ -748,7 +750,7 @@ export default function ProjectPage() {
                         {sectionFiles.length === 0 ? (
                           <p className="text-xs text-muted-foreground/60 italic py-4 text-center">ファイルなし — アップロードしてください</p>
                         ) : (
-                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                             {sectionFiles.map((file) => {
                               const cr = file.check_result_id ? checkResults[file.check_result_id] : null;
                               const st = FILE_STATUS_CONFIG[file.status ?? "uploaded"] ?? FILE_STATUS_CONFIG.uploaded;

@@ -62,7 +62,7 @@ export default function ReferenceMaterialsSection({ projectId, productId, produc
           <h2 className="text-sm font-semibold">参考資料（AIチェックに自動反映）</h2>
         </div>
         <div className="p-4">
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
             {MATERIAL_TYPES.map((mt) => {
               const pmCount = productMaterials.filter(m => m.material_type === mt.id && m.is_active).length;
               const prCount = projectMaterials.filter(m => m.material_type === mt.id && m.is_active).length;
