@@ -123,7 +123,7 @@ export default function ProjectPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ file: ProjectFile; hasCheck: boolean } | null>(null);
   const [addPatternOpen, setAddPatternOpen] = useState(false);
   const [bulkPatternOpen, setBulkPatternOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<"matrix" | "list">("matrix");
+  const [viewMode, setViewMode] = useState<"matrix" | "list">("list");
 
   const { patterns, addPattern, addPatternsBulk, deletePattern, updatePattern, refetch: refetchPatterns } = usePatterns(id);
 
