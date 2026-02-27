@@ -34,7 +34,7 @@ import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import ReferenceMaterialsSection from "@/components/reference/ReferenceMaterialsSection";
 import {
   Upload, FileText, Image, Film, MessageCircle, Plus, Settings, GripVertical,
-  ChevronDown, CalendarIcon, AlertTriangle, Users, Trash2, Grid3X3,
+  ChevronDown, CalendarIcon, AlertTriangle, Users, Trash2, Grid3X3, List,
 } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import {
@@ -123,6 +123,7 @@ export default function ProjectPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ file: ProjectFile; hasCheck: boolean } | null>(null);
   const [addPatternOpen, setAddPatternOpen] = useState(false);
   const [bulkPatternOpen, setBulkPatternOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<"matrix" | "list">("matrix");
 
   const { patterns, addPattern, addPatternsBulk, deletePattern, updatePattern, refetch: refetchPatterns } = usePatterns(id);
 
@@ -508,6 +509,24 @@ export default function ProjectPage() {
                 )}
               </div>
               <div className="flex items-center gap-2">
+                {patterns.length > 0 && (
+                  <div className="flex items-center border border-border rounded-md h-7 overflow-hidden">
+                    <button
+                      onClick={() => setViewMode("matrix")}
+                      className={cn("px-2 h-full flex items-center text-xs transition-colors", viewMode === "matrix" ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
+                      title="マトリクス表示"
+                    >
+                      <Grid3X3 className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      onClick={() => setViewMode("list")}
+                      className={cn("px-2 h-full flex items-center text-xs transition-colors", viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
+                      title="リスト表示"
+                    >
+                      <List className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
                 <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => setBulkPatternOpen(true)}>
                   一括生成
                 </Button>
@@ -521,7 +540,7 @@ export default function ProjectPage() {
             </div>
 
             {/* Conditional: matrix view vs legacy list */}
-            {patterns.length > 0 ? (
+            {patterns.length > 0 && viewMode === "matrix" ? (
               <PatternMatrix
                 projectId={id!}
                 patterns={patterns}
