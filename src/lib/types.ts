@@ -6,6 +6,7 @@ export interface CheckItem {
   location?: string;
   detail: string;
   suggestion?: string;
+  original_text?: string;
   confidence?: number;
 }
 
