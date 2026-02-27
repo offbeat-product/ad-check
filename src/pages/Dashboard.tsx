@@ -151,7 +151,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen">
       <header className="border-b border-border px-4 md:px-6 py-3 flex items-center justify-between bg-card">
-        <div className="text-sm text-muted-foreground">ホーム</div>
+        <div />
         <div className="flex items-center gap-2">
           <NotificationBell />
           <button onClick={() => navigate("/check")}
