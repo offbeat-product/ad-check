@@ -72,6 +72,7 @@ export default function CheckPage() {
   const [result, setResult] = useState<CheckResult | null>(null);
   const [showAudioConfirm, setShowAudioConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const isExecutingRef = useRef(false);
 
   // ── Fetch clients & products ──
   useEffect(() => {
@@ -310,6 +311,25 @@ export default function CheckPage() {
       toast({ title: "エラー", description: "商材を選択してください", variant: "destructive" });
       return;
     }
+    // Prevent duplicate execution
+    if (isExecutingRef.current) return;
+
+    // For video mode: ensure upload is complete before sending
+    if (processConfig.inputMode === "video" && mediaFile) {
+      if (!videoStorageUrl) {
+        toast({ title: "アップロード中", description: "動画のアップロードが完了するまでお待ちください", variant: "destructive" });
+        return;
+      }
+    }
+    // For audio mode: ensure upload is complete before sending
+    if (processConfig.inputMode === "audio" && mediaFile) {
+      if (!audioStorageUrl && mediaFile.type.startsWith("audio/")) {
+        toast({ title: "アップロード中", description: "音声のアップロードが完了するまでお待ちください", variant: "destructive" });
+        return;
+      }
+    }
+
+    isExecutingRef.current = true;
     setLoading(true);
     setResult(null);
     try {
@@ -436,6 +456,7 @@ export default function CheckPage() {
       toast({ title: "チェック送信に失敗しました。再度お試しください", description: message, variant: "destructive" });
     } finally {
       setLoading(false);
+      isExecutingRef.current = false;
     }
   };
 
@@ -468,7 +489,10 @@ export default function CheckPage() {
     ? "🎬 動画解析中..."
     : "AIチェック実行中...";
 
-  const canExecute = !!product && processConfig.enabled && (
+  const isUploading = (videoUploadProgress !== null && videoUploadProgress < 100);
+  const videoUploadReady = processConfig.inputMode === "video" && mediaFile ? !!videoStorageUrl : true;
+
+  const canExecute = !!product && processConfig.enabled && !isUploading && videoUploadReady && (
     processConfig.inputMode === "image" ? !!imageData
     : processConfig.inputMode === "audio"
       ? (selectedProcess === "narration" ? !!naScriptText.trim() : !!bgmDescription.trim())
