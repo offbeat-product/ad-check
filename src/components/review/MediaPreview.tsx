@@ -1,8 +1,7 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import AnnotationCanvas from "@/components/AnnotationCanvas";
 import { Pin } from "lucide-react";
-import type { CheckMarker } from "@/lib/marker-positions";
 
 interface AnnotationData {
   type: string;
@@ -45,13 +44,15 @@ export default function MediaPreview({
     setContainerSize({ width: e.currentTarget.clientWidth, height: e.currentTarget.clientHeight });
   }, []);
 
-  // For audio, measure the container after mount
-  const handleContainerRef = useCallback((el: HTMLDivElement | null) => {
-    (containerRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
-    if (el) {
-      setContainerSize({ width: el.clientWidth, height: el.clientHeight });
+  // Measure container once after mount
+  useEffect(() => {
+    if (containerRef.current) {
+      const { clientWidth, clientHeight } = containerRef.current;
+      if (clientWidth > 0 && clientHeight > 0) {
+        setContainerSize({ width: clientWidth, height: clientHeight });
+      }
     }
-  }, []);
+  }, [hasSource]);
 
   return (
     <div className="relative">
@@ -66,7 +67,7 @@ export default function MediaPreview({
         )}
       </div>
 
-      <div ref={handleContainerRef} className="relative rounded-lg overflow-hidden border border-border bg-muted/30">
+      <div ref={containerRef} className="relative rounded-lg overflow-hidden border border-border bg-muted/30">
         {hasSource && !isRawBase64Text ? (
           mediaType === "video" ? (
             <video
