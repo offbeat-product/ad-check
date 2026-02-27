@@ -29,12 +29,13 @@ export function getWebhookPaths(product: Product): Record<string, string> {
   return product.webhook_paths as Record<string, string>;
 }
 
-export type ProjectFileStatus = "uploaded" | "checking" | "checked" | "revision_requested" | "revised" | "approved";
+export type ProjectFileStatus = "uploaded" | "checking" | "checked" | "fixed" | "revision_requested" | "revised" | "approved";
 
 export const FILE_STATUS_CONFIG: Record<string, { label: string; class: string }> = {
   uploaded: { label: "未チェック", class: "bg-muted text-muted-foreground" },
   checking: { label: "チェック中", class: "bg-primary/10 text-primary animate-pulse" },
   checked: { label: "チェック済", class: "bg-primary/10 text-primary" },
+  fixed: { label: "FIX済", class: "bg-status-ok/10 text-status-ok border border-status-ok" },
   revision_requested: { label: "修正依頼", class: "bg-status-warning/10 text-status-warning" },
   revised: { label: "修正済", class: "border border-status-ok text-status-ok" },
   approved: { label: "承認済", class: "bg-status-ok/10 text-status-ok" },

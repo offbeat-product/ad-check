@@ -538,6 +538,9 @@ export default function ProjectPage() {
                     {!webhookAvailable && (
                       <Badge variant="outline" className="text-[9px] ml-1 text-muted-foreground">準備中</Badge>
                     )}
+                    {sectionFiles.some(f => f.status === "fixed") && (
+                      <Badge variant="outline" className="text-[9px] ml-1 border-status-ok text-status-ok">✅ FIX</Badge>
+                    )}
 
                     <div className="ml-auto">
                       <Button size="sm" variant="outline" className="text-xs h-7"

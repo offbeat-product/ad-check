@@ -22,7 +22,7 @@ import ImagePreview from "@/components/review/ImagePreview";
 import ScriptDisplay from "@/components/review/ScriptDisplay";
 import MediaPreview from "@/components/review/MediaPreview";
 import ReviewRightPanel from "@/components/review/ReviewRightPanel";
-import { ArrowLeft, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight, Lock, Unlock } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -451,6 +451,50 @@ export default function FileReviewPage() {
             {checkDisabled && (
               <Button size="sm" variant="outline" className="text-xs h-8 opacity-50" disabled>
                 <Bot className="h-3 w-3 mr-1" />AIチェック（準備中）
+              </Button>
+            )}
+            {/* FIX / Unfix button */}
+            {hasCheckResult && currentStatus !== "fixed" && ["checked", "revision_requested", "revised", "approved"].includes(currentStatus) && (
+              <Button size="sm" variant="outline" className="text-xs h-8 border-status-ok text-status-ok hover:bg-status-ok/10" onClick={async () => {
+                const confirmed = window.confirm(
+                  'このクリエイティブをFIX（最終確定）しますか？\nFIXしたデータは他工程のAIチェック時に照合用として使用されます。'
+                );
+                if (!confirmed || !file) return;
+                // Unfix other files in the same process
+                if (projectId) {
+                  await supabase.from("project_files")
+                    .update({ status: "checked", fixed_at: null, fixed_by: null } as any)
+                    .eq("project_id", projectId)
+                    .eq("process_type", file.process_type)
+                    .eq("status", "fixed");
+                }
+                const { error } = await supabase.from("project_files")
+                  .update({ status: "fixed", fixed_at: new Date().toISOString(), fixed_by: user?.email || user?.id || null } as any)
+                  .eq("id", file.id);
+                if (error) {
+                  toast({ title: "FIX更新に失敗しました", variant: "destructive" });
+                } else {
+                  setFile({ ...file, status: "fixed" });
+                  toast({ title: "✅ FIX確定しました", description: "他工程のAIチェック時にこのデータが照合用として使用されます" });
+                }
+              }}>
+                <Lock className="h-3 w-3 mr-1" />FIX確定
+              </Button>
+            )}
+            {currentStatus === "fixed" && (
+              <Button size="sm" variant="outline" className="text-xs h-8 border-status-warning text-status-warning hover:bg-status-warning/10" onClick={async () => {
+                if (!file) return;
+                const { error } = await supabase.from("project_files")
+                  .update({ status: "checked", fixed_at: null, fixed_by: null } as any)
+                  .eq("id", file.id);
+                if (error) {
+                  toast({ title: "FIX解除に失敗しました", variant: "destructive" });
+                } else {
+                  setFile({ ...file, status: "checked" });
+                  toast({ title: "FIX解除しました" });
+                }
+              }}>
+                <Unlock className="h-3 w-3 mr-1" />FIX解除
               </Button>
             )}
             {hasCheckResult && (
