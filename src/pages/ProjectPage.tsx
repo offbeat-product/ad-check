@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { compressImage } from "@/lib/image-compress";
 import { useToast } from "@/hooks/use-toast";
 import { validateFileSize, formatFileSize } from "@/lib/file-validation";
+import { tusUpload } from "@/lib/tus-upload";
 import type { Project, Product, Client, ProjectFile, CheckResultRow } from "@/lib/db-types";
 import { FILE_STATUS_CONFIG } from "@/lib/db-types";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
@@ -334,8 +335,8 @@ export default function ProjectPage() {
     const hints: Record<string, string> = {
       script: "TXT / DOCX",
       na_script: "TXT / DOCX",
-      narration: "MP3 / WAV / M4A（最大50MB）",
-      bgm: "MP3 / WAV / M4A（最大50MB）",
+      narration: "MP3 / WAV / M4A（最大500MB）",
+      bgm: "MP3 / WAV / M4A（最大500MB）",
       vcon: "MP4 / MOV / WebM（最大500MB）",
       styleframe: "JPG / PNG / PSD / AI",
       storyboard: "JPG / PNG / PDF / PSD",
@@ -394,31 +395,18 @@ export default function ProjectPage() {
           if (bucket) {
             fileType = file.type.startsWith("audio/") ? "audio" : "video";
             const storagePath = `${id}/${Date.now()}_${i}_${fileName}`;
-            const session = await supabase.auth.getSession();
-            const token = session.data.session?.access_token;
-            if (!token) throw new Error("認証が必要です");
 
-            await new Promise<void>((resolve, reject) => {
-              const xhr = new XMLHttpRequest();
-              xhr.upload.addEventListener("progress", (e) => {
-                if (e.lengthComputable) {
-                  const fileProgress = (e.loaded / e.total);
-                  setUploadProgress(Math.round(((i + fileProgress) / total) * 90));
-                }
-              });
-              xhr.addEventListener("load", () => {
-                if (xhr.status >= 200 && xhr.status < 400) resolve();
-                else reject(new Error(`アップロード失敗: ${xhr.status}`));
-              });
-              xhr.addEventListener("error", () => reject(new Error("ネットワークエラー")));
-              const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-              xhr.open("POST", `${supabaseUrl}/storage/v1/object/${bucket}/${storagePath}`);
-              xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-              xhr.setRequestHeader("x-upsert", "true");
-              xhr.send(file);
+            const result = await tusUpload({
+              bucketName: bucket,
+              path: storagePath,
+              file,
+              contentType: file.type,
+              onProgress: (pct) => {
+                const fileProgress = pct / 100;
+                setUploadProgress(Math.round(((i + fileProgress) / total) * 90));
+              },
             });
-            const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(storagePath);
-            fileData = urlData.publicUrl;
+            fileData = result.publicUrl;
           } else if (file.type.startsWith("image/")) {
             fileType = "image";
             const compressed = await compressImage(file);

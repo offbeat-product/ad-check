@@ -6,6 +6,7 @@ import { getWebhookUrl, webhookFetch, runScriptCheck, getRelatedProcessData } fr
 import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
+import { tusUploadBlob } from "@/lib/tus-upload";
 import type { CheckItem } from "@/lib/types";
 import type { Json } from "@/integrations/supabase/types";
 import type { ProjectFile, Product, Client } from "@/lib/db-types";
@@ -83,14 +84,8 @@ export function useBatchCheck() {
               } else {
                 const ext = mediaType.includes("png") ? "png" : "jpg";
                 const storagePath = `${projectId}/${file.id}.${ext}`;
-                const base64Content = fileData.replace(/^data:[^;]+;base64,/, "");
-                const byteChars = atob(base64Content);
-                const byteArray = new Uint8Array(byteChars.length);
-                for (let k = 0; k < byteChars.length; k++) byteArray[k] = byteChars.charCodeAt(k);
-                const blob = new Blob([byteArray], { type: mediaType });
-                await supabase.storage.from("deliverables").upload(storagePath, blob, { upsert: true, contentType: mediaType });
-                const { data: urlData } = supabase.storage.from("deliverables").getPublicUrl(storagePath);
-                body.image_url = urlData.publicUrl;
+                const publicUrl = await tusUploadBlob("deliverables", storagePath, fileData, mediaType);
+                body.image_url = publicUrl;
               }
               body.image_mime_type = mediaType;
             }
@@ -104,14 +99,8 @@ export function useBatchCheck() {
               } else {
                 const ext = mediaType.includes("wav") ? "wav" : mediaType.includes("m4a") ? "m4a" : "mp3";
                 const storagePath = `${projectId}/${file.id}.${ext}`;
-                const base64Content = fileData.replace(/^data:[^;]+;base64,/, "");
-                const byteChars = atob(base64Content);
-                const byteArray = new Uint8Array(byteChars.length);
-                for (let k = 0; k < byteChars.length; k++) byteArray[k] = byteChars.charCodeAt(k);
-                const blob = new Blob([byteArray], { type: mediaType });
-                await supabase.storage.from("audios").upload(storagePath, blob, { upsert: true, contentType: mediaType });
-                const { data: urlData } = supabase.storage.from("audios").getPublicUrl(storagePath);
-                body.audio_url = urlData.publicUrl;
+                const publicUrl = await tusUploadBlob("audios", storagePath, fileData, mediaType);
+                body.audio_url = publicUrl;
               }
               body.audio_mime_type = mediaType;
             }
@@ -123,14 +112,8 @@ export function useBatchCheck() {
               const mediaType = fileData.match(/^data:([^;]+);/)?.[1] || "video/mp4";
               const ext = mediaType.includes("webm") ? "webm" : mediaType.includes("mov") ? "mov" : "mp4";
               const storagePath = `${projectId}/${file.id}.${ext}`;
-              const base64Content = fileData.replace(/^data:[^;]+;base64,/, "");
-              const byteChars = atob(base64Content);
-              const byteArray = new Uint8Array(byteChars.length);
-              for (let k = 0; k < byteChars.length; k++) byteArray[k] = byteChars.charCodeAt(k);
-              const blob = new Blob([byteArray], { type: mediaType });
-              await supabase.storage.from("videos").upload(storagePath, blob, { upsert: true, contentType: mediaType });
-              const { data: urlData } = supabase.storage.from("videos").getPublicUrl(storagePath);
-              body.video_url = urlData.publicUrl;
+              const publicUrl = await tusUploadBlob("videos", storagePath, fileData, mediaType);
+              body.video_url = publicUrl;
               body.video_mime_type = mediaType;
             } else if (fileData.startsWith("http")) {
               body.video_url = fileData;
