@@ -416,7 +416,7 @@ export default function CheckPage() {
           videoMimeType,
           videoBase64: "", // Always empty - n8n fetches video via URL
           metadata,
-        }, referenceContext);
+        }, referenceContext, selectedProjectId || undefined);
       } else {
         if (!scriptText.trim()) throw new Error("テキストを入力してください");
         res = await runScriptCheck(product.id, scriptText, selectedProcess, referenceContext);
