@@ -1,17 +1,21 @@
 /** File upload validation and size limits */
 
+/** Maximum file size: 500MB for all types */
+export const MAX_UPLOAD_SIZE = 500 * 1024 * 1024; // 500MB
+export const MAX_UPLOAD_LABEL = "500MB";
+
 export const FILE_SIZE_LIMITS: Record<string, number> = {
-  text: 5 * 1024 * 1024,        // 5MB
-  image: 10 * 1024 * 1024,      // 10MB
-  audio: 50 * 1024 * 1024,      // 50MB
-  video: 500 * 1024 * 1024,     // 500MB
+  text: MAX_UPLOAD_SIZE,
+  image: MAX_UPLOAD_SIZE,
+  audio: MAX_UPLOAD_SIZE,
+  video: MAX_UPLOAD_SIZE,
 };
 
 export const FILE_SIZE_LABELS: Record<string, string> = {
-  text: "5MB",
-  image: "10MB",
-  audio: "50MB",
-  video: "500MB",
+  text: MAX_UPLOAD_LABEL,
+  image: MAX_UPLOAD_LABEL,
+  audio: MAX_UPLOAD_LABEL,
+  video: MAX_UPLOAD_LABEL,
 };
 
 export function getFileCategory(processType: string): keyof typeof FILE_SIZE_LIMITS {

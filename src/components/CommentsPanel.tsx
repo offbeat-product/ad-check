@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { tusUpload } from "@/lib/tus-upload";
 import { useAuth } from "@/hooks/useAuth";
 import type { CommentRow } from "@/lib/db-types";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
@@ -60,8 +61,9 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
     const ext = file.name.split(".").pop() || "bin";
     // Path format: {user_id}/{check_result_id}/{timestamp}.{ext} for RLS
     const path = `${user.id}/${checkResultId}/${Date.now()}.${ext}`;
-    const { error } = await supabase.storage.from("comment-attachments").upload(path, file);
-    if (error) { console.error("[storage upload]", error.message); return null; }
+    try {
+      await tusUpload({ bucketName: "comment-attachments", path, file, contentType: file.type, upsert: false });
+    } catch (e) { console.error("[storage upload]", e); return null; }
     // Use signed URL (bucket is private)
     const { data: urlData, error: signError } = await supabase.storage
       .from("comment-attachments")

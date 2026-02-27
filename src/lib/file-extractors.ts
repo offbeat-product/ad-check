@@ -4,8 +4,9 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { tusUpload } from "@/lib/tus-upload";
 
-const MAX_FILE_SIZE_MB = 50;
+const MAX_FILE_SIZE_MB = 500;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 
 function validateFileSize(file: File): void {
@@ -19,17 +20,15 @@ async function uploadToStorage(file: File): Promise<string> {
   const ext = file.name.split('.').pop() || 'bin';
   const safeName = `${Date.now()}_${crypto.randomUUID().slice(0, 8)}.${ext}`;
   const path = `extract-temp/${safeName}`;
-  const { error } = await supabase.storage
-    .from("reference-files")
-    .upload(path, file, { upsert: true });
 
-  if (error) throw new Error(`Storage upload failed: ${error.message}`);
+  const result = await tusUpload({
+    bucketName: "reference-files",
+    path,
+    file,
+    contentType: file.type,
+  });
 
-  const { data } = supabase.storage
-    .from("reference-files")
-    .getPublicUrl(path);
-
-  return data.publicUrl;
+  return result.publicUrl;
 }
 
 async function cleanupStorage(fileUrl: string): Promise<void> {
