@@ -431,7 +431,7 @@ export default function CheckPage() {
         ? { script_text: videoScriptText, video_url: videoStorageUrl || "" }
         : { script_text: scriptText };
 
-      const { error } = await supabase.from("check_results").insert([{
+      const { data: crData, error } = await supabase.from("check_results").insert([{
         user_id: user.id,
         client_name: client?.name ?? "",
         product_code: product.code,
@@ -448,8 +448,39 @@ export default function CheckPage() {
         check_items: res.check_items as unknown as Json,
         raw_response: res as unknown as Json,
         input_data: inputData as unknown as Json,
-      }]);
+      }]).select("id").single();
       handleSupabaseError(error, "check_results insert");
+
+      // Auto-sync to project if a project is selected
+      if (selectedProjectId && crData) {
+        const fileData = processConfig.inputMode === "image" && imageData
+          ? `data:${imageData.mediaType};base64,${imageData.base64}`
+          : processConfig.inputMode === "audio"
+          ? (audioStorageUrl || "")
+          : processConfig.inputMode === "video"
+          ? (videoStorageUrl || "")
+          : scriptText;
+
+        const fileType = processConfig.inputMode === "image" ? "image"
+          : processConfig.inputMode === "audio" ? "audio"
+          : processConfig.inputMode === "video" ? "video"
+          : "text";
+
+        const fileName = processConfig.inputMode === "image" ? (imageData?.mediaType?.includes("png") ? "quick_check.png" : "quick_check.jpg")
+          : mediaFile ? mediaFile.name
+          : `quick_check_${selectedProcess}.txt`;
+
+        await supabase.from("project_files").insert([{
+          project_id: selectedProjectId,
+          process_type: selectedProcess,
+          file_name: fileName,
+          file_type: fileType,
+          file_data: fileData,
+          status: "checked",
+          check_result_id: crData.id,
+          created_by: user.email || "",
+        }]);
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "不明なエラー";
       console.error("[QuickCheck] AIチェックエラー:", err);
