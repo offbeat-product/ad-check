@@ -537,6 +537,11 @@ export default function ProjectPage() {
                 }}
                 onUpdatePattern={updatePattern}
                 onDeletePattern={deletePattern}
+                onToggleProcessCommon={async (processId, isCommon) => {
+                  const ok = await updateProcess(processId, { is_common: isCommon } as Partial<ProjectProcess>);
+                  if (ok) toast({ title: isCommon ? "共通素材に移動しました" : "パターン別に移動しました" });
+                  return !!ok;
+                }}
               />
             ) : (
               /* Legacy list view (no patterns) */
