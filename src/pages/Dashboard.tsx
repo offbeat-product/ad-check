@@ -165,7 +165,7 @@ export default function Dashboard() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <StatCard icon={ClipboardCheck} label="今日のチェック数" value={stats.todayChecks} color="text-primary" />
           <StatCard icon={AlertTriangle} label="修正必須（累計）" value={stats.totalNg} color="text-status-ng" />
-          <StatCard icon={BarChart3} label="提出OK率" value={`${stats.okRate}%`} color="text-status-ok" />
+          <StatCard icon={BarChart3} label="GO率" value={`${stats.okRate}%`} color="text-status-ok" />
           <StatCard icon={TrendingUp} label="直近7日" value={`${stats.weekChecks} 件`} color="text-primary" />
         </div>
 
