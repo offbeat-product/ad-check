@@ -79,8 +79,7 @@ export default function ReferenceMaterialsSection({ projectId, productId, produc
                 <button
                   key={mt.id}
                   onClick={() => setOpenType(mt.id)}
-                  className="glass-card p-3 text-left hover:border-primary/30 transition-colors group flex flex-col h-full min-h-[96px]"
-                  style={{ borderLeft: `3px solid ${mt.color}` }}
+                  className="glass-card p-3 text-left hover:border-primary/30 transition-colors group flex flex-col h-full min-h-[96px] border-l-[3px] border-l-muted-foreground/30"
                 >
                   <div className="h-5 mb-1 flex items-center">
                     {IconComponent ? (
