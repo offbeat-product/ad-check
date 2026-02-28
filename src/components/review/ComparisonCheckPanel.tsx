@@ -163,6 +163,14 @@ export default function ComparisonCheckPanel({ file, productId, projectId, onChe
           <label className="text-xs font-medium text-muted-foreground mb-1.5 block">修正前（現在のファイル）</label>
           {isImage && file.file_data ? (
             <img src={file.file_data} alt="修正前" className="w-full rounded-lg border border-border max-h-[200px] object-contain" />
+          ) : file.file_data && /\.(mp4|mov|webm|avi)(\?|$)/i.test(file.file_data) ? (
+            <video src={file.file_data} controls playsInline className="w-full rounded-lg border border-border max-h-[200px]" />
+          ) : file.file_data && /\.(mp3|wav|m4a|ogg|aac)(\?|$)/i.test(file.file_data) ? (
+            <audio src={file.file_data} controls className="w-full" />
+          ) : file.file_data && file.file_data.startsWith("http") && /\/(videos|deliverables)\//.test(file.file_data) ? (
+            <video src={file.file_data} controls playsInline className="w-full rounded-lg border border-border max-h-[200px]" />
+          ) : file.file_data && file.file_data.startsWith("http") && /\/audios\//.test(file.file_data) ? (
+            <audio src={file.file_data} controls className="w-full" />
           ) : (
             <div className="border border-border rounded-lg p-2 max-h-[150px] overflow-y-auto">
               <pre className="text-xs font-mono whitespace-pre-wrap text-muted-foreground">{file.file_data?.substring(0, 500) || "データなし"}</pre>
