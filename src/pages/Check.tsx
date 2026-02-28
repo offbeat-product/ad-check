@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Upload, X, Info, RefreshCw, Download, Music, Film, CheckCircle2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { useCheckProgress, ESTIMATED_DURATION } from "@/hooks/useCheckProgress";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
 export default function CheckPage() {
@@ -69,6 +70,8 @@ export default function CheckPage() {
 
   // Execution
   const [loading, setLoading] = useState(false);
+  const inputModeForProcess: Record<string, string> = { script: "text", na_script: "text", narration: "audio", bgm: "audio", vcon: "video", video_horizontal: "video", video_vertical: "video", styleframe: "image", storyboard: "image" };
+  const checkProgress = useCheckProgress(ESTIMATED_DURATION[inputModeForProcess[selectedProcess] || "text"] || 60_000);
   const [result, setResult] = useState<CheckResult | null>(null);
   const [showAudioConfirm, setShowAudioConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -331,6 +334,7 @@ export default function CheckPage() {
 
     isExecutingRef.current = true;
     setLoading(true);
+    checkProgress.start();
     setResult(null);
     try {
       // Gather reference materials from DB
@@ -422,6 +426,7 @@ export default function CheckPage() {
         res = await runScriptCheck(product.id, scriptText, selectedProcess, referenceContext);
       }
       setResult(res);
+      checkProgress.complete();
 
       const inputData = processConfig.inputMode === "image" && imageData
         ? { image_base64: `data:${imageData.mediaType};base64,${imageData.base64}` }
@@ -488,6 +493,7 @@ export default function CheckPage() {
     } finally {
       setLoading(false);
       isExecutingRef.current = false;
+      checkProgress.reset();
     }
   };
 
@@ -896,9 +902,17 @@ export default function CheckPage() {
             className="w-full bg-primary text-primary-foreground font-bold text-base py-6 hover:opacity-90 transition-opacity disabled:opacity-40"
           >
             {loading ? (
-              <span className="flex items-center gap-2">
-                <Loader2 className="h-5 w-5 animate-spin" />
-                {loadingText}
+              <span className="flex flex-col items-center gap-2 w-full">
+                <span className="flex items-center gap-2">
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  {loadingText}
+                </span>
+                {checkProgress.isRunning && (
+                  <span className="flex items-center gap-2 w-full max-w-xs">
+                    <Progress value={checkProgress.progress} className="h-2 flex-1" />
+                    <span className="text-xs font-mono opacity-80 w-8">{checkProgress.progress}%</span>
+                  </span>
+                )}
               </span>
             ) : (
               "AIチェック実行"
