@@ -86,14 +86,20 @@ export async function webhookFetch(url: string, body: Record<string, any>): Prom
     console.log("[Webhook] Response received:", { status: res.status, raw });
 
     // Detect async acceptance from n8n (video checks)
-    // n8n may return {"status":"accepted"} or [{"status":"accepted"}]
+    // n8n "Immediately" mode returns {"message": "Workflow was started"}
     if (isVideo) {
       let candidate = raw;
       if (Array.isArray(candidate)) candidate = candidate[0];
       if (candidate && typeof candidate === "object") {
-        const statusVal = candidate.status || (candidate.data && typeof candidate.data === "object" && candidate.data.status);
-        if (statusVal === "accepted") {
-          console.log("[Webhook] Video check accepted asynchronously — will poll for results");
+        const statusVal = candidate.status;
+        const messageVal = candidate.message;
+        const hasCheckItems = candidate.check_items || (candidate.data && candidate.data.check_items);
+        if (
+          statusVal === "accepted" ||
+          messageVal === "Workflow was started" ||
+          !hasCheckItems
+        ) {
+          console.log("[Webhook] Video check accepted asynchronously — will poll for results", { statusVal, messageVal });
           return VIDEO_ASYNC_ACCEPTED;
         }
       }
