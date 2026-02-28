@@ -14,9 +14,14 @@ const DEFAULT_OPTIONS: Required<Omit<RetryOptions, "onRetry">> = {
 };
 
 export class FetchTimeoutError extends Error {
+  public timeoutMs: number;
   constructor(timeoutMs: number) {
-    super(`リクエストがタイムアウトしました（${Math.round(timeoutMs / 1000)}秒）`);
+    const isLong = timeoutMs >= 300_000;
+    super(isLong
+      ? "動画のAI分析に時間がかかっています。しばらくお待ちください。"
+      : `リクエストがタイムアウトしました（${Math.round(timeoutMs / 1000)}秒）`);
     this.name = "FetchTimeoutError";
+    this.timeoutMs = timeoutMs;
   }
 }
 

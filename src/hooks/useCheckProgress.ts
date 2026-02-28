@@ -61,5 +61,5 @@ export const ESTIMATED_DURATION: Record<string, number> = {
   text: 30_000,
   image: 45_000,
   audio: 60_000,
-  video: 90_000,
+  video: 600_000,
 };

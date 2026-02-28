@@ -14,6 +14,13 @@ const WEBHOOK_RETRY_OPTIONS: RetryOptions = {
   },
 };
 
+/** Video checks: 10-min timeout, no retries (avoid duplicate n8n runs) */
+const VIDEO_WEBHOOK_RETRY_OPTIONS: RetryOptions = {
+  maxRetries: 0,
+  timeoutMs: 600_000,
+  initialDelayMs: 0,
+};
+
 /** Determine the unified v2 webhook URL based on process type. */
 export function getWebhookUrl(processType: string): string | null {
   switch (processType) {
@@ -57,7 +64,9 @@ function parseResponse(raw: any): CheckResult {
 }
 
 export async function webhookFetch(url: string, body: Record<string, any>): Promise<CheckResult> {
-  console.log("[Webhook] Sending request:", { url, body: { ...body, image_base64: body.image_base64 ? `[${body.image_base64.length} chars]` : undefined, video_base64: body.video_base64 ? `[${body.video_base64.length} chars]` : undefined, audio_base64: body.audio_base64 ? `[${body.audio_base64.length} chars]` : undefined } });
+  const isVideo = url.includes("check-video");
+  const retryOpts = isVideo ? VIDEO_WEBHOOK_RETRY_OPTIONS : WEBHOOK_RETRY_OPTIONS;
+  console.log("[Webhook] Sending request:", { url, isVideo, timeout: retryOpts.timeoutMs, body: { ...body, image_base64: body.image_base64 ? `[${body.image_base64.length} chars]` : undefined, video_base64: body.video_base64 ? `[${body.video_base64.length} chars]` : undefined, audio_base64: body.audio_base64 ? `[${body.audio_base64.length} chars]` : undefined } });
   try {
     const res = await fetchWithRetry(
       url,
@@ -66,7 +75,7 @@ export async function webhookFetch(url: string, body: Record<string, any>): Prom
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       },
-      WEBHOOK_RETRY_OPTIONS
+      retryOpts
     );
     const raw = await res.json();
     console.log("[Webhook] Response received:", { status: res.status, raw });
