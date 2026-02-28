@@ -70,6 +70,8 @@ export default function FileReviewPage() {
   const [editName, setEditName] = useState("");
   const mediaPreviewRef = useRef<MediaPreviewHandle>(null);
   const [mediaCurrentTime, setMediaCurrentTime] = useState<number | null>(null);
+  const [correctionCount, setCorrectionCount] = useState<number>(0);
+  const [candidateCount, setCandidateCount] = useState<number>(0);
 
   const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
   const { items, markers, commentCounts, paintMode, setPaintMode, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
@@ -90,6 +92,27 @@ export default function FileReviewPage() {
   const handleSeekMedia = useCallback((seconds: number) => {
     mediaPreviewRef.current?.seekTo(seconds);
   }, []);
+
+  // Fetch correction stats
+  useEffect(() => {
+    if (!product?.id || !file?.process_type) return;
+    const fetchStats = async () => {
+      const { count: cCount } = await supabase
+        .from("correction_logs")
+        .select("*", { count: "exact", head: true })
+        .eq("product_id", product.id)
+        .eq("process_type", file.process_type);
+      setCorrectionCount(cCount ?? 0);
+
+      const { count: rCount } = await supabase
+        .from("rule_candidates")
+        .select("*", { count: "exact", head: true })
+        .eq("product_id", product.id)
+        .eq("status", "pending");
+      setCandidateCount(rCount ?? 0);
+    };
+    fetchStats();
+  }, [product?.id, file?.process_type]);
 
   const fetchVersions = async () => {
     if (!fileId) return;
@@ -505,6 +528,18 @@ export default function FileReviewPage() {
             </div>
           </div>
 
+          {/* Correction stats badge */}
+          {correctionCount > 0 && (
+            <div className="flex items-center gap-1.5 px-4 pb-1">
+              <span className="text-[10px] text-muted-foreground">
+                📝 修正指示蓄積: <span className="font-medium text-foreground">{correctionCount}件</span>
+                {candidateCount > 0 && (
+                  <>（ルール候補: <span className="font-medium text-primary">{candidateCount}件待ち</span>）</>
+                )}
+              </span>
+            </div>
+          )}
+
           {/* Row 2: Action buttons */}
           <div className="flex items-center gap-1 px-4 pb-2 overflow-x-auto">
             {canCheck && (
@@ -702,6 +737,8 @@ export default function FileReviewPage() {
         file={file}
         productId={product?.id}
         projectId={projectId}
+        patternId={file?.pattern_id}
+        fileId={fileId}
         mediaCurrentTime={mediaCurrentTime}
         onSeekMedia={handleSeekMedia}
         emptyCheckMessage={

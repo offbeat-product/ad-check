@@ -30,12 +30,15 @@ interface ReviewRightPanelProps {
   mediaCurrentTime?: number | null;
   /** Callback to seek media to a specific time */
   onSeekMedia?: (seconds: number) => void;
+  /** Correction log context */
+  patternId?: string | null;
+  fileId?: string;
 }
 
 export default function ReviewRightPanel({
   rightTab, onTabChange, items, markers, productCode, commentCounts, highlightCard,
   commentFilter, checkResultId, hasCheckResult, onCommentClick, onCheckItemClick, emptyCheckMessage, onAnnotationClick,
-  overallStatus, file, productId, projectId, mediaCurrentTime, onSeekMedia,
+  overallStatus, file, productId, projectId, mediaCurrentTime, onSeekMedia, patternId, fileId,
 }: ReviewRightPanelProps) {
   return (
     <div className="w-[380px] shrink-0 h-screen border-l border-border flex flex-col bg-card overflow-hidden">
@@ -95,7 +98,7 @@ export default function ReviewRightPanel({
 
         <TabsContent value="comments" className="absolute inset-0 top-10 overflow-hidden mt-0 ring-0 focus-visible:ring-0 data-[state=inactive]:hidden">
           {checkResultId ? (
-            <CommentsPanel checkResultId={checkResultId} filterItemId={commentFilter} onAnnotationClick={onAnnotationClick} onCheckItemClick={onCheckItemClick} mediaCurrentTime={mediaCurrentTime} onSeekMedia={onSeekMedia} />
+            <CommentsPanel checkResultId={checkResultId} filterItemId={commentFilter} onAnnotationClick={onAnnotationClick} onCheckItemClick={onCheckItemClick} mediaCurrentTime={mediaCurrentTime} onSeekMedia={onSeekMedia} productId={productId} projectId={projectId} processType={file?.process_type} patternId={patternId} fileId={fileId} />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
               <MessageCircle className="h-10 w-10 mb-3 opacity-30" />

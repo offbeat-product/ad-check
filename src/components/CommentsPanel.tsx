@@ -6,23 +6,45 @@ import type { CommentRow } from "@/lib/db-types";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Send, Pin, Reply, Paperclip, X, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import MentionInput, { type MentionMember } from "@/components/comments/MentionInput";
 import TimestampBadge, { formatTimestamp } from "@/components/comments/TimestampBadge";
+
+// 修正指示かどうかをキーワードで簡易判定
+function detectCorrectionIntent(text: string): boolean {
+  const keywords = [
+    '修正', '変更', '直し', '直して', 'NG', '差し替え', '入れ替え',
+    'やり直し', '再作成', '削除して', '追加して', '変えて',
+    'ここは', '違う', '間違', 'ミス', '誤り', '不備',
+    'フォント', '色を', 'サイズ', 'テロップ', 'ロゴ',
+    'タイミング', '秒に', 'フレーム', '音が', 'SE',
+    'してください', 'お願い', 'すべき', 'ください',
+    'なっていない', 'なってない', 'できていない', 'できてない',
+    'ずれ', 'はみ出', 'ぼやけ', '切れて', '見えない', '聞こえない',
+  ];
+  return keywords.some(kw => text.includes(kw));
+}
 
 interface CommentsPanelProps {
   checkResultId: string;
   filterItemId?: string | null;
   onAnnotationClick?: (annotationData: unknown) => void;
   onCheckItemClick?: (patternId: string) => void;
-  /** Current media playback time in seconds (for auto-timestamping) */
   mediaCurrentTime?: number | null;
-  /** Callback to seek media to a specific time */
   onSeekMedia?: (seconds: number) => void;
+  /** Correction log context */
+  productId?: string;
+  projectId?: string;
+  processType?: string;
+  patternId?: string | null;
+  fileId?: string;
 }
 
-export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia }: CommentsPanelProps) {
+export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia, productId, projectId, processType, patternId, fileId }: CommentsPanelProps) {
   const { user } = useAuth();
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
@@ -35,6 +57,17 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   const [members, setMembers] = useState<MentionMember[]>([]);
   const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
 
+  // Correction log state
+  const [isCorrectionChecked, setIsCorrectionChecked] = useState(false);
+  const [correctionScope, setCorrectionScope] = useState<"project" | "product">("project");
+
+  // Auto-detect correction intent when comment text changes
+  useEffect(() => {
+    if (newComment.trim().length > 0) {
+      setIsCorrectionChecked(detectCorrectionIntent(newComment));
+    }
+  }, [newComment]);
+
   // Fetch workspace members for mentions
   useEffect(() => {
     supabase.from("workspace_members").select("id, user_id, email, role, status").eq("status", "accepted").not("user_id", "is", null).then(({ data }) => {
@@ -45,7 +78,6 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
         display_name: m.email.split("@")[0],
         email: m.email,
       }));
-      // Enrich with display names
       const userIds = data.filter((m) => m.user_id).map((m) => m.user_id!);
       if (userIds.length > 0) {
         supabase.rpc("get_profiles_by_ids", { p_ids: userIds }).then(({ data: profiles }) => {
@@ -55,7 +87,6 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
             profileMap[p.id] = p.display_name || p.email?.split("@")[0] || "";
             activeUserIds.add(p.id);
           });
-          // Only show members who have an active profile
           setMembers(
             memberList
               .filter((m) => m.user_id && activeUserIds.has(m.user_id))
@@ -115,7 +146,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
     if (!user || userIds.length === 0) return;
     const authorName = user.email?.split("@")[0] || "User";
     for (const uid of userIds) {
-      if (uid === user.id) continue; // Don't notify self
+      if (uid === user.id) continue;
       await supabase.from("notifications").insert({
         user_id: uid,
         type: "mention",
@@ -123,6 +154,26 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
         message: `${authorName}さんからメンション: ${content.slice(0, 80)}`,
         data: { check_result_id: checkResultId },
       });
+    }
+  };
+
+  const saveCorrectionLog = async (commentId: string, commentText: string) => {
+    if (!productId || !processType) return;
+    try {
+      await supabase.from("correction_logs").insert({
+        product_id: productId,
+        project_id: projectId || null,
+        process_type: processType,
+        pattern_id: patternId || null,
+        file_id: fileId || null,
+        check_result_id: checkResultId || null,
+        comment_id: commentId,
+        correction_text: commentText,
+        ai_scope: correctionScope,
+        created_by: user?.id || null,
+      } as any);
+    } catch (err) {
+      console.error("[correction_logs] silent error:", err);
     }
   };
 
@@ -138,10 +189,9 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
       }
     }
 
-    // Auto-attach media timestamp if available
     const timestampValue = (mediaCurrentTime != null && mediaCurrentTime > 0) ? mediaCurrentTime : null;
 
-    const { error } = await supabase.from("comments").insert({
+    const { data: savedComment, error } = await supabase.from("comments").insert({
       check_result_id: checkResultId,
       check_item_id: filterItemId || null,
       author_name: user.email?.split("@")[0] || "User",
@@ -151,15 +201,22 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
       media_timestamp: timestampValue,
       mentions: mentionedUserIds.length > 0 ? mentionedUserIds : null,
       ...attachmentData,
-    } as any);
+    } as any).select("id").single();
     handleSupabaseError(error, "comment insert");
 
     // Send mention notifications
     await sendMentionNotifications(newComment, mentionedUserIds);
 
+    // Save to correction_logs if checked
+    if (isCorrectionChecked && savedComment?.id) {
+      await saveCorrectionLog(savedComment.id, newComment);
+    }
+
     setNewComment("");
     setAttachment(null);
     setMentionedUserIds([]);
+    setIsCorrectionChecked(false);
+    setCorrectionScope("project");
     setUploading(false);
     fetchComments();
   };
@@ -259,7 +316,6 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
       </div>
 
       <div className="border-t border-border p-3 shrink-0 space-y-2">
-        {/* Timestamp indicator */}
         {hasMediaTimestamp && (
           <div className="flex items-center gap-1.5 text-[10px] text-primary">
             🕐 再生位置 <span className="font-mono font-medium">{formatTimestamp(mediaCurrentTime!)}</span> をコメントに自動記録します
@@ -298,6 +354,39 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
             <Send className="h-3.5 w-3.5" />
           </Button>
         </div>
+
+        {/* Correction log toggle */}
+        {productId && (
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="correction-toggle"
+                checked={isCorrectionChecked}
+                onCheckedChange={(v) => setIsCorrectionChecked(!!v)}
+                className="h-3.5 w-3.5"
+              />
+              <Label htmlFor="correction-toggle" className="text-[10px] text-muted-foreground cursor-pointer leading-tight">
+                修正指示として記録（AIルール学習に使用）
+              </Label>
+            </div>
+            {isCorrectionChecked && (
+              <RadioGroup
+                value={correctionScope}
+                onValueChange={(v) => setCorrectionScope(v as "project" | "product")}
+                className="flex items-center gap-3 ml-5"
+              >
+                <div className="flex items-center gap-1">
+                  <RadioGroupItem value="project" id="scope-project" className="h-3 w-3" />
+                  <Label htmlFor="scope-project" className="text-[10px] text-muted-foreground cursor-pointer">この案件のみ</Label>
+                </div>
+                <div className="flex items-center gap-1">
+                  <RadioGroupItem value="product" id="scope-product" className="h-3 w-3" />
+                  <Label htmlFor="scope-product" className="text-[10px] text-muted-foreground cursor-pointer">この商材全体</Label>
+                </div>
+              </RadioGroup>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
