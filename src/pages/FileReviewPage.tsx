@@ -3,7 +3,8 @@ import { format } from "date-fns";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { runScriptCheck, getWebhookUrl, webhookFetch, getRelatedProcessData } from "@/lib/webhook";
+import { runScriptCheck, getWebhookUrl, webhookFetch, getRelatedProcessData, VIDEO_ASYNC_ACCEPTED } from "@/lib/webhook";
+import { useVideoCheckPolling } from "@/hooks/useVideoCheckPolling";
 import { tusUploadBlob } from "@/lib/tus-upload";
 import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
@@ -241,6 +242,7 @@ export default function FileReviewPage() {
   const checkProgress = useCheckProgress(ESTIMATED_DURATION[processInputMode] || 60_000);
 
   const isExecutingRef = useRef(false);
+  const videoPolling = useVideoCheckPolling();
 
   const handleRunCheck = async () => {
     if (!file || !product || !user || !projectId) return;
@@ -339,7 +341,30 @@ export default function FileReviewPage() {
         console.log('[CheckMate] Webhook URL:', webhookUrl);
         console.log('[CheckMate] Body size:', JSON.stringify(body).length, 'bytes');
         console.log('[CheckMate] Body keys:', Object.keys(body));
-        res = await webhookFetch(webhookUrl, body);
+        const rawRes = await webhookFetch(webhookUrl, body);
+
+        if (rawRes === VIDEO_ASYNC_ACCEPTED) {
+          // Async video check: poll for result from DB
+          const polled = await videoPolling.startPolling(product.code, processKey);
+          if (!polled) {
+            toast({ title: "チェック処理がタイムアウトしました", description: "ページを更新して結果を確認してください。", variant: "destructive" });
+            return;
+          }
+          // n8n wrote the result directly — load it
+          setRecord(polled);
+          // Link to file
+          const { error: updateErr } = await supabase.from("project_files").update({
+            status: "checked",
+            check_result_id: polled.id,
+          }).eq("id", file.id);
+          handleSupabaseError(updateErr, "project_files update");
+          setFile({ ...file, status: "checked", check_result_id: polled.id });
+          checkProgress.complete();
+          toast({ title: "チェック完了", description: `Grade: ${polled.overall_status}` });
+          return;
+        }
+
+        res = rawRes;
       }
 
       const { data: crData, error: insertErr } = await supabase.from("check_results").insert([{
@@ -388,6 +413,7 @@ export default function FileReviewPage() {
       setChecking(false);
       isExecutingRef.current = false;
       checkProgress.reset();
+      videoPolling.cancelPolling();
     }
   };
 
@@ -592,14 +618,25 @@ export default function FileReviewPage() {
           <div className="flex items-center gap-1 px-4 pb-2 overflow-x-auto">
             {canCheck && (
               <div className="flex items-center gap-2">
-                <Button size="sm" className="text-xs h-8" onClick={handleRunCheck} disabled={checking}>
+                <Button size="sm" className="text-xs h-8" onClick={handleRunCheck} disabled={checking || videoPolling.pollingState.isPolling}>
                   {checking ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Bot className="h-3 w-3 mr-1" />}
                   {checking ? "チェック中..." : "AIチェック実行"}
                 </Button>
-                {checking && checkProgress.isRunning && (
+                {checking && !videoPolling.pollingState.isPolling && checkProgress.isRunning && (
                   <div className="flex items-center gap-2 min-w-[140px]">
                     <Progress value={checkProgress.progress} className="h-2 flex-1" />
                     <span className="text-xs text-muted-foreground font-mono w-8">{checkProgress.progress}%</span>
+                  </div>
+                )}
+                {videoPolling.pollingState.isPolling && (
+                  <div className="flex items-center gap-2 min-w-[200px]">
+                    <div className="flex flex-col gap-1 flex-1">
+                      <span className="text-xs text-muted-foreground">{videoPolling.pollingState.message}</span>
+                      <div className="flex items-center gap-2">
+                        <Progress value={Math.min((videoPolling.pollingState.elapsedSeconds / 300) * 100, 95)} className="h-2 flex-1" />
+                        <span className="text-xs text-muted-foreground font-mono whitespace-nowrap">経過: {videoPolling.formatElapsed(videoPolling.pollingState.elapsedSeconds)}</span>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -804,14 +841,23 @@ export default function FileReviewPage() {
             <p className="text-xs mt-1">AIチェックを実行してください</p>
             {canCheck && (
               <div className="flex flex-col items-center gap-2">
-                <Button size="sm" className="mt-4" onClick={handleRunCheck} disabled={checking}>
+                <Button size="sm" className="mt-4" onClick={handleRunCheck} disabled={checking || videoPolling.pollingState.isPolling}>
                   {checking ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Bot className="h-3 w-3 mr-1" />}
                   {checking ? "チェック中..." : "AIチェック実行"}
                 </Button>
-                {checking && checkProgress.isRunning && (
+                {checking && !videoPolling.pollingState.isPolling && checkProgress.isRunning && (
                   <div className="flex items-center gap-2 w-48">
                     <Progress value={checkProgress.progress} className="h-2 flex-1" />
                     <span className="text-xs text-muted-foreground font-mono w-8">{checkProgress.progress}%</span>
+                  </div>
+                )}
+                {videoPolling.pollingState.isPolling && (
+                  <div className="flex flex-col items-center gap-1 w-64 mt-2">
+                    <span className="text-xs text-muted-foreground">{videoPolling.pollingState.message}</span>
+                    <div className="flex items-center gap-2 w-full">
+                      <Progress value={Math.min((videoPolling.pollingState.elapsedSeconds / 300) * 100, 95)} className="h-2 flex-1" />
+                      <span className="text-xs text-muted-foreground font-mono whitespace-nowrap">経過: {videoPolling.formatElapsed(videoPolling.pollingState.elapsedSeconds)}</span>
+                    </div>
                   </div>
                 )}
               </div>

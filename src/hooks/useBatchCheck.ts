@@ -2,7 +2,7 @@ import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { getWebhookUrl, webhookFetch, runScriptCheck, getRelatedProcessData } from "@/lib/webhook";
+import { getWebhookUrl, webhookFetch, runScriptCheck, getRelatedProcessData, VIDEO_ASYNC_ACCEPTED } from "@/lib/webhook";
 import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
@@ -131,7 +131,13 @@ export function useBatchCheck() {
             }
           }
 
-          res = await webhookFetch(webhookUrl, body);
+          const rawRes = await webhookFetch(webhookUrl, body);
+          if (rawRes === VIDEO_ASYNC_ACCEPTED) {
+            // Video async — skip saving, n8n writes directly to DB
+            console.log("[BatchCheck] Video check accepted asynchronously, skipping save");
+            continue;
+          }
+          res = rawRes as { overall_status: string; detected_case?: string; check_items: CheckItem[]; ng_count: number; warning_count: number; ok_count: number; total_checks: number };
         }
 
         // Save check result

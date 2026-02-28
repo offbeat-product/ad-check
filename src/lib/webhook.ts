@@ -63,7 +63,12 @@ function parseResponse(raw: any): CheckResult {
   };
 }
 
-export async function webhookFetch(url: string, body: Record<string, any>): Promise<CheckResult> {
+/** Marker returned when video webhook responds with async acceptance */
+export const VIDEO_ASYNC_ACCEPTED = Symbol("VIDEO_ASYNC_ACCEPTED");
+
+export type WebhookResult = CheckResult | typeof VIDEO_ASYNC_ACCEPTED;
+
+export async function webhookFetch(url: string, body: Record<string, any>): Promise<WebhookResult> {
   const isVideo = url.includes("check-video");
   const retryOpts = isVideo ? VIDEO_WEBHOOK_RETRY_OPTIONS : WEBHOOK_RETRY_OPTIONS;
   console.log("[Webhook] Sending request:", { url, isVideo, timeout: retryOpts.timeoutMs, body: { ...body, image_base64: body.image_base64 ? `[${body.image_base64.length} chars]` : undefined, video_base64: body.video_base64 ? `[${body.video_base64.length} chars]` : undefined, audio_base64: body.audio_base64 ? `[${body.audio_base64.length} chars]` : undefined } });
@@ -79,6 +84,16 @@ export async function webhookFetch(url: string, body: Record<string, any>): Prom
     );
     const raw = await res.json();
     console.log("[Webhook] Response received:", { status: res.status, raw });
+
+    // Detect async acceptance from n8n (video checks)
+    if (isVideo && raw && typeof raw === "object" && !Array.isArray(raw)) {
+      const statusVal = raw.status || (raw.data && typeof raw.data === "object" && raw.data.status);
+      if (statusVal === "accepted") {
+        console.log("[Webhook] Video check accepted asynchronously — will poll for results");
+        return VIDEO_ASYNC_ACCEPTED;
+      }
+    }
+
     return parseResponse(raw);
   } catch (err) {
     console.error("[Webhook] Request failed:", { url, error: err });
@@ -94,7 +109,7 @@ export async function runScriptCheck(productId: string, scriptText: string, proc
   }
   const url = getWebhookUrl(processType)!;
   if (!url) throw new Error(`この工程(${processType})のWebhookが見つかりません`);
-  return webhookFetch(url, body);
+  return webhookFetch(url, body) as Promise<CheckResult>;
 }
 
 export async function runSfCheck(productId: string, imageBase64: string, mediaType: string, processType: string = "styleframe", referenceContext?: string): Promise<CheckResult> {
@@ -105,7 +120,7 @@ export async function runSfCheck(productId: string, imageBase64: string, mediaTy
   }
   const url = getWebhookUrl(processType)!;
   if (!url) throw new Error(`この工程(${processType})のWebhookが見つかりません`);
-  return webhookFetch(url, body);
+  return webhookFetch(url, body) as Promise<CheckResult>;
 }
 
 export async function runAudioCheck(
@@ -133,7 +148,7 @@ export async function runAudioCheck(
   if (referenceContext) {
     try { body.reference_context = JSON.parse(referenceContext); } catch { body.reference_context = referenceContext; }
   }
-  return webhookFetch(url, body);
+  return webhookFetch(url, body) as Promise<CheckResult>;
 }
 
 /**
@@ -205,7 +220,7 @@ export async function runVideoCheck(
   referenceContext?: string,
   projectId?: string,
   patternId?: string | null
-): Promise<CheckResult> {
+): Promise<WebhookResult> {
   const url = getWebhookUrl(processType);
   if (!url) throw new Error(`動画チェックのWebhookが見つかりません (${processType})`);
 
@@ -266,5 +281,5 @@ export async function runComparisonCheck(
   if (referenceContext) {
     try { body.reference_context = JSON.parse(referenceContext); } catch { body.reference_context = referenceContext; }
   }
-  return webhookFetch(url, body);
+  return webhookFetch(url, body) as Promise<CheckResult>;
 }
