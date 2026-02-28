@@ -34,6 +34,8 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { FILE_STATUS_CONFIG } from "@/lib/db-types";
+import { useCheckProgress, ESTIMATED_DURATION } from "@/hooks/useCheckProgress";
+import { Progress } from "@/components/ui/progress";
 
 interface AnnotationData {
   type: string;
@@ -235,9 +237,13 @@ export default function FileReviewPage() {
     return () => clearInterval(interval);
   }, [checking, file?.check_result_id]);
 
+  const processInputMode = file ? (AI_CHECK_CONFIG[file.process_type]?.inputMode || "text") : "text";
+  const checkProgress = useCheckProgress(ESTIMATED_DURATION[processInputMode] || 60_000);
+
   const handleRunCheck = async () => {
     if (!file || !product || !user || !projectId) return;
     setChecking(true);
+    checkProgress.start();
     try {
       const processKey = file.process_type || "script";
       const aiCfg = AI_CHECK_CONFIG[processKey];
@@ -364,6 +370,7 @@ export default function FileReviewPage() {
       const { data: fullCr } = await supabase.from("check_results").select("*").eq("id", crData.id).maybeSingle();
       setRecord(fullCr);
 
+      checkProgress.complete();
       toast({ title: "チェック完了", description: `Grade: ${res.overall_status}` });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "不明なエラー";
@@ -375,6 +382,7 @@ export default function FileReviewPage() {
       }
     } finally {
       setChecking(false);
+      checkProgress.reset();
     }
   };
 
@@ -578,10 +586,18 @@ export default function FileReviewPage() {
           {/* Row 2: Action buttons */}
           <div className="flex items-center gap-1 px-4 pb-2 overflow-x-auto">
             {canCheck && (
-              <Button size="sm" className="text-xs h-8" onClick={handleRunCheck} disabled={checking}>
-                {checking ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Bot className="h-3 w-3 mr-1" />}
-                {checking ? "チェック中..." : "AIチェック実行"}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button size="sm" className="text-xs h-8" onClick={handleRunCheck} disabled={checking}>
+                  {checking ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Bot className="h-3 w-3 mr-1" />}
+                  {checking ? "チェック中..." : "AIチェック実行"}
+                </Button>
+                {checking && checkProgress.isRunning && (
+                  <div className="flex items-center gap-2 min-w-[140px]">
+                    <Progress value={checkProgress.progress} className="h-2 flex-1" />
+                    <span className="text-xs text-muted-foreground font-mono w-8">{checkProgress.progress}%</span>
+                  </div>
+                )}
+              </div>
             )}
             {checkDisabled && (
               <Button size="sm" variant="outline" className="text-xs h-8 opacity-50" disabled>
@@ -782,10 +798,18 @@ export default function FileReviewPage() {
             <p className="text-sm font-medium">AIチェック未実行</p>
             <p className="text-xs mt-1">AIチェックを実行してください</p>
             {canCheck && (
-              <Button size="sm" className="mt-4" onClick={handleRunCheck} disabled={checking}>
-                {checking ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Bot className="h-3 w-3 mr-1" />}
-                {checking ? "チェック中..." : "AIチェック実行"}
-              </Button>
+              <div className="flex flex-col items-center gap-2">
+                <Button size="sm" className="mt-4" onClick={handleRunCheck} disabled={checking}>
+                  {checking ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Bot className="h-3 w-3 mr-1" />}
+                  {checking ? "チェック中..." : "AIチェック実行"}
+                </Button>
+                {checking && checkProgress.isRunning && (
+                  <div className="flex items-center gap-2 w-48">
+                    <Progress value={checkProgress.progress} className="h-2 flex-1" />
+                    <span className="text-xs text-muted-foreground font-mono w-8">{checkProgress.progress}%</span>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         }
