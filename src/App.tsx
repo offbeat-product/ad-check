@@ -18,6 +18,7 @@ import NotFound from "./pages/NotFound";
 import SharedViewPage from "./pages/SharedViewPage";
 import SettingsPage from "./pages/SettingsPage";
 import AcceptInvitePage from "./pages/AcceptInvitePage";
+import RuleCandidatesPage from "./pages/RuleCandidatesPage";
 
 const queryClient = new QueryClient();
 
@@ -56,6 +57,7 @@ const App = () => (
                 <Route path="/project/:id" element={<ProjectPage />} />
                 <Route path="/project/:projectId/file/:fileId" element={<FileReviewPage />} />
                 <Route path="/settings" element={<SettingsPage />} />
+                <Route path="/rule-candidates" element={<RuleCandidatesPage />} />
               </Route>
               <Route path="/shared/:token" element={<SharedViewPage />} />
               <Route path="*" element={<NotFound />} />

@@ -4,8 +4,9 @@ import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useProjectTree } from "@/hooks/useProjectTree";
 import {
-  Home, Zap, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search, Rocket, PanelLeftClose, PanelLeftOpen,
+  Home, Zap, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search, Rocket, PanelLeftClose, PanelLeftOpen, Sparkles,
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import NotificationBell from "@/components/NotificationBell";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -33,6 +34,12 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
     catch { return new Set<string>(); }
   });
   const [projectsOpen, setProjectsOpen] = useState(true);
+  const [pendingRuleCount, setPendingRuleCount] = useState(0);
+
+  useEffect(() => {
+    supabase.from("rule_candidates").select("*", { count: "exact", head: true }).eq("status", "pending")
+      .then(({ count }) => setPendingRuleCount(count || 0));
+  }, []);
 
   // Drag state for reordering
   const dragItem = useRef<{ id: string; productId: string } | null>(null);
@@ -368,6 +375,25 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
           ))}
         </div>
         )}
+
+        <button onClick={() => navigate("/rule-candidates")}
+          title={collapsed ? "ルール学習" : undefined}
+          className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium transition-colors",
+            collapsed ? "justify-center px-0" : "px-5",
+            location.pathname === "/rule-candidates" ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-[3px] border-primary"
+              : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent")}>
+          <Sparkles className="h-4 w-4 shrink-0" />
+          {!collapsed && (
+            <span className="flex items-center gap-2">
+              ルール学習
+              {pendingRuleCount > 0 && (
+                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">
+                  {pendingRuleCount}
+                </Badge>
+              )}
+            </span>
+          )}
+        </button>
 
         <button onClick={() => navigate("/settings")}
           title={collapsed ? "設定" : undefined}
