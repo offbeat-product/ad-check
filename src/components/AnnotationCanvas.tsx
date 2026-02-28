@@ -394,7 +394,7 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
             style={getPopupPosition()}
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-sm font-semibold mb-2">アノテーションのコメントを入力</h3>
+            <h3 className="text-sm font-semibold mb-2">修正指示を入力</h3>
             <Textarea
               value={commentText}
               onChange={(e) => { setCommentText(e.target.value); setCommentError(false); }}
