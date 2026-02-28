@@ -204,6 +204,37 @@ export default function FileReviewPage() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [prevFile, nextFile, navigateToFile]);
 
+  // Recovery: re-fetch file & check_result from DB (e.g. after webhook timeout but n8n completed)
+  const recoverCheckResult = useCallback(async () => {
+    if (!fileId) return;
+    const { data: freshFile } = await supabase.from("project_files").select("*").eq("id", fileId).maybeSingle();
+    if (freshFile) {
+      setFile(freshFile);
+      if (freshFile.check_result_id) {
+        const { data: cr } = await supabase.from("check_results").select("*").eq("id", freshFile.check_result_id).maybeSingle();
+        if (cr && cr.check_items) {
+          setRecord(cr);
+          toast({ title: "チェック完了", description: `Grade: ${cr.overall_status}` });
+          return;
+        }
+      }
+    }
+  }, [fileId]);
+
+  // Poll for check result when checking is in progress (handles n8n completing after frontend timeout)
+  useEffect(() => {
+    if (!checking || !file?.check_result_id) return;
+    const interval = setInterval(async () => {
+      const { data: cr } = await supabase.from("check_results").select("*").eq("id", file.check_result_id!).maybeSingle();
+      if (cr && cr.check_items && Array.isArray(cr.check_items) && (cr.check_items as unknown[]).length > 0) {
+        setRecord(cr);
+        setChecking(false);
+        toast({ title: "チェック完了", description: `Grade: ${cr.overall_status}` });
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [checking, file?.check_result_id]);
+
   const handleRunCheck = async () => {
     if (!file || !product || !user || !projectId) return;
     setChecking(true);
@@ -337,7 +368,11 @@ export default function FileReviewPage() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "不明なエラー";
       console.error("[FileReview] AIチェックエラー:", err);
-      toast({ title: "チェック送信に失敗しました。再度お試しください", description: message, variant: "destructive" });
+      // After timeout/error, check if n8n already wrote the result to DB
+      await recoverCheckResult();
+      if (!record) {
+        toast({ title: "チェック送信に失敗しました。再度お試しください", description: message, variant: "destructive" });
+      }
     } finally {
       setChecking(false);
     }
