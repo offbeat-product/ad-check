@@ -50,11 +50,20 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
       if (userIds.length > 0) {
         supabase.rpc("get_profiles_by_ids", { p_ids: userIds }).then(({ data: profiles }) => {
           const profileMap: Record<string, string> = {};
-          (profiles ?? []).forEach((p: any) => { profileMap[p.id] = p.display_name || p.email?.split("@")[0] || ""; });
-          setMembers(memberList.map((m) => ({ ...m, display_name: m.user_id ? profileMap[m.user_id] || m.display_name : m.display_name })));
+          const activeUserIds = new Set<string>();
+          (profiles ?? []).forEach((p: any) => {
+            profileMap[p.id] = p.display_name || p.email?.split("@")[0] || "";
+            activeUserIds.add(p.id);
+          });
+          // Only show members who have an active profile
+          setMembers(
+            memberList
+              .filter((m) => m.user_id && activeUserIds.has(m.user_id))
+              .map((m) => ({ ...m, display_name: profileMap[m.user_id!] || m.display_name }))
+          );
         });
       } else {
-        setMembers(memberList);
+        setMembers([]);
       }
     });
   }, []);
