@@ -37,7 +37,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
 
   // Fetch workspace members for mentions
   useEffect(() => {
-    supabase.from("workspace_members").select("id, user_id, email, role, status").eq("status", "accepted").then(({ data }) => {
+    supabase.from("workspace_members").select("id, user_id, email, role, status").eq("status", "accepted").not("user_id", "is", null).then(({ data }) => {
       if (!data) return;
       const memberList: MentionMember[] = data.map((m) => ({
         id: m.id,
