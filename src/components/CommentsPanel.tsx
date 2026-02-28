@@ -8,15 +8,21 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Send, Pin, Reply, Paperclip, X, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
+import MentionInput, { type MentionMember } from "@/components/comments/MentionInput";
+import TimestampBadge, { formatTimestamp } from "@/components/comments/TimestampBadge";
 
 interface CommentsPanelProps {
   checkResultId: string;
   filterItemId?: string | null;
   onAnnotationClick?: (annotationData: unknown) => void;
   onCheckItemClick?: (patternId: string) => void;
+  /** Current media playback time in seconds (for auto-timestamping) */
+  mediaCurrentTime?: number | null;
+  /** Callback to seek media to a specific time */
+  onSeekMedia?: (seconds: number) => void;
 }
 
-export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick }: CommentsPanelProps) {
+export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia }: CommentsPanelProps) {
   const { user } = useAuth();
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
@@ -26,6 +32,32 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   const [attachment, setAttachment] = useState<{ file: File; preview: string } | null>(null);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [members, setMembers] = useState<MentionMember[]>([]);
+  const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
+
+  // Fetch workspace members for mentions
+  useEffect(() => {
+    supabase.from("workspace_members").select("id, user_id, email, role, status").eq("status", "accepted").then(({ data }) => {
+      if (!data) return;
+      const memberList: MentionMember[] = data.map((m) => ({
+        id: m.id,
+        user_id: m.user_id,
+        display_name: m.email.split("@")[0],
+        email: m.email,
+      }));
+      // Enrich with display names
+      const userIds = data.filter((m) => m.user_id).map((m) => m.user_id!);
+      if (userIds.length > 0) {
+        supabase.rpc("get_profiles_by_ids", { p_ids: userIds }).then(({ data: profiles }) => {
+          const profileMap: Record<string, string> = {};
+          (profiles ?? []).forEach((p: any) => { profileMap[p.id] = p.display_name || p.email?.split("@")[0] || ""; });
+          setMembers(memberList.map((m) => ({ ...m, display_name: m.user_id ? profileMap[m.user_id] || m.display_name : m.display_name })));
+        });
+      } else {
+        setMembers(memberList);
+      }
+    });
+  }, []);
 
   const fetchComments = async () => {
     const { data, error } = await supabase
@@ -59,17 +91,30 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   const uploadAttachment = async (file: File): Promise<{ url: string; type: string; name: string } | null> => {
     if (!user) return null;
     const ext = file.name.split(".").pop() || "bin";
-    // Path format: {user_id}/{check_result_id}/{timestamp}.{ext} for RLS
     const path = `${user.id}/${checkResultId}/${Date.now()}.${ext}`;
     try {
       await tusUpload({ bucketName: "comment-attachments", path, file, contentType: file.type, upsert: false });
     } catch (e) { console.error("[storage upload]", e); return null; }
-    // Use signed URL (bucket is private)
     const { data: urlData, error: signError } = await supabase.storage
       .from("comment-attachments")
-      .createSignedUrl(path, 60 * 60 * 24 * 7); // 7 days
+      .createSignedUrl(path, 60 * 60 * 24 * 7);
     if (signError || !urlData?.signedUrl) { console.error("[signed url]", signError?.message); return null; }
     return { url: urlData.signedUrl, type: file.type, name: file.name };
+  };
+
+  const sendMentionNotifications = async (content: string, userIds: string[]) => {
+    if (!user || userIds.length === 0) return;
+    const authorName = user.email?.split("@")[0] || "User";
+    for (const uid of userIds) {
+      if (uid === user.id) continue; // Don't notify self
+      await supabase.from("notifications").insert({
+        user_id: uid,
+        type: "mention",
+        title: "コメントでメンションされました",
+        message: `${authorName}さんからメンション: ${content.slice(0, 80)}`,
+        data: { check_result_id: checkResultId },
+      });
+    }
   };
 
   const handleSubmit = async () => {
@@ -80,13 +125,12 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
     if (attachment) {
       const result = await uploadAttachment(attachment.file);
       if (result) {
-        attachmentData = {
-          attachment_url: result.url,
-          attachment_type: result.type,
-          attachment_name: result.name,
-        };
+        attachmentData = { attachment_url: result.url, attachment_type: result.type, attachment_name: result.name };
       }
     }
+
+    // Auto-attach media timestamp if available
+    const timestampValue = (mediaCurrentTime != null && mediaCurrentTime > 0) ? mediaCurrentTime : null;
 
     const { error } = await supabase.from("comments").insert({
       check_result_id: checkResultId,
@@ -95,11 +139,18 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
       author_email: user.email || "",
       content: newComment,
       status: "open",
+      media_timestamp: timestampValue,
+      mentions: mentionedUserIds.length > 0 ? mentionedUserIds : null,
       ...attachmentData,
-    });
+    } as any);
     handleSupabaseError(error, "comment insert");
+
+    // Send mention notifications
+    await sendMentionNotifications(newComment, mentionedUserIds);
+
     setNewComment("");
     setAttachment(null);
+    setMentionedUserIds([]);
     setUploading(false);
     fetchComments();
   };
@@ -152,6 +203,8 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
     { key: "resolved" as const, label: "対応済" },
   ];
 
+  const hasMediaTimestamp = mediaCurrentTime != null && mediaCurrentTime > 0;
+
   return (
     <div className="flex flex-col h-full bg-card">
       <div className="px-3 py-2 border-b border-border shrink-0">
@@ -179,10 +232,11 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
               timeAgo={timeAgo}
               onAnnotationClick={onAnnotationClick}
               onCheckItemClick={onCheckItemClick}
+              onSeekMedia={onSeekMedia}
             />
             {replies(c.id).map((r) => (
               <div key={r.id} className="ml-5">
-                <CommentCard comment={r} onToggleStatus={() => toggleStatus(r.id, r.status)} onReply={() => {}} timeAgo={timeAgo} isReply />
+                <CommentCard comment={r} onToggleStatus={() => toggleStatus(r.id, r.status)} onReply={() => {}} timeAgo={timeAgo} isReply onSeekMedia={onSeekMedia} />
               </div>
             ))}
             {replyTo === c.id && (
@@ -196,6 +250,12 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
       </div>
 
       <div className="border-t border-border p-3 shrink-0 space-y-2">
+        {/* Timestamp indicator */}
+        {hasMediaTimestamp && (
+          <div className="flex items-center gap-1.5 text-[10px] text-primary">
+            🕐 再生位置 <span className="font-mono font-medium">{formatTimestamp(mediaCurrentTime!)}</span> をコメントに自動記録します
+          </div>
+        )}
         {attachment && (
           <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
             {attachment.preview ? (
@@ -209,9 +269,15 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
         )}
         <div className="flex gap-2">
           <div className="flex-1 space-y-1">
-            <Textarea value={newComment} onChange={(e) => setNewComment(e.target.value)}
-              placeholder="コメントを入力..." className="min-h-[50px] text-xs"
-              onKeyDown={(e) => { if (e.key === "Enter" && e.metaKey) handleSubmit(); }} />
+            <MentionInput
+              value={newComment}
+              onChange={setNewComment}
+              members={members}
+              onMentions={setMentionedUserIds}
+              placeholder="コメントを入力... (@でメンション)"
+              className="min-h-[50px] text-xs"
+              onKeyDown={(e) => { if (e.key === "Enter" && e.metaKey) handleSubmit(); }}
+            />
             <div className="flex items-center gap-1">
               <button onClick={() => fileInputRef.current?.click()} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
                 <Paperclip className="h-3.5 w-3.5" />
@@ -228,14 +294,15 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   );
 }
 
-function CommentCard({ comment, onToggleStatus, onReply, timeAgo, isReply, onAnnotationClick, onCheckItemClick }: {
-  comment: CommentRow; onToggleStatus: () => void; onReply: () => void; timeAgo: (d: string) => string; isReply?: boolean; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void;
+function CommentCard({ comment, onToggleStatus, onReply, timeAgo, isReply, onAnnotationClick, onCheckItemClick, onSeekMedia }: {
+  comment: CommentRow; onToggleStatus: () => void; onReply: () => void; timeAgo: (d: string) => string; isReply?: boolean; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void;
 }) {
   const initial = comment.author_name.charAt(0).toUpperCase();
   const colors = ["bg-primary", "bg-status-ok", "bg-context-client", "bg-product-cta"];
   const colorIdx = comment.author_name.charCodeAt(0) % colors.length;
   const hasAnnotation = !!comment.annotation_data;
   const hasCheckItem = !!comment.check_item_id;
+  const mediaTimestamp = (comment as any).media_timestamp as number | null;
 
   const handleCardClick = () => {
     if (hasAnnotation && onAnnotationClick) {
@@ -246,6 +313,18 @@ function CommentCard({ comment, onToggleStatus, onReply, timeAgo, isReply, onAnn
   };
 
   const isClickable = (hasAnnotation && onAnnotationClick) || (hasCheckItem && onCheckItemClick);
+
+  // Highlight @mentions in content
+  const renderContent = (text: string) => {
+    const parts = text.split(/(@\S+)/g);
+    return parts.map((part, i) =>
+      part.startsWith("@") ? (
+        <span key={i} className="text-primary font-medium">{part}</span>
+      ) : (
+        <span key={i}>{part}</span>
+      )
+    );
+  };
 
   return (
     <div
@@ -258,9 +337,12 @@ function CommentCard({ comment, onToggleStatus, onReply, timeAgo, isReply, onAnn
       <div className="flex items-center gap-2">
         <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white", colors[colorIdx])}>{initial}</div>
         <span className="text-xs font-medium flex-1">{comment.author_name}</span>
+        {mediaTimestamp != null && mediaTimestamp > 0 && (
+          <TimestampBadge seconds={mediaTimestamp} onClick={onSeekMedia ? () => onSeekMedia(mediaTimestamp) : undefined} />
+        )}
         <span className="text-[10px] text-muted-foreground">{timeAgo(comment.created_at)}</span>
       </div>
-      <p className="text-xs whitespace-pre-wrap">{comment.content}</p>
+      <p className="text-xs whitespace-pre-wrap">{renderContent(comment.content)}</p>
       {hasAnnotation && (
         <div className="flex items-center gap-1 text-[10px] text-primary">
           <Pin className="h-3 w-3" />

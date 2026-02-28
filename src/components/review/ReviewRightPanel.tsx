@@ -26,12 +26,16 @@ interface ReviewRightPanelProps {
   file?: { file_data: string | null; file_type: string; process_type: string } | null;
   productId?: string;
   projectId?: string;
+  /** Media playback current time for auto-timestamping */
+  mediaCurrentTime?: number | null;
+  /** Callback to seek media to a specific time */
+  onSeekMedia?: (seconds: number) => void;
 }
 
 export default function ReviewRightPanel({
   rightTab, onTabChange, items, markers, productCode, commentCounts, highlightCard,
   commentFilter, checkResultId, hasCheckResult, onCommentClick, onCheckItemClick, emptyCheckMessage, onAnnotationClick,
-  overallStatus, file, productId, projectId,
+  overallStatus, file, productId, projectId, mediaCurrentTime, onSeekMedia,
 }: ReviewRightPanelProps) {
   return (
     <div className="w-[380px] shrink-0 h-screen border-l border-border flex flex-col bg-card overflow-hidden">
@@ -91,7 +95,7 @@ export default function ReviewRightPanel({
 
         <TabsContent value="comments" className="absolute inset-0 top-10 overflow-hidden mt-0 ring-0 focus-visible:ring-0 data-[state=inactive]:hidden">
           {checkResultId ? (
-            <CommentsPanel checkResultId={checkResultId} filterItemId={commentFilter} onAnnotationClick={onAnnotationClick} onCheckItemClick={onCheckItemClick} />
+            <CommentsPanel checkResultId={checkResultId} filterItemId={commentFilter} onAnnotationClick={onAnnotationClick} onCheckItemClick={onCheckItemClick} mediaCurrentTime={mediaCurrentTime} onSeekMedia={onSeekMedia} />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
               <MessageCircle className="h-10 w-10 mb-3 opacity-30" />

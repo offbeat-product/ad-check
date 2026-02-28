@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useImperativeHandle, forwardRef } from "react";
 import { Button } from "@/components/ui/button";
 import AnnotationCanvas from "@/components/AnnotationCanvas";
 import { Pin } from "lucide-react";
@@ -12,15 +12,17 @@ interface AnnotationData {
   imagePosition?: { x: number; y: number; width: number; height: number };
 }
 
+export interface MediaPreviewHandle {
+  getCurrentTime: () => number;
+  seekTo: (seconds: number) => void;
+}
+
 interface MediaPreviewProps {
-  /** base64 data URI or public URL */
   src: string | null | undefined;
   mediaType: "audio" | "video";
   label?: string;
   noDataMessage?: string;
-  /** Optional script text displayed below the player */
   scriptText?: string;
-  /** Paint mode props (optional – when omitted, paint button is hidden) */
   paintMode?: boolean;
   onPaintModeToggle?: () => void;
   onAnnotationSave?: (annotations: unknown[], comment: string) => void;
@@ -28,23 +30,33 @@ interface MediaPreviewProps {
   highlightAnnotation?: AnnotationData | null;
 }
 
-export default function MediaPreview({
+const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function MediaPreview({
   src, mediaType, label, noDataMessage, scriptText,
   paintMode, onPaintModeToggle, onAnnotationSave,
   savedAnnotations, highlightAnnotation,
-}: MediaPreviewProps) {
+}, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
 
   const hasSource = !!src && src.trim().length > 0;
   const isRawBase64Text = hasSource && !src!.startsWith("data:") && !src!.startsWith("http") && !src!.startsWith("blob:");
   const hasPaintSupport = onPaintModeToggle !== undefined;
 
+  useImperativeHandle(ref, () => ({
+    getCurrentTime: () => mediaRef.current?.currentTime ?? 0,
+    seekTo: (seconds: number) => {
+      if (mediaRef.current) {
+        mediaRef.current.currentTime = seconds;
+        mediaRef.current.play().catch(() => {});
+      }
+    },
+  }), []);
+
   const handleVideoLoad = useCallback((e: React.SyntheticEvent<HTMLVideoElement>) => {
     setContainerSize({ width: e.currentTarget.clientWidth, height: e.currentTarget.clientHeight });
   }, []);
 
-  // Measure container once after mount
   useEffect(() => {
     if (containerRef.current) {
       const { clientWidth, clientHeight } = containerRef.current;
@@ -56,7 +68,6 @@ export default function MediaPreview({
 
   return (
     <div className="relative">
-      {/* Header row with label + paint mode toggle */}
       <div className="flex items-center justify-between mb-2">
         {label && <span className="text-xs text-muted-foreground">{label}</span>}
         {hasPaintSupport && (
@@ -71,6 +82,7 @@ export default function MediaPreview({
         {hasSource && !isRawBase64Text ? (
           mediaType === "video" ? (
             <video
+              ref={(el) => { mediaRef.current = el; }}
               src={src!}
               controls
               controlsList="nodownload"
@@ -83,6 +95,7 @@ export default function MediaPreview({
           ) : (
             <div className="flex items-center justify-center py-8">
               <audio
+                ref={(el) => { mediaRef.current = el; }}
                 src={src!}
                 controls
                 controlsList="nodownload"
@@ -99,7 +112,6 @@ export default function MediaPreview({
           </div>
         )}
 
-        {/* Saved annotation overlays */}
         {savedAnnotations && savedAnnotations.length > 0 && containerSize.width > 0 && (
           <svg className="absolute inset-0 w-full h-full pointer-events-none z-[15]" viewBox={`0 0 ${containerSize.width} ${containerSize.height}`} preserveAspectRatio="none">
             {savedAnnotations.map((ann, i) => (
@@ -108,7 +120,6 @@ export default function MediaPreview({
           </svg>
         )}
 
-        {/* Highlight overlay for clicked annotation */}
         {highlightAnnotation?.imagePosition && (
           <div
             className="absolute border-3 border-primary border-dashed rounded animate-pulse z-[25] pointer-events-none"
@@ -122,7 +133,6 @@ export default function MediaPreview({
           />
         )}
 
-        {/* Annotation canvas overlay */}
         {hasPaintSupport && (
           <AnnotationCanvas
             active={!!paintMode}
@@ -143,7 +153,9 @@ export default function MediaPreview({
       )}
     </div>
   );
-}
+});
+
+export default MediaPreview;
 
 function SavedAnnotationSvg({ ann, containerWidth, containerHeight }: { ann: { type: string; points: { x: number; y: number }[]; color: string; strokeWidth: number; imagePosition?: { x: number; y: number; width: number; height: number } }; containerWidth: number; containerHeight: number }) {
   if (!ann.imagePosition) return null;

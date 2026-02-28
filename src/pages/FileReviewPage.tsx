@@ -22,7 +22,7 @@ import CompareView from "@/components/CompareView";
 import ShareLinkModal from "@/components/ShareLinkModal";
 import ImagePreview from "@/components/review/ImagePreview";
 import ScriptDisplay from "@/components/review/ScriptDisplay";
-import MediaPreview from "@/components/review/MediaPreview";
+import MediaPreview, { type MediaPreviewHandle } from "@/components/review/MediaPreview";
 import ReviewRightPanel from "@/components/review/ReviewRightPanel";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -68,10 +68,28 @@ export default function FileReviewPage() {
   const [siblingFiles, setSiblingFiles] = useState<ProjectFile[]>([]);
   const [editingName, setEditingName] = useState(false);
   const [editName, setEditName] = useState("");
+  const mediaPreviewRef = useRef<MediaPreviewHandle>(null);
+  const [mediaCurrentTime, setMediaCurrentTime] = useState<number | null>(null);
 
   const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
   const { items, markers, commentCounts, paintMode, setPaintMode, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
     useReviewState(record?.id, checkItems);
+
+  // Poll media current time when comments tab is active
+  useEffect(() => {
+    const aiCfgLocal = file ? AI_CHECK_CONFIG[file.process_type] : null;
+    const isMedia = aiCfgLocal?.inputMode === "audio" || aiCfgLocal?.inputMode === "video";
+    if (!isMedia || rightTab !== "comments") { setMediaCurrentTime(null); return; }
+    const interval = setInterval(() => {
+      const t = mediaPreviewRef.current?.getCurrentTime() ?? 0;
+      setMediaCurrentTime(t > 0 ? t : null);
+    }, 500);
+    return () => clearInterval(interval);
+  }, [rightTab, file?.process_type]);
+
+  const handleSeekMedia = useCallback((seconds: number) => {
+    mediaPreviewRef.current?.seekTo(seconds);
+  }, []);
 
   const fetchVersions = async () => {
     if (!fileId) return;
@@ -645,6 +663,7 @@ export default function FileReviewPage() {
             ) : aiCfg?.inputMode === "audio" || aiCfg?.inputMode === "video" ? (
               <div>
                 <MediaPreview
+                  ref={mediaPreviewRef}
                   src={file.file_data}
                   mediaType={aiCfg.inputMode as "audio" | "video"}
                   label={`${client?.name} / ${product?.name} / ${aiCfg.inputMode === "audio" ? "音声" : "動画"}`}
@@ -683,6 +702,8 @@ export default function FileReviewPage() {
         file={file}
         productId={product?.id}
         projectId={projectId}
+        mediaCurrentTime={mediaCurrentTime}
+        onSeekMedia={handleSeekMedia}
         emptyCheckMessage={
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
             <Bot className="h-10 w-10 mb-3 opacity-30" />

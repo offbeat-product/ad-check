@@ -185,6 +185,8 @@ export type Database = {
           content: string
           created_at: string
           id: string
+          media_timestamp: number | null
+          mentions: string[] | null
           parent_id: string | null
           status: string
         }
@@ -200,6 +202,8 @@ export type Database = {
           content: string
           created_at?: string
           id?: string
+          media_timestamp?: number | null
+          mentions?: string[] | null
           parent_id?: string | null
           status?: string
         }
@@ -215,6 +219,8 @@ export type Database = {
           content?: string
           created_at?: string
           id?: string
+          media_timestamp?: number | null
+          mentions?: string[] | null
           parent_id?: string | null
           status?: string
         }
