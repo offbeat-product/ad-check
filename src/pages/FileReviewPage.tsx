@@ -240,8 +240,12 @@ export default function FileReviewPage() {
   const processInputMode = file ? (AI_CHECK_CONFIG[file.process_type]?.inputMode || "text") : "text";
   const checkProgress = useCheckProgress(ESTIMATED_DURATION[processInputMode] || 60_000);
 
+  const isExecutingRef = useRef(false);
+
   const handleRunCheck = async () => {
     if (!file || !product || !user || !projectId) return;
+    if (isExecutingRef.current) return;
+    isExecutingRef.current = true;
     setChecking(true);
     checkProgress.start();
     try {
@@ -382,6 +386,7 @@ export default function FileReviewPage() {
       }
     } finally {
       setChecking(false);
+      isExecutingRef.current = false;
       checkProgress.reset();
     }
   };
