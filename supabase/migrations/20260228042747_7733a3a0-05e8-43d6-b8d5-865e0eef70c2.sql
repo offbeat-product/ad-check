@@ -1,0 +1,1 @@
+ALTER TABLE rule_candidates ADD COLUMN IF NOT EXISTS rule_title TEXT;

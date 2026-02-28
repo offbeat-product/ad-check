@@ -939,6 +939,7 @@ export type Database = {
           reviewed_at: string | null
           reviewed_by: string | null
           rule_text: string
+          rule_title: string | null
           scope: string
           severity: string | null
           similar_existing_rule_id: string | null
@@ -960,6 +961,7 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           rule_text: string
+          rule_title?: string | null
           scope?: string
           severity?: string | null
           similar_existing_rule_id?: string | null
@@ -981,6 +983,7 @@ export type Database = {
           reviewed_at?: string | null
           reviewed_by?: string | null
           rule_text?: string
+          rule_title?: string | null
           scope?: string
           severity?: string | null
           similar_existing_rule_id?: string | null

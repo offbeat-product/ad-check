@@ -449,7 +449,7 @@ export default function CheckRulesTab({ productId }: Props) {
                     >
                       <TableCell className="font-mono text-xs">{r.rule_id}</TableCell>
                       <TableCell className="text-xs">{r.category}</TableCell>
-                      <TableCell className="text-xs max-w-md truncate">{r.title || r.description}</TableCell>
+                      <TableCell className="text-xs max-w-md truncate" title={r.description}>{r.description}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={`text-[10px] ${sev.class}`}>
                           {sev.label}
