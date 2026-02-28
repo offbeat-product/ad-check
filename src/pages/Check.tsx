@@ -6,7 +6,8 @@ import { PROCESS_LIST } from "@/lib/types";
 import type { Json } from "@/integrations/supabase/types";
 import type { Product, Client, Project } from "@/lib/db-types";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
-import { runScriptCheck, runSfCheck, runAudioCheck, runVideoCheck } from "@/lib/webhook";
+import { runScriptCheck, runSfCheck, runAudioCheck, runVideoCheck, VIDEO_ASYNC_ACCEPTED } from "@/lib/webhook";
+import { useVideoCheckPolling } from "@/hooks/useVideoCheckPolling";
 import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -76,6 +77,7 @@ export default function CheckPage() {
   const [showAudioConfirm, setShowAudioConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isExecutingRef = useRef(false);
+  const videoPolling = useVideoCheckPolling();
 
   // ── Fetch clients & products ──
   useEffect(() => {
@@ -415,12 +417,32 @@ export default function CheckPage() {
         const videoMimeType = mediaFile?.type || "";
         console.log("[QuickCheck] video webhook payload:", { videoStorageUrl, videoMimeType, process: selectedProcess });
 
-        res = await runVideoCheck(product.id, selectedProcess, videoScriptText, {
+        const videoRes = await runVideoCheck(product.id, selectedProcess, videoScriptText, {
           videoUrl: videoStorageUrl || "",
           videoMimeType,
           videoBase64: "", // Always empty - n8n fetches video via URL
           metadata,
         }, referenceContext, selectedProjectId || undefined);
+
+        if (videoRes === VIDEO_ASYNC_ACCEPTED) {
+          // Async mode: poll for result
+          const polled = await videoPolling.startPolling(product.code, selectedProcess);
+          if (!polled) {
+            toast({ title: "チェック処理がタイムアウトしました", description: "ページを更新して結果を確認してください。", variant: "destructive" });
+            return;
+          }
+          res = {
+            overall_status: (polled.overall_status || "D") as "A" | "B" | "C" | "D",
+            detected_case: polled.detected_case || "",
+            check_items: (polled.check_items as unknown as CheckItem[]) || [],
+            ng_count: polled.ng_count ?? 0,
+            warning_count: polled.warning_count ?? 0,
+            ok_count: polled.ok_count ?? 0,
+            total_checks: polled.total_checks ?? 0,
+          };
+        } else {
+          res = videoRes;
+        }
       } else {
         if (!scriptText.trim()) throw new Error("テキストを入力してください");
         res = await runScriptCheck(product.id, scriptText, selectedProcess, referenceContext);
@@ -898,21 +920,28 @@ export default function CheckPage() {
               }
               handleExecute();
             }}
-            disabled={loading || !canExecute}
+            disabled={loading || !canExecute || videoPolling.pollingState.isPolling}
             className="w-full bg-primary text-primary-foreground font-bold text-base py-6 hover:opacity-90 transition-opacity disabled:opacity-40"
           >
-            {loading ? (
+            {loading || videoPolling.pollingState.isPolling ? (
               <span className="flex flex-col items-center gap-2 w-full">
                 <span className="flex items-center gap-2">
                   <Loader2 className="h-5 w-5 animate-spin" />
-                  {loadingText}
+                  {videoPolling.pollingState.isPolling ? videoPolling.pollingState.message : loadingText}
                 </span>
-                {checkProgress.isRunning && (
+                {videoPolling.pollingState.isPolling ? (
+                  <span className="flex flex-col items-center gap-1 w-full max-w-xs">
+                    <span className="flex items-center gap-2 w-full">
+                      <Progress value={Math.min((videoPolling.pollingState.elapsedSeconds / 300) * 100, 95)} className="h-2 flex-1" />
+                      <span className="text-xs font-mono opacity-80 whitespace-nowrap">経過: {videoPolling.formatElapsed(videoPolling.pollingState.elapsedSeconds)}</span>
+                    </span>
+                  </span>
+                ) : checkProgress.isRunning ? (
                   <span className="flex items-center gap-2 w-full max-w-xs">
                     <Progress value={checkProgress.progress} className="h-2 flex-1" />
                     <span className="text-xs font-mono opacity-80 w-8">{checkProgress.progress}%</span>
                   </span>
-                )}
+                ) : null}
               </span>
             ) : (
               "AIチェック実行"
