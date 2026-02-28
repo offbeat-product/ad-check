@@ -94,6 +94,7 @@ export type Database = {
           rule_id: string
           severity: string
           sort_order: number | null
+          source_correction_count: number | null
           source_correction_id: string | null
           source_material_id: string | null
           source_type: string | null
@@ -114,6 +115,7 @@ export type Database = {
           rule_id: string
           severity?: string
           sort_order?: number | null
+          source_correction_count?: number | null
           source_correction_id?: string | null
           source_material_id?: string | null
           source_type?: string | null
@@ -134,6 +136,7 @@ export type Database = {
           rule_id?: string
           severity?: string
           sort_order?: number | null
+          source_correction_count?: number | null
           source_correction_id?: string | null
           source_material_id?: string | null
           source_type?: string | null
@@ -237,6 +240,100 @@ export type Database = {
             columns: ["parent_id"]
             isOneToOne: false
             referencedRelation: "comments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      correction_logs: {
+        Row: {
+          ai_extracted_rule: string | null
+          ai_process_types: string[] | null
+          ai_scope: string | null
+          ai_severity: string | null
+          approved_at: string | null
+          approved_by: string | null
+          approved_rule_id: string | null
+          check_result_id: string | null
+          comment_id: string | null
+          correction_category: string | null
+          correction_text: string
+          created_at: string | null
+          created_by: string | null
+          file_id: string | null
+          id: string
+          pattern_id: string | null
+          process_type: string
+          product_id: string
+          project_id: string | null
+          rule_status: string | null
+          similarity_hash: string | null
+        }
+        Insert: {
+          ai_extracted_rule?: string | null
+          ai_process_types?: string[] | null
+          ai_scope?: string | null
+          ai_severity?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_rule_id?: string | null
+          check_result_id?: string | null
+          comment_id?: string | null
+          correction_category?: string | null
+          correction_text: string
+          created_at?: string | null
+          created_by?: string | null
+          file_id?: string | null
+          id?: string
+          pattern_id?: string | null
+          process_type: string
+          product_id: string
+          project_id?: string | null
+          rule_status?: string | null
+          similarity_hash?: string | null
+        }
+        Update: {
+          ai_extracted_rule?: string | null
+          ai_process_types?: string[] | null
+          ai_scope?: string | null
+          ai_severity?: string | null
+          approved_at?: string | null
+          approved_by?: string | null
+          approved_rule_id?: string | null
+          check_result_id?: string | null
+          comment_id?: string | null
+          correction_category?: string | null
+          correction_text?: string
+          created_at?: string | null
+          created_by?: string | null
+          file_id?: string | null
+          id?: string
+          pattern_id?: string | null
+          process_type?: string
+          product_id?: string
+          project_id?: string | null
+          rule_status?: string | null
+          similarity_hash?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "correction_logs_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "project_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "correction_logs_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "correction_logs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
         ]
@@ -828,6 +925,87 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      rule_candidates: {
+        Row: {
+          admin_notes: string | null
+          approved_rule_id: string | null
+          category: string | null
+          created_at: string | null
+          id: string
+          process_type: string
+          product_id: string
+          project_id: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          rule_text: string
+          scope: string
+          severity: string | null
+          similar_existing_rule_id: string | null
+          similarity_score: number | null
+          source_correction_ids: string[] | null
+          source_count: number | null
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          admin_notes?: string | null
+          approved_rule_id?: string | null
+          category?: string | null
+          created_at?: string | null
+          id?: string
+          process_type: string
+          product_id: string
+          project_id?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          rule_text: string
+          scope?: string
+          severity?: string | null
+          similar_existing_rule_id?: string | null
+          similarity_score?: number | null
+          source_correction_ids?: string[] | null
+          source_count?: number | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          admin_notes?: string | null
+          approved_rule_id?: string | null
+          category?: string | null
+          created_at?: string | null
+          id?: string
+          process_type?: string
+          product_id?: string
+          project_id?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          rule_text?: string
+          scope?: string
+          severity?: string | null
+          similar_existing_rule_id?: string | null
+          similarity_score?: number | null
+          source_correction_ids?: string[] | null
+          source_count?: number | null
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rule_candidates_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rule_candidates_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       share_links: {
         Row: {
