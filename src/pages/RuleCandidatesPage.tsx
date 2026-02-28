@@ -381,6 +381,11 @@ export default function RuleCandidatesPage() {
                       </Badge>
                     </div>
 
+                    {/* Rule title */}
+                    {c.rule_title && (
+                      <p className="font-semibold text-sm">🏷️ {c.rule_title}</p>
+                    )}
+
                     {/* Rule text */}
                     <div className="bg-muted/50 rounded-lg p-3 text-sm">
                       {editingId === c.id ? (
