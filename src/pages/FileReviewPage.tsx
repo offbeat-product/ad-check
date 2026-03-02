@@ -1083,14 +1083,17 @@ export default function FileReviewPage() {
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     onClick={async () => {
                       if (!file || !projectId) return;
-                      // Delete related check results, comments, versions
+                      // Delete related check results, comments, versions, correction_logs
                       if (record?.id) {
                         await Promise.all([
                           supabase.from("comments").delete().eq("check_result_id", record.id),
                           supabase.from("file_versions").delete().eq("check_result_id", record.id),
+                          supabase.from("correction_logs").delete().eq("check_result_id", record.id),
                         ]);
                         await supabase.from("check_results").delete().eq("id", record.id);
                       }
+                      // Also delete correction_logs linked to this file
+                      await supabase.from("correction_logs").delete().eq("file_id", file.id);
                       // Delete storage file if applicable
                       if (file.file_data?.includes("/storage/v1/object/public/")) {
                         try {
@@ -1122,7 +1125,7 @@ export default function FileReviewPage() {
 
         <div className="flex-1 overflow-y-auto">
           {comparisonMode ? (
-            <ComparisonLeftPanel
+             <ComparisonLeftPanel
               file={file}
               drafts={comparisonDrafts}
               onDraftsChange={setComparisonDrafts}
@@ -1130,6 +1133,32 @@ export default function FileReviewPage() {
               onActivePairIndexChange={setComparisonActivePairIndex}
               onClose={() => setComparisonMode(false)}
               checkResultId={record?.id}
+              onRevisionUploaded={async (fileData, fileType, versionNumber, originalFile) => {
+                if (!file || !projectId || !user) return;
+                // Check existing versions to determine next version number
+                const { data: existing } = await supabase.from("project_files").select("version_number")
+                  .or(`id.eq.${file.id},parent_file_id.eq.${file.id}`).order("version_number", { ascending: false }).limit(1);
+                const nextVersion = existing && existing.length > 0 ? (existing[0].version_number ?? 1) + 1 : 2;
+                const actualVersion = Math.max(nextVersion, versionNumber);
+
+                const { error: insertErr } = await supabase.from("project_files").insert({
+                  project_id: projectId,
+                  process_type: file.process_type,
+                  file_name: `${file.file_name}_v${actualVersion}`,
+                  file_type: fileType,
+                  file_data: fileData,
+                  file_size_bytes: originalFile.size,
+                  version_number: actualVersion,
+                  parent_file_id: file.id,
+                  pattern_id: file.pattern_id,
+                  status: "revised",
+                  created_by: user.email || user.id,
+                });
+                if (!handleSupabaseError(insertErr, "comparison revision save")) {
+                  toast({ title: `v${actualVersion} を保存しました` });
+                  fetchVersions();
+                }
+              }}
               paintMode={paintMode}
               onPaintModeToggle={() => setPaintMode(!paintMode)}
               onAnnotationSave={handleAnnotationSave}
@@ -1444,6 +1473,7 @@ function UploadRevisionModal({ open, onOpenChange, file, projectId, onUploaded }
         file_size_bytes: f.size,
         version_number: nextVersion,
         parent_file_id: file.id,
+        pattern_id: file.pattern_id,
         status: "revised",
         created_by: user.email || user.id,
       });
