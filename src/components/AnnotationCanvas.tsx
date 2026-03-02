@@ -465,7 +465,7 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
       )}
 
       {/* Toolbar */}
-      <div className="absolute bottom-0 left-0 right-0 z-30 bg-card border-t border-border shadow-sm px-3 py-2 flex items-center gap-1 flex-wrap" onClick={(e) => e.stopPropagation()}>
+      <div className="absolute bottom-0 left-0 right-0 z-30 bg-card/95 backdrop-blur-sm border-t border-border shadow-lg px-3 py-2 flex items-center gap-1 flex-wrap" style={{ transform: "translateY(100%)" }} onClick={(e) => e.stopPropagation()}>
         {TOOLS.map((t) => {
           const Icon = t.icon;
           return (

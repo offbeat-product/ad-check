@@ -51,7 +51,7 @@ export default function ImagePreview({
           ペイントモード
         </Button>
       </div>
-      <div ref={imageContainerRef} className="relative rounded-lg overflow-hidden border border-border bg-muted/30">
+      <div ref={imageContainerRef} className={cn("relative rounded-lg border border-border bg-muted/30", paintMode ? "overflow-visible mb-16" : "overflow-hidden")}>
         {imageSrc ? (
           <img src={imageSrc} alt="Preview" className="w-full" onLoad={handleImageLoad} />
         ) : (
