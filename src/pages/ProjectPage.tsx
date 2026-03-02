@@ -127,7 +127,7 @@ export default function ProjectPage() {
   const [useTextInput, setUseTextInput] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [checkResults, setCheckResults] = useState<Record<string, Pick<CheckResultRow, "id" | "overall_status" | "ng_count" | "warning_count">>>({});
+  const [checkResults, setCheckResults] = useState<Record<string, Pick<CheckResultRow, "id" | "overall_status" | "ng_count" | "warning_count" | "created_at" | "user_id" | "check_type" | "comparison_round">>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [processModalOpen, setProcessModalOpen] = useState(false);
@@ -287,11 +287,11 @@ export default function ProjectPage() {
     if (checkResultIds.length > 0) {
       const { data: results, error: crErr } = await supabase
         .from("check_results")
-        .select("id, overall_status, ng_count, warning_count")
+        .select("id, overall_status, ng_count, warning_count, created_at, user_id, check_type, comparison_round")
         .in("id", checkResultIds);
       if (cancelled) return;
       handleSupabaseError(crErr, "check_results");
-      const map: Record<string, Pick<CheckResultRow, "id" | "overall_status" | "ng_count" | "warning_count">> = {};
+      const map: Record<string, Pick<CheckResultRow, "id" | "overall_status" | "ng_count" | "warning_count" | "created_at" | "user_id" | "check_type" | "comparison_round">> = {};
       (results ?? []).forEach((r) => { map[r.id] = r; });
       setCheckResults(map);
     }
@@ -343,7 +343,7 @@ export default function ProjectPage() {
             if (newFile.check_result_id) {
               const { data: cr } = await supabase
                 .from("check_results")
-                .select("id, overall_status, ng_count, warning_count")
+                .select("id, overall_status, ng_count, warning_count, created_at, user_id, check_type, comparison_round")
                 .eq("id", newFile.check_result_id)
                 .maybeSingle();
               if (cr) {
@@ -367,14 +367,14 @@ export default function ProjectPage() {
       for (const f of checkingFiles) {
         const { data: cr } = await supabase
           .from("check_results")
-          .select("id, overall_status, ng_count, warning_count, check_items")
+          .select("id, overall_status, ng_count, warning_count, check_items, created_at, user_id, check_type, comparison_round")
           .eq("id", f.check_result_id!)
           .maybeSingle();
         if (cr && cr.check_items && Array.isArray(cr.check_items) && (cr.check_items as unknown[]).length > 0) {
           // Check result is complete — update file status
           await supabase.from("project_files").update({ status: "checked" }).eq("id", f.id);
           setFiles(prev => prev.map(pf => pf.id === f.id ? { ...pf, status: "checked" } : pf));
-          setCheckResults(prev => ({ ...prev, [cr.id]: cr }));
+          setCheckResults(prev => ({ ...prev, [cr.id]: cr as any }));
         }
       }
     }, 5000);
@@ -1417,35 +1417,79 @@ export default function ProjectPage() {
 function CheckHistory({ projectId, files, checkResults, onRenameFile }: {
   projectId: string;
   files: ProjectFile[];
-  checkResults: Record<string, Pick<CheckResultRow, "id" | "overall_status" | "ng_count" | "warning_count">>;
+  checkResults: Record<string, Pick<CheckResultRow, "id" | "overall_status" | "ng_count" | "warning_count" | "created_at" | "user_id" | "check_type" | "comparison_round">>;
   onRenameFile: (fileId: string, newName: string) => Promise<void>;
 }) {
   const navigate = useNavigate();
   const [editingFileId, setEditingFileId] = useState<string | null>(null);
   const [editFileName, setEditFileName] = useState("");
+  const [profileMap, setProfileMap] = useState<Record<string, string>>({});
+
   const filesWithChecks = files.filter(f => f.check_result_id && checkResults[f.check_result_id]);
+
+  // Fetch user display names
+  useEffect(() => {
+    const userIds = [...new Set(filesWithChecks.map(f => checkResults[f.check_result_id!]?.user_id).filter(Boolean))] as string[];
+    if (userIds.length === 0) return;
+    supabase.rpc("get_profiles_by_ids", { p_ids: userIds }).then(({ data }) => {
+      if (data) {
+        const map: Record<string, string> = {};
+        data.forEach((p: { id: string; display_name: string; email: string }) => {
+          map[p.id] = p.display_name || p.email?.split("@")[0] || "不明";
+        });
+        setProfileMap(map);
+      }
+    });
+  }, [filesWithChecks.length]);
 
   if (filesWithChecks.length === 0) {
     return <p className="text-sm text-muted-foreground text-center py-12">チェック履歴はまだありません</p>;
   }
+
+  // Sort by check date (newest first)
+  const sorted = [...filesWithChecks].sort((a, b) => {
+    const aDate = checkResults[a.check_result_id!]?.created_at || "";
+    const bDate = checkResults[b.check_result_id!]?.created_at || "";
+    return bDate.localeCompare(aDate);
+  });
+
+  const processLabelMap: Record<string, string> = {
+    script: "構成/字コンテ", na_script: "NA原稿", narration: "ナレーション", bgm: "BGM",
+    vcon: "Vコン", styleframe: "スタイルフレーム", storyboard: "絵コンテ",
+    video_horizontal: "横動画", video_vertical: "縦動画",
+  };
 
   return (
     <div className="glass-card overflow-hidden">
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-border text-muted-foreground text-left">
-            <th className="px-4 py-2.5 font-medium">ファイル名</th>
+            <th className="px-4 py-2.5 font-medium">チェック日時</th>
+            <th className="px-4 py-2.5 font-medium">実行者</th>
             <th className="px-4 py-2.5 font-medium">工程</th>
+            <th className="px-4 py-2.5 font-medium">ファイル名</th>
+            <th className="px-4 py-2.5 font-medium text-center">種別</th>
             <th className="px-4 py-2.5 font-medium text-center">Grade</th>
             <th className="px-4 py-2.5 font-medium text-center">NG</th>
             <th className="px-4 py-2.5 font-medium text-center">WARN</th>
           </tr>
         </thead>
         <tbody>
-          {filesWithChecks.map((f) => {
+          {sorted.map((f) => {
             const cr = checkResults[f.check_result_id!];
+            const userName = cr?.user_id ? (profileMap[cr.user_id] || "...") : "—";
+            const checkDate = cr?.created_at ? format(new Date(cr.created_at), "MM/dd HH:mm") : "—";
+            const processLabel = processLabelMap[f.process_type] || f.process_type;
+            const isComparison = cr?.check_type === "comparison";
+            const roundLabel = isComparison ? `第${(cr?.comparison_round ?? 0) + 1}稿` : "";
+
             return (
               <tr key={f.id} onClick={() => navigate(`/project/${projectId}/file/${f.id}`)} className="border-b border-border/50 hover:bg-muted/50 cursor-pointer">
+                <td className="px-4 py-2.5 text-muted-foreground tabular-nums">{checkDate}</td>
+                <td className="px-4 py-2.5">{userName}</td>
+                <td className="px-4 py-2.5">
+                  <Badge variant="outline" className="text-[10px] font-normal">{processLabel}</Badge>
+                </td>
                 <td className="px-4 py-2.5 font-medium">
                   {editingFileId === f.id ? (
                     <form onSubmit={(e) => { e.preventDefault(); onRenameFile(f.id, editFileName).then(() => setEditingFileId(null)); }}
@@ -1465,7 +1509,13 @@ function CheckHistory({ projectId, files, checkResults, onRenameFile }: {
                     </span>
                   )}
                 </td>
-                <td className="px-4 py-2.5">{f.process_type}</td>
+                <td className="px-4 py-2.5 text-center">
+                  {isComparison ? (
+                    <Badge variant="secondary" className="text-[10px]">比較 {roundLabel}</Badge>
+                  ) : (
+                    <Badge variant="outline" className="text-[10px]">初回</Badge>
+                  )}
+                </td>
                 <td className="px-4 py-2.5 text-center">
                   <Badge className={cn("text-[10px] font-bold", getSubmitBadgeClass(cr?.overall_status))}>
                     {getSubmitLabel(cr?.overall_status).label}
