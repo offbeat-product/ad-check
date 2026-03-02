@@ -12,9 +12,11 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine } from "recharts";
-import { Target, CheckCircle, TrendingUp, Calendar, Settings2, Save } from "lucide-react";
+import { Target, CheckCircle, TrendingUp, Calendar, Settings2, Save, Download, FileSpreadsheet, FileText } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { exportReportExcel, exportReportPdf } from "@/lib/export-report";
 
 interface ProcessRow {
   id: string;
@@ -269,6 +271,37 @@ export default function ReportPage() {
     return "text-status-ng";
   };
 
+  const viewModeLabels: Record<ViewMode, string> = { all: "全体推移", by_project: "案件別", by_process: "工程別", by_client: "クライアント別" };
+
+  const buildExportData = () => {
+    const currentBreakdown = viewMode === "by_project" ? projectBreakdown.map((b) => ({ name: b.name, deadlineRate: b.deadline.rate, deadlineTotal: b.deadline.total, draft1Rate: b.drafts[1]?.rate ?? null, draft1Total: b.drafts[1]?.total ?? 0, draft2Rate: b.drafts[2]?.rate ?? null, draft2Total: b.drafts[2]?.total ?? 0, draft3Rate: b.drafts[3]?.rate ?? null, draft3Total: b.drafts[3]?.total ?? 0 }))
+      : viewMode === "by_process" ? processBreakdown.map((b) => ({ name: b.label, deadlineRate: b.deadline.rate, deadlineTotal: b.deadline.total, draft1Rate: b.drafts[1]?.rate ?? null, draft1Total: b.drafts[1]?.total ?? 0, draft2Rate: b.drafts[2]?.rate ?? null, draft2Total: b.drafts[2]?.total ?? 0, draft3Rate: b.drafts[3]?.rate ?? null, draft3Total: b.drafts[3]?.total ?? 0 }))
+      : viewMode === "by_client" ? clientBreakdown.map((b) => ({ name: b.name, deadlineRate: b.deadline.rate, deadlineTotal: b.deadline.total, draft1Rate: b.drafts[1]?.rate ?? null, draft1Total: b.drafts[1]?.total ?? 0, draft2Rate: b.drafts[2]?.rate ?? null, draft2Total: b.drafts[2]?.total ?? 0, draft3Rate: b.drafts[3]?.rate ?? null, draft3Total: b.drafts[3]?.total ?? 0 }))
+      : [];
+    const breakdownTitles: Record<ViewMode, string> = { all: "", by_project: "案件別KPI", by_process: "工程別KPI", by_client: "クライアント別KPI" };
+    return {
+      viewMode: viewModeLabels[viewMode],
+      monthlyData: monthlyData.map((d) => ({ monthLabel: d.monthLabel, deadlineRate: d.deadlineRate, deadlineTotal: d.deadlineTotal, firstDraftRate: d.firstDraftRate, draft1Total: (d as any).draft1Total ?? 0, secondDraftRate: d.secondDraftRate, draft2Total: (d as any).draft2Total ?? 0, thirdDraftRate: d.thirdDraftRate, draft3Total: (d as any).draft3Total ?? 0 })),
+      breakdownData: currentBreakdown,
+      breakdownTitle: breakdownTitles[viewMode],
+      targets: { deadline: getTarget("deadline_compliance", 100), first: getTarget("first_draft_pass", 80), second: getTarget("second_draft_pass", 90), third: getTarget("third_draft_pass", 95) },
+      exportDate: new Date().toLocaleString("ja-JP"),
+    };
+  };
+
+  const handleExportExcel = async () => {
+    try {
+      await exportReportExcel(buildExportData(), `report_${viewMode}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success("Excelファイルをダウンロードしました");
+    } catch (e) { console.error(e); toast.error("エクスポートに失敗しました"); }
+  };
+
+  const handleExportPdf = () => {
+    try {
+      exportReportPdf(buildExportData());
+    } catch (e) { console.error(e); toast.error("エクスポートに失敗しました"); }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
@@ -303,6 +336,21 @@ export default function ReportPage() {
               </DialogContent>
             </Dialog>
           )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5">
+                <Download className="h-3.5 w-3.5" />エクスポート
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={handleExportExcel} className="gap-2">
+                <FileSpreadsheet className="h-4 w-4" />Excel (.xlsx)
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={handleExportPdf} className="gap-2">
+                <FileText className="h-4 w-4" />PDF (印刷)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Select value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
             <SelectTrigger className="w-36">
               <SelectValue />
