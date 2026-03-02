@@ -52,6 +52,10 @@ interface ReviewRightPanelProps {
   onComparisonSaved?: (entry: ComparisonHistoryEntry) => void;
   /** Clear after-data after comparison check */
   onClearAfterData?: () => void;
+  /** Lock state */
+  lockedByUser?: string | null;
+  onAcquireLock?: () => Promise<boolean>;
+  onReleaseLock?: () => Promise<void>;
 }
 
 export default function ReviewRightPanel({
@@ -59,6 +63,7 @@ export default function ReviewRightPanel({
   commentFilter, checkResultId, hasCheckResult, onCommentClick, onCheckItemClick, onMarkerClick, emptyCheckMessage, onAnnotationClick,
   overallStatus, checkedAt, file, productId, projectId, comparisonBeforeData, comparisonAfterData, comparisonAfterText, comparisonRoundLabel, onOpenComparisonMode,
   mediaCurrentTime, onSeekMedia, patternId, fileId, onCommentDeleted, clientName, productName, onComparisonSaved, onClearAfterData,
+  lockedByUser, onAcquireLock, onReleaseLock,
 }: ReviewRightPanelProps) {
   const [totalCommentCount, setTotalCommentCount] = useState(0);
   return (
@@ -134,6 +139,9 @@ export default function ReviewRightPanel({
               onTabChange={onTabChange}
               onSeekMedia={onSeekMedia}
               onMarkerClick={onMarkerClick}
+              lockedByUser={lockedByUser}
+              onAcquireLock={onAcquireLock}
+              onReleaseLock={onReleaseLock}
             />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">

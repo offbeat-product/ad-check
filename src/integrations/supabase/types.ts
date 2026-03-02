@@ -673,6 +673,8 @@ export type Database = {
       project_files: {
         Row: {
           check_result_id: string | null
+          checking_by: string | null
+          checking_started_at: string | null
           created_at: string | null
           created_by: string | null
           file_data: string | null
@@ -692,6 +694,8 @@ export type Database = {
         }
         Insert: {
           check_result_id?: string | null
+          checking_by?: string | null
+          checking_started_at?: string | null
           created_at?: string | null
           created_by?: string | null
           file_data?: string | null
@@ -711,6 +715,8 @@ export type Database = {
         }
         Update: {
           check_result_id?: string | null
+          checking_by?: string | null
+          checking_started_at?: string | null
           created_at?: string | null
           created_by?: string | null
           file_data?: string | null

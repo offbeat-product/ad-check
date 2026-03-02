@@ -59,6 +59,10 @@ interface ComparisonCheckPanelProps {
   onSeekMedia?: (seconds: number) => void;
   /** Marker click */
   onMarkerClick?: (patternId: string) => void;
+  /** Lock state */
+  lockedByUser?: string | null;
+  onAcquireLock?: () => Promise<boolean>;
+  onReleaseLock?: () => Promise<void>;
 }
 
 export default function ComparisonCheckPanel({
@@ -66,6 +70,7 @@ export default function ComparisonCheckPanel({
   comparisonBeforeData, comparisonAfterData, comparisonAfterText, comparisonRoundLabel,
   onOpenComparisonMode, onCheckComplete, onComparisonSaved, onClearAfterData,
   commentCounts = {}, highlightCard, onCommentClick, onTabChange, onSeekMedia, onMarkerClick,
+  lockedByUser, onAcquireLock, onReleaseLock,
 }: ComparisonCheckPanelProps) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -127,6 +132,11 @@ export default function ComparisonCheckPanel({
 
   const handleRunComparison = async () => {
     if (!enabled || !user) return;
+    // Acquire lock before comparison check
+    if (onAcquireLock) {
+      const locked = await onAcquireLock();
+      if (!locked) return;
+    }
     setChecking(true);
     try {
       const refMaterials = await gatherReferenceMaterials(projectId, productId, file.process_type);
@@ -155,6 +165,16 @@ export default function ComparisonCheckPanel({
 
       // Save comparison result to DB
       const nextRound = history.length + 1;
+      // Persist the after-data so it can be restored when revisiting
+      const savedInputData: Record<string, unknown> = {};
+      if (isImage) {
+        savedInputData.after_image = comparisonAfterData;
+        savedInputData.before_image = comparisonBeforeData;
+      } else {
+        savedInputData.after_text = comparisonAfterText || comparisonAfterData;
+        savedInputData.before_text = comparisonBeforeData;
+      }
+
       const { data: crData, error: insertErr } = await supabase.from("check_results").insert([{
         user_id: user.id,
         client_name: clientName || "",
@@ -171,6 +191,7 @@ export default function ComparisonCheckPanel({
         total_checks: res.total_checks,
         check_items: res.check_items as unknown as Json,
         raw_response: res as unknown as Json,
+        input_data: savedInputData as unknown as Json,
         status: "completed",
         check_type: "comparison",
         comparison_round: nextRound,
@@ -215,6 +236,7 @@ export default function ComparisonCheckPanel({
       toast({ title: "チェックエラー", description: message, variant: "destructive" });
     } finally {
       setChecking(false);
+      if (onReleaseLock) await onReleaseLock();
     }
   };
 
@@ -553,9 +575,9 @@ export default function ComparisonCheckPanel({
           </Button>
         )}
         {hasNewContent && enabled && (
-          <Button size="sm" className="w-full text-xs" onClick={handleRunComparison} disabled={checking}>
+          <Button size="sm" className="w-full text-xs" onClick={handleRunComparison} disabled={checking || !!lockedByUser}>
             {checking ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <GitCompare className="h-3 w-3 mr-1" />}
-            {checking ? "比較チェック中..." : `比較チェック実行（${comparisonRoundLabel}）`}
+            {checking ? "比較チェック中..." : lockedByUser ? `${lockedByUser}さんがチェック中` : `比較チェック実行（${comparisonRoundLabel}）`}
           </Button>
         )}
         {hasNewContent && !enabled && (
