@@ -751,9 +751,12 @@ export default function ProjectPage() {
                             const uncheckedTargets = allTargets.filter(f => f.status !== "checked" && f.status !== "fixed");
                             const hasSelection = selectedInSection.length > 0;
                             const actualTargets = hasSelection ? selectedInSection : uncheckedTargets;
+                            const MAX_BATCH = 5;
+                            const overLimit = actualTargets.length > MAX_BATCH;
                             const label = hasSelection
-                              ? `選択分をAIチェック (${selectedInSection.length})`
-                              : `未チェック分を一括AIチェック (${uncheckedTargets.length})`;
+                              ? `選択分をAIチェック (${selectedInSection.length}${overLimit ? "/最大5" : ""})`
+                              : `未チェック分を一括AIチェック (${Math.min(uncheckedTargets.length, MAX_BATCH)}/${uncheckedTargets.length})`;
+                            const limitedTargets = actualTargets.slice(0, MAX_BATCH);
                             return (
                               <Button
                                 size="sm"
@@ -762,7 +765,14 @@ export default function ProjectPage() {
                                 disabled={batchProgress.status === "running" || actualTargets.length === 0}
                                 onClick={() => {
                                   if (!product || !id) return;
-                                  runBatchCheck(actualTargets, product, client, id, () => fetchData());
+                                  if (overLimit) {
+                                    toast({ title: `最大${MAX_BATCH}件まで一括チェック可能です`, description: `先頭${MAX_BATCH}件をチェックします。`, variant: "default" });
+                                  }
+                                  runBatchCheck(limitedTargets, product, client, id, () => {
+                                    fetchData();
+                                    setSelectedFileIds(new Set());
+                                    setSelectMode(false);
+                                  });
                                 }}
                               >
                                 {batchProgress.status === "running" ? (
