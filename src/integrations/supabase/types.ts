@@ -480,6 +480,33 @@ export type Database = {
         }
         Relationships: []
       }
+      kpi_targets: {
+        Row: {
+          id: string
+          key: string
+          label: string
+          target_value: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: string
+          key: string
+          label: string
+          target_value?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: string
+          key?: string
+          label?: string
+          target_value?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           created_at: string
