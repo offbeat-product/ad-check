@@ -106,21 +106,48 @@ interface MetricSet {
 }
 
 function computeMetrics(procs: ProcessRow[], fileSet: FileRow[], submissionType?: "internal" | "client"): MetricSet {
-  // 納期遵守率: submission_type に応じて internal_deadline / client_deadline を使用
-  const getDeadlineForType = (p: ProcessRow, type?: "internal" | "client"): string | null => {
-    if (type === "internal") return p.internal_deadline ?? p.deadline;
-    if (type === "client") return p.client_deadline ?? p.deadline;
-    // "all": いずれかの期限があれば評価
-    return p.internal_deadline ?? p.client_deadline ?? p.deadline;
-  };
+  // 納期遵守率:
+  // 社内: 社内期限までに全パターンの初稿(version_number=1, submission_type=internal)がアップロードされているか
+  // クライアント: クライアント期限までに全パターンがチェック完了&クライアント提出済みか
 
-  const withDeadline = procs.filter(p => p.status === "completed" && getDeadlineForType(p, submissionType));
-  const onTime = withDeadline.filter(p => {
-    const completed = new Date(p.updated_at);
-    const dl = getDeadlineForType(p, submissionType)!;
-    const deadline = new Date(dl + "T23:59:59");
-    return completed <= deadline;
-  }).length;
+  let deadlineTotal = 0;
+  let deadlineOnTime = 0;
+
+  for (const p of procs) {
+    const processFiles = fileSet.filter(f => f.project_id === p.project_id && f.process_type === p.process_key);
+
+    if (submissionType === "internal" || (!submissionType)) {
+      const dl = p.internal_deadline;
+      if (dl) {
+        deadlineTotal++;
+        const deadlineDate = new Date(dl + "T23:59:59");
+        // Check: all first-draft internal files uploaded before deadline
+        const internalFirstDrafts = processFiles.filter(f => f.submission_type === "internal" && (f.version_number ?? 1) === 1 && !f.parent_file_id);
+        if (internalFirstDrafts.length > 0) {
+          const allOnTime = internalFirstDrafts.every(f => f.created_at && new Date(f.created_at) <= deadlineDate);
+          if (allOnTime) deadlineOnTime++;
+        }
+      }
+    }
+
+    if (submissionType === "client" || (!submissionType && !p.internal_deadline)) {
+      const dl = p.client_deadline;
+      if (dl && submissionType === "client") {
+        // Don't double-count if we already counted internal above for "all" mode
+        if (submissionType === "client") deadlineTotal++;
+        const deadlineDate = new Date(dl + "T23:59:59");
+        // Check: all files checked & submitted to client before deadline
+        const clientFiles = processFiles.filter(f => f.submission_type === "client");
+        if (clientFiles.length > 0) {
+          const allSubmittedOnTime = clientFiles.every(f => {
+            const isCheckedOrFixed = f.status === "checked" || f.status === "fixed" || f.status === "approved";
+            return isCheckedOrFixed && f.created_at && new Date(f.created_at) <= deadlineDate;
+          });
+          if (allSubmittedOnTime) deadlineOnTime++;
+        }
+      }
+    }
+  }
 
   // 初稿合格率: version_number=1 のファイルで、status が fixed/approved の割合
   const isChecked = (f: FileRow) => f.status && f.status !== "uploaded";
@@ -148,9 +175,9 @@ function computeMetrics(procs: ProcessRow[], fileSet: FileRow[], submissionType?
   const clientRev = computeRevForType(clientFiles);
 
   return {
-    deadlineRate: withDeadline.length > 0 ? Math.round((onTime / withDeadline.length) * 100) : null,
-    deadlineTotal: withDeadline.length,
-    deadlineOnTime: onTime,
+    deadlineRate: deadlineTotal > 0 ? Math.round((deadlineOnTime / deadlineTotal) * 100) : null,
+    deadlineTotal,
+    deadlineOnTime,
     firstDraftRate: firstDraftFiles.length > 0 ? Math.round((firstDraftPassed / firstDraftFiles.length) * 100) : null,
     firstDraftTotal: firstDraftFiles.length,
     firstDraftPassed,
