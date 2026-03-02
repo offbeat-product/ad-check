@@ -27,7 +27,7 @@ interface ReviewRightPanelProps {
   overallStatus?: string | null;
   checkedAt?: string | null;
   /** File info for comparison check */
-  file?: { file_data: string | null; file_type: string; process_type: string } | null;
+  file?: { file_data: string | null; file_type: string; process_type: string; file_name?: string } | null;
   productId?: string;
   projectId?: string;
   /** Comparison check state */
@@ -136,7 +136,7 @@ export default function ReviewRightPanel({
 
         <TabsContent value="comments" className="absolute inset-0 top-10 overflow-hidden mt-0 ring-0 focus-visible:ring-0 data-[state=inactive]:hidden">
           {checkResultId ? (
-            <CommentsPanel checkResultId={checkResultId} filterItemId={commentFilter} onAnnotationClick={onAnnotationClick} onCheckItemClick={onCheckItemClick} mediaCurrentTime={mediaCurrentTime} onSeekMedia={onSeekMedia} productId={productId} projectId={projectId} processType={file?.process_type} patternId={patternId} fileId={fileId} onCommentDeleted={onCommentDeleted} onCommentCountChange={setTotalCommentCount} />
+            <CommentsPanel checkResultId={checkResultId} filterItemId={commentFilter} onAnnotationClick={onAnnotationClick} onCheckItemClick={onCheckItemClick} mediaCurrentTime={mediaCurrentTime} onSeekMedia={onSeekMedia} productId={productId} projectId={projectId} processType={file?.process_type} patternId={patternId} fileId={fileId} onCommentDeleted={onCommentDeleted} onCommentCountChange={setTotalCommentCount} fileName={file?.file_name} />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
               <MessageCircle className="h-10 w-10 mb-3 opacity-30" />

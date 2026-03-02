@@ -991,6 +991,12 @@ export default function FileReviewPage() {
               onActivePairIndexChange={setComparisonActivePairIndex}
               onClose={() => setComparisonMode(false)}
               checkResultId={record?.id}
+              paintMode={paintMode}
+              onPaintModeToggle={() => setPaintMode(!paintMode)}
+              onAnnotationSave={handleAnnotationSave}
+              savedAnnotations={savedAnnotations}
+              highlightAnnotation={highlightAnnotation}
+              members={mentionMembers}
             />
           ) : (
           <div className="p-4">
