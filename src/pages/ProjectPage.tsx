@@ -48,6 +48,7 @@ import {
 import { cn } from "@/lib/utils";
 import { format, differenceInDays, isPast } from "date-fns";
 import { useBatchCheck } from "@/hooks/useBatchCheck";
+import BatchCheckFloatingBar from "@/components/BatchCheckFloatingBar";
 
 import { getSubmitBadgeClass, getSubmitLabel } from "@/lib/check-display";
 
@@ -1309,50 +1310,13 @@ export default function ProjectPage() {
         onReset={resetToDefaults}
       />
 
-      {/* Batch check progress dialog */}
-      <Dialog open={batchProgress.status === "running" || batchProgress.status === "done"} onOpenChange={(o) => { if (!o) resetBatchProgress(); }}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              {batchProgress.status === "running" ? "一括AIチェック実行中..." : "一括AIチェック完了"}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            {batchProgress.status === "running" && (
-              <>
-                <div className="flex items-center gap-2 text-sm">
-                  <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                  <span>
-                    {batchProgress.current} / {batchProgress.total} — {batchProgress.currentFileName}
-                  </span>
-                </div>
-                <Progress value={(batchProgress.current / batchProgress.total) * 100} className="h-2" />
-              </>
-            )}
-            {batchProgress.results.length > 0 && (
-              <div className="space-y-1.5 max-h-60 overflow-y-auto">
-                {batchProgress.results.map((r, i) => (
-                  <div key={i} className={cn("flex items-center justify-between text-xs px-2 py-1.5 rounded",
-                    r.success ? "bg-status-ok/10" : "bg-destructive/10"
-                  )}>
-                    <span className="truncate mr-2">{r.fileName}</span>
-                    {r.success ? (
-                      <Badge className={cn("text-[10px] shrink-0", getSubmitBadgeClass(r.grade))}>
-                        {getSubmitLabel(r.grade).label}
-                      </Badge>
-                    ) : (
-                      <span className="text-destructive text-[10px] shrink-0">エラー</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-            {batchProgress.status === "done" && (
-              <Button onClick={resetBatchProgress} className="w-full">閉じる</Button>
-            )}
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Batch check floating progress bar */}
+      <BatchCheckFloatingBar
+        progress={batchProgress}
+        onDismiss={resetBatchProgress}
+        getGradeLabel={(g) => getSubmitLabel(g)}
+        getGradeBadgeClass={(g) => getSubmitBadgeClass(g)}
+      />
 
       {/* Copy to other patterns dialog */}
       {copyToPatternInfo && (
