@@ -29,6 +29,10 @@ interface ReviewRightPanelProps {
   file?: { file_data: string | null; file_type: string; process_type: string } | null;
   productId?: string;
   projectId?: string;
+  /** Comparison check state */
+  comparisonNewFileData?: string | null;
+  comparisonNewText?: string;
+  onOpenComparisonMode?: () => void;
   /** Media playback current time for auto-timestamping */
   mediaCurrentTime?: number | null;
   /** Callback to seek media to a specific time */
@@ -43,7 +47,8 @@ interface ReviewRightPanelProps {
 export default function ReviewRightPanel({
   rightTab, onTabChange, items, markers, productCode, commentCounts, highlightCard,
   commentFilter, checkResultId, hasCheckResult, onCommentClick, onCheckItemClick, onMarkerClick, emptyCheckMessage, onAnnotationClick,
-  overallStatus, checkedAt, file, productId, projectId, mediaCurrentTime, onSeekMedia, patternId, fileId, onCommentDeleted,
+  overallStatus, checkedAt, file, productId, projectId, comparisonNewFileData, comparisonNewText, onOpenComparisonMode,
+  mediaCurrentTime, onSeekMedia, patternId, fileId, onCommentDeleted,
 }: ReviewRightPanelProps) {
   const [totalCommentCount, setTotalCommentCount] = useState(0);
   return (
@@ -101,6 +106,9 @@ export default function ReviewRightPanel({
               file={file}
               productId={productId}
               projectId={projectId}
+              newFileData={comparisonNewFileData ?? null}
+              newText={comparisonNewText ?? ""}
+              onOpenComparisonMode={onOpenComparisonMode ?? (() => {})}
             />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">

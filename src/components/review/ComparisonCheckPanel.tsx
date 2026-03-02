@@ -1,8 +1,6 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import { Upload, GitCompare, Loader2, Bot } from "lucide-react";
-import { compressImage } from "@/lib/image-compress";
+import { GitCompare, Loader2, Bot } from "lucide-react";
 import { runComparisonCheck } from "@/lib/webhook";
 import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
@@ -14,40 +12,26 @@ interface ComparisonCheckPanelProps {
   file: { file_data: string | null; file_type: string; process_type: string };
   productId: string;
   projectId: string;
+  /** New file data from ComparisonLeftPanel */
+  newFileData: string | null;
+  newText: string;
+  /** Open comparison mode in left panel */
+  onOpenComparisonMode: () => void;
   onCheckComplete?: (result: CheckResult) => void;
 }
 
-export default function ComparisonCheckPanel({ file, productId, projectId, onCheckComplete }: ComparisonCheckPanelProps) {
+export default function ComparisonCheckPanel({
+  file, productId, projectId, newFileData, newText, onOpenComparisonMode, onCheckComplete,
+}: ComparisonCheckPanelProps) {
   const { toast } = useToast();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [newFileData, setNewFileData] = useState<string | null>(null);
-  const [newText, setNewText] = useState("");
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<CheckResult | null>(null);
-  const [showDiff, setShowDiff] = useState(false);
 
   const aiCfg = AI_CHECK_CONFIG[file.process_type];
   const isImage = aiCfg?.inputMode === "image";
-  const isText = aiCfg?.inputMode === "text";
   const enabled = aiCfg?.enabled ?? false;
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0];
-    if (!f) return;
-
-    if (isImage && f.type.startsWith("image/")) {
-      try {
-        const compressed = await compressImage(f);
-        setNewFileData(`data:${compressed.mediaType};base64,${compressed.base64}`);
-      } catch {
-        toast({ title: "画像の処理に失敗しました", variant: "destructive" });
-      }
-    } else {
-      const text = await f.text();
-      setNewText(text);
-      setNewFileData(text);
-    }
-  };
+  const hasNewContent = isImage ? !!newFileData : !!(newText || newFileData);
 
   const handleRunComparison = async () => {
     if (!enabled) return;
@@ -85,164 +69,83 @@ export default function ComparisonCheckPanel({ file, productId, projectId, onChe
     }
   };
 
-  const hasNewContent = isImage ? !!newFileData : !!(newText || newFileData);
-
-  const renderDiff = () => {
-    if (!isText) return null;
-    const origLines = (file.file_data || "").split("\n");
-    const newLines = (newText || newFileData || "").split("\n");
-    const maxLen = Math.max(origLines.length, newLines.length);
-
-    return (
-      <div className="border border-border rounded-lg overflow-hidden text-xs">
-        <div className="flex border-b border-border bg-muted/30">
-          <div className="flex-1 px-3 py-1.5 font-semibold text-muted-foreground">修正前</div>
-          <div className="w-px bg-border" />
-          <div className="flex-1 px-3 py-1.5 font-semibold text-muted-foreground">修正後</div>
-        </div>
-        <div className="max-h-[300px] overflow-y-auto">
-          {Array.from({ length: maxLen }).map((_, i) => {
-            const l = origLines[i] || "";
-            const r = newLines[i] || "";
-            const changed = l !== r;
-            return (
-              <div key={i} className="flex border-b border-border/30">
-                <div className={cn("flex-1 px-2 py-0.5 font-mono whitespace-pre-wrap break-all", changed && l ? "bg-destructive/10" : "")}>
-                  {l || <span className="text-muted-foreground/30">—</span>}
-                </div>
-                <div className="w-px bg-border" />
-                <div className={cn("flex-1 px-2 py-0.5 font-mono whitespace-pre-wrap break-all", changed && r ? "bg-status-ok/10" : "")}>
-                  {r || <span className="text-muted-foreground/30">—</span>}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  };
-
-  const renderResultSummary = () => {
-    if (!result) return null;
-    const { check_items, ng_count, warning_count, ok_count, overall_status } = result;
-    return (
-      <div className="space-y-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-medium">比較チェック結果:</span>
-          <span className={cn("text-xs font-bold px-2 py-0.5 rounded text-white",
-            overall_status === "A" || overall_status === "B" ? "bg-[#10B981]" : "bg-[#EF4444]"
-          )}>{overall_status === "A" || overall_status === "B" ? "GO" : "NG"}</span>
-        </div>
-        <div className="flex gap-3 text-xs">
-          <span className="text-[#EF4444] font-medium">修正必須: {ng_count}</span>
-          <span className="text-[#F59E0B] font-medium">要確認: {warning_count}</span>
-          <span className="text-[#10B981] font-medium">問題なし: {ok_count}</span>
-        </div>
-        <div className="space-y-2 max-h-[300px] overflow-y-auto">
-          {check_items.map((item: CheckItem, i: number) => (
-            <div key={i} className={cn("p-2 rounded border text-xs",
-              item.status === "NG" ? "border-[#EF4444]/30 bg-[#EF4444]/5" :
-              item.status === "WARNING" ? "border-[#F59E0B]/30 bg-[#F59E0B]/5" :
-              "border-[#10B981]/30 bg-[#10B981]/5"
-            )}>
-              <div className="font-medium">{item.pattern_id}: {item.item}</div>
-              <div className="text-muted-foreground mt-0.5">{item.detail}</div>
-              {item.suggestion && <div className="mt-1 text-primary">💡 {item.suggestion}</div>}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="flex-1 flex flex-col overflow-hidden">
       <div className="flex-1 overflow-y-auto p-3 space-y-4">
-        {/* Original content */}
-        <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">修正前（現在のファイル）</label>
-          {isImage && file.file_data ? (
-            <img src={file.file_data} alt="修正前" className="w-full rounded-lg border border-border max-h-[200px] object-contain" />
-          ) : file.file_data && /\.(mp4|mov|webm|avi)(\?|$)/i.test(file.file_data) ? (
-            <video src={file.file_data} controls playsInline className="w-full rounded-lg border border-border max-h-[200px]" />
-          ) : file.file_data && /\.(mp3|wav|m4a|ogg|aac)(\?|$)/i.test(file.file_data) ? (
-            <audio src={file.file_data} controls className="w-full" />
-          ) : file.file_data && file.file_data.startsWith("http") && /\/(videos|deliverables)\//.test(file.file_data) ? (
-            <video src={file.file_data} controls playsInline className="w-full rounded-lg border border-border max-h-[200px]" />
-          ) : file.file_data && file.file_data.startsWith("http") && /\/audios\//.test(file.file_data) ? (
-            <audio src={file.file_data} controls className="w-full" />
-          ) : (
-            <div className="border border-border rounded-lg p-2 max-h-[150px] overflow-y-auto">
-              <pre className="text-xs font-mono whitespace-pre-wrap text-muted-foreground">{file.file_data?.substring(0, 500) || "データなし"}</pre>
-            </div>
-          )}
-        </div>
-
-        {/* New content upload */}
-        <div>
-          <label className="text-xs font-medium text-muted-foreground mb-1.5 block">修正後（アップロード）</label>
-          {isImage ? (
-            <div>
-              {newFileData ? (
-                <div className="relative">
-                  <img src={newFileData} alt="修正後" className="w-full rounded-lg border border-border max-h-[200px] object-contain" />
-                  <button onClick={() => setNewFileData(null)} className="absolute top-1 right-1 bg-background/80 rounded-full p-1 text-xs hover:bg-background">✕</button>
-                </div>
-              ) : (
-                <div onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-border rounded-lg p-6 text-center cursor-pointer hover:border-primary/50 transition-colors">
-                  <Upload className="h-6 w-6 mx-auto mb-1.5 text-muted-foreground" />
-                  <p className="text-xs text-muted-foreground">修正後の画像をアップロード</p>
-                </div>
-              )}
-              <input ref={fileInputRef} type="file" className="hidden" accept="image/png,image/jpeg,image/webp" onChange={handleFileUpload} />
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <Textarea
-                value={newText}
-                onChange={(e) => { setNewText(e.target.value); setNewFileData(e.target.value); }}
-                placeholder="修正後のテキストを入力、またはファイルをアップロード..."
-                className="min-h-[100px] text-xs font-mono"
-              />
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => fileInputRef.current?.click()}>
-                  <Upload className="h-3 w-3 mr-1" />ファイル選択
-                </Button>
-                <input ref={fileInputRef} type="file" className="hidden" accept=".txt,.docx" onChange={handleFileUpload} />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Diff display */}
-        {isText && hasNewContent && (
-          <div>
-            <button onClick={() => setShowDiff(!showDiff)} className="text-xs text-primary hover:underline mb-2 flex items-center gap-1">
-              <GitCompare className="h-3 w-3" />
-              {showDiff ? "差分を隠す" : "差分ハイライト表示"}
-            </button>
-            {showDiff && renderDiff()}
+        {!hasNewContent && !result ? (
+          /* Empty state: prompt to open comparison mode */
+          <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6 h-full min-h-[300px]">
+            <GitCompare className="h-10 w-10 mb-3 opacity-30" />
+            <p className="text-sm font-medium mb-1">比較チェック</p>
+            <p className="text-xs text-center mb-4">修正前後のファイルを比較して<br />変更点をAIがチェックします</p>
+            <Button size="sm" variant="outline" onClick={onOpenComparisonMode} className="text-xs">
+              <GitCompare className="h-3 w-3 mr-1" />
+              比較モードを開く
+            </Button>
           </div>
+        ) : !result ? (
+          /* Has content but no result yet */
+          <div className="flex flex-col items-center justify-center text-muted-foreground p-6 h-full min-h-[200px]">
+            <GitCompare className="h-8 w-8 mb-2 opacity-40" />
+            <p className="text-sm font-medium mb-1">修正後ファイルがセットされました</p>
+            <p className="text-xs text-center mb-3">下の「比較チェック実行」ボタンを押してください</p>
+          </div>
+        ) : (
+          /* Results */
+          <ResultView result={result} />
         )}
-
-        {/* Result */}
-        {result && renderResultSummary()}
       </div>
 
       {/* Bottom action */}
-      <div className="shrink-0 border-t border-border p-3 bg-card">
-        {enabled ? (
-          <Button size="sm" className="w-full text-xs" onClick={handleRunComparison}
-            disabled={!hasNewContent || checking}>
+      <div className="shrink-0 border-t border-border p-3 bg-card space-y-2">
+        {!hasNewContent && !result && (
+          <Button size="sm" variant="outline" className="w-full text-xs" onClick={onOpenComparisonMode}>
+            <GitCompare className="h-3 w-3 mr-1" />比較モードを開く
+          </Button>
+        )}
+        {hasNewContent && enabled && (
+          <Button size="sm" className="w-full text-xs" onClick={handleRunComparison} disabled={checking}>
             {checking ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <GitCompare className="h-3 w-3 mr-1" />}
             {checking ? "比較チェック中..." : "比較チェック実行"}
           </Button>
-        ) : (
+        )}
+        {hasNewContent && !enabled && (
           <Button size="sm" variant="outline" className="w-full text-xs opacity-50" disabled>
             <Bot className="h-3 w-3 mr-1" />比較チェック（準備中）
           </Button>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ResultView({ result }: { result: CheckResult }) {
+  const { check_items, ng_count, warning_count, ok_count, overall_status } = result;
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-medium">比較チェック結果:</span>
+        <span className={cn("text-xs font-bold px-2 py-0.5 rounded text-white",
+          overall_status === "A" || overall_status === "B" ? "bg-[hsl(var(--status-ok))]" : "bg-[hsl(var(--status-ng))]"
+        )}>{overall_status === "A" || overall_status === "B" ? "GO" : "NG"}</span>
+      </div>
+      <div className="flex gap-3 text-xs">
+        <span className="text-status-ng font-medium">修正必須: {ng_count}</span>
+        <span className="text-status-warning font-medium">要確認: {warning_count}</span>
+        <span className="text-status-ok font-medium">問題なし: {ok_count}</span>
+      </div>
+      <div className="space-y-2 max-h-[500px] overflow-y-auto">
+        {check_items.map((item: CheckItem, i: number) => (
+          <div key={i} className={cn("p-2 rounded border text-xs",
+            item.status === "NG" ? "border-status-ng/30 bg-status-ng/5" :
+            item.status === "WARNING" ? "border-status-warning/30 bg-status-warning/5" :
+            "border-status-ok/30 bg-status-ok/5"
+          )}>
+            <div className="font-medium">{item.pattern_id}: {item.item}</div>
+            <div className="text-muted-foreground mt-0.5">{item.detail}</div>
+            {item.suggestion && <div className="mt-1 text-primary">💡 {item.suggestion}</div>}
+          </div>
+        ))}
       </div>
     </div>
   );

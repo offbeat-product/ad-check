@@ -27,6 +27,7 @@ import ImagePreview from "@/components/review/ImagePreview";
 import ScriptDisplay from "@/components/review/ScriptDisplay";
 import MediaPreview, { type MediaPreviewHandle } from "@/components/review/MediaPreview";
 import ReviewRightPanel from "@/components/review/ReviewRightPanel";
+import ComparisonLeftPanel from "@/components/review/ComparisonLeftPanel";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -79,7 +80,9 @@ export default function FileReviewPage() {
   const [correctionCount, setCorrectionCount] = useState<number>(0);
   const [candidateCount, setCandidateCount] = useState<number>(0);
   const [mentionMembers, setMentionMembers] = useState<MentionMember[]>([]);
-
+  const [comparisonMode, setComparisonMode] = useState(false);
+  const [comparisonNewFileData, setComparisonNewFileData] = useState<string | null>(null);
+  const [comparisonNewText, setComparisonNewText] = useState("");
   const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
   const { items, markers, commentCounts, paintMode, setPaintMode, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
     useReviewState(record?.id, checkItems);
@@ -979,6 +982,16 @@ export default function FileReviewPage() {
         </header>
 
         <div className="flex-1 overflow-y-auto">
+          {comparisonMode ? (
+            <ComparisonLeftPanel
+              file={file}
+              newFileData={comparisonNewFileData}
+              onNewFileDataChange={setComparisonNewFileData}
+              newText={comparisonNewText}
+              onNewTextChange={setComparisonNewText}
+              onClose={() => setComparisonMode(false)}
+            />
+          ) : (
           <div className="p-4">
             {isSf ? (
               <ImagePreview
@@ -1050,6 +1063,7 @@ export default function FileReviewPage() {
               </div>
             )}
           </div>
+          )}
         </div>
       </div>
 
@@ -1073,6 +1087,9 @@ export default function FileReviewPage() {
         file={file}
         productId={product?.id}
         projectId={projectId}
+        comparisonNewFileData={comparisonNewFileData}
+        comparisonNewText={comparisonNewText}
+        onOpenComparisonMode={() => { setComparisonMode(true); setRightTab("comparison"); }}
         patternId={file?.pattern_id}
         fileId={fileId}
         mediaCurrentTime={mediaCurrentTime}
