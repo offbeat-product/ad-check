@@ -82,7 +82,26 @@ export async function webhookFetch(url: string, body: Record<string, any>): Prom
       },
       retryOpts
     );
-    const raw = await res.json();
+
+    // Handle empty or non-JSON responses gracefully
+    const responseText = await res.text();
+    if (!responseText || responseText.trim() === "") {
+      console.error("[Webhook] Empty response received from:", url);
+      throw new Error("AIモデルが一時的に高負荷のため応答がありませんでした。しばらく待ってから再度お試しください。");
+    }
+
+    let raw: any;
+    try {
+      raw = JSON.parse(responseText);
+    } catch (parseErr) {
+      console.error("[Webhook] Failed to parse response:", responseText.substring(0, 500));
+      // Check for known n8n error patterns in the raw text
+      if (responseText.includes("Service unavailable") || responseText.includes("high demand")) {
+        throw new Error("AIモデルが一時的に高負荷です。数分後に再度お試しください。");
+      }
+      throw new Error("サーバーからの応答を解析できませんでした。しばらく待ってから再度お試しください。");
+    }
+
     console.log("[Webhook] Response received:", { status: res.status, raw });
 
     // Detect async acceptance from n8n (video checks)
