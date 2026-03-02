@@ -7,7 +7,7 @@ import { FILE_STATUS_CONFIG } from "@/lib/db-types";
 import { PROJECT_STATUS_CONFIG, getProcessLabel } from "@/lib/process-config";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Badge } from "@/components/ui/badge";
-import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderOpen, ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderOpen, ChevronLeft, ChevronRight, Plus, RefreshCw, WifiOff } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import { cn } from "@/lib/utils";
@@ -46,6 +46,7 @@ export default function Dashboard() {
   const [products, setProducts] = useState<Product[]>([]);
   const [recentFiles, setRecentFiles] = useState<(ProjectFile & { project_name?: string })[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
   const [page, setPage] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [refetchKey, setRefetchKey] = useState(0);
@@ -57,18 +58,58 @@ export default function Dashboard() {
 
     const fetchData = async (retryCount = 0) => {
       setLoading(true);
+      setFetchError(false);
       const from = page * ITEMS_PER_PAGE;
       const to = from + ITEMS_PER_PAGE - 1;
 
-      let cr, countRes, pr, prod, pf;
       try {
-        [cr, countRes, pr, prod, pf] = await Promise.all([
-          supabase.from("check_results").select("*").order("created_at", { ascending: false }).range(from, to),
-          supabase.from("check_results").select("*", { count: "exact", head: true }),
-          page === 0 ? supabase.from("projects").select("*").order("updated_at", { ascending: false }).limit(6) : null,
-          page === 0 ? supabase.from("products").select("*") : null,
-          page === 0 ? supabase.from("project_files").select("id, project_id, file_name, file_type, process_type, status, updated_at").order("updated_at", { ascending: false }).limit(5) : null,
-        ]);
+        // Sequential batches to reduce concurrent DB connections
+        // Batch 1: Core check results
+        const cr = await supabase.from("check_results").select("*").order("created_at", { ascending: false }).range(from, to);
+        if (cancelled) return;
+        handleSupabaseError(cr.error, "check_results");
+        setRecords(cr.data ?? []);
+
+        const countRes = await supabase.from("check_results").select("*", { count: "exact", head: true });
+        if (cancelled) return;
+        handleSupabaseError(countRes?.error ?? null, "check_results count");
+        setTotalCount(countRes?.count ?? 0);
+
+        // Batch 2: Supporting data (only on first page)
+        if (page === 0) {
+          const pr = await supabase.from("projects").select("*").order("updated_at", { ascending: false }).limit(6);
+          if (cancelled) return;
+          handleSupabaseError(pr?.error ?? null, "projects");
+          setProjects(pr?.data ?? []);
+
+          const prod = await supabase.from("products").select("*");
+          if (cancelled) return;
+          handleSupabaseError(prod?.error ?? null, "products");
+          setProducts(prod?.data ?? []);
+
+          const pf = await supabase.from("project_files").select("id, project_id, file_name, file_type, process_type, status, updated_at").order("updated_at", { ascending: false }).limit(5);
+          if (cancelled) return;
+          handleSupabaseError(pf?.error ?? null, "project_files");
+          const filesData = (pf?.data ?? []) as ProjectFile[];
+
+          // Enrich files with project names (batch, no N+1)
+          if (filesData.length > 0) {
+            const projectIds = [...new Set(filesData.map(f => f.project_id).filter(Boolean))] as string[];
+            if (projectIds.length > 0) {
+              const { data: fileProjects } = await supabase
+                .from("projects").select("id, name").in("id", projectIds);
+              if (!cancelled) {
+                const nameMap = new Map((fileProjects ?? []).map(p => [p.id, p.name]));
+                setRecentFiles(filesData.map(f => ({ ...f, project_name: nameMap.get(f.project_id ?? "") })));
+              }
+            } else {
+              setRecentFiles(filesData);
+            }
+          } else {
+            setRecentFiles([]);
+          }
+        }
+        if (!cancelled) setLoading(false);
       } catch (e) {
         // Network error — retry up to 3 times with exponential backoff
         if (retryCount < 3 && !cancelled) {
@@ -77,45 +118,11 @@ export default function Dashboard() {
           return fetchData(retryCount + 1);
         }
         console.error("[Dashboard] Fetch failed after retries:", e);
-        setLoading(false);
-        return;
-      }
-
-      if (cancelled) return;
-
-      handleSupabaseError(cr.error, "check_results");
-      handleSupabaseError(countRes?.error ?? null, "check_results count");
-      setRecords(cr.data ?? []);
-      setTotalCount(countRes?.count ?? 0);
-
-      if (page === 0) {
-        handleSupabaseError(pr?.error ?? null, "projects");
-        handleSupabaseError(prod?.error ?? null, "products");
-        handleSupabaseError(pf?.error ?? null, "project_files");
-        const projectsData = pr?.data ?? [];
-        const productsData = prod?.data ?? [];
-        const filesData = (pf?.data ?? []) as ProjectFile[];
-        setProjects(projectsData);
-        setProducts(productsData);
-
-        // Enrich files with project names (batch, no N+1)
-        if (filesData.length > 0) {
-          const projectIds = [...new Set(filesData.map(f => f.project_id).filter(Boolean))] as string[];
-          if (projectIds.length > 0) {
-            const { data: fileProjects } = await supabase
-              .from("projects").select("id, name").in("id", projectIds);
-            if (!cancelled) {
-              const nameMap = new Map((fileProjects ?? []).map(p => [p.id, p.name]));
-              setRecentFiles(filesData.map(f => ({ ...f, project_name: nameMap.get(f.project_id ?? "") })));
-            }
-          } else {
-            setRecentFiles(filesData);
-          }
-        } else {
-          setRecentFiles([]);
+        if (!cancelled) {
+          setFetchError(true);
+          setLoading(false);
         }
       }
-      if (!cancelled) setLoading(false);
     };
 
     fetchData();
@@ -160,6 +167,28 @@ export default function Dashboard() {
   const goPage = useCallback((p: number) => {
     setPage(Math.max(0, Math.min(p, totalPages - 1)));
   }, [totalPages]);
+
+  if (fetchError && records.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-6">
+        <div className="max-w-md w-full text-center space-y-4">
+          <div className="mx-auto w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+            <WifiOff className="h-6 w-6 text-muted-foreground" />
+          </div>
+          <h2 className="text-lg font-semibold">接続がタイムアウトしました</h2>
+          <p className="text-sm text-muted-foreground">
+            サーバーへの接続が混雑しています。しばらく待ってから再試行してください。
+          </p>
+          <button
+            onClick={() => setRefetchKey(k => k + 1)}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity"
+          >
+            <RefreshCw className="h-4 w-4" />再試行
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">

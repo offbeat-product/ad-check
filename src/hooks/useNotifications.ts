@@ -10,16 +10,25 @@ export function useNotifications() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchNotifications = useCallback(async () => {
+  const fetchNotifications = useCallback(async (retryCount = 0) => {
     if (!user) return;
-    const { data } = await supabase
-      .from("notifications")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(50);
-    setNotifications(data ?? []);
-    setLoading(false);
+    try {
+      const { data } = await supabase
+        .from("notifications")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false })
+        .limit(50);
+      setNotifications(data ?? []);
+      setLoading(false);
+    } catch (e) {
+      if (retryCount < 2) {
+        await new Promise(r => setTimeout(r, 2000 * (retryCount + 1)));
+        return fetchNotifications(retryCount + 1);
+      }
+      console.warn("[Notifications] Fetch failed after retries:", e);
+      setLoading(false);
+    }
   }, [user]);
 
   useEffect(() => {
