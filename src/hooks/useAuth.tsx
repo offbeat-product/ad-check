@@ -91,10 +91,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signIn = useCallback(async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
-    // Update last_login_at
-    const { data: { user: u } } = await supabase.auth.getUser();
-    if (u) {
-      await supabase.from("profiles").update({ last_login_at: new Date().toISOString() }).eq("id", u.id);
+    // Update last_login_at (non-blocking — don't let DB issues block login)
+    try {
+      const { data: { user: u } } = await supabase.auth.getUser();
+      if (u) {
+        supabase.from("profiles").update({ last_login_at: new Date().toISOString() }).eq("id", u.id)
+          .then(({ error: e }) => { if (e) console.warn("[Auth] last_login_at update failed:", e.message); });
+      }
+    } catch (e) {
+      console.warn("[Auth] Post-login profile update skipped:", e);
     }
   }, []);
 
