@@ -967,6 +967,35 @@ export default function FileReviewPage() {
                 <ScriptDisplay text={file.file_data || ""} items={items} markers={markers} onItemClick={scrollToCard} />
               </div>
             )}
+
+            {/* File navigation bar below creative */}
+            {siblingFiles.length > 1 && (
+              <div className="flex items-center justify-between mt-4 px-2 py-3 rounded-lg border border-border bg-muted/30">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!prevFile}
+                  onClick={() => prevFile && navigateToFile(prevFile.id)}
+                  className="gap-1.5"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  前のファイル
+                </Button>
+                <span className="text-sm font-medium text-muted-foreground">
+                  {currentIndex + 1} / {siblingFiles.length}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={!nextFile}
+                  onClick={() => nextFile && navigateToFile(nextFile.id)}
+                  className="gap-1.5"
+                >
+                  次のファイル
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </div>
