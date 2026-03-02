@@ -148,7 +148,6 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
     if (!user || userIds.length === 0) return;
     const authorName = user.email?.split("@")[0] || "User";
     for (const uid of userIds) {
-      if (uid === user.id) continue;
       await supabase.from("notifications").insert({
         user_id: uid,
         type: "mention",
