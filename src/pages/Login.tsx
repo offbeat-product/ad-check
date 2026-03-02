@@ -28,20 +28,28 @@ export default function Login() {
       } else {
         await signIn(email, password);
         
-        // Check if user is active
-        const { data: { user: u } } = await supabase.auth.getUser();
-        if (u) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("is_active")
-            .eq("id", u.id)
-            .single();
+        // Check if user is active (with timeout to prevent hang on DB issues)
+        try {
+          const profileCheck = supabase.auth.getUser().then(async ({ data: { user: u } }) => {
+            if (!u) return null;
+            const { data: profile } = await supabase
+              .from("profiles")
+              .select("is_active")
+              .eq("id", u.id)
+              .single();
+            return profile;
+          });
           
-          if (profile && !profile.is_active) {
+          const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000));
+          const profile = await Promise.race([profileCheck, timeoutPromise]);
+          
+          if (profile && profile.is_active === false) {
             await supabase.auth.signOut();
             toast({ title: "エラー", description: "このアカウントは無効化されています。管理者にお問い合わせください。", variant: "destructive" });
             return;
           }
+        } catch (e) {
+          console.warn("[Login] Profile active check skipped due to error:", e);
         }
         
         navigate("/dashboard");
