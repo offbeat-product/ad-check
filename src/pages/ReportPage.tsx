@@ -107,77 +107,71 @@ interface MetricSet {
   logInternalRevisionCount: number;
 }
 
-function computeMetrics(procs: ProcessRow[], fileSet: FileRow[], submissionType?: "internal" | "client", logs?: SubmissionLog[]): MetricSet {
-  // 納期遵守率:
-  // 社内: 社内期限までに全パターンの初稿(version_number=1, submission_type=internal)がアップロードされているか
-  // クライアント: クライアント期限までに全パターンがチェック完了&クライアント提出済みか
-
+function computeMetrics(procs: ProcessRow[], allFiles: FileRow[], submissionType: "internal" | "client", logs?: SubmissionLog[]): MetricSet {
+  // ── 納期遵守率 ──
   let deadlineTotal = 0;
   let deadlineOnTime = 0;
 
   for (const p of procs) {
-    const processFiles = fileSet.filter(f => f.project_id === p.project_id && f.process_type === p.process_key);
+    const processFiles = allFiles.filter(f => f.project_id === p.project_id && f.process_type === p.process_key);
 
-    if (submissionType === "internal" || (!submissionType)) {
+    if (submissionType === "internal") {
+      // 社内: 社内期限までに初稿アップロードが完了しているか
       const dl = p.internal_deadline;
       if (dl) {
         deadlineTotal++;
         const deadlineDate = new Date(dl + "T23:59:59");
-        // Check: all first-draft internal files uploaded before deadline
         const internalFirstDrafts = processFiles.filter(f => f.submission_type === "internal" && (f.version_number ?? 1) === 1 && !f.parent_file_id);
         if (internalFirstDrafts.length > 0) {
           const allOnTime = internalFirstDrafts.every(f => f.created_at && new Date(f.created_at) <= deadlineDate);
           if (allOnTime) deadlineOnTime++;
         }
       }
-    }
-
-    if (submissionType === "client" || (!submissionType && !p.internal_deadline)) {
+    } else {
+      // クライアント: クライアント期限までにチェック・クライアント提出が完了し、FIX済みか
       const dl = p.client_deadline;
-      if (dl && submissionType === "client") {
-        // Don't double-count if we already counted internal above for "all" mode
-        if (submissionType === "client") deadlineTotal++;
+      if (dl) {
+        deadlineTotal++;
         const deadlineDate = new Date(dl + "T23:59:59");
-        // Check: all files checked & submitted to client before deadline
         const clientFiles = processFiles.filter(f => f.submission_type === "client");
         if (clientFiles.length > 0) {
-          const allSubmittedOnTime = clientFiles.every(f => {
-            const isCheckedOrFixed = f.status === "checked" || f.status === "fixed" || f.status === "approved";
-            return isCheckedOrFixed && f.created_at && new Date(f.created_at) <= deadlineDate;
+          const allFixedOnTime = clientFiles.every(f => {
+            const isFixed = f.status === "fixed" || f.status === "approved";
+            // fixed_at がある場合はそれを使い、なければ updated_at で判定
+            const completedAt = f.fixed_at || f.created_at;
+            return isFixed && completedAt && new Date(completedAt) <= deadlineDate;
           });
-          if (allSubmittedOnTime) deadlineOnTime++;
+          if (allFixedOnTime) deadlineOnTime++;
         }
       }
     }
   }
 
-  // 初稿合格率: submission_logsベースで判定
-  // 初稿(version_number=1)のファイルに対して、最初のアクションが client_submit であれば合格
-  // internal_revision が先に押された場合は不合格（社内修正が必要だった）
-  const firstDraftFileIds = fileSet.filter(f => (f.version_number ?? 1) === 1).map(f => f.id);
+  // ── 初稿合格率 ──
   let firstDraftTotal = 0;
   let firstDraftPassed = 0;
-  if (logs && logs.length > 0 && firstDraftFileIds.length > 0) {
-    // Group logs by file_id, find the earliest action for each file
-    const fileFirstAction = new Map<string, string>();
-    for (const fileId of firstDraftFileIds) {
-      const fileLogs = logs.filter(l => l.file_id === fileId).sort((a, b) => a.created_at.localeCompare(b.created_at));
-      if (fileLogs.length > 0) {
-        fileFirstAction.set(fileId, fileLogs[0].action_type);
-      }
-    }
-    firstDraftTotal = fileFirstAction.size;
-    firstDraftPassed = [...fileFirstAction.values()].filter(a => a === "client_submit").length;
+
+  if (submissionType === "client") {
+    // クライアント初稿合格率: クライアントに提出した初稿(v1, submission_type=client)がFIX済みか
+    const clientFirstDrafts = allFiles.filter(f => f.submission_type === "client" && (f.version_number ?? 1) === 1);
+    firstDraftTotal = clientFirstDrafts.length;
+    firstDraftPassed = clientFirstDrafts.filter(f => f.status === "fixed" || f.status === "approved").length;
   } else {
-    // Fallback: no logs yet, use legacy status-based logic
-    const isChecked = (f: FileRow) => f.status && f.status !== "uploaded";
-    const isPassed = (f: FileRow) => f.status === "fixed" || f.status === "approved";
-    const checkedFirstDrafts = fileSet.filter(f => (f.version_number ?? 1) === 1 && isChecked(f));
-    firstDraftTotal = checkedFirstDrafts.length;
-    firstDraftPassed = checkedFirstDrafts.filter(isPassed).length;
+    // 社内初稿合格率: 社内に提出した初稿(v1)がクライアント提出済みになっているか
+    // v1ファイル全体から、client_submitログがあるものを合格とする
+    const v1Files = allFiles.filter(f => (f.version_number ?? 1) === 1 && !f.parent_file_id);
+    firstDraftTotal = v1Files.length;
+    if (logs && logs.length > 0) {
+      firstDraftPassed = v1Files.filter(f =>
+        logs.some(l => l.file_id === f.id && l.action_type === "client_submit")
+      ).length;
+    } else {
+      // Fallback: submission_type が client に変わっているかで判定
+      firstDraftPassed = v1Files.filter(f => f.submission_type === "client").length;
+    }
   }
 
-  // 修正稿数: 提出タイプごとにバージョン数をカウント
+  // ── 修正回数 ──
   const computeRevForType = (files: FileRow[]) => {
     const chains = new Map<string, number>();
     for (const f of files) {
@@ -190,9 +184,9 @@ function computeMetrics(procs: ProcessRow[], fileSet: FileRow[], submissionType?
     return { total, count };
   };
 
-  const allRev = computeRevForType(fileSet);
-  const internalFiles = fileSet.filter(f => f.submission_type === "internal");
-  const clientFiles = fileSet.filter(f => f.submission_type === "client");
+  const allRev = computeRevForType(allFiles);
+  const internalFiles = allFiles.filter(f => f.submission_type === "internal");
+  const clientFiles = allFiles.filter(f => f.submission_type === "client");
   const internalRev = computeRevForType(internalFiles);
   const clientRev = computeRevForType(clientFiles);
 
@@ -350,11 +344,9 @@ export default function ReportPage() {
 
   // Submission type summary
   const submissionSummary = useMemo(() => {
-    const internal = periodFiles.filter(f => f.submission_type === "internal");
-    const client = periodFiles.filter(f => f.submission_type === "client");
     return {
-      internal: computeMetrics(periodProcesses, internal, "internal", periodLogs),
-      client: computeMetrics(periodProcesses, client, "client", periodLogs),
+      internal: computeMetrics(periodProcesses, periodFiles, "internal", periodLogs),
+      client: computeMetrics(periodProcesses, periodFiles, "client", periodLogs),
     };
   }, [periodProcesses, periodFiles, periodLogs]);
 
@@ -366,24 +358,22 @@ export default function ReportPage() {
 
   // Monthly trend for chart (using all files, not filtered by submission type)
   const monthlyChartData = useMemo(() => {
-    const monthMap = new Map<string, { procs: ProcessRow[]; internalFiles: FileRow[]; clientFiles: FileRow[]; logs: SubmissionLog[] }>();
-    const ensure = (k: string) => { if (!monthMap.has(k)) monthMap.set(k, { procs: [], internalFiles: [], clientFiles: [], logs: [] }); return monthMap.get(k)!; };
+    const monthMap = new Map<string, { procs: ProcessRow[]; files: FileRow[]; logs: SubmissionLog[] }>();
+    const ensure = (k: string) => { if (!monthMap.has(k)) monthMap.set(k, { procs: [], files: [], logs: [] }); return monthMap.get(k)!; };
 
     periodProcesses.forEach(p => {
       ensure(toMonthKey(p.updated_at)).procs.push(p);
     });
     periodFiles.filter(f => f.created_at).forEach(f => {
-      const bucket = ensure(toMonthKey(f.created_at!));
-      if (f.submission_type === "internal") bucket.internalFiles.push(f);
-      else if (f.submission_type === "client") bucket.clientFiles.push(f);
+      ensure(toMonthKey(f.created_at!)).files.push(f);
     });
     periodLogs.filter(l => l.created_at).forEach(l => {
       ensure(toMonthKey(l.created_at)).logs.push(l);
     });
 
     return [...monthMap.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, data]) => {
-      const clientM = computeMetrics(data.procs, data.clientFiles, "client", data.logs);
-      const internalM = computeMetrics(data.procs, data.internalFiles, "internal", data.logs);
+      const clientM = computeMetrics(data.procs, data.files, "client", data.logs);
+      const internalM = computeMetrics(data.procs, data.files, "internal", data.logs);
       return {
         month,
         monthLabel: monthLabel(month),
@@ -701,7 +691,7 @@ export default function ReportPage() {
             </CardTitle>
             <p className="text-sm text-muted-foreground mt-1">各KPIの算出方法と判定基準の詳細です。</p>
           </CardHeader>
-          <CardContent className="space-y-6 text-sm leading-relaxed">
+           <CardContent className="space-y-6 text-sm leading-relaxed">
             <div className="space-y-2">
               <h4 className="text-base font-bold text-foreground flex items-center gap-2">
                 <Target className="h-4 w-4 text-primary" />
@@ -709,12 +699,12 @@ export default function ReportPage() {
               </h4>
               <div className="pl-4 border-l-[3px] border-primary/30 space-y-3">
                 <div className="bg-muted/50 rounded-lg p-3">
-                  <p className="font-semibold text-foreground mb-1">📋 社内提出の判定</p>
-                  <p className="text-muted-foreground">各工程に設定された<span className="font-medium text-foreground">「社内期限」</span>までに、全パターンのクリエイティブ初稿（version_number=1, submission_type=internal）がアップロードされているかで判定します。</p>
+                  <p className="font-semibold text-foreground mb-1">📤 クライアント提出の判定</p>
+                  <p className="text-muted-foreground">各工程に設定された<span className="font-medium text-foreground">「クライアント期限」</span>までに、各クリエイティブのチェック・クライアント提出が完了し、<span className="font-medium text-foreground">FIX済み</span>（fixed / approved）となっているかで判定します。</p>
                 </div>
                 <div className="bg-muted/50 rounded-lg p-3">
-                  <p className="font-semibold text-foreground mb-1">📤 クライアント提出の判定</p>
-                  <p className="text-muted-foreground">各工程に設定された<span className="font-medium text-foreground">「クライアント期限」</span>までに、全パターンのクリエイティブがチェック完了済み（checked / fixed / approved）かつクライアント提出済み（submission_type=client）になっているかで判定します。</p>
+                  <p className="font-semibold text-foreground mb-1">📋 社内提出の判定</p>
+                  <p className="text-muted-foreground">各工程に設定された<span className="font-medium text-foreground">「社内期限」</span>までに、各クリエイティブのアップロードが完了しているかで判定します。</p>
                 </div>
                 <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">計算式: 遵守工程数 ÷ 期限設定済み工程数 × 100</p>
               </div>
@@ -725,43 +715,37 @@ export default function ReportPage() {
                 <CheckCircle className="h-4 w-4 text-status-ok" />
                 ② 初稿合格率（目標: クライアント {getClientTarget("first_draft_pass", 80)}% / 社内 {getInternalTarget("first_draft_pass", 80)}%）
               </h4>
-              <div className="pl-4 border-l-[3px] border-status-ok/30 space-y-2">
-                <p className="text-muted-foreground">初稿（version_number=1）のファイルに対して、最初に押されたボタンが<span className="font-medium text-foreground">「クライアント提出」</span>であれば合格としてカウントします。<span className="font-medium text-foreground">「社内修正する」</span>ボタンが先に押された場合は不合格（社内修正が必要だった）と判定します。</p>
+              <div className="pl-4 border-l-[3px] border-status-ok/30 space-y-3">
                 <div className="bg-muted/50 rounded-lg p-3">
-                  <p className="font-semibold text-foreground mb-1">🔄 判定フロー</p>
-                  <p className="text-muted-foreground">初稿アップロード → AIチェック → 「クライアント提出」ボタン押下 = <span className="font-medium text-status-ok">初稿合格 ✓</span></p>
-                  <p className="text-muted-foreground">初稿アップロード → AIチェック → 「社内修正する」ボタン押下 = <span className="font-medium text-status-ng">初稿不合格 ✗</span></p>
+                  <p className="font-semibold text-foreground mb-1">📤 クライアント提出の判定</p>
+                  <p className="text-muted-foreground">クライアントに提出した初稿（version_number=1, submission_type=client）が<span className="font-medium text-foreground">FIX済み</span>（fixed / approved）になっているかで判定します。</p>
+                  <p className="text-muted-foreground mt-1">→ クライアントからの修正指示なく一発でFIXされれば合格。</p>
                 </div>
-                <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">計算式: クライアント提出された初稿数 ÷ アクション記録のある初稿数 × 100</p>
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="font-semibold text-foreground mb-1">📋 社内提出の判定</p>
+                  <p className="text-muted-foreground">社内に提出した初稿（version_number=1）が<span className="font-medium text-foreground">クライアント提出済み</span>になっているかで判定します。</p>
+                  <p className="text-muted-foreground mt-1">→ 社内修正なくクライアントに提出できれば合格。</p>
+                </div>
+                <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">クライアント: FIX済み初稿数 ÷ クライアント提出済み初稿数 × 100</p>
+                <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">社内: クライアント提出済み初稿数 ÷ 全初稿数 × 100</p>
               </div>
             </div>
 
             <div className="space-y-2">
               <h4 className="text-base font-bold text-foreground flex items-center gap-2">
                 <RotateCcw className="h-4 w-4 text-status-warning" />
-                ③ 平均修正回数
+                ③ 修正回数
               </h4>
-              <div className="pl-4 border-l-[3px] border-status-warning/30 space-y-2">
-                <p className="text-muted-foreground">提出タイプごとに、各案件×工程のシーケンスにおける最大バージョン番号から1を引いた値の平均を算出します。</p>
-                <div className="bg-muted/50 rounded-lg p-3 space-y-1">
-                  <p className="text-muted-foreground"><span className="font-medium text-foreground">社内修正:</span> submission_type=internal のファイルのみで集計</p>
-                  <p className="text-muted-foreground"><span className="font-medium text-foreground">クライアント修正:</span> submission_type=client のファイルのみで集計</p>
+              <div className="pl-4 border-l-[3px] border-status-warning/30 space-y-3">
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="font-semibold text-foreground mb-1">📤 クライアント提出</p>
+                  <p className="text-muted-foreground">クライアントに提出した制作物が何回修正が発生しているか。submission_type=client のファイルのバージョン数で集計します。</p>
+                </div>
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="font-semibold text-foreground mb-1">📋 社内提出</p>
+                  <p className="text-muted-foreground">社内に提出した制作物が何回修正が発生しているか。submission_type=internal のファイルのバージョン数で集計します。</p>
                 </div>
                 <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">計算式: Σ(最大バージョン番号 - 1) ÷ シーケンス数</p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <h4 className="text-base font-bold text-foreground flex items-center gap-2">
-                <RotateCcw className="h-4 w-4 text-status-warning" />
-                ④ アクション回数（提出回数・社内修正回数）
-              </h4>
-              <div className="pl-4 border-l-[3px] border-status-warning/30 space-y-2">
-                <p className="text-muted-foreground">チェック画面の<span className="font-medium text-foreground">「クライアント提出」</span>ボタンと<span className="font-medium text-foreground">「社内修正する」</span>ボタンの押下をDBに記録（submission_logsテーブル）し、正確にカウントします。</p>
-                <div className="bg-muted/50 rounded-lg p-3 space-y-1">
-                  <p className="text-muted-foreground"><span className="font-medium text-foreground">クライアント提出回数:</span> 「クライアント提出」ボタンが押された回数</p>
-                  <p className="text-muted-foreground"><span className="font-medium text-foreground">社内修正回数:</span> 「社内修正する」ボタンが押された回数</p>
-                </div>
               </div>
             </div>
 
