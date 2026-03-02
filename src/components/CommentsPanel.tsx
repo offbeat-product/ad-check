@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Send, Pin, Reply, Paperclip, X, FileText } from "lucide-react";
+import { Send, Pin, Reply, Paperclip, X, FileText, Pencil, Trash2, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import MentionInput, { type MentionMember } from "@/components/comments/MentionInput";
 import TimestampBadge, { formatTimestamp } from "@/components/comments/TimestampBadge";
@@ -293,8 +293,19 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
           <div key={c.id} className="space-y-2">
             <CommentCard
               comment={c}
+              currentUserEmail={user?.email || ""}
               onToggleStatus={() => toggleStatus(c.id, c.status)}
               onReply={() => setReplyTo(replyTo === c.id ? null : c.id)}
+              onEdit={async (id, content) => {
+                const { error } = await supabase.from("comments").update({ content }).eq("id", id);
+                handleSupabaseError(error, "comment edit");
+                fetchComments();
+              }}
+              onDelete={async (id) => {
+                const { error } = await supabase.from("comments").delete().eq("id", id);
+                handleSupabaseError(error, "comment delete");
+                fetchComments();
+              }}
               timeAgo={timeAgo}
               onAnnotationClick={onAnnotationClick}
               onCheckItemClick={onCheckItemClick}
@@ -302,7 +313,25 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
             />
             {replies(c.id).map((r) => (
               <div key={r.id} className="ml-5">
-                <CommentCard comment={r} onToggleStatus={() => toggleStatus(r.id, r.status)} onReply={() => {}} timeAgo={timeAgo} isReply onSeekMedia={onSeekMedia} />
+                <CommentCard
+                  comment={r}
+                  currentUserEmail={user?.email || ""}
+                  onToggleStatus={() => toggleStatus(r.id, r.status)}
+                  onReply={() => {}}
+                  onEdit={async (id, content) => {
+                    const { error } = await supabase.from("comments").update({ content }).eq("id", id);
+                    handleSupabaseError(error, "comment edit");
+                    fetchComments();
+                  }}
+                  onDelete={async (id) => {
+                    const { error } = await supabase.from("comments").delete().eq("id", id);
+                    handleSupabaseError(error, "comment delete");
+                    fetchComments();
+                  }}
+                  timeAgo={timeAgo}
+                  isReply
+                  onSeekMedia={onSeekMedia}
+                />
               </div>
             ))}
             {replyTo === c.id && (
@@ -392,9 +421,14 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   );
 }
 
-function CommentCard({ comment, onToggleStatus, onReply, timeAgo, isReply, onAnnotationClick, onCheckItemClick, onSeekMedia }: {
-  comment: CommentRow; onToggleStatus: () => void; onReply: () => void; timeAgo: (d: string) => string; isReply?: boolean; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void;
+function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdit, onDelete, timeAgo, isReply, onAnnotationClick, onCheckItemClick, onSeekMedia }: {
+  comment: CommentRow; currentUserEmail: string; onToggleStatus: () => void; onReply: () => void; onEdit?: (id: string, content: string) => void; onDelete?: (id: string) => void; timeAgo: (d: string) => string; isReply?: boolean; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void;
 }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editText, setEditText] = useState(comment.content);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const isOwn = currentUserEmail === comment.author_email;
   const initial = comment.author_name.charAt(0).toUpperCase();
   const colors = ["bg-primary", "bg-status-ok", "bg-context-client", "bg-product-cta"];
   const colorIdx = comment.author_name.charCodeAt(0) % colors.length;
@@ -412,7 +446,6 @@ function CommentCard({ comment, onToggleStatus, onReply, timeAgo, isReply, onAnn
 
   const isClickable = (hasAnnotation && onAnnotationClick) || (hasCheckItem && onCheckItemClick);
 
-  // Highlight @mentions in content
   const renderContent = (text: string) => {
     const parts = text.split(/(@\S+)/g);
     return parts.map((part, i) =>
@@ -422,6 +455,13 @@ function CommentCard({ comment, onToggleStatus, onReply, timeAgo, isReply, onAnn
         <span key={i}>{part}</span>
       )
     );
+  };
+
+  const handleSaveEdit = () => {
+    if (editText.trim() && onEdit) {
+      onEdit(comment.id, editText.trim());
+      setIsEditing(false);
+    }
   };
 
   return (
@@ -440,7 +480,23 @@ function CommentCard({ comment, onToggleStatus, onReply, timeAgo, isReply, onAnn
         )}
         <span className="text-[10px] text-muted-foreground">{timeAgo(comment.created_at)}</span>
       </div>
-      <p className="text-xs whitespace-pre-wrap">{renderContent(comment.content)}</p>
+
+      {isEditing ? (
+        <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
+          <Textarea value={editText} onChange={(e) => setEditText(e.target.value)} className="min-h-[50px] text-xs" autoFocus />
+          <div className="flex gap-1.5">
+            <Button size="sm" variant="default" onClick={handleSaveEdit} className="h-6 text-[10px] px-2">
+              <Check className="h-3 w-3 mr-1" />保存
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => { setIsEditing(false); setEditText(comment.content); }} className="h-6 text-[10px] px-2">
+              キャンセル
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs whitespace-pre-wrap">{renderContent(comment.content)}</p>
+      )}
+
       {hasAnnotation && (
         <div className="flex items-center gap-1 text-[10px] text-primary">
           <Pin className="h-3 w-3" />
@@ -474,6 +530,23 @@ function CommentCard({ comment, onToggleStatus, onReply, timeAgo, isReply, onAnn
           <button onClick={onReply} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1">
             <Reply className="h-3 w-3" />返信
           </button>
+        )}
+        {isOwn && !isEditing && (
+          <>
+            <button onClick={() => setIsEditing(true)} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1">
+              <Pencil className="h-3 w-3" />編集
+            </button>
+            {confirmDelete ? (
+              <span className="flex items-center gap-1">
+                <button onClick={() => { if (onDelete) onDelete(comment.id); setConfirmDelete(false); }} className="text-[10px] text-destructive font-medium">削除する</button>
+                <button onClick={() => setConfirmDelete(false)} className="text-[10px] text-muted-foreground">取消</button>
+              </span>
+            ) : (
+              <button onClick={() => setConfirmDelete(true)} className="text-[10px] text-muted-foreground hover:text-destructive flex items-center gap-1">
+                <Trash2 className="h-3 w-3" />削除
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>
