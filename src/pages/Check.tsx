@@ -443,15 +443,19 @@ export default function CheckPage() {
             ok_count: polled.ok_count ?? 0,
             total_checks: polled.total_checks ?? 0,
           };
+          setResult(res);
+          setCheckedAt(polled.created_at || new Date().toISOString());
         } else {
           res = videoRes;
+          setResult(res);
+          setCheckedAt(new Date().toISOString());
         }
       } else {
         if (!scriptText.trim()) throw new Error("テキストを入力してください");
         res = await runScriptCheck(product.id, scriptText, selectedProcess, referenceContext);
+        setResult(res);
+        setCheckedAt(new Date().toISOString());
       }
-      setResult(res);
-      setCheckedAt(new Date().toISOString());
       checkProgress.complete();
 
       const inputData = processConfig.inputMode === "image" && imageData
