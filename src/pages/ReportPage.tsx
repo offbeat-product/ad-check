@@ -102,10 +102,6 @@ interface MetricSet {
   internalRevSequences: number;
   clientRevisions: number | null;
   clientRevSequences: number;
-  /** 社内修正率: submission_logsベースで計算 */
-  internalRevisionRate: number | null;
-  internalRevisionCount: number;
-  clientSubmissionTotal: number;
   /** ログベースのアクション回数 */
   logClientSubmitCount: number;
   logInternalRevisionCount: number;
@@ -155,11 +151,31 @@ function computeMetrics(procs: ProcessRow[], fileSet: FileRow[], submissionType?
     }
   }
 
-  // 初稿合格率: version_number=1 のファイルで、status が fixed/approved の割合
-  const isChecked = (f: FileRow) => f.status && f.status !== "uploaded";
-  const isPassed = (f: FileRow) => f.status === "fixed" || f.status === "approved";
-  const firstDraftFiles = fileSet.filter(f => (f.version_number ?? 1) === 1 && isChecked(f));
-  const firstDraftPassed = firstDraftFiles.filter(isPassed).length;
+  // 初稿合格率: submission_logsベースで判定
+  // 初稿(version_number=1)のファイルに対して、最初のアクションが client_submit であれば合格
+  // internal_revision が先に押された場合は不合格（社内修正が必要だった）
+  const firstDraftFileIds = fileSet.filter(f => (f.version_number ?? 1) === 1).map(f => f.id);
+  let firstDraftTotal = 0;
+  let firstDraftPassed = 0;
+  if (logs && logs.length > 0 && firstDraftFileIds.length > 0) {
+    // Group logs by file_id, find the earliest action for each file
+    const fileFirstAction = new Map<string, string>();
+    for (const fileId of firstDraftFileIds) {
+      const fileLogs = logs.filter(l => l.file_id === fileId).sort((a, b) => a.created_at.localeCompare(b.created_at));
+      if (fileLogs.length > 0) {
+        fileFirstAction.set(fileId, fileLogs[0].action_type);
+      }
+    }
+    firstDraftTotal = fileFirstAction.size;
+    firstDraftPassed = [...fileFirstAction.values()].filter(a => a === "client_submit").length;
+  } else {
+    // Fallback: no logs yet, use legacy status-based logic
+    const isChecked = (f: FileRow) => f.status && f.status !== "uploaded";
+    const isPassed = (f: FileRow) => f.status === "fixed" || f.status === "approved";
+    const checkedFirstDrafts = fileSet.filter(f => (f.version_number ?? 1) === 1 && isChecked(f));
+    firstDraftTotal = checkedFirstDrafts.length;
+    firstDraftPassed = checkedFirstDrafts.filter(isPassed).length;
+  }
 
   // 修正稿数: 提出タイプごとにバージョン数をカウント
   const computeRevForType = (files: FileRow[]) => {
@@ -180,23 +196,6 @@ function computeMetrics(procs: ProcessRow[], fileSet: FileRow[], submissionType?
   const internalRev = computeRevForType(internalFiles);
   const clientRev = computeRevForType(clientFiles);
 
-  // 社内修正率: クライアント提出のうち、第2稿以降がある（= 社内修正が発生した）件数
-  // Each client submission sequence where max version > 1 means internal revision happened
-  const clientChains = new Map<string, number>();
-  for (const f of clientFiles) {
-    const key = `${f.project_id}::${f.process_type}`;
-    const ver = f.version_number ?? 1;
-    clientChains.set(key, Math.max(clientChains.get(key) ?? 0, ver));
-  }
-  const clientSubmissionTotal = clientChains.size;
-  let internalRevisionCount = 0;
-  for (const [, maxVer] of clientChains) {
-    if (maxVer > 1) internalRevisionCount++;
-  }
-  const internalRevisionRate = clientSubmissionTotal > 0
-    ? Math.round((internalRevisionCount / clientSubmissionTotal) * 100)
-    : null;
-
   // ログベースのアクション回数
   const logClientSubmitCount = logs ? logs.filter(l => l.action_type === "client_submit").length : 0;
   const logInternalRevisionCount = logs ? logs.filter(l => l.action_type === "internal_revision").length : 0;
@@ -205,8 +204,8 @@ function computeMetrics(procs: ProcessRow[], fileSet: FileRow[], submissionType?
     deadlineRate: deadlineTotal > 0 ? Math.round((deadlineOnTime / deadlineTotal) * 100) : null,
     deadlineTotal,
     deadlineOnTime,
-    firstDraftRate: firstDraftFiles.length > 0 ? Math.round((firstDraftPassed / firstDraftFiles.length) * 100) : null,
-    firstDraftTotal: firstDraftFiles.length,
+    firstDraftRate: firstDraftTotal > 0 ? Math.round((firstDraftPassed / firstDraftTotal) * 100) : null,
+    firstDraftTotal,
     firstDraftPassed,
     avgRevisions: allRev.count > 0 ? Math.round((allRev.total / allRev.count) * 10) / 10 : null,
     revisionSequences: allRev.count,
@@ -215,9 +214,6 @@ function computeMetrics(procs: ProcessRow[], fileSet: FileRow[], submissionType?
     internalRevSequences: internalRev.count,
     clientRevisions: clientRev.count > 0 ? Math.round((clientRev.total / clientRev.count) * 10) / 10 : null,
     clientRevSequences: clientRev.count,
-    internalRevisionRate,
-    internalRevisionCount,
-    clientSubmissionTotal,
     logClientSubmitCount,
     logInternalRevisionCount,
   };
@@ -396,7 +392,6 @@ export default function ReportPage() {
         clientAvgRevisions: clientM.avgRevisions,
         clientDeadlineTotal: clientM.deadlineTotal,
         clientFirstDraftTotal: clientM.firstDraftTotal,
-        clientInternalRevisionRate: clientM.internalRevisionRate,
         clientSubmitCount: clientM.logClientSubmitCount,
         internalRevCount: clientM.logInternalRevisionCount,
         internalDeadlineRate: internalM.deadlineRate,
@@ -516,7 +511,7 @@ export default function ReportPage() {
           <h2 className="text-sm font-bold mb-3 flex items-center gap-2">
             <Badge variant="outline" className="text-xs">クライアント提出</Badge>
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <KpiCard
               icon={Target}
               label="納期遵守率"
@@ -544,15 +539,6 @@ export default function ReportPage() {
               detail={`${submissionSummary.client.clientRevSequences}シーケンス`}
               color="text-status-warning"
               isRevision
-            />
-            <KpiCard
-              icon={RotateCcw}
-              label="社内修正率"
-              value={submissionSummary.client.internalRevisionRate !== null ? `${submissionSummary.client.internalRevisionRate}%` : "—"}
-              rate={submissionSummary.client.internalRevisionRate}
-              target={null}
-              detail={`社内修正${submissionSummary.client.logInternalRevisionCount}回 / クライアント提出${submissionSummary.client.logClientSubmitCount}回`}
-              color="text-status-warning"
             />
           </div>
         </div>
@@ -653,14 +639,13 @@ export default function ReportPage() {
               <thead>
                 <tr className="border-b border-border text-muted-foreground text-left">
                   <th className="px-4 py-2 font-medium" rowSpan={2}>月</th>
-                  <th className="px-4 py-2 font-medium text-center border-l border-border" colSpan={6}>クライアント提出</th>
+                  <th className="px-4 py-2 font-medium text-center border-l border-border" colSpan={5}>クライアント提出</th>
                   <th className="px-4 py-2 font-medium text-center border-l border-border" colSpan={3}>社内提出</th>
                 </tr>
                 <tr className="border-b border-border text-muted-foreground text-left">
                   <th className="px-4 py-2 font-medium text-right border-l border-border">納期遵守率</th>
                   <th className="px-4 py-2 font-medium text-right">初稿合格率</th>
                   <th className="px-4 py-2 font-medium text-right">修正回数</th>
-                  <th className="px-4 py-2 font-medium text-right">社内修正率</th>
                   <th className="px-4 py-2 font-medium text-right">提出回数</th>
                   <th className="px-4 py-2 font-medium text-right">社内修正回数</th>
                   <th className="px-4 py-2 font-medium text-right border-l border-border">納期遵守率</th>
@@ -670,7 +655,7 @@ export default function ReportPage() {
               </thead>
               <tbody>
                 {monthlyChartData.length === 0 ? (
-                  <tr><td colSpan={10} className="text-center py-8 text-muted-foreground">データなし</td></tr>
+                  <tr><td colSpan={9} className="text-center py-8 text-muted-foreground">データなし</td></tr>
                 ) : (
                   [...monthlyChartData].reverse().map(d => (
                     <tr key={d.month} className="border-b border-border/50">
@@ -683,9 +668,6 @@ export default function ReportPage() {
                       </td>
                       <td className="px-4 py-2 text-right">
                         {d.clientAvgRevisions !== null ? <span className="font-bold">{d.clientAvgRevisions}回</span> : <span className="text-muted-foreground">—</span>}
-                      </td>
-                      <td className="px-4 py-2 text-right">
-                        {d.clientInternalRevisionRate !== null ? <span className={cn("font-bold", d.clientInternalRevisionRate > 0 ? "text-status-warning" : "text-status-ok")}>{d.clientInternalRevisionRate}%</span> : <span className="text-muted-foreground">—</span>}
                       </td>
                       <td className="px-4 py-2 text-right">
                         <span className="font-bold">{d.clientSubmitCount ?? 0}</span><span className="text-muted-foreground text-[10px]">回</span>
@@ -744,8 +726,13 @@ export default function ReportPage() {
                 ② 初稿合格率（目標: クライアント {getClientTarget("first_draft_pass", 80)}% / 社内 {getInternalTarget("first_draft_pass", 80)}%）
               </h4>
               <div className="pl-4 border-l-[3px] border-status-ok/30 space-y-2">
-                <p className="text-muted-foreground">初稿（version_number=1）のファイルのうち、修正を挟まずに<span className="font-medium text-foreground">「FIX済」</span>または<span className="font-medium text-foreground">「承認済」</span>に到達した割合を算出します。</p>
-                <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">計算式: FIX済み初稿数 ÷ チェック済み初稿数 × 100</p>
+                <p className="text-muted-foreground">初稿（version_number=1）のファイルに対して、最初に押されたボタンが<span className="font-medium text-foreground">「クライアント提出」</span>であれば合格としてカウントします。<span className="font-medium text-foreground">「社内修正する」</span>ボタンが先に押された場合は不合格（社内修正が必要だった）と判定します。</p>
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="font-semibold text-foreground mb-1">🔄 判定フロー</p>
+                  <p className="text-muted-foreground">初稿アップロード → AIチェック → 「クライアント提出」ボタン押下 = <span className="font-medium text-status-ok">初稿合格 ✓</span></p>
+                  <p className="text-muted-foreground">初稿アップロード → AIチェック → 「社内修正する」ボタン押下 = <span className="font-medium text-status-ng">初稿不合格 ✗</span></p>
+                </div>
+                <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">計算式: クライアント提出された初稿数 ÷ アクション記録のある初稿数 × 100</p>
               </div>
             </div>
 
@@ -767,20 +754,14 @@ export default function ReportPage() {
             <div className="space-y-2">
               <h4 className="text-base font-bold text-foreground flex items-center gap-2">
                 <RotateCcw className="h-4 w-4 text-status-warning" />
-                ④ 社内修正率・アクション回数
+                ④ アクション回数（提出回数・社内修正回数）
               </h4>
               <div className="pl-4 border-l-[3px] border-status-warning/30 space-y-2">
                 <p className="text-muted-foreground">チェック画面の<span className="font-medium text-foreground">「クライアント提出」</span>ボタンと<span className="font-medium text-foreground">「社内修正する」</span>ボタンの押下をDBに記録（submission_logsテーブル）し、正確にカウントします。</p>
                 <div className="bg-muted/50 rounded-lg p-3 space-y-1">
-                  <p className="text-muted-foreground"><span className="font-medium text-foreground">クライアント提出回数:</span> action_type=&apos;client_submit&apos; のログ件数</p>
-                  <p className="text-muted-foreground"><span className="font-medium text-foreground">社内修正回数:</span> action_type=&apos;internal_revision&apos; のログ件数</p>
-                  <p className="text-muted-foreground"><span className="font-medium text-foreground">社内修正率:</span> クライアント提出シーケンスのうち、最大バージョン番号が2以上（= 社内修正ボタンで新稿がアップロードされた）の割合</p>
+                  <p className="text-muted-foreground"><span className="font-medium text-foreground">クライアント提出回数:</span> 「クライアント提出」ボタンが押された回数</p>
+                  <p className="text-muted-foreground"><span className="font-medium text-foreground">社内修正回数:</span> 「社内修正する」ボタンが押された回数</p>
                 </div>
-                <div className="bg-muted/50 rounded-lg p-3">
-                  <p className="font-semibold text-foreground mb-1">🔄 運用フロー</p>
-                  <p className="text-muted-foreground">初稿アップロード → AIチェック → 「クライアント提出」or「社内修正する」→ 次稿アップロード → AIチェック → 繰り返し</p>
-                </div>
-                <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">社内修正率 = 社内修正発生シーケンス数 ÷ クライアント提出シーケンス総数 × 100</p>
               </div>
             </div>
 
