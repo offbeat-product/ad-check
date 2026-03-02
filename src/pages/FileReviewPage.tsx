@@ -1344,6 +1344,17 @@ export default function FileReviewPage() {
               const { error } = await supabase.from("project_files").update({ submission_type: "client" } as any).eq("id", file.id);
               if (!handleSupabaseError(error, "submission_type")) {
                 setFile({ ...file, submission_type: "client" as any });
+                // Log the client submission action
+                await supabase.from("submission_logs").insert({
+                  file_id: file.id,
+                  project_id: file.project_id,
+                  product_id: product?.id || null,
+                  process_type: file.process_type,
+                  action_type: "client_submit",
+                  version_number: file.version_number ?? 1,
+                  pattern_id: file.pattern_id,
+                  created_by: user?.id || null,
+                } as any);
                 toast({ title: "✅ クライアント提出に変更しました" });
               }
               setSubmitToClientOpen(false);
@@ -1367,6 +1378,17 @@ export default function FileReviewPage() {
             <AlertDialogCancel>キャンセル</AlertDialogCancel>
             <AlertDialogAction onClick={async () => {
               if (!file) return;
+              // Log the internal revision action
+              await supabase.from("submission_logs").insert({
+                file_id: file.id,
+                project_id: file.project_id,
+                product_id: product?.id || null,
+                process_type: file.process_type,
+                action_type: "internal_revision",
+                version_number: file.version_number ?? 1,
+                pattern_id: file.pattern_id,
+                created_by: user?.id || null,
+              } as any);
               // Ensure submission_type stays internal
               if (file.submission_type === "client") {
                 await supabase.from("project_files").update({ submission_type: "internal" } as any).eq("id", file.id);
