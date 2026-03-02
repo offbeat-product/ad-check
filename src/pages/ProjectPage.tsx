@@ -298,6 +298,58 @@ export default function ProjectPage() {
     return () => { cancelled = true; };
   }, [fetchData]);
 
+  // Realtime subscription: update files & check results when project_files change
+  useEffect(() => {
+    if (!id) return;
+    const channel = supabase
+      .channel(`project-files:${id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "project_files",
+          filter: `project_id=eq.${id}`,
+        },
+        async (payload) => {
+          console.log("[ProjectPage] Realtime project_files change:", payload.eventType);
+          const newFile = payload.new as ProjectFile | undefined;
+          const oldFile = payload.old as { id?: string } | undefined;
+
+          if (payload.eventType === "DELETE" && oldFile?.id) {
+            setFiles(prev => prev.filter(f => f.id !== oldFile.id));
+            return;
+          }
+
+          if (newFile) {
+            setFiles(prev => {
+              const idx = prev.findIndex(f => f.id === newFile.id);
+              if (idx >= 0) {
+                const updated = [...prev];
+                updated[idx] = newFile;
+                return updated;
+              }
+              return [...prev, newFile];
+            });
+
+            // If a check_result_id appeared/changed, fetch the check result
+            if (newFile.check_result_id) {
+              const { data: cr } = await supabase
+                .from("check_results")
+                .select("id, overall_status, ng_count, warning_count")
+                .eq("id", newFile.check_result_id)
+                .maybeSingle();
+              if (cr) {
+                setCheckResults(prev => ({ ...prev, [cr.id]: cr }));
+              }
+            }
+          }
+        }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [id]);
+
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   useEffect(() => {
     if (!id) return;

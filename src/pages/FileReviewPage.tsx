@@ -261,6 +261,11 @@ export default function FileReviewPage() {
     checkProgress.start();
     let pendingRecordId: string | null = null;
     const processKey = file.process_type || "script";
+
+    // Immediately mark file as "checking" in DB so ProjectPage can show the status
+    await supabase.from("project_files").update({ status: "checking" }).eq("id", file.id);
+    setFile(prev => prev ? { ...prev, status: "checking" } : prev);
+
     try {
       const aiCfg = AI_CHECK_CONFIG[processKey];
       const inputMode = aiCfg?.inputMode || "text";
