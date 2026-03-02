@@ -95,11 +95,26 @@ export async function webhookFetch(url: string, body: Record<string, any>): Prom
       raw = JSON.parse(responseText);
     } catch (parseErr) {
       console.error("[Webhook] Failed to parse response:", responseText.substring(0, 500));
-      // Check for known n8n error patterns in the raw text
       if (responseText.includes("Service unavailable") || responseText.includes("high demand")) {
         throw new Error("AIモデルが一時的に高負荷です。数分後に再度お試しください。");
       }
       throw new Error("サーバーからの応答を解析できませんでした。しばらく待ってから再度お試しください。");
+    }
+
+    // Detect n8n error responses (e.g. Gemini 503 wrapped in AxiosError)
+    const errorCandidate = Array.isArray(raw) ? raw[0] : raw;
+    if (errorCandidate?.error) {
+      const errMsg = typeof errorCandidate.error === "string"
+        ? errorCandidate.error
+        : errorCandidate.error?.message || JSON.stringify(errorCandidate.error);
+      console.error("[Webhook] n8n returned error object:", errMsg);
+      if (errMsg.includes("high demand") || errMsg.includes("503") || errMsg.includes("UNAVAILABLE")) {
+        throw new Error("AIモデルが一時的に高負荷です。数分後に再度お試しください。");
+      }
+      if (errMsg.includes("429") || errMsg.includes("RESOURCE_EXHAUSTED") || errMsg.includes("rate limit")) {
+        throw new Error("APIレート制限に達しました。数分後に再度お試しください。");
+      }
+      throw new Error(`チェック処理でエラーが発生しました: ${errMsg.substring(0, 100)}`);
     }
 
     console.log("[Webhook] Response received:", { status: res.status, raw });
