@@ -27,6 +27,8 @@ interface ProcessRow {
   process_label: string;
   status: string;
   deadline: string | null;
+  internal_deadline: string | null;
+  client_deadline: string | null;
   updated_at: string;
 }
 
@@ -97,14 +99,26 @@ interface MetricSet {
   avgRevisions: number | null;
   revisionSequences: number;
   totalRevisions: number;
+  internalRevisions: number | null;
+  internalRevSequences: number;
+  clientRevisions: number | null;
+  clientRevSequences: number;
 }
 
-function computeMetrics(procs: ProcessRow[], fileSet: FileRow[]): MetricSet {
-  // 納期遵守率: 完了済み工程のうち、updated_at <= deadline の割合
-  const withDeadline = procs.filter(p => p.status === "completed" && p.deadline);
+function computeMetrics(procs: ProcessRow[], fileSet: FileRow[], submissionType?: "internal" | "client"): MetricSet {
+  // 納期遵守率: submission_type に応じて internal_deadline / client_deadline を使用
+  const getDeadlineForType = (p: ProcessRow, type?: "internal" | "client"): string | null => {
+    if (type === "internal") return p.internal_deadline ?? p.deadline;
+    if (type === "client") return p.client_deadline ?? p.deadline;
+    // "all": いずれかの期限があれば評価
+    return p.internal_deadline ?? p.client_deadline ?? p.deadline;
+  };
+
+  const withDeadline = procs.filter(p => p.status === "completed" && getDeadlineForType(p, submissionType));
   const onTime = withDeadline.filter(p => {
     const completed = new Date(p.updated_at);
-    const deadline = new Date(p.deadline + "T23:59:59");
+    const dl = getDeadlineForType(p, submissionType)!;
+    const deadline = new Date(dl + "T23:59:59");
     return completed <= deadline;
   }).length;
 
@@ -114,19 +128,24 @@ function computeMetrics(procs: ProcessRow[], fileSet: FileRow[]): MetricSet {
   const firstDraftFiles = fileSet.filter(f => (f.version_number ?? 1) === 1 && isChecked(f));
   const firstDraftPassed = firstDraftFiles.filter(isPassed).length;
 
-  // 修正稿数: project_id × process_type ごとの最大 version_number の平均
-  const chains = new Map<string, number>();
-  for (const f of fileSet) {
-    const key = `${f.project_id}::${f.process_type}`;
-    const ver = f.version_number ?? 1;
-    chains.set(key, Math.max(chains.get(key) ?? 0, ver));
-  }
-  let totalRevisions = 0;
-  let sequenceCount = 0;
-  for (const [, maxVer] of chains) {
-    totalRevisions += maxVer - 1;
-    sequenceCount++;
-  }
+  // 修正稿数: 提出タイプごとにバージョン数をカウント
+  const computeRevForType = (files: FileRow[]) => {
+    const chains = new Map<string, number>();
+    for (const f of files) {
+      const key = `${f.project_id}::${f.process_type}`;
+      const ver = f.version_number ?? 1;
+      chains.set(key, Math.max(chains.get(key) ?? 0, ver));
+    }
+    let total = 0, count = 0;
+    for (const [, maxVer] of chains) { total += maxVer - 1; count++; }
+    return { total, count };
+  };
+
+  const allRev = computeRevForType(fileSet);
+  const internalFiles = fileSet.filter(f => f.submission_type === "internal");
+  const clientFiles = fileSet.filter(f => f.submission_type === "client");
+  const internalRev = computeRevForType(internalFiles);
+  const clientRev = computeRevForType(clientFiles);
 
   return {
     deadlineRate: withDeadline.length > 0 ? Math.round((onTime / withDeadline.length) * 100) : null,
@@ -135,9 +154,13 @@ function computeMetrics(procs: ProcessRow[], fileSet: FileRow[]): MetricSet {
     firstDraftRate: firstDraftFiles.length > 0 ? Math.round((firstDraftPassed / firstDraftFiles.length) * 100) : null,
     firstDraftTotal: firstDraftFiles.length,
     firstDraftPassed,
-    avgRevisions: sequenceCount > 0 ? Math.round((totalRevisions / sequenceCount) * 10) / 10 : null,
-    revisionSequences: sequenceCount,
-    totalRevisions,
+    avgRevisions: allRev.count > 0 ? Math.round((allRev.total / allRev.count) * 10) / 10 : null,
+    revisionSequences: allRev.count,
+    totalRevisions: allRev.total,
+    internalRevisions: internalRev.count > 0 ? Math.round((internalRev.total / internalRev.count) * 10) / 10 : null,
+    internalRevSequences: internalRev.count,
+    clientRevisions: clientRev.count > 0 ? Math.round((clientRev.total / clientRev.count) * 10) / 10 : null,
+    clientRevSequences: clientRev.count,
   };
 }
 
@@ -176,7 +199,7 @@ export default function ReportPage() {
       setLoading(true);
       try {
         const [procRes, fileRes, projRes, prodRes, clientRes, targetRes] = await Promise.all([
-          supabase.from("project_processes").select("id, project_id, process_key, process_label, status, deadline, updated_at"),
+          supabase.from("project_processes").select("id, project_id, process_key, process_label, status, deadline, internal_deadline, client_deadline, updated_at"),
           supabase.from("project_files").select("id, project_id, process_type, status, version_number, parent_file_id, fixed_at, created_at, submission_type"),
           supabase.from("projects").select("id, name, product_id"),
           supabase.from("products").select("id, name, client_id"),
@@ -238,7 +261,7 @@ export default function ReportPage() {
   }, [periodFiles, submissionFilter]);
 
   // Overall metrics
-  const overall = useMemo(() => computeMetrics(periodProcesses, filteredFiles), [periodProcesses, filteredFiles]);
+  const overall = useMemo(() => computeMetrics(periodProcesses, filteredFiles, submissionFilter !== "all" ? submissionFilter : undefined), [periodProcesses, filteredFiles, submissionFilter]);
 
   // Monthly trend
   const monthlyData = useMemo(() => {
@@ -292,8 +315,8 @@ export default function ReportPage() {
     const internal = periodFiles.filter(f => f.submission_type === "internal");
     const client = periodFiles.filter(f => f.submission_type === "client");
     return {
-      internal: computeMetrics(periodProcesses, internal),
-      client: computeMetrics(periodProcesses, client),
+      internal: computeMetrics(periodProcesses, internal, "internal"),
+      client: computeMetrics(periodProcesses, client, "client"),
     };
   }, [periodProcesses, periodFiles]);
 
@@ -437,18 +460,47 @@ export default function ReportPage() {
               <CardTitle className="text-xs font-medium">社内 / クライアント提出別</CardTitle>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
-              <table className="w-full text-xs min-w-[500px]">
+              <table className="w-full text-xs min-w-[600px]">
                 <thead>
                   <tr className="border-b border-border text-muted-foreground text-left">
                     <th className="px-4 py-2 font-medium">提出タイプ</th>
                     <th className="px-4 py-2 font-medium text-right">納期遵守率</th>
                     <th className="px-4 py-2 font-medium text-right">初稿合格率</th>
                     <th className="px-4 py-2 font-medium text-right">平均修正回数</th>
+                    <th className="px-4 py-2 font-medium text-right">期限基準</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <SubmissionRow label="社内提出" metrics={submissionSummary.internal} targets={targetMap} />
-                  <SubmissionRow label="クライアント提出" metrics={submissionSummary.client} targets={targetMap} />
+                  <tr className="border-b border-border/50">
+                    <td className="px-4 py-2 font-medium">社内提出</td>
+                    <td className="px-4 py-2 text-right">
+                      <RateCell rate={submissionSummary.internal.deadlineRate} target={getTarget("deadline_compliance", 100)} total={submissionSummary.internal.deadlineTotal} />
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <RateCell rate={submissionSummary.internal.firstDraftRate} target={getTarget("first_draft_pass", 80)} total={submissionSummary.internal.firstDraftTotal} />
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      {submissionSummary.internal.internalRevisions !== null ? (
+                        <span className="font-bold">{submissionSummary.internal.internalRevisions}回</span>
+                      ) : <span className="text-muted-foreground">—</span>}
+                    </td>
+                    <td className="px-4 py-2 text-right text-[10px] text-muted-foreground">社内期限</td>
+                  </tr>
+                  <tr className="border-b border-border/50">
+                    <td className="px-4 py-2 font-medium">クライアント提出</td>
+                    <td className="px-4 py-2 text-right">
+                      <RateCell rate={submissionSummary.client.deadlineRate} target={getTarget("deadline_compliance", 100)} total={submissionSummary.client.deadlineTotal} />
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <RateCell rate={submissionSummary.client.firstDraftRate} target={getTarget("first_draft_pass", 80)} total={submissionSummary.client.firstDraftTotal} />
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      {submissionSummary.client.clientRevisions !== null ? (
+                        <span className="font-bold">{submissionSummary.client.clientRevisions}回</span>
+                      ) : <span className="text-muted-foreground">—</span>}
+                    </td>
+                    <td className="px-4 py-2 text-right text-[10px] text-muted-foreground">クライアント期限</td>
+                  </tr>
                 </tbody>
               </table>
             </CardContent>
@@ -559,8 +611,10 @@ export default function ReportPage() {
           <CardContent className="text-[11px] text-muted-foreground space-y-2">
             <div>
               <p className="font-medium text-foreground">① 納期遵守率（目標: {getTarget("deadline_compliance", 100)}%）</p>
-              <p>工程（project_processes）のステータスが「完了」になった日時（updated_at）と、設定された期限（deadline）を比較。updated_at ≤ deadline であれば「遵守」とカウント。</p>
-              <p className="text-[10px]">計算式: 期限内完了工程数 ÷ 完了済み工程数（期限設定あり） × 100</p>
+              <p>工程（project_processes）のステータスが「完了」になった日時（updated_at）と、設定された期限を比較。</p>
+              <p>• 社内提出: <code className="bg-muted px-1 rounded">internal_deadline</code>で判定</p>
+              <p>• クライアント提出: <code className="bg-muted px-1 rounded">client_deadline</code>で判定</p>
+              <p className="text-[10px]">計算式: 期限内完了工程数 ÷ 完了済み工程数（該当期限設定あり） × 100</p>
             </div>
             <div>
               <p className="font-medium text-foreground">② 初稿合格率（目標: {getTarget("first_draft_pass", 80)}%）</p>
@@ -569,7 +623,9 @@ export default function ReportPage() {
             </div>
             <div>
               <p className="font-medium text-foreground">③ 平均修正回数</p>
-              <p>案件×工程ごとにアップロードされた最大稿数（version_number）を取得し、修正回数 = 最大稿数 - 1 として計算。全シーケンスの平均値を表示。</p>
+              <p>提出タイプ（submission_type）ごとにバージョン数をカウント。</p>
+              <p>• 社内修正回数 = submission_type=internal のファイルの最大version - 1</p>
+              <p>• クライアント修正回数 = submission_type=client のファイルの最大version - 1</p>
               <p className="text-[10px]">計算式: Σ(各シーケンスの最大version - 1) ÷ シーケンス数</p>
             </div>
           </CardContent>
@@ -624,25 +680,7 @@ function RateCell({ rate, target, total }: { rate: number | null; target: number
   );
 }
 
-function SubmissionRow({ label, metrics, targets }: { label: string; metrics: MetricSet; targets: Map<string, number> }) {
-  const getTarget = (key: string, fallback: number) => targets.get(key) ?? fallback;
-  return (
-    <tr className="border-b border-border/50">
-      <td className="px-4 py-2 font-medium">{label}</td>
-      <td className="px-4 py-2 text-right">
-        <RateCell rate={metrics.deadlineRate} target={getTarget("deadline_compliance", 100)} total={metrics.deadlineTotal} />
-      </td>
-      <td className="px-4 py-2 text-right">
-        <RateCell rate={metrics.firstDraftRate} target={getTarget("first_draft_pass", 80)} total={metrics.firstDraftTotal} />
-      </td>
-      <td className="px-4 py-2 text-right">
-        {metrics.avgRevisions !== null ? (
-          <span className="font-bold">{metrics.avgRevisions}回</span>
-        ) : <span className="text-muted-foreground">—</span>}
-      </td>
-    </tr>
-  );
-}
+// SubmissionRow removed - inlined in the submission comparison table above
 
 function MetricsTable({ title, rows, targets }: {
   title: string;

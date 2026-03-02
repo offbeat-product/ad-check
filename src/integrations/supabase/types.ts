@@ -827,9 +827,11 @@ export type Database = {
       }
       project_processes: {
         Row: {
+          client_deadline: string | null
           created_at: string
           deadline: string | null
           id: string
+          internal_deadline: string | null
           is_active: boolean
           is_common: boolean
           process_key: string
@@ -840,9 +842,11 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          client_deadline?: string | null
           created_at?: string
           deadline?: string | null
           id?: string
+          internal_deadline?: string | null
           is_active?: boolean
           is_common?: boolean
           process_key: string
@@ -853,9 +857,11 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          client_deadline?: string | null
           created_at?: string
           deadline?: string | null
           id?: string
+          internal_deadline?: string | null
           is_active?: boolean
           is_common?: boolean
           process_key?: string

@@ -52,17 +52,17 @@ import BatchCheckFloatingBar from "@/components/BatchCheckFloatingBar";
 
 import { getSubmitBadgeClass, getSubmitLabel } from "@/lib/check-display";
 
-function DeadlineDisplay({ deadline, className, isCompleted }: { deadline: string | null; className?: string; isCompleted?: boolean }) {
-  if (!deadline) return <span className={cn("text-xs text-muted-foreground/50", className)}>納期未設定</span>;
+function DeadlineDisplay({ deadline, className, isCompleted, label }: { deadline: string | null; className?: string; isCompleted?: boolean; label?: string }) {
+  const prefix = label || "納期";
+  if (!deadline) return <span className={cn("text-xs text-muted-foreground/50", className)}>{prefix}未設定</span>;
   const d = new Date(deadline);
   const daysUntil = differenceInDays(d, new Date());
   const past = isPast(d) && daysUntil < 0;
   const soon = daysUntil >= 0 && daysUntil <= 3;
   const dateStr = format(d, "MM/dd");
 
-  // 完了済みの場合は警告を表示しない
   if (isCompleted) {
-    return <span className={cn("text-xs text-muted-foreground", className)}>納期: {dateStr}</span>;
+    return <span className={cn("text-xs text-muted-foreground", className)}>{prefix}: {dateStr}</span>;
   }
 
   return (
@@ -70,20 +70,21 @@ function DeadlineDisplay({ deadline, className, isCompleted }: { deadline: strin
       past ? "text-status-ng font-medium" : soon ? "text-status-warning font-medium" : "text-muted-foreground"
     )}>
       {(past || soon) && <AlertTriangle className="h-3 w-3" />}
-      {past ? `期限超過 (${dateStr})` : `納期: ${dateStr}`}
+      {past ? `${prefix}超過 (${dateStr})` : `${prefix}: ${dateStr}`}
     </span>
   );
 }
 
-function DeadlinePicker({ deadline, onChange, isCompleted }: { deadline: string | null; onChange: (d: string | null) => void; isCompleted?: boolean }) {
+function DeadlinePicker({ deadline, onChange, isCompleted, label }: { deadline: string | null; onChange: (d: string | null) => void; isCompleted?: boolean; label?: string }) {
   const [open, setOpen] = useState(false);
   const selected = deadline ? new Date(deadline) : undefined;
+  const prefix = label || "納期";
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button className="hover:bg-muted/50 rounded px-1 py-0.5 transition-colors">
-          <DeadlineDisplay deadline={deadline} isCompleted={isCompleted} />
+          <DeadlineDisplay deadline={deadline} isCompleted={isCompleted} label={label} />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
@@ -99,7 +100,7 @@ function DeadlinePicker({ deadline, onChange, isCompleted }: { deadline: string 
         {deadline && (
           <div className="px-3 pb-3">
             <Button size="sm" variant="ghost" className="text-xs w-full" onClick={() => { onChange(null); setOpen(false); }}>
-              納期をクリア
+              {prefix}をクリア
             </Button>
           </div>
         )}
@@ -426,9 +427,9 @@ export default function ProjectPage() {
     }
   };
 
-  const handleProcessDeadlineChange = async (processId: string, deadline: string | null) => {
-    await updateProcess(processId, { deadline } as Partial<ProjectProcess>);
-    toast({ title: "工程の納期を更新しました" });
+  const handleProcessDeadlineChange = async (processId: string, field: "internal_deadline" | "client_deadline", value: string | null) => {
+    await updateProcess(processId, { [field]: value } as Partial<ProjectProcess>);
+    toast({ title: field === "internal_deadline" ? "社内期限を更新しました" : "クライアント期限を更新しました" });
   };
 
   const handleProcessStatusChange = async (processId: string, status: string) => {
@@ -838,9 +839,16 @@ export default function ProjectPage() {
                         <h2 className="text-sm font-semibold">{proc.process_label}</h2>
 
                         <DeadlinePicker
-                          deadline={proc.deadline}
-                          onChange={(d) => handleProcessDeadlineChange(proc.id, d)}
+                          deadline={proc.internal_deadline}
+                          onChange={(d) => handleProcessDeadlineChange(proc.id, "internal_deadline", d)}
                           isCompleted={isProcessCompleted}
+                          label="社内"
+                        />
+                        <DeadlinePicker
+                          deadline={proc.client_deadline}
+                          onChange={(d) => handleProcessDeadlineChange(proc.id, "client_deadline", d)}
+                          isCompleted={isProcessCompleted}
+                          label="Client"
                         />
 
                         <Popover>
