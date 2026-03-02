@@ -25,9 +25,10 @@ interface AICheckPanelProps {
   productId?: string;
   projectId?: string;
   processKey?: string;
+  onSeekMedia?: (seconds: number) => void;
 }
 
-export default function AICheckPanel({ items, markers, productCode, commentCounts, highlightCard, onCommentClick, checkResultId, onTabChange, overallStatus, productId, projectId, processKey }: AICheckPanelProps) {
+export default function AICheckPanel({ items, markers, productCode, commentCounts, highlightCard, onCommentClick, checkResultId, onTabChange, overallStatus, productId, projectId, processKey, onSeekMedia }: AICheckPanelProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [resolvedItems, setResolvedItems] = useState<Set<string>>(new Set());
@@ -226,6 +227,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
               onToggleSelect={() => toggleSelectItem(item.pattern_id)}
               onToggleResolved={() => setResolvedItems((s) => { const next = new Set(s); next.has(item.pattern_id) ? next.delete(item.pattern_id) : next.add(item.pattern_id); return next; })}
               onCommentClick={() => onCommentClick(item.pattern_id)}
+              onSeekMedia={onSeekMedia}
             />
           );
         })}
@@ -248,6 +250,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
               onToggleSelect={toggleSelectItem}
               onToggleResolved={(id) => setResolvedItems((s) => { const next = new Set(s); next.has(id) ? next.delete(id) : next.add(id); return next; })}
               onCommentClick={onCommentClick}
+              onSeekMedia={onSeekMedia}
             />
           );
         })()}
@@ -280,7 +283,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
 }
 
 /* Collapsible section for OK items */
-function OkItemsSection({ okItems, markers, resolvedItems, selectedItems, highlightCard, appliedItems, commentCounts, productCode, cardRefs, onToggleSelect, onToggleResolved, onCommentClick }: {
+function OkItemsSection({ okItems, markers, resolvedItems, selectedItems, highlightCard, appliedItems, commentCounts, productCode, cardRefs, onToggleSelect, onToggleResolved, onCommentClick, onSeekMedia }: {
   okItems: CheckItem[];
   markers: import("@/lib/marker-positions").CheckMarker[];
   resolvedItems: Set<string>;
@@ -293,6 +296,7 @@ function OkItemsSection({ okItems, markers, resolvedItems, selectedItems, highli
   onToggleSelect: (id: string) => void;
   onToggleResolved: (id: string) => void;
   onCommentClick: (id: string) => void;
+  onSeekMedia?: (seconds: number) => void;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -322,6 +326,7 @@ function OkItemsSection({ okItems, markers, resolvedItems, selectedItems, highli
             onToggleSelect={() => onToggleSelect(item.pattern_id)}
             onToggleResolved={() => onToggleResolved(item.pattern_id)}
             onCommentClick={() => onCommentClick(item.pattern_id)}
+            onSeekMedia={onSeekMedia}
           />
         );
       })}
