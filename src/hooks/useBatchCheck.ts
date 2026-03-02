@@ -35,10 +35,17 @@ export function useBatchCheck() {
   ) => {
     if (!user || files.length === 0) return;
 
-    // Filter to unchecked or re-checkable files (skip already-fixed files)
+    // Use files as-is — caller already filters for selection/unchecked
     const targetFiles = files.filter(f => f.file_data && !f.parent_file_id);
     if (targetFiles.length === 0) {
       toast({ title: "チェック対象のファイルがありません" });
+      return;
+    }
+
+    // Enforce max 5 files per batch
+    const MAX_BATCH = 5;
+    if (targetFiles.length > MAX_BATCH) {
+      toast({ title: `一括チェックは最大${MAX_BATCH}件までです`, description: `${targetFiles.length}件選択されています。${MAX_BATCH}件以下に絞ってください。`, variant: "destructive" });
       return;
     }
 
