@@ -131,7 +131,8 @@ export function useBatchCheck() {
             // Related files for video and audio processes
             const isVideoProcess = ["vcon", "video_horizontal", "video_vertical"].includes(processKey);
             const isAudioProcess = ["narration", "bgm"].includes(processKey);
-            if (isVideoProcess || isAudioProcess) {
+            const isNaScriptProcess = processKey === "na_script";
+            if (isVideoProcess || isAudioProcess || isNaScriptProcess) {
               const relatedFiles = await getRelatedProcessData(projectId, processKey, file.pattern_id);
               if (Object.keys(relatedFiles).length > 0) {
                 body.related_files = relatedFiles;
