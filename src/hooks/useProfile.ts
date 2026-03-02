@@ -24,22 +24,32 @@ export function useProfile() {
 
     let cancelled = false;
 
-    const ensureAndFetch = async () => {
-      // Ensure profile exists
-      await supabase.rpc("ensure_profile", {
-        p_user_id: user.id,
-        p_email: user.email || "",
-      });
+    const ensureAndFetch = async (retryCount = 0) => {
+      try {
+        // Ensure profile exists
+        await supabase.rpc("ensure_profile", {
+          p_user_id: user.id,
+          p_email: user.email || "",
+        });
 
-      const { data } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", user.id)
-        .maybeSingle();
+        const { data } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .maybeSingle();
 
-      if (!cancelled) {
-        setProfile(data);
-        setLoading(false);
+        if (!cancelled) {
+          setProfile(data);
+          setLoading(false);
+        }
+      } catch (e) {
+        if (retryCount < 3 && !cancelled) {
+          console.warn(`[Profile] Fetch failed (attempt ${retryCount + 1}), retrying...`, e);
+          await new Promise(r => setTimeout(r, Math.min(1000 * Math.pow(2, retryCount), 8000)));
+          return ensureAndFetch(retryCount + 1);
+        }
+        console.error("[Profile] Fetch failed after retries:", e);
+        if (!cancelled) setLoading(false);
       }
     };
 

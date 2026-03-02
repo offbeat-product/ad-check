@@ -29,13 +29,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [roleLoading, setRoleLoading] = useState(true);
   const { toast } = useToast();
 
-  const fetchRole = useCallback(async (userId: string) => {
+  const fetchRole = useCallback(async (userId: string, retryCount = 0) => {
     setRoleLoading(true);
     try {
       const { data } = await supabase.rpc("get_user_role", { _user_id: userId });
       if (data) setRole(data as UserRole);
     } catch (e) {
-      console.warn("[Auth] Failed to fetch role:", e);
+      if (retryCount < 3) {
+        console.warn(`[Auth] Role fetch failed (attempt ${retryCount + 1}), retrying...`);
+        await new Promise(r => setTimeout(r, Math.min(1000 * Math.pow(2, retryCount), 8000)));
+        return fetchRole(userId, retryCount + 1);
+      }
+      console.warn("[Auth] Failed to fetch role after retries:", e);
     } finally {
       setRoleLoading(false);
     }

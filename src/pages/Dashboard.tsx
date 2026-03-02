@@ -55,18 +55,31 @@ export default function Dashboard() {
     if (!user) return;
     let cancelled = false;
 
-    const fetchData = async () => {
+    const fetchData = async (retryCount = 0) => {
       setLoading(true);
       const from = page * ITEMS_PER_PAGE;
       const to = from + ITEMS_PER_PAGE - 1;
 
-      const [cr, countRes, pr, prod, pf] = await Promise.all([
-        supabase.from("check_results").select("*").order("created_at", { ascending: false }).range(from, to),
-        supabase.from("check_results").select("*", { count: "exact", head: true }),
-        page === 0 ? supabase.from("projects").select("*").order("updated_at", { ascending: false }).limit(6) : null,
-        page === 0 ? supabase.from("products").select("*") : null,
-        page === 0 ? supabase.from("project_files").select("id, project_id, file_name, file_type, process_type, status, updated_at").order("updated_at", { ascending: false }).limit(5) : null,
-      ]);
+      let cr, countRes, pr, prod, pf;
+      try {
+        [cr, countRes, pr, prod, pf] = await Promise.all([
+          supabase.from("check_results").select("*").order("created_at", { ascending: false }).range(from, to),
+          supabase.from("check_results").select("*", { count: "exact", head: true }),
+          page === 0 ? supabase.from("projects").select("*").order("updated_at", { ascending: false }).limit(6) : null,
+          page === 0 ? supabase.from("products").select("*") : null,
+          page === 0 ? supabase.from("project_files").select("id, project_id, file_name, file_type, process_type, status, updated_at").order("updated_at", { ascending: false }).limit(5) : null,
+        ]);
+      } catch (e) {
+        // Network error — retry up to 3 times with exponential backoff
+        if (retryCount < 3 && !cancelled) {
+          console.warn(`[Dashboard] Fetch failed (attempt ${retryCount + 1}), retrying...`, e);
+          await new Promise(r => setTimeout(r, Math.min(1000 * Math.pow(2, retryCount), 8000)));
+          return fetchData(retryCount + 1);
+        }
+        console.error("[Dashboard] Fetch failed after retries:", e);
+        setLoading(false);
+        return;
+      }
 
       if (cancelled) return;
 
@@ -116,7 +129,7 @@ export default function Dashboard() {
       .channel("dashboard-check-results")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "check_results", filter: `user_id=eq.${user.id}` },
+        { event: "*", schema: "public", table: "check_results" },
         () => { setRefetchKey((k) => k + 1); }
       )
       .subscribe();
