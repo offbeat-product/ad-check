@@ -81,6 +81,7 @@ export default function FileReviewPage() {
   const [candidateCount, setCandidateCount] = useState<number>(0);
   const [mentionMembers, setMentionMembers] = useState<MentionMember[]>([]);
   const [comparisonMode, setComparisonMode] = useState(false);
+  const [submitToClientOpen, setSubmitToClientOpen] = useState(false);
   const [comparisonDrafts, setComparisonDrafts] = useState<DraftEntry[]>([]);
   const [comparisonActivePairIndex, setComparisonActivePairIndex] = useState(0);
   const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
@@ -1036,28 +1037,17 @@ export default function FileReviewPage() {
                 <Unlock className="h-3 w-3 mr-1" />FIX解除
               </Button>
             )}
-            {hasCheckResult && (
-              <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => setRightTab("ai-check")}>
-                <CheckCircle2 className="h-3 w-3 mr-1" />AI結果
-              </Button>
-            )}
             <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => setShareOpen(true)}>
               <Link2 className="h-3 w-3 mr-1" />共有
             </Button>
             <Button size="sm" variant="outline" className="text-xs h-8" onClick={handleDownload}>
               <Download className="h-3 w-3 mr-1" />DL
             </Button>
-            {hasCheckResult && (
-              <Button size="sm" variant="outline" className="text-xs h-8" onClick={handleExportCsv}>CSV</Button>
-            )}
             {hasVersions && (
               <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => setCompareOpen(true)}>
                 <GitCompare className="h-3 w-3 mr-1" />比較
               </Button>
             )}
-            <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => setUploadRevisionOpen(true)}>
-              <Upload className="h-3 w-3 mr-1" />修正版
-            </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button size="sm" variant="ghost" className="text-xs h-8 text-destructive hover:text-destructive hover:bg-destructive/10">
@@ -1202,6 +1192,24 @@ export default function FileReviewPage() {
                 </Button>
               </div>
             )}
+
+            {/* Submit to client button */}
+            {file.submission_type !== "client" && (
+              <Button
+                size="lg"
+                className="w-full mt-4 gap-2 text-sm font-bold h-12"
+                onClick={() => setSubmitToClientOpen(true)}
+              >
+                <CheckCircle2 className="h-5 w-5" />
+                クライアントに提出する
+              </Button>
+            )}
+            {file.submission_type === "client" && (
+              <div className="mt-4 flex items-center justify-center gap-2 py-3 rounded-lg border border-primary/30 bg-primary/5 text-primary text-sm font-medium">
+                <CheckCircle2 className="h-4 w-4" />
+                クライアント提出済み
+              </div>
+            )}
           </div>
           )}
         </div>
@@ -1323,6 +1331,32 @@ export default function FileReviewPage() {
         onOpenChange={setCompareOpen}
       />
       {record && <ShareLinkModal checkResultId={record.id} open={shareOpen} onOpenChange={setShareOpen} />}
+
+      {/* Submit to client confirmation dialog */}
+      <AlertDialog open={submitToClientOpen} onOpenChange={setSubmitToClientOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>クライアントに提出</AlertDialogTitle>
+            <AlertDialogDescription>
+              このファイルを「クライアント提出済み」としてマークします。品質ギャップ分析に反映されます。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+            <AlertDialogAction onClick={async () => {
+              if (!file) return;
+              const { error } = await supabase.from("project_files").update({ submission_type: "client" } as any).eq("id", file.id);
+              if (!handleSupabaseError(error, "submission_type")) {
+                setFile({ ...file, submission_type: "client" as any });
+                toast({ title: "✅ クライアント提出に変更しました" });
+              }
+              setSubmitToClientOpen(false);
+            }}>
+              提出する
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
