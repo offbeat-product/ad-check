@@ -84,7 +84,7 @@ export default function PatternMatrix({ projectId, patterns, processes, files, c
     }
     const patternFiles = files
       .filter(f => f.pattern_id && !commonProcessKeys.has(f.process_type))
-      .sort((a, b) => new Date(b.created_at || "").getTime() - new Date(a.created_at || "").getTime());
+      .sort((a, b) => new Date(a.created_at || "").getTime() - new Date(b.created_at || "").getTime());
 
     for (const f of patternFiles) {
       const patMap = map.get(f.pattern_id!);
