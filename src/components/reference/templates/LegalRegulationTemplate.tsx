@@ -152,12 +152,6 @@ export default function LegalRegulationTemplate({ initialData, onChange }: Props
   const [customRules, setCustomRules] = useState(initialData?.custom_rules || "");
   const [industryCustom, setIndustryCustom] = useState("");
 
-  // Emit initial data on mount so parent receives preset content
-  useEffect(() => {
-    buildAndNotify(activeLaws, customRules, industryCustom);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   const buildAndNotify = (laws: string[], custom: string, industryText: string) => {
     const lawContents = laws
       .filter(id => id !== "industry_custom")
@@ -176,6 +170,12 @@ export default function LegalRegulationTemplate({ initialData, onChange }: Props
     };
     onChange(data);
   };
+
+  // Emit initial data on mount so parent receives preset content
+  useEffect(() => {
+    buildAndNotify(activeLaws, customRules, industryCustom);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toggleLaw = (id: string) => {
     const next = activeLaws.includes(id) ? activeLaws.filter(p => p !== id) : [...activeLaws, id];
