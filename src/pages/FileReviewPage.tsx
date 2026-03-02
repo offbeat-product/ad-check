@@ -259,8 +259,9 @@ export default function FileReviewPage() {
     setRecord(null);
     setChecking(true);
     checkProgress.start();
+    let pendingRecordId: string | null = null;
+    const processKey = file.process_type || "script";
     try {
-      const processKey = file.process_type || "script";
       const aiCfg = AI_CHECK_CONFIG[processKey];
       const inputMode = aiCfg?.inputMode || "text";
 
@@ -349,7 +350,7 @@ export default function FileReviewPage() {
 
         // For video async checks, insert a pending record first so n8n can UPDATE it
         const isVideoProcess = ["vcon", "video_horizontal", "video_vertical"].includes(processKey);
-        let pendingRecordId: string | null = null;
+        // pendingRecordId is hoisted above try block
         if (isVideoProcess) {
           const { data: pendingCr, error: pendingErr } = await supabase.from("check_results").insert([{
             user_id: user.id,
@@ -464,18 +465,50 @@ export default function FileReviewPage() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "不明なエラー";
       console.error("[FileReview] AIチェックエラー:", err);
-      // Allow recovery to fetch results after error
       isRecheckingRef.current = false;
-      // After timeout/error, check if n8n already wrote the result to DB
-      await recoverCheckResult();
-      if (!record) {
-        // Restore previous result so user doesn't see "未実行"
-        if (previousCheckResultId) {
-          const { data: prevCr } = await supabase.from("check_results").select("*").eq("id", previousCheckResultId).maybeSingle();
-          if (prevCr) setRecord(prevCr);
+
+      // For video checks: "Failed to fetch" can mean n8n received the request but
+      // the connection timed out. Check if n8n already completed via the pending record.
+      if (pendingRecordId) {
+        // Wait a moment then check if n8n updated the pending record
+        await new Promise(r => setTimeout(r, 3000));
+        const { data: pendingCr } = await supabase.from("check_results").select("*").eq("id", pendingRecordId).maybeSingle();
+        if (pendingCr && pendingCr.status === "completed" && pendingCr.check_items) {
+          // n8n already completed! Show the result.
+          setRecord(pendingCr);
+          await supabase.from("project_files").update({ status: "checked", check_result_id: pendingCr.id }).eq("id", file.id);
+          setFile({ ...file, status: "checked", check_result_id: pendingCr.id });
+          checkProgress.complete();
+          toast({ title: "チェック完了", description: `Grade: ${pendingCr.overall_status}` });
+          return;
         }
-        toast({ title: "チェック送信に失敗しました。再度お試しください", description: message, variant: "destructive" });
+        // n8n hasn't completed yet — start polling in case it's still processing
+        if (pendingCr && pendingCr.status === "pending") {
+          toast({ title: "動画分析中...", description: "n8nへの接続がタイムアウトしましたが、処理は続行中の可能性があります。結果を待っています..." });
+          const polled = await videoPolling.startPolling(product.code, processKey, new Date(Date.now() - 60000).toISOString());
+          if (polled) {
+            setRecord(polled);
+            await supabase.from("project_files").update({ status: "checked", check_result_id: polled.id }).eq("id", file.id);
+            setFile({ ...file, status: "checked", check_result_id: polled.id });
+            checkProgress.complete();
+            toast({ title: "チェック完了", description: `Grade: ${polled.overall_status}` });
+            return;
+          }
+          // Polling timed out — clean up pending record and restore previous
+          await supabase.from("check_results").delete().eq("id", pendingRecordId).eq("status", "pending");
+        }
       }
+
+      // Restore previous result so user doesn't see "未実行"
+      if (previousCheckResultId) {
+        const { data: prevCr } = await supabase.from("check_results").select("*").eq("id", previousCheckResultId).maybeSingle();
+        if (prevCr) {
+          setRecord(prevCr);
+          await supabase.from("project_files").update({ status: "checked", check_result_id: prevCr.id }).eq("id", file.id);
+          setFile({ ...file, status: "checked", check_result_id: prevCr.id });
+        }
+      }
+      toast({ title: "チェック送信に失敗しました", description: "n8nへの接続に失敗しました。再度お試しください。", variant: "destructive" });
     } finally {
       isRecheckingRef.current = false;
       setChecking(false);
