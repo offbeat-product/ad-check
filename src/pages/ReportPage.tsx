@@ -4,13 +4,13 @@ import { useAuth } from "@/hooks/useAuth";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { getProcessLabel } from "@/lib/process-config";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine } from "recharts";
 import { Target, CheckCircle, TrendingUp, Calendar, Settings2, Save, Download, FileSpreadsheet, FileText, RotateCcw } from "lucide-react";
@@ -50,6 +50,41 @@ interface KpiTarget { id: string; key: string; label: string; target_value: numb
 type SubmissionFilter = "all" | "internal" | "client";
 type DrillTab = "overview" | "by_client" | "by_project" | "by_process";
 
+/* ─── Helpers ──────────────────────────────────────── */
+
+function toMonthKey(dateStr: string) {
+  const d = new Date(dateStr);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Generate list of YYYY-MM from earliest data to now */
+function generateMonthOptions(procs: ProcessRow[], files: FileRow[]): string[] {
+  let min = new Date();
+  let max = new Date();
+  for (const p of procs) {
+    const d = new Date(p.updated_at);
+    if (d < min) min = d;
+  }
+  for (const f of files) {
+    if (f.created_at) {
+      const d = new Date(f.created_at);
+      if (d < min) min = d;
+    }
+  }
+  const months: string[] = [];
+  const cursor = new Date(min.getFullYear(), min.getMonth(), 1);
+  while (cursor <= max) {
+    months.push(`${cursor.getFullYear()}-${String(cursor.getMonth() + 1).padStart(2, "0")}`);
+    cursor.setMonth(cursor.getMonth() + 1);
+  }
+  return months;
+}
+
+function monthLabel(m: string) {
+  const [y, mo] = m.split("-");
+  return `${y}/${mo}`;
+}
+
 /* ─── Metric computations ──────────────────────────── */
 
 interface MetricSet {
@@ -65,7 +100,7 @@ interface MetricSet {
 }
 
 function computeMetrics(procs: ProcessRow[], fileSet: FileRow[]): MetricSet {
-  // Deadline
+  // 納期遵守率: 完了済み工程のうち、updated_at <= deadline の割合
   const withDeadline = procs.filter(p => p.status === "completed" && p.deadline);
   const onTime = withDeadline.filter(p => {
     const completed = new Date(p.updated_at);
@@ -73,24 +108,19 @@ function computeMetrics(procs: ProcessRow[], fileSet: FileRow[]): MetricSet {
     return completed <= deadline;
   }).length;
 
-  // First draft pass rate
+  // 初稿合格率: version_number=1 のファイルで、status が fixed/approved の割合
   const isChecked = (f: FileRow) => f.status && f.status !== "uploaded";
   const isPassed = (f: FileRow) => f.status === "fixed" || f.status === "approved";
   const firstDraftFiles = fileSet.filter(f => (f.version_number ?? 1) === 1 && isChecked(f));
   const firstDraftPassed = firstDraftFiles.filter(isPassed).length;
 
-  // Revision count: group by (project_id, process_type, parent chain root)
-  // We count distinct version chains and their max version
-  const chains = new Map<string, number>(); // chain key → max version
+  // 修正稿数: project_id × process_type ごとの最大 version_number の平均
+  const chains = new Map<string, number>();
   for (const f of fileSet) {
-    // Use root grouping: project_id + process_type
-    // Files with parent_file_id=null are roots (version 1)
-    // We track max version_number per root group
     const key = `${f.project_id}::${f.process_type}`;
     const ver = f.version_number ?? 1;
     chains.set(key, Math.max(chains.get(key) ?? 0, ver));
   }
-  // Revision count = version - 1 for each chain
   let totalRevisions = 0;
   let sequenceCount = 0;
   for (const [, maxVer] of chains) {
@@ -125,6 +155,16 @@ export default function ReportPage() {
   const [submissionFilter, setSubmissionFilter] = useState<SubmissionFilter>("all");
   const [drillTab, setDrillTab] = useState<DrillTab>("overview");
   const [targetDialogOpen, setTargetDialogOpen] = useState(false);
+
+  // Period filter: start/end month (YYYY-MM)
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const sixMonthsAgo = (() => {
+    const d = new Date(now.getFullYear(), now.getMonth() - 5, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  })();
+  const [periodFrom, setPeriodFrom] = useState(sixMonthsAgo);
+  const [periodTo, setPeriodTo] = useState(currentMonth);
 
   const targetMap = useMemo(() => new Map(targets.map(t => [t.key, t.target_value])), [targets]);
   const getTarget = (key: string, fallback: number) => targetMap.get(key) ?? fallback;
@@ -162,88 +202,104 @@ export default function ReportPage() {
     return () => { cancelled = true; };
   }, [user]);
 
+  // Available month options
+  const monthOptions = useMemo(() => generateMonthOptions(processes, files), [processes, files]);
+
   // Mapping helpers
   const projectProductMap = useMemo(() => new Map(projects.map(p => [p.id, p.product_id])), [projects]);
   const productClientMap = useMemo(() => new Map(products.map(p => [p.id, p.client_id])), [products]);
   const projectNameMap = useMemo(() => new Map(projects.map(p => [p.id, p.name])), [projects]);
-  const clientNameMap = useMemo(() => new Map(clients.map(c => [c.id, c.name])), [clients]);
 
   const getClientIdForProject = (pid: string) => {
     const prodId = projectProductMap.get(pid);
     return prodId ? productClientMap.get(prodId) : null;
   };
 
-  // Filter files by submission type
+  // Period-filtered data
+  const isInPeriod = (dateStr: string) => {
+    const mk = toMonthKey(dateStr);
+    return mk >= periodFrom && mk <= periodTo;
+  };
+
+  const periodProcesses = useMemo(() =>
+    processes.filter(p => isInPeriod(p.updated_at)),
+    [processes, periodFrom, periodTo]
+  );
+
+  const periodFiles = useMemo(() =>
+    files.filter(f => f.created_at && isInPeriod(f.created_at)),
+    [files, periodFrom, periodTo]
+  );
+
+  // Submission filter
   const filteredFiles = useMemo(() => {
-    if (submissionFilter === "all") return files;
-    return files.filter(f => f.submission_type === submissionFilter);
-  }, [files, submissionFilter]);
+    if (submissionFilter === "all") return periodFiles;
+    return periodFiles.filter(f => f.submission_type === submissionFilter);
+  }, [periodFiles, submissionFilter]);
 
   // Overall metrics
-  const overall = useMemo(() => computeMetrics(processes, filteredFiles), [processes, filteredFiles]);
+  const overall = useMemo(() => computeMetrics(periodProcesses, filteredFiles), [periodProcesses, filteredFiles]);
 
   // Monthly trend
   const monthlyData = useMemo(() => {
     const monthMap = new Map<string, { procs: ProcessRow[]; files: FileRow[] }>();
-    const getMonth = (d: string) => { const dt = new Date(d); return `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`; };
     const ensure = (k: string) => { if (!monthMap.has(k)) monthMap.set(k, { procs: [], files: [] }); return monthMap.get(k)!; };
 
-    processes.filter(p => p.status === "completed" && p.deadline).forEach(p => {
-      ensure(getMonth(p.updated_at)).procs.push(p);
+    periodProcesses.filter(p => p.status === "completed" && p.deadline).forEach(p => {
+      ensure(toMonthKey(p.updated_at)).procs.push(p);
     });
     filteredFiles.filter(f => f.created_at).forEach(f => {
-      ensure(getMonth(f.created_at!)).files.push(f);
+      ensure(toMonthKey(f.created_at!)).files.push(f);
     });
 
     return [...monthMap.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, data]) => {
       const m = computeMetrics(data.procs, data.files);
-      return { month, monthLabel: `${month.split("-")[0]}/${month.split("-")[1]}`, ...m };
+      return { month, monthLabel: monthLabel(month), ...m };
     });
-  }, [processes, filteredFiles]);
+  }, [periodProcesses, filteredFiles]);
 
   // Breakdowns
   const clientBreakdown = useMemo(() => {
     return clients.map(client => {
       const clientProductIds = products.filter(p => p.client_id === client.id).map(p => p.id);
       const clientProjectIds = projects.filter(p => p.product_id && clientProductIds.includes(p.product_id)).map(p => p.id);
-      const procs = processes.filter(p => clientProjectIds.includes(p.project_id));
+      const procs = periodProcesses.filter(p => clientProjectIds.includes(p.project_id));
       const fls = filteredFiles.filter(f => clientProjectIds.includes(f.project_id));
       return { id: client.id, name: client.name, ...computeMetrics(procs, fls) };
     }).filter(b => b.deadlineTotal > 0 || b.firstDraftTotal > 0 || b.revisionSequences > 0);
-  }, [clients, products, projects, processes, filteredFiles]);
+  }, [clients, products, projects, periodProcesses, filteredFiles]);
 
   const projectBreakdown = useMemo(() => {
-    const pids = [...new Set([...processes.map(p => p.project_id), ...filteredFiles.map(f => f.project_id).filter(Boolean)])];
+    const pids = [...new Set([...periodProcesses.map(p => p.project_id), ...filteredFiles.map(f => f.project_id).filter(Boolean)])];
     return pids.map(pid => {
-      const procs = processes.filter(p => p.project_id === pid);
+      const procs = periodProcesses.filter(p => p.project_id === pid);
       const fls = filteredFiles.filter(f => f.project_id === pid);
-      return { id: pid, name: projectNameMap.get(pid) || "不明", clientId: getClientIdForProject(pid), ...computeMetrics(procs, fls) };
+      return { id: pid, name: projectNameMap.get(pid) || "不明", ...computeMetrics(procs, fls) };
     }).filter(b => b.deadlineTotal > 0 || b.firstDraftTotal > 0 || b.revisionSequences > 0);
-  }, [processes, filteredFiles, projectNameMap]);
+  }, [periodProcesses, filteredFiles, projectNameMap]);
 
   const processBreakdown = useMemo(() => {
     const keys = [...new Set(filteredFiles.map(f => f.process_type))];
     return keys.map(key => {
-      const procs = processes.filter(p => p.process_key === key);
+      const procs = periodProcesses.filter(p => p.process_key === key);
       const fls = filteredFiles.filter(f => f.process_type === key);
       return { key, label: getProcessLabel(key), ...computeMetrics(procs, fls) };
     }).filter(b => b.deadlineTotal > 0 || b.firstDraftTotal > 0 || b.revisionSequences > 0);
-  }, [processes, filteredFiles]);
+  }, [periodProcesses, filteredFiles]);
 
-  // Submission type summary (always shows both)
+  // Submission type summary
   const submissionSummary = useMemo(() => {
-    const internal = files.filter(f => f.submission_type === "internal");
-    const client = files.filter(f => f.submission_type === "client");
+    const internal = periodFiles.filter(f => f.submission_type === "internal");
+    const client = periodFiles.filter(f => f.submission_type === "client");
     return {
-      internal: computeMetrics(processes, internal),
-      client: computeMetrics(processes, client),
+      internal: computeMetrics(periodProcesses, internal),
+      client: computeMetrics(periodProcesses, client),
     };
-  }, [processes, files]);
+  }, [periodProcesses, periodFiles]);
 
   const chartConfig = {
     deadlineRate: { label: "納期遵守率", color: "hsl(var(--primary))" },
     firstDraftRate: { label: "初稿合格率", color: "hsl(var(--status-ok))" },
-    avgRevisions: { label: "平均修正回数", color: "hsl(var(--status-warning))" },
   };
 
   const submissionLabels: Record<SubmissionFilter, string> = { all: "全体", internal: "社内提出", client: "クライアント提出" };
@@ -298,20 +354,48 @@ export default function ReportPage() {
       </header>
 
       <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
-        {/* Submission filter */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-medium text-muted-foreground">提出タイプ:</span>
-          {(["all", "internal", "client"] as SubmissionFilter[]).map(f => (
-            <Button
-              key={f}
-              variant={submissionFilter === f ? "default" : "outline"}
-              size="sm"
-              className="h-7 text-xs"
-              onClick={() => setSubmissionFilter(f)}
-            >
-              {submissionLabels[f]}
-            </Button>
-          ))}
+        {/* Filters row */}
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Period selector */}
+          <div className="flex items-center gap-1.5">
+            <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
+            <span className="text-xs font-medium text-muted-foreground">期間:</span>
+            <Select value={periodFrom} onValueChange={v => { setPeriodFrom(v); if (v > periodTo) setPeriodTo(v); }}>
+              <SelectTrigger className="w-28 h-7 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {monthOptions.map(m => <SelectItem key={m} value={m} className="text-xs">{monthLabel(m)}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <span className="text-xs text-muted-foreground">〜</span>
+            <Select value={periodTo} onValueChange={v => { setPeriodTo(v); if (v < periodFrom) setPeriodFrom(v); }}>
+              <SelectTrigger className="w-28 h-7 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {monthOptions.map(m => <SelectItem key={m} value={m} className="text-xs">{monthLabel(m)}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="h-4 w-px bg-border" />
+
+          {/* Submission filter */}
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">提出:</span>
+            {(["all", "internal", "client"] as SubmissionFilter[]).map(f => (
+              <Button
+                key={f}
+                variant={submissionFilter === f ? "default" : "outline"}
+                size="sm"
+                className="h-7 text-xs px-2.5"
+                onClick={() => setSubmissionFilter(f)}
+              >
+                {submissionLabels[f]}
+              </Button>
+            ))}
+          </div>
         </div>
 
         {/* 3 KPI Summary Cards */}
@@ -380,7 +464,6 @@ export default function ReportPage() {
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4 mt-4">
-            {/* Monthly trend chart */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -414,7 +497,6 @@ export default function ReportPage() {
               </CardContent>
             </Card>
 
-            {/* Monthly detail table */}
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium flex items-center gap-2"><Calendar className="h-4 w-4" />月別詳細</CardTitle>
@@ -457,29 +539,41 @@ export default function ReportPage() {
           </TabsContent>
 
           <TabsContent value="by_client" className="mt-4">
-            <MetricsTable
-              title="クライアント別"
-              rows={clientBreakdown.map(b => ({ key: b.id, name: b.name, ...b }))}
-              targets={targetMap}
-            />
+            <MetricsTable title="クライアント別" rows={clientBreakdown.map(b => ({ key: b.id, name: b.name, ...b }))} targets={targetMap} />
           </TabsContent>
 
           <TabsContent value="by_project" className="mt-4">
-            <MetricsTable
-              title="案件別"
-              rows={projectBreakdown.map(b => ({ key: b.id, name: b.name, ...b }))}
-              targets={targetMap}
-            />
+            <MetricsTable title="案件別" rows={projectBreakdown.map(b => ({ key: b.id, name: b.name, ...b }))} targets={targetMap} />
           </TabsContent>
 
           <TabsContent value="by_process" className="mt-4">
-            <MetricsTable
-              title="工程別"
-              rows={processBreakdown.map(b => ({ key: b.key, name: b.label, ...b }))}
-              targets={targetMap}
-            />
+            <MetricsTable title="工程別" rows={processBreakdown.map(b => ({ key: b.key, name: b.label, ...b }))} targets={targetMap} />
           </TabsContent>
         </Tabs>
+
+        {/* Logic explanation */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-medium">集計ロジック</CardTitle>
+          </CardHeader>
+          <CardContent className="text-[11px] text-muted-foreground space-y-2">
+            <div>
+              <p className="font-medium text-foreground">① 納期遵守率（目標: {getTarget("deadline_compliance", 100)}%）</p>
+              <p>工程（project_processes）のステータスが「完了」になった日時（updated_at）と、設定された期限（deadline）を比較。updated_at ≤ deadline であれば「遵守」とカウント。</p>
+              <p className="text-[10px]">計算式: 期限内完了工程数 ÷ 完了済み工程数（期限設定あり） × 100</p>
+            </div>
+            <div>
+              <p className="font-medium text-foreground">② 初稿合格率（目標: {getTarget("first_draft_pass", 80)}%）</p>
+              <p>version_number = 1（初稿）のファイルのうち、チェック済み（status ≠ uploaded）かつ status が「fixed」または「approved」のものを「合格」とカウント。</p>
+              <p className="text-[10px]">計算式: 初稿合格ファイル数 ÷ 初稿チェック済みファイル数 × 100</p>
+            </div>
+            <div>
+              <p className="font-medium text-foreground">③ 平均修正回数</p>
+              <p>案件×工程ごとにアップロードされた最大稿数（version_number）を取得し、修正回数 = 最大稿数 - 1 として計算。全シーケンスの平均値を表示。</p>
+              <p className="text-[10px]">計算式: Σ(各シーケンスの最大version - 1) ÷ シーケンス数</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
@@ -504,9 +598,7 @@ function KpiCard({ icon: Icon, label, value, rate, target, detail, color, isRevi
         <CardTitle className="text-xs font-medium flex items-center gap-2">
           <Icon className={cn("h-4 w-4", color)} />
           {label}
-          {target !== null && (
-            <Badge variant="outline" className="ml-auto text-[10px]">目標: {target}%</Badge>
-          )}
+          {target !== null && <Badge variant="outline" className="ml-auto text-[10px]">目標: {target}%</Badge>}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -603,15 +695,17 @@ function MetricsTable({ title, rows, targets }: {
 }
 
 function TargetEditor({ targets, onSaved }: { targets: KpiTarget[]; onSaved: (updated: KpiTarget[]) => void }) {
+  // Only show relevant KPIs (deadline_compliance, first_draft_pass)
+  const relevantTargets = targets.filter(t => ["deadline_compliance", "first_draft_pass"].includes(t.key));
   const [values, setValues] = useState<Record<string, number>>(() =>
-    Object.fromEntries(targets.map(t => [t.key, t.target_value]))
+    Object.fromEntries(relevantTargets.map(t => [t.key, t.target_value]))
   );
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      for (const t of targets) {
+      for (const t of relevantTargets) {
         const newVal = values[t.key];
         if (newVal !== t.target_value) {
           const { error } = await supabase.from("kpi_targets").update({ target_value: newVal, updated_at: new Date().toISOString() }).eq("id", t.id);
@@ -629,19 +723,24 @@ function TargetEditor({ targets, onSaved }: { targets: KpiTarget[]; onSaved: (up
 
   return (
     <div className="space-y-4">
-      {targets.map(t => (
-        <div key={t.key} className="flex items-center gap-3">
-          <label className="text-sm font-medium flex-1">{t.label}</label>
-          <div className="flex items-center gap-1">
-            <Input type="number" min={0} max={100} className="w-20 text-right"
-              value={values[t.key] ?? t.target_value}
-              onChange={e => setValues(v => ({ ...v, [t.key]: parseInt(e.target.value) || 0 }))}
-            />
-            <span className="text-sm text-muted-foreground">%</span>
+      {relevantTargets.length === 0 ? (
+        <p className="text-sm text-muted-foreground">設定可能なKPIがありません</p>
+      ) : (
+        relevantTargets.map(t => (
+          <div key={t.key} className="flex items-center gap-3">
+            <label className="text-sm font-medium flex-1">{t.label}</label>
+            <div className="flex items-center gap-1">
+              <Input type="number" min={0} max={100} className="w-20 text-right"
+                value={values[t.key] ?? t.target_value}
+                onChange={e => setValues(v => ({ ...v, [t.key]: parseInt(e.target.value) || 0 }))}
+              />
+              <span className="text-sm text-muted-foreground">%</span>
+            </div>
           </div>
-        </div>
-      ))}
-      <Button onClick={handleSave} disabled={saving} className="w-full gap-2">
+        ))
+      )}
+      <p className="text-[11px] text-muted-foreground">※ 修正回数は目標値ではなく実績のみ表示します</p>
+      <Button onClick={handleSave} disabled={saving || relevantTargets.length === 0} className="w-full gap-2">
         <Save className="h-4 w-4" />{saving ? "保存中..." : "保存"}
       </Button>
     </div>
