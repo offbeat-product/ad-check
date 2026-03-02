@@ -1,15 +1,18 @@
+import { format } from "date-fns";
 import type { CheckResult, CheckItem } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
 import { getSubmitLabel, getSubmitBadgeClass, STATUS_LABEL } from "@/lib/check-display";
+import { CalendarDays } from "lucide-react";
 
 interface Props {
   result: CheckResult;
   title: string;
+  checkedAt?: string | null;
 }
 
 const statusOrder: Record<string, number> = { NG: 0, WARNING: 1, OK: 2 };
 
-export default function CheckResultView({ result, title }: Props) {
+export default function CheckResultView({ result, title, checkedAt }: Props) {
   const sortedItems = [...result.check_items].sort(
     (a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3)
   );
@@ -20,6 +23,12 @@ export default function CheckResultView({ result, title }: Props) {
     <div className="space-y-6 animate-fade-in">
       <div className="space-y-1">
         <h3 className="text-lg font-bold">{title}</h3>
+        {checkedAt && (
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <CalendarDays className="h-3.5 w-3.5" />
+            <span>チェック実行日時: {format(new Date(checkedAt), "yyyy/MM/dd HH:mm")}</span>
+          </div>
+        )}
         {result.detected_case && (
           <p className="text-sm text-muted-foreground">検出: <span className="text-primary font-medium">{result.detected_case}</span></p>
         )}

@@ -250,6 +250,8 @@ export default function FileReviewPage() {
     if (!file || !product || !user || !projectId) return;
     if (isExecutingRef.current) return;
     isExecutingRef.current = true;
+    // Clear old results before re-check
+    setRecord(null);
     setChecking(true);
     checkProgress.start();
     try {
@@ -878,11 +880,12 @@ export default function FileReviewPage() {
         highlightCard={highlightCard}
         commentFilter={commentFilter}
         checkResultId={record?.id || null}
-        hasCheckResult={hasCheckResult}
+        hasCheckResult={!!record}
         onCommentClick={handleCommentClick}
         onCheckItemClick={scrollToCard}
         onAnnotationClick={handleAnnotationClick}
         overallStatus={record?.overall_status}
+        checkedAt={record?.created_at}
         file={file}
         productId={product?.id}
         projectId={projectId}

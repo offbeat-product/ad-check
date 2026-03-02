@@ -74,6 +74,7 @@ export default function CheckPage() {
   const inputModeForProcess: Record<string, string> = { script: "text", na_script: "text", narration: "audio", bgm: "audio", vcon: "video", video_horizontal: "video", video_vertical: "video", styleframe: "image", storyboard: "image" };
   const checkProgress = useCheckProgress(ESTIMATED_DURATION[inputModeForProcess[selectedProcess] || "text"] || 60_000);
   const [result, setResult] = useState<CheckResult | null>(null);
+  const [checkedAt, setCheckedAt] = useState<string | null>(null);
   const [showAudioConfirm, setShowAudioConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isExecutingRef = useRef(false);
@@ -338,6 +339,7 @@ export default function CheckPage() {
     setLoading(true);
     checkProgress.start();
     setResult(null);
+    setCheckedAt(null);
     try {
       // Gather reference materials from DB
       const refMaterials = await gatherReferenceMaterials(
@@ -449,6 +451,7 @@ export default function CheckPage() {
         res = await runScriptCheck(product.id, scriptText, selectedProcess, referenceContext);
       }
       setResult(res);
+      setCheckedAt(new Date().toISOString());
       checkProgress.complete();
 
       const inputData = processConfig.inputMode === "image" && imageData
@@ -954,6 +957,7 @@ export default function CheckPage() {
               <CheckResultView
                 result={result}
                 title={`${client?.name ?? ""} / ${product?.name ?? ""} / ${processConfig.label}チェック`}
+                checkedAt={checkedAt}
               />
               <div className="flex gap-3">
                 <Button variant="outline" onClick={() => { setResult(null); handleExecute(); }} disabled={loading} className="flex items-center gap-2">

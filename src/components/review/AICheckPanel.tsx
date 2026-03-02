@@ -1,4 +1,5 @@
 import { useRef, useState, useMemo, useCallback } from "react";
+import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import type { CheckItem } from "@/lib/types";
@@ -11,6 +12,7 @@ import { getSubmitLabel, getSubmitBadgeClass, STATUS_LABEL, STATUS_FILTER_OPTION
 import { cn } from "@/lib/utils";
 import CheckItemCard from "./CheckItemCard";
 import ReferenceStatusIndicator from "@/components/reference/ReferenceStatusIndicator";
+import { CalendarDays } from "lucide-react";
 
 interface AICheckPanelProps {
   items: CheckItem[];
@@ -22,13 +24,14 @@ interface AICheckPanelProps {
   checkResultId?: string | null;
   onTabChange?: (tab: string) => void;
   overallStatus?: string | null;
+  checkedAt?: string | null;
   productId?: string;
   projectId?: string;
   processKey?: string;
   onSeekMedia?: (seconds: number) => void;
 }
 
-export default function AICheckPanel({ items, markers, productCode, commentCounts, highlightCard, onCommentClick, checkResultId, onTabChange, overallStatus, productId, projectId, processKey, onSeekMedia }: AICheckPanelProps) {
+export default function AICheckPanel({ items, markers, productCode, commentCounts, highlightCard, onCommentClick, checkResultId, onTabChange, overallStatus, checkedAt, productId, projectId, processKey, onSeekMedia }: AICheckPanelProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [resolvedItems, setResolvedItems] = useState<Set<string>>(new Set());
@@ -174,6 +177,12 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
       <div className="shrink-0 border-b border-border px-3 py-2 space-y-2">
         {productId && projectId && (
           <ReferenceStatusIndicator projectId={projectId} productId={productId} processKey={processKey} />
+        )}
+        {checkedAt && (
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <CalendarDays className="h-3 w-3" />
+            <span>チェック実行日時: {format(new Date(checkedAt), "yyyy/MM/dd HH:mm")}</span>
+          </div>
         )}
         <div className="flex items-center gap-2 flex-wrap">
           <Badge className={cn("text-xs font-bold px-2.5 py-1", getSubmitBadgeClass(overallStatus))}>

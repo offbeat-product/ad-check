@@ -23,6 +23,7 @@ interface ReviewRightPanelProps {
   emptyCheckMessage?: React.ReactNode;
   onAnnotationClick?: (annotationData: unknown) => void;
   overallStatus?: string | null;
+  checkedAt?: string | null;
   /** File info for comparison check */
   file?: { file_data: string | null; file_type: string; process_type: string } | null;
   productId?: string;
@@ -41,7 +42,7 @@ interface ReviewRightPanelProps {
 export default function ReviewRightPanel({
   rightTab, onTabChange, items, markers, productCode, commentCounts, highlightCard,
   commentFilter, checkResultId, hasCheckResult, onCommentClick, onCheckItemClick, emptyCheckMessage, onAnnotationClick,
-  overallStatus, file, productId, projectId, mediaCurrentTime, onSeekMedia, patternId, fileId, onCommentDeleted,
+  overallStatus, checkedAt, file, productId, projectId, mediaCurrentTime, onSeekMedia, patternId, fileId, onCommentDeleted,
 }: ReviewRightPanelProps) {
   const [totalCommentCount, setTotalCommentCount] = useState(0);
   return (
@@ -76,6 +77,7 @@ export default function ReviewRightPanel({
               checkResultId={checkResultId}
               onTabChange={onTabChange}
               overallStatus={overallStatus}
+              checkedAt={checkedAt}
               productId={productId}
               projectId={projectId}
               processKey={file?.process_type}
