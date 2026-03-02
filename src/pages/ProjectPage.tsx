@@ -901,15 +901,16 @@ export default function ProjectPage() {
                           }
 
                           return (
-                            <div className="space-y-4">
-                              {groupedFiles.map((group, gi) => (
-                                <div key={gi}>
-                                  {group.label && patterns.length > 0 && (
-                                    <h4 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
-                                      <Badge variant="outline" className="text-[10px] font-bold">{group.label}</Badge>
-                                    </h4>
-                                  )}
-                                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+                            <div>
+                              {patterns.length > 0 ? (
+                                <div className="flex gap-4 overflow-x-auto pb-2">
+                                  {groupedFiles.map((group, gi) => (
+                                    <div key={gi} className="min-w-[160px] max-w-[200px] flex-shrink-0">
+                                      <h4 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                                        <Badge variant="outline" className="text-[10px] font-bold">{group.label}</Badge>
+                                        <span className="text-[9px] text-muted-foreground/60">{group.files.length}件</span>
+                                      </h4>
+                                      <div className="space-y-2">
                                     {group.files.map((file) => {
                                       const cr = file.check_result_id ? checkResults[file.check_result_id] : null;
                                       const st = FILE_STATUS_CONFIG[file.status ?? "uploaded"] ?? FILE_STATUS_CONFIG.uploaded;
@@ -1029,9 +1030,35 @@ export default function ProjectPage() {
                                         </div>
                                       );
                                     })}
-                                  </div>
+                                      </div>
+                                    </div>
+                                  ))}
                                 </div>
-                              ))}
+                              ) : (
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+                                  {groupedFiles[0]?.files.map((file) => {
+                                    const cr = file.check_result_id ? checkResults[file.check_result_id] : null;
+                                    const st = FILE_STATUS_CONFIG[file.status ?? "uploaded"] ?? FILE_STATUS_CONFIG.uploaded;
+                                    const cc = file.check_result_id ? (commentCounts[file.check_result_id] || 0) : 0;
+                                    const isImageFile = file.file_type === "image";
+                                    const childVersions = files.filter(f => f.parent_file_id === file.id);
+                                    const versionLabel = file.parent_file_id ? `v${file.version_number}` : childVersions.length > 0 ? "v1" : null;
+                                    const isSelected = selectedFileIds.has(file.id);
+                                    // Render same card - reuse by navigating
+                                    return (
+                                      <div key={file.id} className="relative group">
+                                        <button onClick={() => navigate(`/project/${id}/file/${file.id}`)}
+                                          className="glass-card p-2 text-left hover:border-primary/30 transition-colors w-full">
+                                          <div className="h-16 rounded-md bg-muted/50 flex items-center justify-center mb-1.5 overflow-hidden">
+                                            <Image className="h-8 w-8 text-muted-foreground/30" />
+                                          </div>
+                                          <p className="text-[10px] truncate">{file.file_name}</p>
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
                             </div>
                           );
                         })()}
