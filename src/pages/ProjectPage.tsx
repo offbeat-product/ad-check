@@ -815,24 +815,22 @@ export default function ProjectPage() {
                 )}
               </div>
               <div className="flex items-center gap-2 flex-wrap">
-                {patterns.length > 0 && (
-                  <div className="flex items-center border border-border rounded-md h-7 overflow-hidden">
-                    <button
-                      onClick={() => setViewMode("list")}
-                      className={cn("px-2 h-full flex items-center text-xs transition-colors", viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
-                      title="リスト表示"
-                    >
-                      <List className="h-3.5 w-3.5" />
-                    </button>
-                    <button
-                      onClick={() => setViewMode("matrix")}
-                      className={cn("px-2 h-full flex items-center text-xs transition-colors", viewMode === "matrix" ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
-                      title="パターン管理"
-                    >
-                      <Grid3X3 className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                )}
+                <div className="flex items-center border border-border rounded-md h-7 overflow-hidden">
+                  <button
+                    onClick={() => setViewMode("list")}
+                    className={cn("px-2 h-full flex items-center text-xs transition-colors", viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
+                    title="リスト表示"
+                  >
+                    <List className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    onClick={() => setViewMode("matrix")}
+                    className={cn("px-2 h-full flex items-center text-xs transition-colors", viewMode === "matrix" ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
+                    title="パターン管理"
+                  >
+                    <Grid3X3 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
                 <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => setBulkPatternOpen(true)}>
                   一括生成
                 </Button>
@@ -894,18 +892,34 @@ export default function ProjectPage() {
                       onDragEnter={() => handleProcessDragEnter(index)}
                       onDragEnd={handleProcessDragEnd}
                       onDragOver={(e) => e.preventDefault()}
-                      className={cn("glass-card overflow-hidden transition-all relative",
-                        dragOverIdx === index && "ring-2 ring-primary/30",
-                        isProcessCompleted && "border-muted-foreground/30")}
+                    className={cn("glass-card overflow-hidden transition-all relative",
+                      dragOverIdx === index && "ring-2 ring-primary/30",
+                      (isProcessCompleted || (sectionFiles.length > 0 && sectionFiles.filter(f => !f.parent_file_id).every(f => f.status === "fixed"))) && "border-muted-foreground/30")}
                     >
-                      {/* Completed overlay */}
-                      {isProcessCompleted && isCollapsed && (
-                        <div className="absolute inset-0 bg-foreground/40 z-10 pointer-events-none rounded-lg flex items-center justify-center">
-                          <span className="bg-muted/90 text-muted-foreground text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 pointer-events-none">
-                            <Lock className="h-3 w-3" /> 完了
-                          </span>
-                        </div>
-                      )}
+                      {/* Completed / All-FIX overlay */}
+                      {(() => {
+                        const rootFiles = sectionFiles.filter(f => !f.parent_file_id);
+                        const allFixed = rootFiles.length > 0 && rootFiles.every(f => f.status === "fixed");
+                        if (isProcessCompleted && isCollapsed) {
+                          return (
+                            <div className="absolute inset-0 bg-foreground/40 z-10 pointer-events-none rounded-lg flex items-center justify-center">
+                              <span className="bg-muted/90 text-muted-foreground text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 pointer-events-none">
+                                <Lock className="h-3 w-3" /> 完了
+                              </span>
+                            </div>
+                          );
+                        }
+                        if (allFixed && !isProcessCompleted && isCollapsed) {
+                          return (
+                            <div className="absolute inset-0 bg-foreground/30 z-10 pointer-events-none rounded-lg flex items-center justify-center">
+                              <span className="bg-muted-foreground/90 text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 pointer-events-none">
+                                <Lock className="h-3 w-3" /> 全FIX済
+                              </span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                       <div className="px-4 py-3 border-b border-border flex flex-wrap items-center gap-2 cursor-pointer select-none"
                         onClick={(e) => {
                           // Don't toggle if clicking on buttons/popovers inside the header
@@ -1264,18 +1278,138 @@ export default function ProjectPage() {
                                     const cc = file.check_result_id ? (commentCounts[file.check_result_id] || 0) : 0;
                                     const isImageFile = file.file_type === "image";
                                     const childVersions = files.filter(f => f.parent_file_id === file.id);
+                                    const latestVersion = childVersions.length > 0
+                                      ? childVersions.sort((a, b) => (b.version_number ?? 0) - (a.version_number ?? 0))[0]
+                                      : null;
+                                    const thumbnailData = latestVersion?.file_data || file.file_data;
                                     const versionLabel = file.parent_file_id ? `v${file.version_number}` : childVersions.length > 0 ? "v1" : null;
                                     const isSelected = selectedFileIds.has(file.id);
-                                    // Render same card - reuse by navigating
+
                                     return (
                                       <div key={file.id} className="relative group">
-                                        <button onClick={() => navigate(`/project/${id}/file/${file.id}`)}
-                                          className="glass-card p-2 text-left hover:border-primary/30 transition-colors w-full">
-                                          <div className="h-16 rounded-md bg-muted/50 flex items-center justify-center mb-1.5 overflow-hidden">
-                                            <Image className="h-8 w-8 text-muted-foreground/30" />
+                                        {selectMode && (
+                                          <div className="absolute top-1 left-1 z-20" onClick={(e) => e.stopPropagation()}>
+                                            <Checkbox
+                                              checked={isSelected}
+                                              onCheckedChange={(checked) => {
+                                                setSelectedFileIds(prev => {
+                                                  const next = new Set(prev);
+                                                  if (checked) next.add(file.id); else next.delete(file.id);
+                                                  return next;
+                                                });
+                                              }}
+                                            />
                                           </div>
-                                          <p className="text-[10px] truncate">{file.file_name}</p>
+                                        )}
+                                        <button onClick={() => {
+                                            if (selectMode) {
+                                              setSelectedFileIds(prev => {
+                                                const next = new Set(prev);
+                                                if (next.has(file.id)) next.delete(file.id); else next.add(file.id);
+                                                return next;
+                                              });
+                                            } else {
+                                              navigate(`/project/${id}/file/${file.id}`);
+                                            }
+                                          }}
+                                          className={cn("glass-card p-2 text-left hover:border-primary/30 transition-colors w-full relative overflow-hidden",
+                                            file.status === "fixed" && "border-muted-foreground/30 ring-1 ring-muted-foreground/20",
+                                            isSelected && selectMode && "ring-2 ring-primary border-primary/50"
+                                          )}>
+                                          {/* Submission type ribbon */}
+                                          <div
+                                            className={cn(
+                                              "absolute top-0 right-0 z-[5] px-2 py-0.5 text-[9px] font-bold rounded-bl-md cursor-default transition-colors",
+                                              file.submission_type === "client"
+                                                ? "bg-primary text-primary-foreground"
+                                                : "bg-muted text-muted-foreground hover:bg-muted-foreground/20"
+                                            )}
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              if (!selectMode && file.submission_type === "internal") {
+                                                setSubmissionChangeTarget(file.id);
+                                              }
+                                            }}
+                                            title={file.submission_type === "internal" ? "クリックでクライアント提出に変更" : "クライアント提出済み"}
+                                          >
+                                            {file.submission_type === "client" ? "Client" : "社内"}
+                                          </div>
+                                          {file.status === "fixed" && (
+                                            <>
+                                              <div className="absolute inset-0 bg-foreground/50 rounded-lg z-[1] pointer-events-none" />
+                                              <div className="absolute top-1.5 left-1.5 z-10 bg-muted-foreground text-white rounded-full p-0.5">
+                                                <Lock className="h-3 w-3" />
+                                              </div>
+                                              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex items-center gap-1 bg-muted-foreground/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm pointer-events-none">
+                                                <Lock className="h-2.5 w-2.5" /> FIX済
+                                              </div>
+                                            </>
+                                          )}
+                                          <div className="h-16 rounded-md bg-muted/50 flex items-center justify-center mb-1.5 overflow-hidden">
+                                            {isImageFile && thumbnailData ? (
+                                              <img src={thumbnailData} alt="" className="w-full h-full object-cover" />
+                                            ) : (file.file_type === "video" || proc.process_key.includes("video") || proc.process_key === "vcon") && thumbnailData ? (
+                                              <video src={thumbnailData} className="w-full h-full object-cover" muted preload="metadata" />
+                                            ) : file.file_type === "video" || proc.process_key.includes("video") || proc.process_key === "vcon" ? (
+                                              <Film className="h-8 w-8 text-muted-foreground/30" />
+                                            ) : file.file_type === "audio" || proc.process_key === "narration" || proc.process_key === "bgm" ? (
+                                              <FileText className="h-8 w-8 text-muted-foreground/30" />
+                                            ) : proc.process_key.includes("script") || proc.process_key === "na_script" ? (
+                                              <FileText className="h-8 w-8 text-muted-foreground/30" />
+                                            ) : thumbnailData && (thumbnailData.startsWith("data:image") || thumbnailData.match(/\.(jpg|jpeg|png|gif|webp)(\?|$)/i)) ? (
+                                              <img src={thumbnailData} alt="" className="w-full h-full object-cover" />
+                                            ) : (
+                                              <Image className="h-8 w-8 text-muted-foreground/30" />
+                                            )}
+                                          </div>
+                                          {editingFileId === file.id ? (
+                                            <form onSubmit={(e) => { e.preventDefault(); handleRenameFile(file.id, editFileName); }}
+                                              onClick={(e) => e.stopPropagation()}>
+                                              <Input value={editFileName} onChange={(e) => setEditFileName(e.target.value)}
+                                                className="h-5 text-xs w-full" autoFocus
+                                                onBlur={() => handleRenameFile(file.id, editFileName)}
+                                                onKeyDown={(e) => { if (e.key === "Escape") setEditingFileId(null); }} />
+                                            </form>
+                                          ) : (
+                                            <p className="text-xs font-medium truncate flex items-center gap-1 group/name">
+                                              <span className="truncate">{file.file_name}</span>
+                                              <button onClick={(e) => { e.stopPropagation(); setEditingFileId(file.id); setEditFileName(file.file_name); }}
+                                                className="opacity-0 group-hover/name:opacity-100 shrink-0 text-muted-foreground/50 hover:text-primary transition-all">
+                                                <Pencil className="h-2.5 w-2.5" />
+                                              </button>
+                                            </p>
+                                          )}
+                                          <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
+                                            {file.created_at && <span>{format(new Date(file.created_at), "MM/dd HH:mm")}</span>}
+                                            {file.created_by && <span>/ {(file.created_by as string).includes("@") ? (file.created_by as string).split("@")[0] : file.created_by}</span>}
+                                          </div>
+                                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                            <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
+                                            {cr && (
+                                              <Badge className={cn("text-[10px] h-4 px-1.5", getSubmitBadgeClass(cr.overall_status))}>
+                                                {getSubmitLabel(cr.overall_status).label}
+                                              </Badge>
+                                            )}
+                                            {versionLabel && <span className="text-[10px] text-muted-foreground">{versionLabel}</span>}
+                                          </div>
+                                          {cc > 0 && (
+                                            <div className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground">
+                                              <MessageCircle className="h-3 w-3" />{cc}
+                                            </div>
+                                          )}
                                         </button>
+                                        {!selectMode && (
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setDeleteTarget({ file, hasCheck: !!cr });
+                                            }}
+                                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:scale-110 z-10"
+                                            title="削除"
+                                          >
+                                            <span className="text-xs font-bold leading-none">×</span>
+                                          </button>
+                                        )}
                                       </div>
                                     );
                                   })}
