@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, useImperativeHandle, forwardRef } from "react";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import AnnotationCanvas from "@/components/AnnotationCanvas";
 import { Pin } from "lucide-react";
@@ -38,6 +39,7 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
   const containerRef = useRef<HTMLDivElement>(null);
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const [seekFlash, setSeekFlash] = useState(false);
 
   const hasSource = !!src && src.trim().length > 0;
   const isRawBase64Text = hasSource && !src!.startsWith("data:") && !src!.startsWith("http") && !src!.startsWith("blob:");
@@ -48,6 +50,9 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
     seekTo: (seconds: number) => {
       if (mediaRef.current) {
         mediaRef.current.currentTime = seconds;
+        // Flash red border to indicate seek position
+        setSeekFlash(true);
+        setTimeout(() => setSeekFlash(false), 1500);
       }
     },
   }), []);
@@ -77,7 +82,10 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
         )}
       </div>
 
-      <div ref={containerRef} className="relative rounded-lg overflow-hidden border border-border bg-muted/30">
+      <div ref={containerRef} className={cn(
+        "relative rounded-lg overflow-hidden border bg-muted/30 transition-all duration-300",
+        seekFlash ? "border-destructive border-2 ring-4 ring-destructive/30 shadow-[0_0_20px_rgba(239,68,68,0.3)]" : "border-border"
+      )}>
         {hasSource && !isRawBase64Text ? (
           mediaType === "video" ? (
             <video
