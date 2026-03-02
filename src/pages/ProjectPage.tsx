@@ -52,24 +52,30 @@ import BatchCheckFloatingBar from "@/components/BatchCheckFloatingBar";
 
 import { getSubmitBadgeClass, getSubmitLabel } from "@/lib/check-display";
 
-function DeadlineDisplay({ deadline, className }: { deadline: string | null; className?: string }) {
+function DeadlineDisplay({ deadline, className, isCompleted }: { deadline: string | null; className?: string; isCompleted?: boolean }) {
   if (!deadline) return <span className={cn("text-xs text-muted-foreground/50", className)}>納期未設定</span>;
   const d = new Date(deadline);
   const daysUntil = differenceInDays(d, new Date());
   const past = isPast(d) && daysUntil < 0;
   const soon = daysUntil >= 0 && daysUntil <= 3;
+  const dateStr = format(d, "MM/dd");
+
+  // 完了済みの場合は警告を表示しない
+  if (isCompleted) {
+    return <span className={cn("text-xs text-muted-foreground", className)}>納期: {dateStr}</span>;
+  }
 
   return (
     <span className={cn("text-xs flex items-center gap-1", className,
       past ? "text-status-ng font-medium" : soon ? "text-status-warning font-medium" : "text-muted-foreground"
     )}>
       {(past || soon) && <AlertTriangle className="h-3 w-3" />}
-      {past ? "期限超過" : `納期: ${format(d, "MM/dd")}`}
+      {past ? `期限超過 (${dateStr})` : `納期: ${dateStr}`}
     </span>
   );
 }
 
-function DeadlinePicker({ deadline, onChange }: { deadline: string | null; onChange: (d: string | null) => void }) {
+function DeadlinePicker({ deadline, onChange, isCompleted }: { deadline: string | null; onChange: (d: string | null) => void; isCompleted?: boolean }) {
   const [open, setOpen] = useState(false);
   const selected = deadline ? new Date(deadline) : undefined;
 
@@ -77,7 +83,7 @@ function DeadlinePicker({ deadline, onChange }: { deadline: string | null; onCha
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button className="hover:bg-muted/50 rounded px-1 py-0.5 transition-colors">
-          <DeadlineDisplay deadline={deadline} />
+          <DeadlineDisplay deadline={deadline} isCompleted={isCompleted} />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
@@ -757,6 +763,8 @@ export default function ProjectPage() {
                   const fileCount = sectionFiles.filter(f => !f.parent_file_id).length;
                   const checkedCount = sectionFiles.filter(f => f.status === "checked" || f.status === "fixed").length;
 
+                  const isProcessCompleted = proc.status === "completed";
+
                   return (
                     <div
                       key={proc.id}
@@ -765,9 +773,18 @@ export default function ProjectPage() {
                       onDragEnter={() => handleProcessDragEnter(index)}
                       onDragEnd={handleProcessDragEnd}
                       onDragOver={(e) => e.preventDefault()}
-                      className={cn("glass-card overflow-hidden transition-all",
-                        dragOverIdx === index && "ring-2 ring-primary/30")}
+                      className={cn("glass-card overflow-hidden transition-all relative",
+                        dragOverIdx === index && "ring-2 ring-primary/30",
+                        isProcessCompleted && "border-muted-foreground/30")}
                     >
+                      {/* Completed overlay */}
+                      {isProcessCompleted && isCollapsed && (
+                        <div className="absolute inset-0 bg-foreground/40 z-10 pointer-events-none rounded-lg flex items-center justify-center">
+                          <span className="bg-muted/90 text-muted-foreground text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 pointer-events-none">
+                            <Lock className="h-3 w-3" /> 完了
+                          </span>
+                        </div>
+                      )}
                       <div className="px-4 py-3 border-b border-border flex flex-wrap items-center gap-2 cursor-pointer select-none"
                         onClick={(e) => {
                           // Don't toggle if clicking on buttons/popovers inside the header
@@ -786,6 +803,7 @@ export default function ProjectPage() {
                         <DeadlinePicker
                           deadline={proc.deadline}
                           onChange={(d) => handleProcessDeadlineChange(proc.id, d)}
+                          isCompleted={isProcessCompleted}
                         />
 
                         <Popover>
