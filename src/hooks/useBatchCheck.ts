@@ -129,10 +129,9 @@ export function useBatchCheck() {
             inputData = { script_text: body.script_text, video_url: body.video_url || "" };
 
             // Related files for video and audio processes
-            const isVideoProcess = ["vcon", "video_horizontal", "video_vertical"].includes(processKey);
-            const isAudioProcess = ["narration", "bgm"].includes(processKey);
-            const isNaScriptProcess = processKey === "na_script";
-            if (isVideoProcess || isAudioProcess || isNaScriptProcess) {
+            // Include related files (all prior process FIX data) for cross-reference
+            const isFirstProcess = processKey === "script";
+            if (!isFirstProcess) {
               const relatedFiles = await getRelatedProcessData(projectId, processKey, file.pattern_id);
               if (Object.keys(relatedFiles).length > 0) {
                 body.related_files = relatedFiles;

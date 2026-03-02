@@ -209,14 +209,12 @@ export async function getRelatedProcessData(
 ): Promise<Record<string, { file_data: string; file_name: string; file_type: string }>> {
   if (!projectId) return {};
 
-  const isAudioProcess = ["narration", "bgm"].includes(currentProcessType);
-  const isNaScript = currentProcessType === "na_script";
-  const relatedProcessTypes = isAudioProcess
-    ? ["script", "na_script", "narration", "bgm"]
-    : isNaScript
-      ? ["script"]
-      : ["script", "storyboard", "styleframe", "na_script", "vcon"];
-  const targetTypes = relatedProcessTypes.filter((pt) => pt !== currentProcessType);
+  // Process order: all processes before the current one are candidates for cross-reference
+  const PROCESS_ORDER = ["script", "na_script", "narration", "bgm", "vcon", "styleframe", "storyboard", "video_horizontal", "video_vertical"];
+  const currentIndex = PROCESS_ORDER.indexOf(currentProcessType);
+  const targetTypes = currentIndex > 0
+    ? PROCESS_ORDER.slice(0, currentIndex)
+    : [];
 
   const { data: files } = await supabase
     .from("project_files")
