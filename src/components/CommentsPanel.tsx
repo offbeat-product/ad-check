@@ -44,9 +44,10 @@ interface CommentsPanelProps {
   processType?: string;
   patternId?: string | null;
   fileId?: string;
+  onCommentCountChange?: (count: number) => void;
 }
 
-export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia, onCommentDeleted, productId, projectId, processType, patternId, fileId }: CommentsPanelProps) {
+export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia, onCommentDeleted, productId, projectId, processType, patternId, fileId, onCommentCountChange }: CommentsPanelProps) {
   const { user } = useAuth();
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
@@ -108,7 +109,9 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
       .eq("check_result_id", checkResultId)
       .order("created_at", { ascending: true });
     if (handleSupabaseError(error, "comments")) return;
-    setComments(data ?? []);
+    const result = data ?? [];
+    setComments(result);
+    onCommentCountChange?.(result.length);
   };
 
   useEffect(() => { fetchComments(); }, [checkResultId]);

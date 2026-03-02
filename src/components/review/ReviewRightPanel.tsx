@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import CommentsPanel from "@/components/CommentsPanel";
 import AICheckPanel from "./AICheckPanel";
@@ -42,6 +43,7 @@ export default function ReviewRightPanel({
   commentFilter, checkResultId, hasCheckResult, onCommentClick, onCheckItemClick, emptyCheckMessage, onAnnotationClick,
   overallStatus, file, productId, projectId, mediaCurrentTime, onSeekMedia, patternId, fileId, onCommentDeleted,
 }: ReviewRightPanelProps) {
+  const [totalCommentCount, setTotalCommentCount] = useState(0);
   return (
     <div className="w-[380px] shrink-0 h-screen border-l border-border flex flex-col bg-card overflow-hidden">
       <Tabs value={rightTab} onValueChange={onTabChange} className="relative flex-1 flex flex-col min-h-0">
@@ -52,8 +54,13 @@ export default function ReviewRightPanel({
           <TabsTrigger value="comparison" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs h-10">
             比較チェック
           </TabsTrigger>
-          <TabsTrigger value="comments" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs h-10">
+          <TabsTrigger value="comments" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs h-10 gap-1">
             コメント
+            {totalCommentCount > 0 && (
+              <span className="min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+                {totalCommentCount > 99 ? "99+" : totalCommentCount}
+              </span>
+            )}
           </TabsTrigger>
         </TabsList>
 
@@ -101,7 +108,7 @@ export default function ReviewRightPanel({
 
         <TabsContent value="comments" className="absolute inset-0 top-10 overflow-hidden mt-0 ring-0 focus-visible:ring-0 data-[state=inactive]:hidden">
           {checkResultId ? (
-            <CommentsPanel checkResultId={checkResultId} filterItemId={commentFilter} onAnnotationClick={onAnnotationClick} onCheckItemClick={onCheckItemClick} mediaCurrentTime={mediaCurrentTime} onSeekMedia={onSeekMedia} productId={productId} projectId={projectId} processType={file?.process_type} patternId={patternId} fileId={fileId} onCommentDeleted={onCommentDeleted} />
+            <CommentsPanel checkResultId={checkResultId} filterItemId={commentFilter} onAnnotationClick={onAnnotationClick} onCheckItemClick={onCheckItemClick} mediaCurrentTime={mediaCurrentTime} onSeekMedia={onSeekMedia} productId={productId} projectId={projectId} processType={file?.process_type} patternId={patternId} fileId={fileId} onCommentDeleted={onCommentDeleted} onCommentCountChange={setTotalCommentCount} />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
               <MessageCircle className="h-10 w-10 mb-3 opacity-30" />
