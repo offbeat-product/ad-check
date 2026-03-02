@@ -23,6 +23,8 @@ interface ComparisonLeftPanelProps {
   onActivePairIndexChange: (index: number) => void;
   onClose: () => void;
   checkResultId?: string | null;
+  /** Called when a new draft file is uploaded so it can be persisted as a project_file */
+  onRevisionUploaded?: (fileData: string, fileType: string, versionNumber: number, originalFile: File) => void;
   /** Paint mode support */
   paintMode?: boolean;
   onPaintModeToggle?: () => void;
@@ -39,6 +41,7 @@ interface ComparisonLeftPanelProps {
 
 export default function ComparisonLeftPanel({
   file, drafts, onDraftsChange, activePairIndex, onActivePairIndexChange, onClose, checkResultId,
+  onRevisionUploaded,
   paintMode, onPaintModeToggle, onAnnotationSave, savedAnnotations, highlightAnnotation, members,
   submissionType, onSubmitToClient, onInternalRevision,
 }: ComparisonLeftPanelProps) {
@@ -62,21 +65,25 @@ export default function ComparisonLeftPanel({
 
     let newData: string | null = null;
     let newText = "";
+    let fileType = "text";
 
     if (isImage && f.type.startsWith("image/")) {
       try {
         const compressed = await compressImage(f);
         newData = `data:${compressed.mediaType};base64,${compressed.base64}`;
+        fileType = "image";
       } catch {
         toast({ title: "画像の処理に失敗しました", variant: "destructive" });
         return;
       }
     } else if (isMedia) {
       newData = URL.createObjectURL(f);
+      fileType = isVideo ? "video" : "audio";
     } else {
       const text = await f.text();
       newText = text;
       newData = text;
+      fileType = "text";
     }
 
     const updated = [...drafts];
@@ -89,6 +96,11 @@ export default function ComparisonLeftPanel({
 
     if (targetIndex > 0) {
       onActivePairIndexChange(targetIndex - 1);
+    }
+
+    // Save to project_files as a child version
+    if (targetIndex > 0 && newData && onRevisionUploaded) {
+      onRevisionUploaded(newData, fileType, targetIndex + 1, f);
     }
 
     e.target.value = "";
