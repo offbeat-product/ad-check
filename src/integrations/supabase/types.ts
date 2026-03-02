@@ -716,6 +716,7 @@ export type Database = {
           process_type: string
           project_id: string | null
           status: string | null
+          submission_type: string
           updated_at: string | null
           version_number: number | null
         }
@@ -737,6 +738,7 @@ export type Database = {
           process_type: string
           project_id?: string | null
           status?: string | null
+          submission_type?: string
           updated_at?: string | null
           version_number?: number | null
         }
@@ -758,6 +760,7 @@ export type Database = {
           process_type?: string
           project_id?: string | null
           status?: string | null
+          submission_type?: string
           updated_at?: string | null
           version_number?: number | null
         }

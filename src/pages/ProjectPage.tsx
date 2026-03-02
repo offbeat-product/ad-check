@@ -123,6 +123,7 @@ export default function ProjectPage() {
   const [uploadModal, setUploadModal] = useState<string | null>(null);
   const [uploadPatternId, setUploadPatternId] = useState<string | null>(null);
   const [uploadPatternMode, setUploadPatternMode] = useState<"common" | "specific">("common");
+  const [uploadSubmissionType, setUploadSubmissionType] = useState<"internal" | "client">("internal");
   const [uploadTextInput, setUploadTextInput] = useState("");
   const [useTextInput, setUseTextInput] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -501,6 +502,7 @@ export default function ProjectPage() {
           project_id: id, process_type: uploadModal, file_name: fileName,
           file_type: "text", file_data: fileData, file_size_bytes: fileSize,
           created_by: user.email || user.id, pattern_id: resolvedPatternId,
+          submission_type: uploadSubmissionType,
         } as any);
         if (error) throw error;
         setUploadProgress(100);
@@ -554,6 +556,7 @@ export default function ProjectPage() {
             project_id: id, process_type: uploadModal, file_name: fileName,
             file_type: fileType, file_data: fileData, file_size_bytes: fileSize,
             created_by: user.email || user.id, pattern_id: resolvedPatternId,
+            submission_type: uploadSubmissionType,
           } as any);
           if (error) throw error;
 
@@ -595,6 +598,7 @@ export default function ProjectPage() {
       setUploadProgress(null);
       setUploadPatternId(null);
       setUploadPatternMode("common");
+      setUploadSubmissionType("internal");
       fetchData();
     }
   };
@@ -1268,6 +1272,21 @@ export default function ProjectPage() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>ファイルアップロード</DialogTitle></DialogHeader>
           <div className="space-y-4">
+            {/* Submission type selection */}
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">提出先</Label>
+              <RadioGroup value={uploadSubmissionType} onValueChange={(v) => setUploadSubmissionType(v as "internal" | "client")} className="flex gap-4">
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="internal" id="sub-internal" />
+                  <Label htmlFor="sub-internal" className="text-xs">社内提出</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="client" id="sub-client" />
+                  <Label htmlFor="sub-client" className="text-xs">クライアント提出</Label>
+                </div>
+              </RadioGroup>
+            </div>
+
             {/* Pattern selection (only when patterns exist) */}
             {patterns.length > 0 && (
               <div className="space-y-2">
