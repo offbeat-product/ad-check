@@ -15,14 +15,16 @@ export interface TreeData {
 }
 
 async function fetchTreeData() {
-  const [c, p, pr] = await Promise.all([
-    supabase.from("clients").select("*").order("sort_order").order("name"),
-    supabase.from("products").select("*").order("sort_order").order("name"),
-    supabase.from("projects").select("*").order("sort_order").order("created_at", { ascending: false }),
-  ]);
+  // Sequential queries to reduce concurrent DB connections
+  const c = await supabase.from("clients").select("*").order("sort_order").order("name");
   handleSupabaseError(c.error, "clients");
+
+  const p = await supabase.from("products").select("*").order("sort_order").order("name");
   handleSupabaseError(p.error, "products");
+
+  const pr = await supabase.from("projects").select("*").order("sort_order").order("created_at", { ascending: false });
   handleSupabaseError(pr.error, "projects");
+
   return {
     clients: c.data ?? [],
     products: p.data ?? [],
