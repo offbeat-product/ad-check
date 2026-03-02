@@ -80,6 +80,18 @@ export default function ComparisonCheckPanel({
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set(["NG", "WARNING"]));
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
+  // Reset state when navigating to a different file
+  useEffect(() => {
+    setChecking(false);
+    setResult(null);
+    setHistory([]);
+    setSelectedHistoryId(null);
+    setResolvedItems(new Set());
+    setSelectedItems(new Set());
+    setAppliedItems(new Set());
+    setActiveFilters(new Set(["NG", "WARNING"]));
+  }, [fileId]);
+
   const aiCfg = AI_CHECK_CONFIG[file.process_type];
   const isImage = aiCfg?.inputMode === "image";
   const enabled = aiCfg?.enabled ?? false;
