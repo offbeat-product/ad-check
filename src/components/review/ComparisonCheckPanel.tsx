@@ -1,8 +1,12 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { GitCompare, Loader2, Bot, History } from "lucide-react";
+import { GitCompare, Loader2, Bot, History, CheckCircle2 } from "lucide-react";
 import { runComparisonCheck } from "@/lib/webhook";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import { supabase } from "@/integrations/supabase/client";
@@ -63,6 +67,9 @@ interface ComparisonCheckPanelProps {
   lockedByUser?: string | null;
   onAcquireLock?: () => Promise<boolean>;
   onReleaseLock?: () => Promise<void>;
+  /** Client submission */
+  submissionType?: string;
+  onSubmitToClient?: () => void;
 }
 
 export default function ComparisonCheckPanel({
@@ -71,6 +78,7 @@ export default function ComparisonCheckPanel({
   onOpenComparisonMode, onCheckComplete, onComparisonSaved, onClearAfterData,
   commentCounts = {}, highlightCard, onCommentClick, onTabChange, onSeekMedia, onMarkerClick,
   lockedByUser, onAcquireLock, onReleaseLock,
+  submissionType, onSubmitToClient,
 }: ComparisonCheckPanelProps) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -584,6 +592,24 @@ export default function ComparisonCheckPanel({
           <Button size="sm" variant="outline" className="w-full text-xs opacity-50" disabled>
             <Bot className="h-3 w-3 mr-1" />比較チェック（準備中）
           </Button>
+        )}
+
+        {/* Submit to client button */}
+        {submissionType !== "client" && onSubmitToClient && (displayResult || history.length > 0) && (
+          <Button
+            size="sm"
+            className="w-full text-xs gap-1.5"
+            onClick={onSubmitToClient}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            クライアントに提出する
+          </Button>
+        )}
+        {submissionType === "client" && (
+          <div className="flex items-center justify-center gap-2 py-2 rounded-lg border border-primary/30 bg-primary/5 text-primary text-xs font-medium">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            クライアント提出済み
+          </div>
         )}
       </div>
     </div>
