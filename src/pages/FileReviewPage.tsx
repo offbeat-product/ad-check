@@ -467,36 +467,41 @@ export default function FileReviewPage() {
       console.error("[FileReview] AIチェックエラー:", err);
       isRecheckingRef.current = false;
 
-      // For video checks: "Failed to fetch" can mean n8n received the request but
-      // the connection timed out. Check if n8n already completed via the pending record.
-      if (pendingRecordId) {
-        // Wait a moment then check if n8n updated the pending record
-        await new Promise(r => setTimeout(r, 3000));
-        const { data: pendingCr } = await supabase.from("check_results").select("*").eq("id", pendingRecordId).maybeSingle();
-        if (pendingCr && pendingCr.status === "completed" && pendingCr.check_items) {
-          // n8n already completed! Show the result.
-          setRecord(pendingCr);
-          await supabase.from("project_files").update({ status: "checked", check_result_id: pendingCr.id }).eq("id", file.id);
-          setFile({ ...file, status: "checked", check_result_id: pendingCr.id });
-          checkProgress.complete();
-          toast({ title: "チェック完了", description: `Grade: ${pendingCr.overall_status}` });
-          return;
-        }
-        // n8n hasn't completed yet — start polling in case it's still processing
-        if (pendingCr && pendingCr.status === "pending") {
-          toast({ title: "動画分析中...", description: "n8nへの接続がタイムアウトしましたが、処理は続行中の可能性があります。結果を待っています..." });
-          const polled = await videoPolling.startPolling(product.code, processKey, new Date(Date.now() - 60000).toISOString());
-          if (polled) {
-            setRecord(polled);
-            await supabase.from("project_files").update({ status: "checked", check_result_id: polled.id }).eq("id", file.id);
-            setFile({ ...file, status: "checked", check_result_id: polled.id });
+      // For video checks: "Failed to fetch" often means the connection timed out
+      // but n8n is still processing. Poll the specific pending record by ID.
+      const isVideoProcess = ["vcon", "video_horizontal", "video_vertical"].includes(processKey);
+      if (pendingRecordId && isVideoProcess) {
+        toast({ title: "動画分析中...", description: "接続がタイムアウトしましたが、AI分析は続行中です。結果を待っています..." });
+
+        // Poll the specific pending record by ID until it's completed
+        const MAX_POLL_MS = 600_000; // 10 min
+        const POLL_INTERVAL = 10_000;
+        const pollStart = Date.now();
+        let foundResult = false;
+
+        while (Date.now() - pollStart < MAX_POLL_MS) {
+          await new Promise(r => setTimeout(r, POLL_INTERVAL));
+          const { data: cr } = await supabase
+            .from("check_results")
+            .select("*")
+            .eq("id", pendingRecordId)
+            .maybeSingle();
+
+          if (cr && cr.status === "completed" && cr.check_items) {
+            setRecord(cr);
+            await supabase.from("project_files").update({ status: "checked", check_result_id: cr.id }).eq("id", file.id);
+            setFile({ ...file, status: "checked", check_result_id: cr.id });
             checkProgress.complete();
-            toast({ title: "チェック完了", description: `Grade: ${polled.overall_status}` });
-            return;
+            setChecking(false);
+            toast({ title: "チェック完了", description: `Grade: ${cr.overall_status}` });
+            foundResult = true;
+            break;
           }
-          // Polling timed out — clean up pending record and restore previous
-          await supabase.from("check_results").delete().eq("id", pendingRecordId).eq("status", "pending");
         }
+
+        if (foundResult) return;
+        // Polling timed out — clean up pending record
+        await supabase.from("check_results").delete().eq("id", pendingRecordId).eq("status", "pending");
       }
 
       // Restore previous result so user doesn't see "未実行"
