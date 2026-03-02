@@ -738,10 +738,10 @@ export default function ReportPage() {
                 ④ 社内修正率
               </h4>
               <div className="pl-4 border-l-[3px] border-status-warning/30 space-y-2">
-                <p className="text-muted-foreground">クライアントに提出されたクリエイティブのうち、<span className="font-medium text-foreground">第2稿以降の提出が発生した</span>（= 社内での修正が必要だった）割合を算出します。</p>
+                <p className="text-muted-foreground">クライアントに提出されたクリエイティブのうち、<span className="font-medium text-foreground">「社内修正する」ボタンが押された</span>（= 社内での修正が必要だった）割合を算出します。</p>
                 <div className="bg-muted/50 rounded-lg p-3 space-y-1">
-                  <p className="text-muted-foreground"><span className="font-medium text-foreground">カウント条件:</span> クライアント提出ファイル（submission_type=client）のシーケンスで、最大バージョン番号が2以上であるもの</p>
-                  <p className="text-muted-foreground"><span className="font-medium text-foreground">意味:</span> 初稿提出 → 第2稿提出が発生した場合、その間に社内修正が1回発生したとカウント</p>
+                  <p className="text-muted-foreground"><span className="font-medium text-foreground">カウント条件:</span> クライアント提出ファイル（submission_type=client）のシーケンスで、最大バージョン番号が2以上であるもの（= 社内修正ボタンで新稿がアップロードされた）</p>
+                  <p className="text-muted-foreground"><span className="font-medium text-foreground">運用フロー:</span> 初稿アップロード → AIチェック → 「クライアント提出」or「社内修正する」→ 次稿アップロード → 繰り返し</p>
                 </div>
                 <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">計算式: 社内修正発生シーケンス数 ÷ クライアント提出シーケンス総数 × 100</p>
               </div>

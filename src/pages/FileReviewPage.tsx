@@ -82,6 +82,7 @@ export default function FileReviewPage() {
   const [mentionMembers, setMentionMembers] = useState<MentionMember[]>([]);
   const [comparisonMode, setComparisonMode] = useState(false);
   const [submitToClientOpen, setSubmitToClientOpen] = useState(false);
+  const [internalRevisionOpen, setInternalRevisionOpen] = useState(false);
   const [comparisonDrafts, setComparisonDrafts] = useState<DraftEntry[]>([]);
   const [comparisonActivePairIndex, setComparisonActivePairIndex] = useState(0);
   const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
@@ -1137,6 +1138,7 @@ export default function FileReviewPage() {
               members={mentionMembers}
               submissionType={file.submission_type}
               onSubmitToClient={() => setSubmitToClientOpen(true)}
+              onInternalRevision={() => setInternalRevisionOpen(true)}
             />
           ) : (
           <div className="p-4">
@@ -1325,6 +1327,34 @@ export default function FileReviewPage() {
               setSubmitToClientOpen(false);
             }}>
               提出する
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Internal revision confirmation dialog */}
+      <AlertDialog open={internalRevisionOpen} onOpenChange={setInternalRevisionOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>社内修正</AlertDialogTitle>
+            <AlertDialogDescription>
+              このファイルを「社内修正」としてマークし、次の稿をアップロードします。修正回数としてカウントされます。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+            <AlertDialogAction onClick={async () => {
+              if (!file) return;
+              // Ensure submission_type stays internal
+              if (file.submission_type === "client") {
+                await supabase.from("project_files").update({ submission_type: "internal" } as any).eq("id", file.id);
+                setFile({ ...file, submission_type: "internal" as any });
+              }
+              setInternalRevisionOpen(false);
+              // Open the upload revision modal to add next draft
+              setUploadRevisionOpen(true);
+            }}>
+              社内修正する
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

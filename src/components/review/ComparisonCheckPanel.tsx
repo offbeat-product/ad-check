@@ -70,6 +70,8 @@ interface ComparisonCheckPanelProps {
   /** Client submission */
   submissionType?: string;
   onSubmitToClient?: () => void;
+  /** Internal revision */
+  onInternalRevision?: () => void;
 }
 
 export default function ComparisonCheckPanel({
@@ -78,7 +80,7 @@ export default function ComparisonCheckPanel({
   onOpenComparisonMode, onCheckComplete, onComparisonSaved, onClearAfterData,
   commentCounts = {}, highlightCard, onCommentClick, onTabChange, onSeekMedia, onMarkerClick,
   lockedByUser, onAcquireLock, onReleaseLock,
-  submissionType, onSubmitToClient,
+  submissionType, onSubmitToClient, onInternalRevision,
 }: ComparisonCheckPanelProps) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -596,19 +598,43 @@ export default function ComparisonCheckPanel({
 
         {/* Submit to client button */}
         {submissionType !== "client" && onSubmitToClient && (displayResult || history.length > 0) && (
-          <Button
-            size="sm"
-            className="w-full text-xs gap-1.5"
-            onClick={onSubmitToClient}
-          >
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            クライアントに提出する
-          </Button>
+          <div className="space-y-2">
+            <Button
+              size="sm"
+              className="w-full text-xs gap-1.5"
+              onClick={onSubmitToClient}
+            >
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              クライアントに提出する
+            </Button>
+            {onInternalRevision && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full text-xs gap-1.5"
+                onClick={onInternalRevision}
+              >
+                社内修正する
+              </Button>
+            )}
+          </div>
         )}
         {submissionType === "client" && (
-          <div className="flex items-center justify-center gap-2 py-2 rounded-lg border border-primary/30 bg-primary/5 text-primary text-xs font-medium">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            クライアント提出済み
+          <div className="space-y-2">
+            <div className="flex items-center justify-center gap-2 py-2 rounded-lg border border-primary/30 bg-primary/5 text-primary text-xs font-medium">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              クライアント提出済み
+            </div>
+            {onInternalRevision && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full text-xs gap-1.5"
+                onClick={onInternalRevision}
+              >
+                社内修正する
+              </Button>
+            )}
           </div>
         )}
       </div>
