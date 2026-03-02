@@ -808,8 +808,14 @@ function KpiCard({ icon: Icon, label, value, rate, target, detail, color, isRevi
 }
 
 function TargetEditor({ targets, onSaved }: { targets: KpiTarget[]; onSaved: (updated: KpiTarget[]) => void }) {
-  const clientTargets = targets.filter(t => t.key.startsWith("client_"));
-  const internalTargets = targets.filter(t => t.key.startsWith("internal_"));
+  const kpiOrder = ["deadline_compliance", "first_draft_pass"];
+  const sortByKpi = (items: KpiTarget[]) => [...items].sort((a, b) => {
+    const aIdx = kpiOrder.findIndex(k => a.key.includes(k));
+    const bIdx = kpiOrder.findIndex(k => b.key.includes(k));
+    return (aIdx === -1 ? 99 : aIdx) - (bIdx === -1 ? 99 : bIdx);
+  });
+  const clientTargets = sortByKpi(targets.filter(t => t.key.startsWith("client_")));
+  const internalTargets = sortByKpi(targets.filter(t => t.key.startsWith("internal_")));
   const allEditable = [...clientTargets, ...internalTargets];
   const [values, setValues] = useState<Record<string, number>>(() =>
     Object.fromEntries(allEditable.map(t => [t.key, t.target_value]))
