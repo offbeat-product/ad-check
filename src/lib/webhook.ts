@@ -197,8 +197,9 @@ export async function runAudioCheck(
 }
 
 /**
- * Fetch related process files for video checks.
- * Returns data from script, storyboard, styleframe, na_script, vcon
+ * Fetch related process files for cross-reference checking.
+ * For video checks: script, storyboard, styleframe, na_script, vcon
+ * For audio checks (narration/bgm): script, na_script
  * (excluding the current process type) for the same project.
  */
 export async function getRelatedProcessData(
@@ -208,7 +209,10 @@ export async function getRelatedProcessData(
 ): Promise<Record<string, { file_data: string; file_name: string; file_type: string }>> {
   if (!projectId) return {};
 
-  const relatedProcessTypes = ["script", "storyboard", "styleframe", "na_script", "vcon"];
+  const isAudioProcess = ["narration", "bgm"].includes(currentProcessType);
+  const relatedProcessTypes = isAudioProcess
+    ? ["script", "na_script", "narration", "bgm"]
+    : ["script", "storyboard", "styleframe", "na_script", "vcon"];
   const targetTypes = relatedProcessTypes.filter((pt) => pt !== currentProcessType);
 
   const { data: files } = await supabase
