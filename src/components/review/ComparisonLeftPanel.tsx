@@ -33,12 +33,14 @@ interface ComparisonLeftPanelProps {
   /** Client submission */
   submissionType?: string;
   onSubmitToClient?: () => void;
+  /** Internal revision */
+  onInternalRevision?: () => void;
 }
 
 export default function ComparisonLeftPanel({
   file, drafts, onDraftsChange, activePairIndex, onActivePairIndexChange, onClose, checkResultId,
   paintMode, onPaintModeToggle, onAnnotationSave, savedAnnotations, highlightAnnotation, members,
-  submissionType, onSubmitToClient,
+  submissionType, onSubmitToClient, onInternalRevision,
 }: ComparisonLeftPanelProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -332,19 +334,45 @@ export default function ComparisonLeftPanel({
 
         {/* Submit to client button — show draft number */}
         {submissionType !== "client" && onSubmitToClient && afterDraft && (
-          <Button
-            size="sm"
-            className="w-full text-xs gap-1.5 h-10"
-            onClick={onSubmitToClient}
-          >
-            <CheckCircle2 className="h-4 w-4" />
-            クライアントに第{activePairIndex + 2}稿を提出する
-          </Button>
+          <div className="space-y-2">
+            <Button
+              size="sm"
+              className="w-full text-xs gap-1.5 h-10"
+              onClick={onSubmitToClient}
+            >
+              <CheckCircle2 className="h-4 w-4" />
+              クライアントに第{activePairIndex + 2}稿を提出する
+            </Button>
+            {onInternalRevision && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full text-xs gap-1.5 h-10"
+                onClick={onInternalRevision}
+              >
+                <ArrowDown className="h-4 w-4" />
+                社内で第{activePairIndex + 2}稿を修正する
+              </Button>
+            )}
+          </div>
         )}
         {submissionType === "client" && (
-          <div className="flex items-center justify-center gap-2 py-2.5 rounded-lg border border-primary/30 bg-primary/5 text-primary text-xs font-medium">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            クライアント提出済み
+          <div className="space-y-2">
+            <div className="flex items-center justify-center gap-2 py-2.5 rounded-lg border border-primary/30 bg-primary/5 text-primary text-xs font-medium">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              クライアント提出済み
+            </div>
+            {onInternalRevision && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full text-xs gap-1.5 h-10"
+                onClick={onInternalRevision}
+              >
+                <ArrowDown className="h-4 w-4" />
+                社内で第{activePairIndex + 2}稿を修正する
+              </Button>
+            )}
           </div>
         )}
       </div>
