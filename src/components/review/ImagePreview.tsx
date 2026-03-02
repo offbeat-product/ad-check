@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import AnnotationCanvas from "@/components/AnnotationCanvas";
+import type { MentionMember } from "@/components/comments/MentionInput";
 import { Pin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CheckMarker } from "@/lib/marker-positions";
@@ -21,17 +22,18 @@ interface ImagePreviewProps {
   paintMode: boolean;
   onPaintModeToggle: () => void;
   onMarkerClick: (patternId: string) => void;
-  onAnnotationSave?: (annotations: unknown[], comment: string) => void;
+  onAnnotationSave?: (annotations: unknown[], comment: string, mentionedUserIds?: string[]) => void;
   label?: string;
   noDataMessage?: string;
   overlay?: React.ReactNode;
   savedAnnotations?: AnnotationData[];
   highlightAnnotation?: AnnotationData | null;
+  members?: MentionMember[];
 }
 
 export default function ImagePreview({
   imageSrc, markers, paintMode, onPaintModeToggle, onMarkerClick, onAnnotationSave,
-  label, noDataMessage, overlay, savedAnnotations, highlightAnnotation,
+  label, noDataMessage, overlay, savedAnnotations, highlightAnnotation, members,
 }: ImagePreviewProps) {
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
@@ -105,7 +107,7 @@ export default function ImagePreview({
           />
         )}
 
-        <AnnotationCanvas active={paintMode} width={imageSize.width || 800} height={imageSize.height || 400} onSaveAnnotations={onAnnotationSave} />
+        <AnnotationCanvas active={paintMode} width={imageSize.width || 800} height={imageSize.height || 400} onSaveAnnotations={onAnnotationSave} members={members} />
 
         {overlay}
       </div>

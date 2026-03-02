@@ -1,6 +1,7 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import MentionInput, { type MentionMember } from "@/components/comments/MentionInput";
 import { Square, Circle, ArrowUpRight, Pencil, Type, MapPin, Undo2, Trash2, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -19,7 +20,8 @@ interface AnnotationCanvasProps {
   active: boolean;
   width: number;
   height: number;
-  onSaveAnnotations?: (annotations: Annotation[], comment: string) => void;
+  onSaveAnnotations?: (annotations: Annotation[], comment: string, mentionedUserIds?: string[]) => void;
+  members?: MentionMember[];
 }
 
 const COLORS = [
@@ -46,7 +48,7 @@ const TOOLS: { type: ToolType; icon: typeof Square; label: string }[] = [
   { type: "pin", icon: MapPin, label: "ピン" },
 ];
 
-export default function AnnotationCanvas({ active, width, height, onSaveAnnotations }: AnnotationCanvasProps) {
+export default function AnnotationCanvas({ active, width, height, onSaveAnnotations, members = [] }: AnnotationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tool, setTool] = useState<ToolType>("rect");
   const [color, setColor] = useState("#EF4444");
@@ -63,6 +65,7 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
   const [pendingAnnotation, setPendingAnnotation] = useState<Annotation | null>(null);
   const [commentText, setCommentText] = useState("");
   const [commentError, setCommentError] = useState(false);
+  const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
 
   const showingPopup = !!pendingAnnotation;
 
@@ -203,13 +206,14 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
     setUndoStack((s) => [...s, annotations]);
     setAnnotations((a) => [...a, pendingAnnotation]);
 
-    // Save with comment
+    // Save with comment and mentions
     const imagePosition = getAnnotationImagePosition(pendingAnnotation);
     const annotationWithPosition = { ...pendingAnnotation, imagePosition };
-    onSaveAnnotations?.([annotationWithPosition] as unknown as Annotation[], commentText);
+    onSaveAnnotations?.([annotationWithPosition] as unknown as Annotation[], commentText, mentionedUserIds.length > 0 ? mentionedUserIds : undefined);
 
     setPendingAnnotation(null);
     setCommentText("");
+    setMentionedUserIds([]);
   };
 
   const handleCancelComment = () => {
@@ -217,6 +221,7 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
     setPendingAnnotation(null);
     setCommentText("");
     setCommentError(false);
+    setMentionedUserIds([]);
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -395,14 +400,17 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-sm font-semibold mb-2">修正指示を入力</h3>
-            <Textarea
-              value={commentText}
-              onChange={(e) => { setCommentText(e.target.value); setCommentError(false); }}
-              placeholder="修正内容を入力してください..."
-              className={cn("min-h-[70px] text-sm mb-2", commentError && "border-destructive")}
-              autoFocus
-              onKeyDown={(e) => { if (e.key === "Enter" && e.metaKey) handleConfirmComment(); }}
-            />
+            <div className={cn("mb-2", commentError && "[&_textarea]:border-destructive")}>
+              <MentionInput
+                value={commentText}
+                onChange={(v) => { setCommentText(v); setCommentError(false); }}
+                members={members}
+                onMentions={setMentionedUserIds}
+                placeholder="修正内容を入力... (@でメンション)"
+                className="min-h-[70px] text-sm"
+                onKeyDown={(e) => { if (e.key === "Enter" && e.metaKey) handleConfirmComment(); }}
+              />
+            </div>
             {commentError && <p className="text-[10px] text-destructive mb-2">コメントを入力してください</p>}
             <div className="flex gap-2 justify-end">
               <Button variant="outline" size="sm" className="text-xs" onClick={handleCancelComment}>取消（削除）</Button>

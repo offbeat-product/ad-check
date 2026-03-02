@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, useImperativeHandle, forwardR
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import AnnotationCanvas from "@/components/AnnotationCanvas";
+import type { MentionMember } from "@/components/comments/MentionInput";
 import { Pin } from "lucide-react";
 
 interface AnnotationData {
@@ -26,15 +27,16 @@ interface MediaPreviewProps {
   scriptText?: string;
   paintMode?: boolean;
   onPaintModeToggle?: () => void;
-  onAnnotationSave?: (annotations: unknown[], comment: string) => void;
+  onAnnotationSave?: (annotations: unknown[], comment: string, mentionedUserIds?: string[]) => void;
   savedAnnotations?: AnnotationData[];
   highlightAnnotation?: AnnotationData | null;
+  members?: MentionMember[];
 }
 
 const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function MediaPreview({
   src, mediaType, label, noDataMessage, scriptText,
   paintMode, onPaintModeToggle, onAnnotationSave,
-  savedAnnotations, highlightAnnotation,
+  savedAnnotations, highlightAnnotation, members,
 }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
@@ -146,6 +148,7 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
             width={containerSize.width || 800}
             height={containerSize.height || 400}
             onSaveAnnotations={onAnnotationSave}
+            members={members}
           />
         )}
       </div>

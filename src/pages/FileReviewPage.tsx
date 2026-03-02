@@ -9,6 +9,7 @@ import { tusUploadBlob } from "@/lib/tus-upload";
 import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import type { CheckItem } from "@/lib/types";
+import type { MentionMember } from "@/components/comments/MentionInput";
 import type { Json } from "@/integrations/supabase/types";
 import type { ProjectFile, Product, Project, Client, CheckResultRow } from "@/lib/db-types";
 // getWebhookPaths no longer needed — unified v2 webhook
@@ -75,6 +76,7 @@ export default function FileReviewPage() {
   const [mediaCurrentTime, setMediaCurrentTime] = useState<number | null>(null);
   const [correctionCount, setCorrectionCount] = useState<number>(0);
   const [candidateCount, setCandidateCount] = useState<number>(0);
+  const [mentionMembers, setMentionMembers] = useState<MentionMember[]>([]);
 
   const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
   const { items, markers, commentCounts, paintMode, setPaintMode, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
@@ -463,19 +465,70 @@ export default function FileReviewPage() {
 
   useEffect(() => { fetchSavedAnnotations(); }, [fetchSavedAnnotations]);
 
-  const handleAnnotationSave = async (annotations: unknown[], comment: string) => {
+  // Fetch workspace members for mention in paint mode
+  useEffect(() => {
+    supabase.from("workspace_members").select("id, user_id, email, role, status").eq("status", "accepted").not("user_id", "is", null).then(({ data }) => {
+      if (!data) return;
+      const memberList: MentionMember[] = data.map((m) => ({
+        id: m.id, user_id: m.user_id, display_name: m.email.split("@")[0], email: m.email,
+      }));
+      const userIds = data.filter((m) => m.user_id).map((m) => m.user_id!);
+      if (userIds.length > 0) {
+        supabase.rpc("get_profiles_by_ids", { p_ids: userIds }).then(({ data: profiles }) => {
+          const profileMap: Record<string, string> = {};
+          const activeUserIds = new Set<string>();
+          (profiles ?? []).forEach((p: any) => { profileMap[p.id] = p.display_name || p.email?.split("@")[0] || ""; activeUserIds.add(p.id); });
+          setMentionMembers(memberList.filter((m) => m.user_id && activeUserIds.has(m.user_id)).map((m) => ({ ...m, display_name: profileMap[m.user_id!] || m.display_name })));
+        });
+      }
+    });
+  }, []);
+
+  const handleAnnotationSave = async (annotations: unknown[], comment: string, mentionedUserIds?: string[]) => {
     if (!record?.id || !user) return;
-    const { error } = await supabase.from("comments").insert([{
+    const { data: savedComment, error } = await supabase.from("comments").insert([{
       check_result_id: record.id,
       author_name: user.email?.split("@")[0] || "User",
       author_email: user.email || "",
       content: comment || "アノテーション追加",
       annotation_data: { annotations } as unknown as Json,
       status: "open",
-    }]);
+      mentions: mentionedUserIds && mentionedUserIds.length > 0 ? mentionedUserIds : null,
+    }]).select("id").single();
     if (!handleSupabaseError(error, "annotation save")) {
       toast({ title: "コメントを保存しました" });
       fetchSavedAnnotations();
+
+      // Send mention notifications
+      if (mentionedUserIds && mentionedUserIds.length > 0) {
+        const authorName = user.email?.split("@")[0] || "User";
+        for (const uid of mentionedUserIds) {
+          if (uid === user.id) continue;
+          await supabase.from("notifications").insert({
+            user_id: uid, type: "mention",
+            title: "コメントでメンションされました",
+            message: `${authorName}さんからメンション: ${comment.slice(0, 80)}`,
+            data: { check_result_id: record.id },
+          });
+        }
+      }
+
+      // Send general comment notifications
+      const authorName = user.email?.split("@")[0] || "User";
+      const excludeSet = new Set([user.id, ...(mentionedUserIds || [])]);
+      const { data: wsMembers } = await supabase.from("workspace_members").select("user_id").eq("status", "accepted").not("user_id", "is", null);
+      const targetIds = (wsMembers || []).map((m) => m.user_id!).filter((uid) => !excludeSet.has(uid));
+      if (targetIds.length > 0) {
+        const { data: profiles } = await supabase.from("profiles").select("id, notify_comment").in("id", targetIds).eq("notify_comment", true);
+        if (profiles && profiles.length > 0) {
+          await supabase.from("notifications").insert(profiles.map((p) => ({
+            user_id: p.id, type: "comment",
+            title: "新しいコメントが投稿されました",
+            message: `${authorName}: ${comment.slice(0, 80)}`,
+            data: { check_result_id: record.id },
+          })));
+        }
+      }
     }
   };
 
@@ -782,6 +835,7 @@ export default function FileReviewPage() {
                 noDataMessage="プレビューなし"
                 savedAnnotations={savedAnnotations}
                 highlightAnnotation={highlightAnnotation}
+                members={mentionMembers}
                 overlay={!hasCheckResult && !checking && canCheck ? (
                   <div className="absolute inset-0 flex items-center justify-center bg-background/60">
                     <Button onClick={handleRunCheck}><Bot className="h-4 w-4 mr-2" />AIチェック実行</Button>
@@ -801,6 +855,7 @@ export default function FileReviewPage() {
                   onAnnotationSave={handleAnnotationSave}
                   savedAnnotations={savedAnnotations}
                   highlightAnnotation={highlightAnnotation}
+                  members={mentionMembers}
                 />
               </div>
             ) : (
@@ -834,6 +889,7 @@ export default function FileReviewPage() {
         fileId={fileId}
         mediaCurrentTime={mediaCurrentTime}
         onSeekMedia={handleSeekMedia}
+        onCommentDeleted={fetchSavedAnnotations}
         emptyCheckMessage={
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
             <Bot className="h-10 w-10 mb-3 opacity-30" />

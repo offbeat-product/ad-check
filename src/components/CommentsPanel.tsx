@@ -36,6 +36,8 @@ interface CommentsPanelProps {
   onCheckItemClick?: (patternId: string) => void;
   mediaCurrentTime?: number | null;
   onSeekMedia?: (seconds: number) => void;
+  /** Called after a comment is deleted (to refresh annotations etc.) */
+  onCommentDeleted?: () => void;
   /** Correction log context */
   productId?: string;
   projectId?: string;
@@ -44,7 +46,7 @@ interface CommentsPanelProps {
   fileId?: string;
 }
 
-export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia, productId, projectId, processType, patternId, fileId }: CommentsPanelProps) {
+export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia, onCommentDeleted, productId, projectId, processType, patternId, fileId }: CommentsPanelProps) {
   const { user } = useAuth();
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
@@ -345,6 +347,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
                 const { error } = await supabase.from("comments").delete().eq("id", id);
                 handleSupabaseError(error, "comment delete");
                 fetchComments();
+                onCommentDeleted?.();
               }}
               timeAgo={timeAgo}
               onAnnotationClick={onAnnotationClick}
@@ -367,6 +370,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
                     const { error } = await supabase.from("comments").delete().eq("id", id);
                     handleSupabaseError(error, "comment delete");
                     fetchComments();
+                    onCommentDeleted?.();
                   }}
                   timeAgo={timeAgo}
                   isReply
