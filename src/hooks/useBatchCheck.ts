@@ -128,9 +128,10 @@ export function useBatchCheck() {
             body.script_text = file.file_data?.startsWith("data:") ? "" : (file.file_data || "");
             inputData = { script_text: body.script_text, video_url: body.video_url || "" };
 
-            // Related files for video processes
+            // Related files for video and audio processes
             const isVideoProcess = ["vcon", "video_horizontal", "video_vertical"].includes(processKey);
-            if (isVideoProcess) {
+            const isAudioProcess = ["narration", "bgm"].includes(processKey);
+            if (isVideoProcess || isAudioProcess) {
               const relatedFiles = await getRelatedProcessData(projectId, processKey, file.pattern_id);
               if (Object.keys(relatedFiles).length > 0) {
                 body.related_files = relatedFiles;
