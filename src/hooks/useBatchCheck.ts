@@ -43,19 +43,49 @@ export function useBatchCheck() {
       return;
     }
 
-    // Enforce max 5 files per batch
-    const MAX_BATCH = 5;
-    if (targetFiles.length > MAX_BATCH) {
-      toast({ title: `一括チェックは最大${MAX_BATCH}件までです`, description: `${targetFiles.length}件選択されています。${MAX_BATCH}件以下に絞ってください。`, variant: "destructive" });
-      return;
+    // Enforce per-process-type limits for video
+    const VIDEO_LIMITS: Record<string, number> = {
+      vcon: 3,
+      video_horizontal: 1,
+      video_vertical: 1,
+    };
+    const processGroups = new Map<string, typeof targetFiles>();
+    for (const f of targetFiles) {
+      const key = f.process_type || "script";
+      if (!processGroups.has(key)) processGroups.set(key, []);
+      processGroups.get(key)!.push(f);
+    }
+    let limited = false;
+    const limitedFiles: typeof targetFiles = [];
+    for (const [key, group] of processGroups) {
+      const limit = VIDEO_LIMITS[key];
+      if (limit && group.length > limit) {
+        limited = true;
+        limitedFiles.push(...group.slice(0, limit));
+      } else {
+        limitedFiles.push(...group);
+      }
+    }
+    // Preserve original order
+    const finalFiles = targetFiles.filter(f => limitedFiles.includes(f));
+
+    if (limited) {
+      toast({ title: "動画チェック件数制限", description: "Vコンは最大3件、横動画/縦動画は最大1件までです。制限内のファイルのみチェックします。" });
     }
 
-    setProgress({ total: targetFiles.length, current: 0, currentFileName: "", status: "running", results: [] });
+    // Enforce max 5 files per batch
+    const MAX_BATCH = 5;
+    if (finalFiles.length > MAX_BATCH) {
+      toast({ title: `一括チェックは最大${MAX_BATCH}件までです`, description: `先頭${MAX_BATCH}件をチェックします。`, variant: "destructive" });
+    }
+    const batchFiles = finalFiles.slice(0, MAX_BATCH);
+
+    setProgress({ total: batchFiles.length, current: 0, currentFileName: "", status: "running", results: [] });
 
     const results: BatchCheckProgress["results"] = [];
 
-    for (let i = 0; i < targetFiles.length; i++) {
-      const file = targetFiles[i];
+    for (let i = 0; i < batchFiles.length; i++) {
+      const file = batchFiles[i];
       setProgress(p => ({ ...p, current: i + 1, currentFileName: file.file_name }));
 
       try {

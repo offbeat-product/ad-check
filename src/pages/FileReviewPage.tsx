@@ -164,7 +164,15 @@ export default function FileReviewPage() {
         const { data: cr, error: crErr } = await supabase.from("check_results").select("*").eq("id", f.check_result_id).maybeSingle();
         if (cancelled || isRecheckingRef.current) return;
         handleSupabaseError(crErr, "check_result");
-        setRecord(cr);
+        // If file is in "checking" state (e.g. batch check in progress), resume checking UI
+        if (f.status === "checking" && (!cr || !cr.check_items || !(cr.check_items as unknown[]).length)) {
+          setChecking(true);
+        } else {
+          setRecord(cr);
+        }
+      } else if (f.status === "checking") {
+        // File marked as checking but no check_result_id yet
+        setChecking(true);
       }
 
       await fetchVersions();
