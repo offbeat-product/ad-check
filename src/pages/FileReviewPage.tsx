@@ -1135,6 +1135,8 @@ export default function FileReviewPage() {
               savedAnnotations={savedAnnotations}
               highlightAnnotation={highlightAnnotation}
               members={mentionMembers}
+              submissionType={file.submission_type}
+              onSubmitToClient={() => setSubmitToClientOpen(true)}
             />
           ) : (
           <div className="p-4">

@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Upload, ArrowDown, X, GitCompare, Plus, Pin } from "lucide-react";
+import { Upload, ArrowDown, X, GitCompare, Plus, Pin, CheckCircle2 } from "lucide-react";
 import { compressImage } from "@/lib/image-compress";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import { useToast } from "@/hooks/use-toast";
@@ -30,11 +30,15 @@ interface ComparisonLeftPanelProps {
   savedAnnotations?: Array<{ type: string; points: { x: number; y: number }[]; color: string; strokeWidth: number; text?: string; imagePosition?: { x: number; y: number; width: number; height: number } }>;
   highlightAnnotation?: { type: string; points: { x: number; y: number }[]; color: string; strokeWidth: number; text?: string; imagePosition?: { x: number; y: number; width: number; height: number } } | null;
   members?: MentionMember[];
+  /** Client submission */
+  submissionType?: string;
+  onSubmitToClient?: () => void;
 }
 
 export default function ComparisonLeftPanel({
   file, drafts, onDraftsChange, activePairIndex, onActivePairIndexChange, onClose, checkResultId,
   paintMode, onPaintModeToggle, onAnnotationSave, savedAnnotations, highlightAnnotation, members,
+  submissionType, onSubmitToClient,
 }: ComparisonLeftPanelProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -324,6 +328,24 @@ export default function ComparisonLeftPanel({
 
         {!isImage && !isMedia && beforeDraft?.data && afterDraft?.data && (
           <TextDiff original={beforeDraft.data} revised={afterDraft.data} />
+        )}
+
+        {/* Submit to client button */}
+        {submissionType !== "client" && onSubmitToClient && (
+          <Button
+            size="sm"
+            className="w-full text-xs gap-1.5 h-10"
+            onClick={onSubmitToClient}
+          >
+            <CheckCircle2 className="h-4 w-4" />
+            クライアントに提出する
+          </Button>
+        )}
+        {submissionType === "client" && (
+          <div className="flex items-center justify-center gap-2 py-2.5 rounded-lg border border-primary/30 bg-primary/5 text-primary text-xs font-medium">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            クライアント提出済み
+          </div>
         )}
       </div>
 
