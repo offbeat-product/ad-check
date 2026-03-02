@@ -1146,6 +1146,18 @@ export default function FileReviewPage() {
               : "修正が必要な項目があります。ステータスを修正依頼に更新しました",
           });
         }}
+        onClearAfterData={() => {
+          // Clear the after-draft data but keep the left panel open with empty slot for next upload
+          setComparisonDrafts(prev => {
+            const activeAfterIdx = comparisonActivePairIndex + 1;
+            if (activeAfterIdx < prev.length) {
+              const updated = [...prev];
+              updated[activeAfterIdx] = { ...updated[activeAfterIdx], data: null, text: "" };
+              return updated;
+            }
+            return prev;
+          });
+        }}
         emptyCheckMessage={
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
             <Bot className="h-10 w-10 mb-3 opacity-30" />

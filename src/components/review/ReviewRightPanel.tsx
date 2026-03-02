@@ -50,13 +50,15 @@ interface ReviewRightPanelProps {
   productName?: string;
   /** Called when comparison result is saved to DB */
   onComparisonSaved?: (entry: ComparisonHistoryEntry) => void;
+  /** Clear after-data after comparison check */
+  onClearAfterData?: () => void;
 }
 
 export default function ReviewRightPanel({
   rightTab, onTabChange, items, markers, productCode, commentCounts, highlightCard,
   commentFilter, checkResultId, hasCheckResult, onCommentClick, onCheckItemClick, onMarkerClick, emptyCheckMessage, onAnnotationClick,
   overallStatus, checkedAt, file, productId, projectId, comparisonBeforeData, comparisonAfterData, comparisonAfterText, comparisonRoundLabel, onOpenComparisonMode,
-  mediaCurrentTime, onSeekMedia, patternId, fileId, onCommentDeleted, clientName, productName, onComparisonSaved,
+  mediaCurrentTime, onSeekMedia, patternId, fileId, onCommentDeleted, clientName, productName, onComparisonSaved, onClearAfterData,
 }: ReviewRightPanelProps) {
   const [totalCommentCount, setTotalCommentCount] = useState(0);
   return (
@@ -125,6 +127,7 @@ export default function ReviewRightPanel({
               comparisonRoundLabel={comparisonRoundLabel ?? "第2稿"}
               onOpenComparisonMode={onOpenComparisonMode ?? (() => {})}
               onComparisonSaved={onComparisonSaved}
+              onClearAfterData={onClearAfterData}
               commentCounts={commentCounts}
               highlightCard={highlightCard}
               onCommentClick={onCommentClick}
