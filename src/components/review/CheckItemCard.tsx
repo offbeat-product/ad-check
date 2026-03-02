@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { STATUS_LABEL } from "@/lib/check-display";
 import type { CheckItem } from "@/lib/types";
 import type { CheckMarker } from "@/lib/marker-positions";
-import { forwardRef } from "react";
+import { forwardRef, type ReactNode } from "react";
 
 const borderColors: Record<string, string> = {
   NG: "border-l-status-ng",
@@ -28,6 +28,43 @@ const severityBadge: Record<string, string> = {
   low: "bg-muted text-muted-foreground",
 };
 
+/** Parse timestamp strings like 00:20, 1:23, 00:01:30 into seconds */
+function parseTimestamp(ts: string): number {
+  const parts = ts.split(":").map(Number);
+  if (parts.some(isNaN)) return -1;
+  if (parts.length === 2) return parts[0] * 60 + parts[1];
+  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  return -1;
+}
+
+/** Render text with clickable timestamps */
+function renderWithTimestamps(text: string, onSeek?: (seconds: number) => void): ReactNode {
+  if (!onSeek) return text;
+  // Match patterns like 00:20, 0:30, 1:23:45, also with surrounding context like (00:20) or 「00:20」
+  const timestampRegex = /(\d{1,2}:\d{2}(?::\d{2})?)/g;
+  const parts = text.split(timestampRegex);
+  if (parts.length <= 1) return text;
+
+  return parts.map((part, i) => {
+    if (timestampRegex.lastIndex = 0, timestampRegex.test(part)) {
+      const seconds = parseTimestamp(part);
+      if (seconds >= 0) {
+        return (
+          <button
+            key={i}
+            onClick={(e) => { e.stopPropagation(); onSeek(seconds); }}
+            className="inline-flex items-center gap-0.5 text-primary font-mono font-medium bg-primary/10 hover:bg-primary/20 px-1 py-0.5 rounded text-[11px] transition-colors cursor-pointer border border-primary/20"
+            title={`${part} にジャンプ`}
+          >
+            🕐 {part}
+          </button>
+        );
+      }
+    }
+    return <span key={i}>{part}</span>;
+  });
+}
+
 interface CheckItemCardProps {
   item: CheckItem;
   index: number;
@@ -41,10 +78,11 @@ interface CheckItemCardProps {
   onToggleSelect: () => void;
   onToggleResolved: () => void;
   onCommentClick: () => void;
+  onSeekMedia?: (seconds: number) => void;
 }
 
 const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
-  ({ item, index, marker, isResolved, isSelected, isHighlighted, isApplied, commentCount, productCode, onToggleSelect, onToggleResolved, onCommentClick }, ref) => {
+  ({ item, index, marker, isResolved, isSelected, isHighlighted, isApplied, commentCount, productCode, onToggleSelect, onToggleResolved, onCommentClick, onSeekMedia }, ref) => {
     return (
       <div
         ref={ref}
@@ -89,14 +127,14 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
               )}
             </div>
 
-            <p className="text-sm font-medium">{item.item}</p>
-            {item.location && <p className="text-xs text-muted-foreground">📍 {item.location}</p>}
-            <p className="text-xs text-foreground/80 mt-1">{item.detail}</p>
+            <p className="text-sm font-medium">{renderWithTimestamps(item.item, onSeekMedia)}</p>
+            {item.location && <p className="text-xs text-muted-foreground">📍 {renderWithTimestamps(item.location, onSeekMedia)}</p>}
+            <p className="text-xs text-foreground/80 mt-1">{renderWithTimestamps(item.detail, onSeekMedia)}</p>
 
             {item.suggestion && item.status !== "OK" && (
               <div className="text-xs text-primary bg-primary/5 rounded-md p-2 mt-2 flex items-start gap-1.5">
                 <Lightbulb className="h-3 w-3 shrink-0 mt-0.5" />
-                <span>修正案: {item.suggestion}</span>
+                <span>修正案: {renderWithTimestamps(item.suggestion, onSeekMedia)}</span>
               </div>
             )}
 

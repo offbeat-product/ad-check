@@ -70,6 +70,7 @@ export default function ReviewRightPanel({
               productId={productId}
               projectId={projectId}
               processKey={file?.process_type}
+              onSeekMedia={onSeekMedia}
             />
           ) : (
             emptyCheckMessage || (
