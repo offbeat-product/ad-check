@@ -48,6 +48,7 @@ interface ProjectRow { id: string; name: string; product_id: string | null; }
 interface ProductRow { id: string; name: string; client_id: string | null; }
 interface ClientRow { id: string; name: string; }
 interface KpiTarget { id: string; key: string; label: string; target_value: number; }
+interface SubmissionLog { id: string; file_id: string; project_id: string | null; product_id: string | null; process_type: string; action_type: string; version_number: number; created_at: string; }
 
 
 /* ─── Helpers ──────────────────────────────────────── */
@@ -101,13 +102,16 @@ interface MetricSet {
   internalRevSequences: number;
   clientRevisions: number | null;
   clientRevSequences: number;
-  /** 社内修正率: クライアント提出が初稿→第2稿以降になった件数 / クライアント提出総件数 */
+  /** 社内修正率: submission_logsベースで計算 */
   internalRevisionRate: number | null;
   internalRevisionCount: number;
   clientSubmissionTotal: number;
+  /** ログベースのアクション回数 */
+  logClientSubmitCount: number;
+  logInternalRevisionCount: number;
 }
 
-function computeMetrics(procs: ProcessRow[], fileSet: FileRow[], submissionType?: "internal" | "client"): MetricSet {
+function computeMetrics(procs: ProcessRow[], fileSet: FileRow[], submissionType?: "internal" | "client", logs?: SubmissionLog[]): MetricSet {
   // 納期遵守率:
   // 社内: 社内期限までに全パターンの初稿(version_number=1, submission_type=internal)がアップロードされているか
   // クライアント: クライアント期限までに全パターンがチェック完了&クライアント提出済みか
@@ -193,6 +197,10 @@ function computeMetrics(procs: ProcessRow[], fileSet: FileRow[], submissionType?
     ? Math.round((internalRevisionCount / clientSubmissionTotal) * 100)
     : null;
 
+  // ログベースのアクション回数
+  const logClientSubmitCount = logs ? logs.filter(l => l.action_type === "client_submit").length : 0;
+  const logInternalRevisionCount = logs ? logs.filter(l => l.action_type === "internal_revision").length : 0;
+
   return {
     deadlineRate: deadlineTotal > 0 ? Math.round((deadlineOnTime / deadlineTotal) * 100) : null,
     deadlineTotal,
@@ -210,6 +218,8 @@ function computeMetrics(procs: ProcessRow[], fileSet: FileRow[], submissionType?
     internalRevisionRate,
     internalRevisionCount,
     clientSubmissionTotal,
+    logClientSubmitCount,
+    logInternalRevisionCount,
   };
 }
 
@@ -223,6 +233,7 @@ export default function ReportPage() {
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);
   const [targets, setTargets] = useState<KpiTarget[]>([]);
+  const [submissionLogs, setSubmissionLogs] = useState<SubmissionLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [targetDialogOpen, setTargetDialogOpen] = useState(false);
 
@@ -248,13 +259,14 @@ export default function ReportPage() {
     const load = async () => {
       setLoading(true);
       try {
-        const [procRes, fileRes, projRes, prodRes, clientRes, targetRes] = await Promise.all([
+        const [procRes, fileRes, projRes, prodRes, clientRes, targetRes, logRes] = await Promise.all([
           supabase.from("project_processes").select("id, project_id, process_key, process_label, status, deadline, internal_deadline, client_deadline, updated_at"),
           supabase.from("project_files").select("id, project_id, process_type, status, version_number, parent_file_id, fixed_at, created_at, submission_type"),
           supabase.from("projects").select("id, name, product_id"),
           supabase.from("products").select("id, name, client_id"),
           supabase.from("clients").select("id, name"),
           supabase.from("kpi_targets").select("*"),
+          supabase.from("submission_logs").select("id, file_id, project_id, product_id, process_type, action_type, version_number, created_at") as any,
         ]);
         if (cancelled) return;
         handleSupabaseError(procRes.error, "project_processes");
@@ -265,6 +277,7 @@ export default function ReportPage() {
         setProducts(prodRes.data ?? []);
         setClients(clientRes.data ?? []);
         setTargets((targetRes.data ?? []) as KpiTarget[]);
+        setSubmissionLogs((logRes.data ?? []) as SubmissionLog[]);
       } catch (e) {
         console.error("[Report] fetch error:", e);
       } finally {
@@ -333,15 +346,21 @@ export default function ReportPage() {
     [files, scopeProjectIds, periodFrom, periodTo]
   );
 
+  // Filter submission logs by period and scope
+  const periodLogs = useMemo(() =>
+    submissionLogs.filter(l => l.created_at && l.project_id && scopeProjectIds.has(l.project_id) && isInPeriod(l.created_at)),
+    [submissionLogs, scopeProjectIds, periodFrom, periodTo]
+  );
+
   // Submission type summary
   const submissionSummary = useMemo(() => {
     const internal = periodFiles.filter(f => f.submission_type === "internal");
     const client = periodFiles.filter(f => f.submission_type === "client");
     return {
-      internal: computeMetrics(periodProcesses, internal, "internal"),
-      client: computeMetrics(periodProcesses, client, "client"),
+      internal: computeMetrics(periodProcesses, internal, "internal", periodLogs),
+      client: computeMetrics(periodProcesses, client, "client", periodLogs),
     };
-  }, [periodProcesses, periodFiles]);
+  }, [periodProcesses, periodFiles, periodLogs]);
 
   const chartConfig = {
     deadlineRate: { label: "納期遵守率", color: "hsl(var(--primary))" },
@@ -351,8 +370,8 @@ export default function ReportPage() {
 
   // Monthly trend for chart (using all files, not filtered by submission type)
   const monthlyChartData = useMemo(() => {
-    const monthMap = new Map<string, { procs: ProcessRow[]; internalFiles: FileRow[]; clientFiles: FileRow[] }>();
-    const ensure = (k: string) => { if (!monthMap.has(k)) monthMap.set(k, { procs: [], internalFiles: [], clientFiles: [] }); return monthMap.get(k)!; };
+    const monthMap = new Map<string, { procs: ProcessRow[]; internalFiles: FileRow[]; clientFiles: FileRow[]; logs: SubmissionLog[] }>();
+    const ensure = (k: string) => { if (!monthMap.has(k)) monthMap.set(k, { procs: [], internalFiles: [], clientFiles: [], logs: [] }); return monthMap.get(k)!; };
 
     periodProcesses.forEach(p => {
       ensure(toMonthKey(p.updated_at)).procs.push(p);
@@ -362,10 +381,13 @@ export default function ReportPage() {
       if (f.submission_type === "internal") bucket.internalFiles.push(f);
       else if (f.submission_type === "client") bucket.clientFiles.push(f);
     });
+    periodLogs.filter(l => l.created_at).forEach(l => {
+      ensure(toMonthKey(l.created_at)).logs.push(l);
+    });
 
     return [...monthMap.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, data]) => {
-      const clientM = computeMetrics(data.procs, data.clientFiles, "client");
-      const internalM = computeMetrics(data.procs, data.internalFiles, "internal");
+      const clientM = computeMetrics(data.procs, data.clientFiles, "client", data.logs);
+      const internalM = computeMetrics(data.procs, data.internalFiles, "internal", data.logs);
       return {
         month,
         monthLabel: monthLabel(month),
@@ -375,6 +397,8 @@ export default function ReportPage() {
         clientDeadlineTotal: clientM.deadlineTotal,
         clientFirstDraftTotal: clientM.firstDraftTotal,
         clientInternalRevisionRate: clientM.internalRevisionRate,
+        clientSubmitCount: clientM.logClientSubmitCount,
+        internalRevCount: clientM.logInternalRevisionCount,
         internalDeadlineRate: internalM.deadlineRate,
         internalFirstDraftRate: internalM.firstDraftRate,
         internalAvgRevisions: internalM.avgRevisions,
@@ -382,7 +406,7 @@ export default function ReportPage() {
         internalFirstDraftTotal: internalM.firstDraftTotal,
       };
     });
-  }, [periodProcesses, periodFiles]);
+  }, [periodProcesses, periodFiles, periodLogs]);
 
   if (loading) {
     return (
@@ -527,7 +551,7 @@ export default function ReportPage() {
               value={submissionSummary.client.internalRevisionRate !== null ? `${submissionSummary.client.internalRevisionRate}%` : "—"}
               rate={submissionSummary.client.internalRevisionRate}
               target={null}
-              detail={`${submissionSummary.client.internalRevisionCount}/${submissionSummary.client.clientSubmissionTotal}件で社内修正発生`}
+              detail={`社内修正${submissionSummary.client.logInternalRevisionCount}回 / クライアント提出${submissionSummary.client.logClientSubmitCount}回`}
               color="text-status-warning"
             />
           </div>
@@ -629,7 +653,7 @@ export default function ReportPage() {
               <thead>
                 <tr className="border-b border-border text-muted-foreground text-left">
                   <th className="px-4 py-2 font-medium" rowSpan={2}>月</th>
-                  <th className="px-4 py-2 font-medium text-center border-l border-border" colSpan={4}>クライアント提出</th>
+                  <th className="px-4 py-2 font-medium text-center border-l border-border" colSpan={6}>クライアント提出</th>
                   <th className="px-4 py-2 font-medium text-center border-l border-border" colSpan={3}>社内提出</th>
                 </tr>
                 <tr className="border-b border-border text-muted-foreground text-left">
@@ -637,6 +661,8 @@ export default function ReportPage() {
                   <th className="px-4 py-2 font-medium text-right">初稿合格率</th>
                   <th className="px-4 py-2 font-medium text-right">修正回数</th>
                   <th className="px-4 py-2 font-medium text-right">社内修正率</th>
+                  <th className="px-4 py-2 font-medium text-right">提出回数</th>
+                  <th className="px-4 py-2 font-medium text-right">社内修正回数</th>
                   <th className="px-4 py-2 font-medium text-right border-l border-border">納期遵守率</th>
                   <th className="px-4 py-2 font-medium text-right">初稿合格率</th>
                   <th className="px-4 py-2 font-medium text-right">修正回数</th>
@@ -644,7 +670,7 @@ export default function ReportPage() {
               </thead>
               <tbody>
                 {monthlyChartData.length === 0 ? (
-                  <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">データなし</td></tr>
+                  <tr><td colSpan={10} className="text-center py-8 text-muted-foreground">データなし</td></tr>
                 ) : (
                   [...monthlyChartData].reverse().map(d => (
                     <tr key={d.month} className="border-b border-border/50">
@@ -660,6 +686,12 @@ export default function ReportPage() {
                       </td>
                       <td className="px-4 py-2 text-right">
                         {d.clientInternalRevisionRate !== null ? <span className={cn("font-bold", d.clientInternalRevisionRate > 0 ? "text-status-warning" : "text-status-ok")}>{d.clientInternalRevisionRate}%</span> : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <span className="font-bold">{d.clientSubmitCount ?? 0}</span><span className="text-muted-foreground text-[10px]">回</span>
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        <span className={cn("font-bold", (d.internalRevCount ?? 0) > 0 ? "text-status-warning" : "")}>{d.internalRevCount ?? 0}</span><span className="text-muted-foreground text-[10px]">回</span>
                       </td>
                       <td className="px-4 py-2 text-right border-l border-border">
                         <RateCell rate={d.internalDeadlineRate} target={getInternalTarget("deadline_compliance", 100)} total={d.internalDeadlineTotal} />
@@ -735,15 +767,20 @@ export default function ReportPage() {
             <div className="space-y-2">
               <h4 className="text-base font-bold text-foreground flex items-center gap-2">
                 <RotateCcw className="h-4 w-4 text-status-warning" />
-                ④ 社内修正率
+                ④ 社内修正率・アクション回数
               </h4>
               <div className="pl-4 border-l-[3px] border-status-warning/30 space-y-2">
-                <p className="text-muted-foreground">クライアントに提出されたクリエイティブのうち、<span className="font-medium text-foreground">「社内修正する」ボタンが押された</span>（= 社内での修正が必要だった）割合を算出します。</p>
+                <p className="text-muted-foreground">チェック画面の<span className="font-medium text-foreground">「クライアント提出」</span>ボタンと<span className="font-medium text-foreground">「社内修正する」</span>ボタンの押下をDBに記録（submission_logsテーブル）し、正確にカウントします。</p>
                 <div className="bg-muted/50 rounded-lg p-3 space-y-1">
-                  <p className="text-muted-foreground"><span className="font-medium text-foreground">カウント条件:</span> クライアント提出ファイル（submission_type=client）のシーケンスで、最大バージョン番号が2以上であるもの（= 社内修正ボタンで新稿がアップロードされた）</p>
-                  <p className="text-muted-foreground"><span className="font-medium text-foreground">運用フロー:</span> 初稿アップロード → AIチェック → 「クライアント提出」or「社内修正する」→ 次稿アップロード → 繰り返し</p>
+                  <p className="text-muted-foreground"><span className="font-medium text-foreground">クライアント提出回数:</span> action_type=&apos;client_submit&apos; のログ件数</p>
+                  <p className="text-muted-foreground"><span className="font-medium text-foreground">社内修正回数:</span> action_type=&apos;internal_revision&apos; のログ件数</p>
+                  <p className="text-muted-foreground"><span className="font-medium text-foreground">社内修正率:</span> クライアント提出シーケンスのうち、最大バージョン番号が2以上（= 社内修正ボタンで新稿がアップロードされた）の割合</p>
                 </div>
-                <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">計算式: 社内修正発生シーケンス数 ÷ クライアント提出シーケンス総数 × 100</p>
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="font-semibold text-foreground mb-1">🔄 運用フロー</p>
+                  <p className="text-muted-foreground">初稿アップロード → AIチェック → 「クライアント提出」or「社内修正する」→ 次稿アップロード → AIチェック → 繰り返し</p>
+                </div>
+                <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">社内修正率 = 社内修正発生シーケンス数 ÷ クライアント提出シーケンス総数 × 100</p>
               </div>
             </div>
 

@@ -1116,6 +1116,45 @@ export type Database = {
           },
         ]
       }
+      submission_logs: {
+        Row: {
+          action_type: string
+          created_at: string
+          created_by: string | null
+          file_id: string
+          id: string
+          pattern_id: string | null
+          process_type: string
+          product_id: string | null
+          project_id: string | null
+          version_number: number
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          created_by?: string | null
+          file_id: string
+          id?: string
+          pattern_id?: string | null
+          process_type: string
+          product_id?: string | null
+          project_id?: string | null
+          version_number?: number
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          created_by?: string | null
+          file_id?: string
+          id?: string
+          pattern_id?: string | null
+          process_type?: string
+          product_id?: string | null
+          project_id?: string | null
+          version_number?: number
+        }
+        Relationships: []
+      }
       workspace_members: {
         Row: {
           created_at: string
