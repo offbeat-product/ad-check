@@ -85,8 +85,10 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
       </div>
 
       <div ref={containerRef} className={cn(
-        "relative rounded-lg overflow-hidden border bg-muted/30 transition-all duration-300",
-        seekFlash ? "border-destructive border-2 ring-4 ring-destructive/30 shadow-[0_0_20px_rgba(239,68,68,0.3)]" : "border-border"
+        "relative rounded-lg transition-all duration-300",
+        paintMode ? "overflow-visible mb-16" : "overflow-hidden",
+        seekFlash ? "border-destructive border-2 ring-4 ring-destructive/30 shadow-[0_0_20px_rgba(239,68,68,0.3)]" : "border border-border",
+        "bg-muted/30"
       )}>
         {hasSource && !isRawBase64Text ? (
           mediaType === "video" ? (
