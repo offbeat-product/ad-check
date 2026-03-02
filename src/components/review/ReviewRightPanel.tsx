@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import CommentsPanel from "@/components/CommentsPanel";
 import AICheckPanel from "./AICheckPanel";
 import ComparisonCheckPanel from "./ComparisonCheckPanel";
+import type { ComparisonHistoryEntry } from "./ComparisonCheckPanel";
 import { MessageCircle, Bot, GitCompare } from "lucide-react";
 import type { CheckItem } from "@/lib/types";
 import type { CheckMarker } from "@/lib/marker-positions";
@@ -42,13 +43,18 @@ interface ReviewRightPanelProps {
   fileId?: string;
   /** Called after a comment is deleted */
   onCommentDeleted?: () => void;
+  /** Client/product info for comparison check DB save */
+  clientName?: string;
+  productName?: string;
+  /** Called when comparison result is saved to DB */
+  onComparisonSaved?: (entry: ComparisonHistoryEntry) => void;
 }
 
 export default function ReviewRightPanel({
   rightTab, onTabChange, items, markers, productCode, commentCounts, highlightCard,
   commentFilter, checkResultId, hasCheckResult, onCommentClick, onCheckItemClick, onMarkerClick, emptyCheckMessage, onAnnotationClick,
   overallStatus, checkedAt, file, productId, projectId, comparisonNewFileData, comparisonNewText, onOpenComparisonMode,
-  mediaCurrentTime, onSeekMedia, patternId, fileId, onCommentDeleted,
+  mediaCurrentTime, onSeekMedia, patternId, fileId, onCommentDeleted, clientName, productName, onComparisonSaved,
 }: ReviewRightPanelProps) {
   const [totalCommentCount, setTotalCommentCount] = useState(0);
   return (
@@ -106,9 +112,15 @@ export default function ReviewRightPanel({
               file={file}
               productId={productId}
               projectId={projectId}
+              fileId={fileId}
+              checkResultId={checkResultId}
+              clientName={clientName}
+              productCode={productCode}
+              productName={productName}
               newFileData={comparisonNewFileData ?? null}
               newText={comparisonNewText ?? ""}
               onOpenComparisonMode={onOpenComparisonMode ?? (() => {})}
+              onComparisonSaved={onComparisonSaved}
             />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">

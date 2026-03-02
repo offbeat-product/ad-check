@@ -1095,6 +1095,20 @@ export default function FileReviewPage() {
         mediaCurrentTime={mediaCurrentTime}
         onSeekMedia={handleSeekMedia}
         onCommentDeleted={fetchSavedAnnotations}
+        clientName={client?.name}
+        productName={product?.name}
+        onComparisonSaved={(entry) => {
+          // Auto-update file status based on latest comparison result
+          const isGo = entry.overall_status === "A" || entry.overall_status === "B";
+          const newStatus = isGo ? "checked" : "revision_requested";
+          setFile(prev => prev ? { ...prev, status: newStatus } : prev);
+          toast({
+            title: isGo ? "✅ GO判定" : "⚠ NG判定",
+            description: isGo
+              ? "比較チェック結果に基づきステータスをGOに更新しました"
+              : "修正が必要な項目があります。ステータスを修正依頼に更新しました",
+          });
+        }}
         emptyCheckMessage={
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
             <Bot className="h-10 w-10 mb-3 opacity-30" />

@@ -17,7 +17,9 @@ export type Database = {
       check_results: {
         Row: {
           check_items: Json | null
+          check_type: string
           client_name: string
+          comparison_round: number
           created_at: string | null
           detected_case: string | null
           id: string
@@ -27,6 +29,7 @@ export type Database = {
           ng_count: number | null
           ok_count: number | null
           overall_status: string | null
+          parent_check_result_id: string | null
           process_type: string
           product_code: string
           product_name: string
@@ -39,7 +42,9 @@ export type Database = {
         }
         Insert: {
           check_items?: Json | null
+          check_type?: string
           client_name: string
+          comparison_round?: number
           created_at?: string | null
           detected_case?: string | null
           id?: string
@@ -49,6 +54,7 @@ export type Database = {
           ng_count?: number | null
           ok_count?: number | null
           overall_status?: string | null
+          parent_check_result_id?: string | null
           process_type: string
           product_code: string
           product_name: string
@@ -61,7 +67,9 @@ export type Database = {
         }
         Update: {
           check_items?: Json | null
+          check_type?: string
           client_name?: string
+          comparison_round?: number
           created_at?: string | null
           detected_case?: string | null
           id?: string
@@ -71,6 +79,7 @@ export type Database = {
           ng_count?: number | null
           ok_count?: number | null
           overall_status?: string | null
+          parent_check_result_id?: string | null
           process_type?: string
           product_code?: string
           product_name?: string
@@ -81,7 +90,15 @@ export type Database = {
           user_id?: string
           warning_count?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "check_results_parent_check_result_id_fkey"
+            columns: ["parent_check_result_id"]
+            isOneToOne: false
+            referencedRelation: "check_results"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       check_rules: {
         Row: {
@@ -1184,7 +1201,9 @@ export type Database = {
         Args: { p_check_result_id: string; p_share_token: string }
         Returns: {
           check_items: Json | null
+          check_type: string
           client_name: string
+          comparison_round: number
           created_at: string | null
           detected_case: string | null
           id: string
@@ -1194,6 +1213,7 @@ export type Database = {
           ng_count: number | null
           ok_count: number | null
           overall_status: string | null
+          parent_check_result_id: string | null
           process_type: string
           product_code: string
           product_name: string
