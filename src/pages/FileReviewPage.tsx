@@ -195,13 +195,14 @@ export default function FileReviewPage() {
             const inputData = latest.input_data as Record<string, unknown> | null;
             const aiCfgLocal = AI_CHECK_CONFIG[f.process_type];
             const isImg = aiCfgLocal?.inputMode === "image";
+            const isText = (aiCfgLocal?.inputMode || "text") === "text";
 
             if (inputData) {
               const afterData = isImg ? (inputData.after_image as string) : (inputData.after_text as string);
               if (afterData) {
                 // Initialize comparison drafts with original + latest draft
                 setComparisonDrafts([
-                  { label: "初稿", data: f.file_data, text: "" },
+                  { label: "初稿", data: f.file_data, text: isText ? (f.file_data || "") : "" },
                   { label: `第${(latest.comparison_round ?? 1) + 1}稿`, data: afterData, text: isImg ? "" : (afterData || "") },
                 ]);
               }
@@ -998,8 +999,10 @@ export default function FileReviewPage() {
             {hasCheckResult && (
               <Button size="sm" variant="outline" className="text-xs h-8 border-primary/50 text-primary hover:bg-primary/10" onClick={() => {
                 if (comparisonDrafts.length === 0) {
+                  const inputMode = AI_CHECK_CONFIG[file.process_type]?.inputMode || "text";
+                  const isText = inputMode === "text";
                   setComparisonDrafts([
-                    { label: "初稿", data: file.file_data, text: "" },
+                    { label: "初稿", data: file.file_data, text: isText ? (file.file_data || "") : "" },
                     { label: "第2稿", data: null, text: "" },
                   ]);
                   setComparisonActivePairIndex(0);
@@ -1348,9 +1351,12 @@ export default function FileReviewPage() {
           setUploadRevisionOpen(false);
           fetchVersions();
           // Auto-switch to comparison mode with uploaded file as the new draft
-          const isImg = AI_CHECK_CONFIG[file.process_type]?.inputMode === "image";
+          const aiCfgLocal = AI_CHECK_CONFIG[file.process_type];
+          const inputMode = aiCfgLocal?.inputMode || "text";
+          const isImg = inputMode === "image";
+          const isText = inputMode === "text";
           setComparisonDrafts([
-            { label: "初稿", data: file.file_data, text: "" },
+            { label: "初稿", data: file.file_data, text: isText ? (file.file_data || "") : "" },
             { label: `第${versionNumber}稿`, data: fileData, text: isImg ? "" : fileData },
           ]);
           setComparisonActivePairIndex(0);
@@ -1464,10 +1470,23 @@ function UploadRevisionModal({ open, onOpenChange, file, projectId, onUploaded }
     try {
       let fileData = "";
       let fileType = file.file_type;
+      const aiCfg = AI_CHECK_CONFIG[file.process_type];
+      const inputMode = aiCfg?.inputMode || "text";
+
       if (f.type.startsWith("image/")) {
         const compressed = await compressImage(f);
         fileData = `data:${compressed.mediaType};base64,${compressed.base64}`;
         fileType = "image";
+      } else if (f.type.startsWith("audio/") || f.type.startsWith("video/")) {
+        // Upload media to storage and store public URL
+        const ext = f.name.split(".").pop() || "mp4";
+        const bucket = f.type.startsWith("audio/") ? "audios" : "videos";
+        const storagePath = `${projectId}/${file.id}_rev_${Date.now()}.${ext}`;
+        const { data: uploadData, error: uploadErr } = await supabase.storage.from(bucket).upload(storagePath, f, { upsert: true });
+        if (uploadErr) throw uploadErr;
+        const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(storagePath);
+        fileData = urlData.publicUrl;
+        fileType = f.type.startsWith("audio/") ? "audio" : "video";
       } else {
         fileData = await f.text();
         fileType = "text";
@@ -1494,8 +1513,9 @@ function UploadRevisionModal({ open, onOpenChange, file, projectId, onUploaded }
       if (handleSupabaseError(insertErr, "revision upload")) return;
       toast({ title: `v${nextVersion} をアップロードしました` });
       onUploaded(fileData, fileType, nextVersion);
-    } catch {
-      toast({ title: "エラー", variant: "destructive" });
+    } catch (err) {
+      console.error("[UploadRevision] Error:", err);
+      toast({ title: "アップロードに失敗しました", description: err instanceof Error ? err.message : "不明なエラー", variant: "destructive" });
     }
     setUploading(false);
   };
@@ -1510,7 +1530,13 @@ function UploadRevisionModal({ open, onOpenChange, file, projectId, onUploaded }
             <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
             <p className="text-sm text-muted-foreground">{uploading ? "アップロード中..." : "ファイルを選択"}</p>
             <input ref={fileInputRef} type="file" className="hidden"
-              accept={file.file_type === "image" ? "image/png,image/jpeg,image/webp" : ".txt,.docx"}
+              accept={(() => {
+                const inputMode = AI_CHECK_CONFIG[file.process_type]?.inputMode || "text";
+                if (inputMode === "image") return "image/png,image/jpeg,image/webp";
+                if (inputMode === "audio") return "audio/*";
+                if (inputMode === "video") return "video/*";
+                return ".txt,.docx";
+              })()}
               onChange={handleUpload} />
           </div>
           <p className="text-xs text-muted-foreground text-center">
