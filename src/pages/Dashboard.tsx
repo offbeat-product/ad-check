@@ -37,106 +37,169 @@ function StatCard({ icon: Icon, label, value, color }: { icon: React.ElementType
   );
 }
 
+async function fetchWithRetry<T>(
+  fn: () => PromiseLike<T>,
+  retries = 3,
+  baseDelay = 1000
+): Promise<T> {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (i === retries - 1) throw e;
+      await new Promise(r => setTimeout(r, baseDelay * Math.pow(2, i)));
+    }
+  }
+  throw new Error("fetchWithRetry exhausted");
+}
+
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [records, setRecords] = useState<CheckResultRow[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
+
+  // Phase 1: Projects (loaded immediately)
   const [projects, setProjects] = useState<Project[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [projectsLoading, setProjectsLoading] = useState(true);
+
+  // Phase 2: Check results (loaded lazily)
+  const [records, setRecords] = useState<CheckResultRow[]>([]);
+  const [totalCount, setTotalCount] = useState(0);
+  const [checksLoading, setChecksLoading] = useState(true);
+  const [checksLoaded, setChecksLoaded] = useState(false);
+
+  // Phase 3: Recent files (loaded lazily)
   const [recentFiles, setRecentFiles] = useState<(ProjectFile & { project_name?: string })[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [filesLoaded, setFilesLoaded] = useState(false);
+
   const [fetchError, setFetchError] = useState(false);
   const [page, setPage] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [refetchKey, setRefetchKey] = useState(0);
 
-  // Fetch paginated records
+  // Phase 1: Fetch projects & products only (lightweight, fast)
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
 
-    const fetchData = async (retryCount = 0) => {
-      setLoading(true);
+    const fetchProjects = async () => {
+      setProjectsLoading(true);
       setFetchError(false);
-      const from = page * ITEMS_PER_PAGE;
-      const to = from + ITEMS_PER_PAGE - 1;
-
       try {
-        // Sequential batches to reduce concurrent DB connections
-        // Batch 1: Core check results
-        const cr = await supabase.from("check_results").select("*").order("created_at", { ascending: false }).range(from, to);
+        const pr = await fetchWithRetry(() =>
+          supabase.from("projects").select("*").order("updated_at", { ascending: false }).limit(6)
+        );
         if (cancelled) return;
-        handleSupabaseError(cr.error, "check_results");
-        setRecords(cr.data ?? []);
+        handleSupabaseError(pr.error, "projects");
+        setProjects(pr.data ?? []);
 
-        const countRes = await supabase.from("check_results").select("*", { count: "exact", head: true });
+        const prod = await fetchWithRetry(() =>
+          supabase.from("products").select("*").limit(100)
+        );
         if (cancelled) return;
-        handleSupabaseError(countRes?.error ?? null, "check_results count");
-        setTotalCount(countRes?.count ?? 0);
+        handleSupabaseError(prod.error, "products");
+        setProducts(prod.data ?? []);
 
-        // Batch 2: Supporting data (only on first page)
-        if (page === 0) {
-          const pr = await supabase.from("projects").select("*").order("updated_at", { ascending: false }).limit(6);
-          if (cancelled) return;
-          handleSupabaseError(pr?.error ?? null, "projects");
-          setProjects(pr?.data ?? []);
-
-          const prod = await supabase.from("products").select("*");
-          if (cancelled) return;
-          handleSupabaseError(prod?.error ?? null, "products");
-          setProducts(prod?.data ?? []);
-
-          const pf = await supabase.from("project_files").select("id, project_id, file_name, file_type, process_type, status, updated_at").order("updated_at", { ascending: false }).limit(5);
-          if (cancelled) return;
-          handleSupabaseError(pf?.error ?? null, "project_files");
-          const filesData = (pf?.data ?? []) as ProjectFile[];
-
-          // Enrich files with project names (batch, no N+1)
-          if (filesData.length > 0) {
-            const projectIds = [...new Set(filesData.map(f => f.project_id).filter(Boolean))] as string[];
-            if (projectIds.length > 0) {
-              const { data: fileProjects } = await supabase
-                .from("projects").select("id, name").in("id", projectIds);
-              if (!cancelled) {
-                const nameMap = new Map((fileProjects ?? []).map(p => [p.id, p.name]));
-                setRecentFiles(filesData.map(f => ({ ...f, project_name: nameMap.get(f.project_id ?? "") })));
-              }
-            } else {
-              setRecentFiles(filesData);
-            }
-          } else {
-            setRecentFiles([]);
-          }
-        }
-        if (!cancelled) setLoading(false);
+        setProjectsLoading(false);
       } catch (e) {
-        // Network error — retry up to 3 times with exponential backoff
-        if (retryCount < 3 && !cancelled) {
-          console.warn(`[Dashboard] Fetch failed (attempt ${retryCount + 1}), retrying...`, e);
-          await new Promise(r => setTimeout(r, Math.min(1000 * Math.pow(2, retryCount), 8000)));
-          return fetchData(retryCount + 1);
-        }
-        console.error("[Dashboard] Fetch failed after retries:", e);
+        console.error("[Dashboard] Projects fetch failed:", e);
         if (!cancelled) {
           setFetchError(true);
-          setLoading(false);
+          setProjectsLoading(false);
         }
       }
     };
 
-    fetchData();
+    fetchProjects();
     return () => { cancelled = true; };
+  }, [user, refetchKey]);
+
+  // Phase 2: Fetch check results (deferred, paginated)
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+
+    const fetchChecks = async () => {
+      setChecksLoading(true);
+      const from = page * ITEMS_PER_PAGE;
+      const to = from + ITEMS_PER_PAGE - 1;
+
+      try {
+        const cr = await fetchWithRetry(() =>
+          supabase.from("check_results").select("*").order("created_at", { ascending: false }).range(from, to)
+        );
+        if (cancelled) return;
+        handleSupabaseError(cr.error, "check_results");
+        setRecords(cr.data ?? []);
+
+        const countRes = await fetchWithRetry(() =>
+          supabase.from("check_results").select("*", { count: "exact", head: true })
+        );
+        if (cancelled) return;
+        handleSupabaseError(countRes.error, "check_results count");
+        setTotalCount(countRes.count ?? 0);
+
+        setChecksLoaded(true);
+        setChecksLoading(false);
+      } catch (e) {
+        console.error("[Dashboard] Check results fetch failed:", e);
+        if (!cancelled) setChecksLoading(false);
+      }
+    };
+
+    // Defer check results loading by 300ms to let projects render first
+    const timer = setTimeout(fetchChecks, page === 0 ? 300 : 0);
+    return () => { cancelled = true; clearTimeout(timer); };
   }, [user, page, refetchKey]);
 
-  // Realtime: auto-refresh when check_results change
+  // Phase 3: Fetch recent files (deferred further)
+  useEffect(() => {
+    if (!user || filesLoaded) return;
+    let cancelled = false;
+
+    const fetchFiles = async () => {
+      try {
+        const pf = await fetchWithRetry(() =>
+          supabase.from("project_files")
+            .select("id, project_id, file_name, file_type, process_type, status, updated_at")
+            .order("updated_at", { ascending: false }).limit(5)
+        );
+        if (cancelled) return;
+        handleSupabaseError(pf.error, "project_files");
+        const filesData = (pf.data ?? []) as ProjectFile[];
+
+        if (filesData.length > 0) {
+          const projectIds = [...new Set(filesData.map(f => f.project_id).filter(Boolean))] as string[];
+          if (projectIds.length > 0) {
+            const { data: fileProjects } = await supabase
+              .from("projects").select("id, name").in("id", projectIds);
+            if (!cancelled) {
+              const nameMap = new Map((fileProjects ?? []).map(p => [p.id, p.name]));
+              setRecentFiles(filesData.map(f => ({ ...f, project_name: nameMap.get(f.project_id ?? "") })));
+            }
+          } else {
+            setRecentFiles(filesData);
+          }
+        }
+        if (!cancelled) setFilesLoaded(true);
+      } catch (e) {
+        console.warn("[Dashboard] Recent files fetch failed:", e);
+      }
+    };
+
+    // Defer file loading by 800ms
+    const timer = setTimeout(fetchFiles, 800);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [user, filesLoaded, refetchKey]);
+
+  // Realtime: auto-refresh check results only (single channel)
   useEffect(() => {
     if (!user) return;
     const channel = supabase
       .channel("dashboard-check-results")
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "check_results" },
+        { event: "INSERT", schema: "public", table: "check_results" },
         () => { setRefetchKey((k) => k + 1); }
       )
       .subscribe();
@@ -168,7 +231,7 @@ export default function Dashboard() {
     setPage(Math.max(0, Math.min(p, totalPages - 1)));
   }, [totalPages]);
 
-  if (fetchError && records.length === 0) {
+  if (fetchError && projects.length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-6">
         <div className="max-w-md w-full text-center space-y-4">
@@ -180,7 +243,7 @@ export default function Dashboard() {
             サーバーへの接続が混雑しています。しばらく待ってから再試行してください。
           </p>
           <button
-            onClick={() => setRefetchKey(k => k + 1)}
+            onClick={() => { setRefetchKey(k => k + 1); setFilesLoaded(false); }}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity"
           >
             <RefreshCw className="h-4 w-4" />再試行
@@ -189,6 +252,8 @@ export default function Dashboard() {
       </div>
     );
   }
+
+  const loading = projectsLoading;
 
   return (
     <div className="min-h-screen">
@@ -204,14 +269,39 @@ export default function Dashboard() {
       </header>
 
       <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
+        {/* Stats - show skeleton while checks loading */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard icon={ClipboardCheck} label="今日のチェック数" value={stats.todayChecks} color="text-primary" />
-          <StatCard icon={AlertTriangle} label="修正必須（累計）" value={stats.totalNg} color="text-status-ng" />
-          <StatCard icon={BarChart3} label="GO率" value={`${stats.okRate}%`} color="text-status-ok" />
-          <StatCard icon={TrendingUp} label="直近7日" value={`${stats.weekChecks} 件`} color="text-primary" />
+          {checksLoaded ? (
+            <>
+              <StatCard icon={ClipboardCheck} label="今日のチェック数" value={stats.todayChecks} color="text-primary" />
+              <StatCard icon={AlertTriangle} label="修正必須（累計）" value={stats.totalNg} color="text-status-ng" />
+              <StatCard icon={BarChart3} label="GO率" value={`${stats.okRate}%`} color="text-status-ok" />
+              <StatCard icon={TrendingUp} label="直近7日" value={`${stats.weekChecks} 件`} color="text-primary" />
+            </>
+          ) : (
+            Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="glass-card p-4 flex items-center gap-4">
+                <div className="p-2.5 rounded-lg bg-muted w-10 h-10 animate-pulse" />
+                <div>
+                  <div className="h-3 w-16 bg-muted animate-pulse rounded mb-1" />
+                  <div className="h-6 w-12 bg-muted animate-pulse rounded" />
+                </div>
+              </div>
+            ))
+          )}
         </div>
 
-        {projects.length > 0 && (
+        {/* Projects - loaded first (Phase 1) */}
+        {loading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="glass-card p-4 space-y-2">
+                <div className="h-4 w-32 bg-muted animate-pulse rounded" />
+                <div className="h-3 w-24 bg-muted animate-pulse rounded" />
+              </div>
+            ))}
+          </div>
+        ) : projects.length > 0 && (
           <div>
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-sm font-semibold">最近のプロジェクト</h2>
@@ -245,10 +335,11 @@ export default function Dashboard() {
         )}
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          {/* Check results table - Phase 2 */}
           <div className="lg:col-span-3 glass-card overflow-hidden">
             <div className="px-4 py-3 border-b border-border flex items-center justify-between">
               <h2 className="text-sm font-semibold">最近のチェック結果</h2>
-              <span className="text-xs text-muted-foreground">{totalCount} 件</span>
+              <span className="text-xs text-muted-foreground">{checksLoaded ? `${totalCount} 件` : "..."}</span>
             </div>
             {/* Desktop table */}
             <table className="w-full text-xs hidden md:table">
@@ -264,7 +355,7 @@ export default function Dashboard() {
                  </tr>
               </thead>
               <tbody>
-                {loading ? (
+                {checksLoading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i}>
                       <td className="px-4 py-3"><div className="h-4 w-20 bg-muted animate-pulse rounded" /></td>
@@ -308,7 +399,7 @@ export default function Dashboard() {
 
             {/* Mobile card list */}
             <div className="md:hidden divide-y divide-border">
-              {loading ? (
+              {checksLoading ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <div key={i} className="p-4 space-y-2">
                     <div className="h-4 w-32 bg-muted animate-pulse rounded" />
@@ -397,13 +488,26 @@ export default function Dashboard() {
             )}
           </div>
 
+          {/* Right sidebar - Phase 3 */}
           <div className="lg:col-span-2 space-y-4">
             <TopCorrectionPatterns limit={3} />
             <div className="glass-card overflow-hidden">
               <div className="px-4 py-3 border-b border-border">
                 <h2 className="text-sm font-semibold">最近のファイル</h2>
               </div>
-              {recentFiles.length === 0 ? (
+              {!filesLoaded ? (
+                <div className="divide-y divide-border">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="px-4 py-3 flex items-center gap-3">
+                      <div className="h-4 w-4 bg-muted animate-pulse rounded" />
+                      <div className="flex-1 space-y-1">
+                        <div className="h-3 w-28 bg-muted animate-pulse rounded" />
+                        <div className="h-2 w-20 bg-muted animate-pulse rounded" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : recentFiles.length === 0 ? (
                 <div className="p-8 text-center text-muted-foreground">
                   <FileText className="h-10 w-10 mx-auto mb-3 opacity-30" />
                   <p className="text-sm">ファイルはまだありません</p>
