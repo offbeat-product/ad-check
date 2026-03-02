@@ -84,6 +84,10 @@ export function useBatchCheck() {
 
     const results: BatchCheckProgress["results"] = [];
 
+    // Mark all batch files as "checking" immediately so UI reflects status
+    const batchFileIds = batchFiles.map(f => f.id);
+    await supabase.from("project_files").update({ status: "checking" }).in("id", batchFileIds);
+
     for (let i = 0; i < batchFiles.length; i++) {
       const file = batchFiles[i];
       setProgress(p => ({ ...p, current: i + 1, currentFileName: file.file_name }));
