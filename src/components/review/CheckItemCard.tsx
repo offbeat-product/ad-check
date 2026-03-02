@@ -28,20 +28,33 @@ const severityBadge: Record<string, string> = {
   low: "bg-muted text-muted-foreground",
 };
 
-/** Parse timestamp strings like 00:20, 1:23, 00:01:30 into seconds */
+/** Parse timestamp strings like 00:20, 1:23, 00:01:30, 00:20.350 into seconds (with millisecond support) */
 function parseTimestamp(ts: string): number {
-  const parts = ts.split(":").map(Number);
+  // Split off milliseconds if present (e.g., "00:20.350" -> "00:20" + "350")
+  const [timePart, msPart] = ts.split(".");
+  const parts = timePart.split(":").map(Number);
   if (parts.some(isNaN)) return -1;
-  if (parts.length === 2) return parts[0] * 60 + parts[1];
-  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-  return -1;
+  let seconds = 0;
+  if (parts.length === 2) seconds = parts[0] * 60 + parts[1];
+  else if (parts.length === 3) seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+  else return -1;
+  // Add milliseconds
+  if (msPart) {
+    const ms = Number(msPart);
+    if (!isNaN(ms)) {
+      // Normalize: "35" -> 350ms, "350" -> 350ms, "3" -> 300ms
+      const normalized = msPart.length === 1 ? ms * 100 : msPart.length === 2 ? ms * 10 : ms;
+      seconds += normalized / 1000;
+    }
+  }
+  return seconds;
 }
 
 /** Render text with clickable timestamps */
 function renderWithTimestamps(text: string, onSeek?: (seconds: number) => void): ReactNode {
   if (!onSeek) return text;
-  // Match patterns like 00:20, 0:30, 1:23:45, also with surrounding context like (00:20) or 「00:20」
-  const timestampRegex = /(\d{1,2}:\d{2}(?::\d{2})?)/g;
+  // Match patterns like 00:20, 0:30, 1:23:45, 00:20.350 (with optional milliseconds)
+  const timestampRegex = /(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,3})?)/g;
   const parts = text.split(timestampRegex);
   if (parts.length <= 1) return text;
 
