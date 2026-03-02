@@ -343,11 +343,12 @@ export default function FileReviewPage() {
         console.log('[CheckMate] Webhook URL:', webhookUrl);
         console.log('[CheckMate] Body size:', JSON.stringify(body).length, 'bytes');
         console.log('[CheckMate] Body keys:', Object.keys(body));
+        const webhookSentAt = new Date().toISOString();
         const rawRes = await webhookFetch(webhookUrl, body);
 
         if (rawRes === VIDEO_ASYNC_ACCEPTED) {
           // Async video check: poll for result from DB
-          const polled = await videoPolling.startPolling(product.code, processKey);
+          const polled = await videoPolling.startPolling(product.code, processKey, webhookSentAt);
           if (!polled) {
             toast({ title: "チェック処理がタイムアウトしました", description: "ページを更新して結果を確認してください。", variant: "destructive" });
             return;
