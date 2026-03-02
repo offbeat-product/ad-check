@@ -31,8 +31,10 @@ interface ReviewRightPanelProps {
   productId?: string;
   projectId?: string;
   /** Comparison check state */
-  comparisonNewFileData?: string | null;
-  comparisonNewText?: string;
+  comparisonBeforeData?: string | null;
+  comparisonAfterData?: string | null;
+  comparisonAfterText?: string;
+  comparisonRoundLabel?: string;
   onOpenComparisonMode?: () => void;
   /** Media playback current time for auto-timestamping */
   mediaCurrentTime?: number | null;
@@ -53,7 +55,7 @@ interface ReviewRightPanelProps {
 export default function ReviewRightPanel({
   rightTab, onTabChange, items, markers, productCode, commentCounts, highlightCard,
   commentFilter, checkResultId, hasCheckResult, onCommentClick, onCheckItemClick, onMarkerClick, emptyCheckMessage, onAnnotationClick,
-  overallStatus, checkedAt, file, productId, projectId, comparisonNewFileData, comparisonNewText, onOpenComparisonMode,
+  overallStatus, checkedAt, file, productId, projectId, comparisonBeforeData, comparisonAfterData, comparisonAfterText, comparisonRoundLabel, onOpenComparisonMode,
   mediaCurrentTime, onSeekMedia, patternId, fileId, onCommentDeleted, clientName, productName, onComparisonSaved,
 }: ReviewRightPanelProps) {
   const [totalCommentCount, setTotalCommentCount] = useState(0);
@@ -117,8 +119,10 @@ export default function ReviewRightPanel({
               clientName={clientName}
               productCode={productCode}
               productName={productName}
-              newFileData={comparisonNewFileData ?? null}
-              newText={comparisonNewText ?? ""}
+              comparisonBeforeData={comparisonBeforeData ?? null}
+              comparisonAfterData={comparisonAfterData ?? null}
+              comparisonAfterText={comparisonAfterText ?? ""}
+              comparisonRoundLabel={comparisonRoundLabel ?? "第2稿"}
               onOpenComparisonMode={onOpenComparisonMode ?? (() => {})}
               onComparisonSaved={onComparisonSaved}
             />

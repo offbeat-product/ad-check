@@ -34,9 +34,13 @@ interface ComparisonCheckPanelProps {
   clientName?: string;
   productCode?: string;
   productName?: string;
-  /** New file data from ComparisonLeftPanel */
-  newFileData: string | null;
-  newText: string;
+  /** The "before" data for comparison (from the draft pair) */
+  comparisonBeforeData: string | null;
+  /** The "after" data for comparison (from the draft pair) */
+  comparisonAfterData: string | null;
+  comparisonAfterText: string;
+  /** Which round this comparison represents */
+  comparisonRoundLabel: string;
   /** Open comparison mode in left panel */
   onOpenComparisonMode: () => void;
   onCheckComplete?: (result: CheckResult) => void;
@@ -46,7 +50,8 @@ interface ComparisonCheckPanelProps {
 
 export default function ComparisonCheckPanel({
   file, productId, projectId, fileId, checkResultId, clientName, productCode, productName,
-  newFileData, newText, onOpenComparisonMode, onCheckComplete, onComparisonSaved,
+  comparisonBeforeData, comparisonAfterData, comparisonAfterText, comparisonRoundLabel,
+  onOpenComparisonMode, onCheckComplete, onComparisonSaved,
 }: ComparisonCheckPanelProps) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -59,7 +64,7 @@ export default function ComparisonCheckPanel({
   const isImage = aiCfg?.inputMode === "image";
   const enabled = aiCfg?.enabled ?? false;
 
-  const hasNewContent = isImage ? !!newFileData : !!(newText || newFileData);
+  const hasNewContent = isImage ? !!comparisonAfterData : !!(comparisonAfterText || comparisonAfterData);
 
   // Fetch comparison history
   useEffect(() => {
@@ -95,9 +100,9 @@ export default function ComparisonCheckPanel({
 
       let data: Parameters<typeof runComparisonCheck>[2];
       if (isImage) {
-        const newBase64 = newFileData?.replace(/^data:[^;]+;base64,/, "") || "";
-        const origBase64 = file.file_data?.replace(/^data:[^;]+;base64,/, "") || "";
-        const mediaType = newFileData?.match(/^data:([^;]+);/)?.[1] || "image/jpeg";
+        const newBase64 = comparisonAfterData?.replace(/^data:[^;]+;base64,/, "") || "";
+        const origBase64 = comparisonBeforeData?.replace(/^data:[^;]+;base64,/, "") || "";
+        const mediaType = comparisonAfterData?.match(/^data:([^;]+);/)?.[1] || "image/jpeg";
         data = {
           image_base64: newBase64,
           media_type: mediaType,
@@ -105,8 +110,8 @@ export default function ComparisonCheckPanel({
         };
       } else {
         data = {
-          script_text: newText || newFileData || "",
-          original_text: file.file_data || "",
+          script_text: comparisonAfterText || comparisonAfterData || "",
+          original_text: comparisonBeforeData || "",
         };
       }
 
@@ -123,7 +128,7 @@ export default function ComparisonCheckPanel({
         product_name: productName || "",
         process_type: file.process_type,
         input_type: isImage ? "image" : "text",
-        input_text: isImage ? null : (newText || newFileData),
+        input_text: isImage ? null : (comparisonAfterText || comparisonAfterData),
         overall_status: res.overall_status,
         detected_case: res.detected_case,
         ng_count: res.ng_count,
@@ -277,7 +282,7 @@ export default function ComparisonCheckPanel({
         {hasNewContent && enabled && (
           <Button size="sm" className="w-full text-xs" onClick={handleRunComparison} disabled={checking}>
             {checking ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <GitCompare className="h-3 w-3 mr-1" />}
-            {checking ? "比較チェック中..." : `比較チェック実行（第${history.length + 2}稿）`}
+            {checking ? "比較チェック中..." : `比較チェック実行（${comparisonRoundLabel}）`}
           </Button>
         )}
         {hasNewContent && !enabled && (

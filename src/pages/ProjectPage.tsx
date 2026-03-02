@@ -844,8 +844,17 @@ export default function ProjectPage() {
                           <div className="ml-auto flex items-center gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
                            {webhookAvailable && sectionFiles.filter(f => f.file_data && !f.parent_file_id).length > 0 && (() => {
                             const allTargets = sectionFiles.filter(f => f.file_data && !f.parent_file_id);
-                            const selectedInSection = allTargets.filter(f => selectedFileIds.has(f.id));
-                            const uncheckedTargets = allTargets.filter(f => f.status !== "checked" && f.status !== "fixed");
+                            // Sort by pattern order (left to right), then by created_at within same pattern
+                            const patternOrderMap = new Map<string | null, number>();
+                            patterns.forEach((p, idx) => patternOrderMap.set(p.id, idx));
+                            const sortedTargets = [...allTargets].sort((a, b) => {
+                              const aOrder = patternOrderMap.get(a.pattern_id ?? null) ?? -1;
+                              const bOrder = patternOrderMap.get(b.pattern_id ?? null) ?? -1;
+                              if (aOrder !== bOrder) return aOrder - bOrder;
+                              return (a.created_at ?? "").localeCompare(b.created_at ?? "");
+                            });
+                            const selectedInSection = sortedTargets.filter(f => selectedFileIds.has(f.id));
+                            const uncheckedTargets = sortedTargets.filter(f => f.status !== "checked" && f.status !== "fixed");
                             const hasSelection = selectedInSection.length > 0;
                             const actualTargets = hasSelection ? selectedInSection : uncheckedTargets;
                             const MAX_BATCH = 5;
