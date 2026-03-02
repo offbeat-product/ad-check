@@ -1348,20 +1348,25 @@ export default function FileReviewPage() {
       {/* Upload revision */}
       <UploadRevisionModal open={uploadRevisionOpen} onOpenChange={setUploadRevisionOpen} file={file} projectId={projectId!}
         onUploaded={(fileData, fileType, versionNumber) => {
-          setUploadRevisionOpen(false);
-          fetchVersions();
-          // Auto-switch to comparison mode with uploaded file as the new draft
-          const aiCfgLocal = AI_CHECK_CONFIG[file.process_type];
-          const inputMode = aiCfgLocal?.inputMode || "text";
-          const isImg = inputMode === "image";
-          const isText = inputMode === "text";
-          setComparisonDrafts([
-            { label: "初稿", data: file.file_data, text: isText ? (file.file_data || "") : "" },
-            { label: `第${versionNumber}稿`, data: fileData, text: isImg ? "" : fileData },
-          ]);
-          setComparisonActivePairIndex(0);
-          setComparisonMode(true);
-          toast({ title: "比較チェックモードに切り替えました", description: "比較チェックを実行してください" });
+          try {
+            setUploadRevisionOpen(false);
+            fetchVersions();
+            // Auto-switch to comparison mode with uploaded file as the new draft
+            const aiCfgLocal = AI_CHECK_CONFIG[file.process_type];
+            const inputMode = aiCfgLocal?.inputMode || "text";
+            const isImg = inputMode === "image";
+            const isText = inputMode === "text";
+            setComparisonDrafts([
+              { label: "初稿", data: file.file_data, text: isText ? (file.file_data || "") : "" },
+              { label: `第${versionNumber}稿`, data: fileData, text: isImg ? "" : fileData },
+            ]);
+            setComparisonActivePairIndex(0);
+            setComparisonMode(true);
+            toast({ title: "比較チェックモードに切り替えました", description: "比較チェックを実行してください" });
+          } catch (err) {
+            console.error("[onUploaded] Error switching to comparison mode:", err);
+            toast({ title: "比較モード切替エラー", description: err instanceof Error ? err.message : "不明なエラー", variant: "destructive" });
+          }
         }} />
 
       {/* Compare: use project_files mode */}
@@ -1387,9 +1392,13 @@ export default function FileReviewPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>キャンセル</AlertDialogCancel>
             <AlertDialogAction onClick={async () => {
-              if (!file) return;
-              const { error } = await supabase.from("project_files").update({ submission_type: "client" } as any).eq("id", file.id);
-              if (!handleSupabaseError(error, "submission_type")) {
+              try {
+                if (!file) return;
+                const { error } = await supabase.from("project_files").update({ submission_type: "client" } as any).eq("id", file.id);
+                if (error) {
+                  toast({ title: "提出に失敗しました", description: error.message, variant: "destructive" });
+                  return;
+                }
                 setFile({ ...file, submission_type: "client" as any });
                 // Log the client submission action
                 await supabase.from("submission_logs").insert({
@@ -1403,8 +1412,12 @@ export default function FileReviewPage() {
                   created_by: user?.id || null,
                 } as any);
                 toast({ title: "✅ クライアント提出に変更しました" });
+              } catch (err) {
+                console.error("[ClientSubmit] Error:", err);
+                toast({ title: "エラーが発生しました", description: err instanceof Error ? err.message : "不明なエラー", variant: "destructive" });
+              } finally {
+                setSubmitToClientOpen(false);
               }
-              setSubmitToClientOpen(false);
             }}>
               提出する
             </AlertDialogAction>
@@ -1424,26 +1437,33 @@ export default function FileReviewPage() {
           <AlertDialogFooter>
             <AlertDialogCancel>キャンセル</AlertDialogCancel>
             <AlertDialogAction onClick={async () => {
-              if (!file) return;
-              // Log the internal revision action
-              await supabase.from("submission_logs").insert({
-                file_id: file.id,
-                project_id: file.project_id,
-                product_id: product?.id || null,
-                process_type: file.process_type,
-                action_type: "internal_revision",
-                version_number: file.version_number ?? 1,
-                pattern_id: file.pattern_id,
-                created_by: user?.id || null,
-              } as any);
-              // Ensure submission_type stays internal
-              if (file.submission_type === "client") {
-                await supabase.from("project_files").update({ submission_type: "internal" } as any).eq("id", file.id);
-                setFile({ ...file, submission_type: "internal" as any });
+              try {
+                if (!file) return;
+                // Log the internal revision action
+                const { error: logErr } = await supabase.from("submission_logs").insert({
+                  file_id: file.id,
+                  project_id: file.project_id,
+                  product_id: product?.id || null,
+                  process_type: file.process_type,
+                  action_type: "internal_revision",
+                  version_number: file.version_number ?? 1,
+                  pattern_id: file.pattern_id,
+                  created_by: user?.id || null,
+                } as any);
+                if (logErr) console.error("[InternalRevision] log error:", logErr);
+                // Ensure submission_type stays internal
+                if (file.submission_type === "client") {
+                  await supabase.from("project_files").update({ submission_type: "internal" } as any).eq("id", file.id);
+                  setFile({ ...file, submission_type: "internal" as any });
+                }
+                setInternalRevisionOpen(false);
+                // Open the upload revision modal to add next draft
+                setUploadRevisionOpen(true);
+              } catch (err) {
+                console.error("[InternalRevision] Error:", err);
+                toast({ title: "エラーが発生しました", description: err instanceof Error ? err.message : "不明なエラー", variant: "destructive" });
+                setInternalRevisionOpen(false);
               }
-              setInternalRevisionOpen(false);
-              // Open the upload revision modal to add next draft
-              setUploadRevisionOpen(true);
             }}>
               修正版をアップロード
             </AlertDialogAction>
@@ -1493,7 +1513,11 @@ function UploadRevisionModal({ open, onOpenChange, file, projectId, onUploaded }
       }
       const { data: existing, error: verErr } = await supabase.from("project_files").select("version_number")
         .or(`id.eq.${file.id},parent_file_id.eq.${file.id}`).order("version_number", { ascending: false }).limit(1);
-      handleSupabaseError(verErr, "version check");
+      if (verErr) {
+        toast({ title: "バージョン確認に失敗しました", description: verErr.message, variant: "destructive" });
+        setUploading(false);
+        return;
+      }
       const nextVersion = existing && existing.length > 0 ? (existing[0].version_number ?? 1) + 1 : 2;
 
       const { error: insertErr } = await supabase.from("project_files").insert({
@@ -1510,14 +1534,20 @@ function UploadRevisionModal({ open, onOpenChange, file, projectId, onUploaded }
         created_by: user.email || user.id,
       });
 
-      if (handleSupabaseError(insertErr, "revision upload")) return;
+      if (insertErr) {
+        console.error("[UploadRevision] Insert error:", insertErr);
+        toast({ title: "アップロードに失敗しました", description: insertErr.message, variant: "destructive" });
+        setUploading(false);
+        return;
+      }
       toast({ title: `v${nextVersion} をアップロードしました` });
       onUploaded(fileData, fileType, nextVersion);
     } catch (err) {
       console.error("[UploadRevision] Error:", err);
       toast({ title: "アップロードに失敗しました", description: err instanceof Error ? err.message : "不明なエラー", variant: "destructive" });
+    } finally {
+      setUploading(false);
     }
-    setUploading(false);
   };
 
   return (
