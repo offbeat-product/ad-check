@@ -13,7 +13,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Legend, ReferenceLine } from "recharts";
-import { Target, CheckCircle, TrendingUp, Calendar, Settings2, Save, Download, FileSpreadsheet, FileText, RotateCcw } from "lucide-react";
+import { Target, CheckCircle, TrendingUp, Calendar, Settings2, Save, Download, FileSpreadsheet, FileText, RotateCcw, ChevronDown } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -203,6 +203,7 @@ export default function ReportPage() {
   const [targets, setTargets] = useState<KpiTarget[]>([]);
   const [loading, setLoading] = useState(true);
   const [submissionFilter, setSubmissionFilter] = useState<SubmissionFilter>("all");
+  const [showDefinitions, setShowDefinitions] = useState(false);
   const [drillTab, setDrillTab] = useState<DrillTab>("overview");
   const [targetDialogOpen, setTargetDialogOpen] = useState(false);
 
@@ -447,6 +448,54 @@ export default function ReportPage() {
             ))}
           </div>
         </div>
+
+        {/* KPI定義セクション */}
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-medium flex items-center gap-2 cursor-pointer select-none" onClick={() => setShowDefinitions(v => !v)}>
+              <FileText className="h-3.5 w-3.5" />
+              集計ロジック・定義
+              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showDefinitions && "rotate-180")} />
+            </CardTitle>
+          </CardHeader>
+          {showDefinitions && (
+            <CardContent className="pt-0 space-y-4 text-xs text-muted-foreground leading-relaxed">
+              <div>
+                <h4 className="font-semibold text-foreground mb-1">① 納期遵守率</h4>
+                <p className="mb-1">目標: {getTarget("deadline_compliance", 100)}%</p>
+                <div className="pl-3 border-l-2 border-border space-y-1">
+                  <p><span className="font-medium text-foreground">社内提出:</span> 各工程に設定された「社内期限」までに、全パターンのクリエイティブ初稿（version_number=1, submission_type=internal）がアップロードされているかで判定。</p>
+                  <p><span className="font-medium text-foreground">クライアント提出:</span> 各工程に設定された「クライアント期限」までに、全パターンのクリエイティブがチェック完了済み（checked / fixed / approved）かつクライアント提出済み（submission_type=client）になっているかで判定。</p>
+                  <p className="text-[10px]">計算式: 遵守工程数 ÷ 期限設定済み工程数 × 100</p>
+                </div>
+              </div>
+              <div>
+                <h4 className="font-semibold text-foreground mb-1">② 初稿合格率</h4>
+                <p className="mb-1">目標: {getTarget("first_draft_pass", 80)}%</p>
+                <div className="pl-3 border-l-2 border-border space-y-1">
+                  <p>初稿（version_number=1）のファイルのうち、修正を挟まずに「FIX済」または「承認済」に到達した割合。</p>
+                  <p className="text-[10px]">計算式: FIX済み初稿数 ÷ チェック済み初稿数 × 100</p>
+                </div>
+              </div>
+              <div>
+                <h4 className="font-semibold text-foreground mb-1">③ 平均修正回数</h4>
+                <div className="pl-3 border-l-2 border-border space-y-1">
+                  <p>提出タイプごとに、各案件×工程のシーケンスにおける最大バージョン番号から1を引いた値の平均。</p>
+                  <p className="text-[10px]">計算式: Σ(最大バージョン番号 - 1) ÷ シーケンス数</p>
+                  <p><span className="font-medium text-foreground">社内修正:</span> submission_type=internal のファイルのみで集計</p>
+                  <p><span className="font-medium text-foreground">クライアント修正:</span> submission_type=client のファイルのみで集計</p>
+                </div>
+              </div>
+              <div className="pt-2 border-t border-border">
+                <h4 className="font-semibold text-foreground mb-1">補足：完了条件</h4>
+                <div className="pl-3 border-l-2 border-border space-y-1">
+                  <p><span className="font-medium text-foreground">工程の完了:</span> 全ファイルが「クライアント提出済み」または「FIX済み」でなければ完了ステータスに変更不可。</p>
+                  <p><span className="font-medium text-foreground">案件の完了:</span> 全ファイルが「FIX済み」でなければ完了ステータスに変更不可。完了日が納期を超過している場合は「遅延」、間に合っている場合は「納期遵守OK」と表示。</p>
+                </div>
+              </div>
+            </CardContent>
+          )}
+        </Card>
 
         {/* 3 KPI Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
