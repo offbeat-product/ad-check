@@ -993,6 +993,21 @@ export default function FileReviewPage() {
                 <Bot className="h-3 w-3 mr-1" />AIチェック（準備中）
               </Button>
             )}
+            {/* Comparison check button */}
+            {hasCheckResult && (
+              <Button size="sm" variant="outline" className="text-xs h-8 border-primary/50 text-primary hover:bg-primary/10" onClick={() => {
+                if (comparisonDrafts.length === 0) {
+                  setComparisonDrafts([
+                    { label: "初稿", data: file.file_data, text: "" },
+                    { label: "第2稿", data: null, text: "" },
+                  ]);
+                  setComparisonActivePairIndex(0);
+                }
+                setComparisonMode(true);
+              }}>
+                <GitCompare className="h-3 w-3 mr-1" />比較チェック
+              </Button>
+            )}
             {/* FIX / Unfix button */}
             {hasCheckResult && currentStatus !== "fixed" && ["checked", "revision_requested", "revised", "approved"].includes(currentStatus) && (
               <Button size="sm" variant="outline" className="text-xs h-8 border-status-ok text-status-ok hover:bg-status-ok/10" onClick={async () => {
@@ -1235,56 +1250,11 @@ export default function FileReviewPage() {
         file={file}
         productId={product?.id}
         projectId={projectId}
-        comparisonBeforeData={comparisonDrafts[comparisonActivePairIndex]?.data ?? null}
-        comparisonAfterData={comparisonDrafts[comparisonActivePairIndex + 1]?.data ?? null}
-        comparisonAfterText={comparisonDrafts[comparisonActivePairIndex + 1]?.text ?? ""}
-        comparisonRoundLabel={`第${comparisonActivePairIndex + 2}稿`}
-        onOpenComparisonMode={() => {
-          // Initialize drafts with current file as 初稿 if empty
-          if (comparisonDrafts.length === 0) {
-            setComparisonDrafts([
-              { label: "初稿", data: file.file_data, text: "" },
-              { label: "第2稿", data: null, text: "" },
-            ]);
-            setComparisonActivePairIndex(0);
-          }
-          setComparisonMode(true);
-          setRightTab("comparison");
-        }}
         patternId={file?.pattern_id}
         fileId={fileId}
         mediaCurrentTime={mediaCurrentTime}
         onSeekMedia={handleSeekMedia}
         onCommentDeleted={fetchSavedAnnotations}
-        clientName={client?.name}
-        productName={product?.name}
-        onComparisonSaved={(entry) => {
-          // Auto-update file status based on latest comparison result
-          const isGo = entry.overall_status === "A" || entry.overall_status === "B";
-          const newStatus = isGo ? "checked" : "revision_requested";
-          setFile(prev => prev ? { ...prev, status: newStatus } : prev);
-          toast({
-            title: isGo ? "✅ GO判定" : "⚠ NG判定",
-            description: isGo
-              ? "比較チェック結果に基づきステータスをGOに更新しました"
-              : "修正が必要な項目があります。ステータスを修正依頼に更新しました",
-          });
-        }}
-        onClearAfterData={() => {
-          // Clear the after-draft data but keep the left panel open with empty slot for next upload
-          setComparisonDrafts(prev => {
-            const activeAfterIdx = comparisonActivePairIndex + 1;
-            if (activeAfterIdx < prev.length) {
-              const updated = [...prev];
-              updated[activeAfterIdx] = { ...updated[activeAfterIdx], data: null, text: "" };
-              return updated;
-            }
-            return prev;
-          });
-        }}
-        lockedByUser={lockedByUser}
-        onAcquireLock={acquireLock}
-        onReleaseLock={releaseLock}
         emptyCheckMessage={
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
             <Bot className="h-10 w-10 mb-3 opacity-30" />
