@@ -675,7 +675,7 @@ export default function ProjectPage() {
   };
 
   const getFilesForProcess = (processKey: string) =>
-    files.filter((f) => f.process_type === processKey);
+    files.filter((f) => f.process_type === processKey && !f.parent_file_id);
 
   const handleProcessDragStart = (index: number) => { dragItem.current = index; };
   const handleProcessDragEnter = (index: number) => { dragOver.current = index; setDragOverIdx(index); };
