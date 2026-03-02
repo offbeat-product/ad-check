@@ -203,18 +203,14 @@ export default function ReportPage() {
   const [targets, setTargets] = useState<KpiTarget[]>([]);
   const [loading, setLoading] = useState(true);
   const [submissionFilter, setSubmissionFilter] = useState<SubmissionFilter>("all");
-  const [showDefinitions, setShowDefinitions] = useState(false);
+  
   const [drillTab, setDrillTab] = useState<DrillTab>("overview");
   const [targetDialogOpen, setTargetDialogOpen] = useState(false);
 
   // Period filter: start/end month (YYYY-MM)
   const now = new Date();
   const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const sixMonthsAgo = (() => {
-    const d = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  })();
-  const [periodFrom, setPeriodFrom] = useState(sixMonthsAgo);
+  const [periodFrom, setPeriodFrom] = useState(currentMonth);
   const [periodTo, setPeriodTo] = useState(currentMonth);
 
   const targetMap = useMemo(() => new Map(targets.map(t => [t.key, t.target_value])), [targets]);
@@ -449,59 +445,11 @@ export default function ReportPage() {
           </div>
         </div>
 
-        {/* KPI定義セクション */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium flex items-center gap-2 cursor-pointer select-none" onClick={() => setShowDefinitions(v => !v)}>
-              <FileText className="h-3.5 w-3.5" />
-              集計ロジック・定義
-              <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showDefinitions && "rotate-180")} />
-            </CardTitle>
-          </CardHeader>
-          {showDefinitions && (
-            <CardContent className="pt-0 space-y-4 text-xs text-muted-foreground leading-relaxed">
-              <div>
-                <h4 className="font-semibold text-foreground mb-1">① 納期遵守率</h4>
-                <p className="mb-1">目標: {getTarget("deadline_compliance", 100)}%</p>
-                <div className="pl-3 border-l-2 border-border space-y-1">
-                  <p><span className="font-medium text-foreground">社内提出:</span> 各工程に設定された「社内期限」までに、全パターンのクリエイティブ初稿（version_number=1, submission_type=internal）がアップロードされているかで判定。</p>
-                  <p><span className="font-medium text-foreground">クライアント提出:</span> 各工程に設定された「クライアント期限」までに、全パターンのクリエイティブがチェック完了済み（checked / fixed / approved）かつクライアント提出済み（submission_type=client）になっているかで判定。</p>
-                  <p className="text-[10px]">計算式: 遵守工程数 ÷ 期限設定済み工程数 × 100</p>
-                </div>
-              </div>
-              <div>
-                <h4 className="font-semibold text-foreground mb-1">② 初稿合格率</h4>
-                <p className="mb-1">目標: {getTarget("first_draft_pass", 80)}%</p>
-                <div className="pl-3 border-l-2 border-border space-y-1">
-                  <p>初稿（version_number=1）のファイルのうち、修正を挟まずに「FIX済」または「承認済」に到達した割合。</p>
-                  <p className="text-[10px]">計算式: FIX済み初稿数 ÷ チェック済み初稿数 × 100</p>
-                </div>
-              </div>
-              <div>
-                <h4 className="font-semibold text-foreground mb-1">③ 平均修正回数</h4>
-                <div className="pl-3 border-l-2 border-border space-y-1">
-                  <p>提出タイプごとに、各案件×工程のシーケンスにおける最大バージョン番号から1を引いた値の平均。</p>
-                  <p className="text-[10px]">計算式: Σ(最大バージョン番号 - 1) ÷ シーケンス数</p>
-                  <p><span className="font-medium text-foreground">社内修正:</span> submission_type=internal のファイルのみで集計</p>
-                  <p><span className="font-medium text-foreground">クライアント修正:</span> submission_type=client のファイルのみで集計</p>
-                </div>
-              </div>
-              <div className="pt-2 border-t border-border">
-                <h4 className="font-semibold text-foreground mb-1">補足：完了条件</h4>
-                <div className="pl-3 border-l-2 border-border space-y-1">
-                  <p><span className="font-medium text-foreground">工程の完了:</span> 全ファイルが「クライアント提出済み」または「FIX済み」でなければ完了ステータスに変更不可。</p>
-                  <p><span className="font-medium text-foreground">案件の完了:</span> 全ファイルが「FIX済み」でなければ完了ステータスに変更不可。完了日が納期を超過している場合は「遅延」、間に合っている場合は「納期遵守OK」と表示。</p>
-                </div>
-              </div>
-            </CardContent>
-          )}
-        </Card>
-
         {/* 3 KPI Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <KpiCard
             icon={Target}
-            label="納期遵守率"
+            label="納期遵守率（クライアント提出）"
             value={overall.deadlineRate !== null ? `${overall.deadlineRate}%` : "—"}
             rate={overall.deadlineRate}
             target={getTarget("deadline_compliance", 100)}
@@ -510,7 +458,7 @@ export default function ReportPage() {
           />
           <KpiCard
             icon={CheckCircle}
-            label="初稿合格率"
+            label="初稿合格率（クライアント提出）"
             value={overall.firstDraftRate !== null ? `${overall.firstDraftRate}%` : "—"}
             rate={overall.firstDraftRate}
             target={getTarget("first_draft_pass", 80)}
@@ -679,30 +627,66 @@ export default function ReportPage() {
           </TabsContent>
         </Tabs>
 
-        {/* Logic explanation */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-medium">集計ロジック</CardTitle>
+        {/* 集計ロジック・定義（詳細） */}
+        <Card className="border-2 border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-bold flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              集計ロジック・定義
+            </CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">各KPIの算出方法と判定基準の詳細です。</p>
           </CardHeader>
-          <CardContent className="text-[11px] text-muted-foreground space-y-2">
-            <div>
-              <p className="font-medium text-foreground">① 納期遵守率（目標: {getTarget("deadline_compliance", 100)}%）</p>
-              <p>工程（project_processes）のステータスが「完了」になった日時（updated_at）と、設定された期限を比較。</p>
-              <p>• 社内提出: <code className="bg-muted px-1 rounded">internal_deadline</code>で判定</p>
-              <p>• クライアント提出: <code className="bg-muted px-1 rounded">client_deadline</code>で判定</p>
-              <p className="text-[10px]">計算式: 期限内完了工程数 ÷ 完了済み工程数（該当期限設定あり） × 100</p>
+          <CardContent className="space-y-6 text-sm leading-relaxed">
+            <div className="space-y-2">
+              <h4 className="text-base font-bold text-foreground flex items-center gap-2">
+                <Target className="h-4 w-4 text-primary" />
+                ① 納期遵守率（目標: {getTarget("deadline_compliance", 100)}%）
+              </h4>
+              <div className="pl-4 border-l-[3px] border-primary/30 space-y-3">
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="font-semibold text-foreground mb-1">📋 社内提出の判定</p>
+                  <p className="text-muted-foreground">各工程に設定された<span className="font-medium text-foreground">「社内期限」</span>までに、全パターンのクリエイティブ初稿（version_number=1, submission_type=internal）がアップロードされているかで判定します。</p>
+                </div>
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="font-semibold text-foreground mb-1">📤 クライアント提出の判定</p>
+                  <p className="text-muted-foreground">各工程に設定された<span className="font-medium text-foreground">「クライアント期限」</span>までに、全パターンのクリエイティブがチェック完了済み（checked / fixed / approved）かつクライアント提出済み（submission_type=client）になっているかで判定します。</p>
+                </div>
+                <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">計算式: 遵守工程数 ÷ 期限設定済み工程数 × 100</p>
+              </div>
             </div>
-            <div>
-              <p className="font-medium text-foreground">② 初稿合格率（目標: {getTarget("first_draft_pass", 80)}%）</p>
-              <p>version_number = 1（初稿）のファイルのうち、チェック済み（status ≠ uploaded）かつ status が「fixed」または「approved」のものを「合格」とカウント。</p>
-              <p className="text-[10px]">計算式: 初稿合格ファイル数 ÷ 初稿チェック済みファイル数 × 100</p>
+
+            <div className="space-y-2">
+              <h4 className="text-base font-bold text-foreground flex items-center gap-2">
+                <CheckCircle className="h-4 w-4 text-status-ok" />
+                ② 初稿合格率（目標: {getTarget("first_draft_pass", 80)}%）
+              </h4>
+              <div className="pl-4 border-l-[3px] border-status-ok/30 space-y-2">
+                <p className="text-muted-foreground">初稿（version_number=1）のファイルのうち、修正を挟まずに<span className="font-medium text-foreground">「FIX済」</span>または<span className="font-medium text-foreground">「承認済」</span>に到達した割合を算出します。</p>
+                <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">計算式: FIX済み初稿数 ÷ チェック済み初稿数 × 100</p>
+              </div>
             </div>
-            <div>
-              <p className="font-medium text-foreground">③ 平均修正回数</p>
-              <p>提出タイプ（submission_type）ごとにバージョン数をカウント。</p>
-              <p>• 社内修正回数 = submission_type=internal のファイルの最大version - 1</p>
-              <p>• クライアント修正回数 = submission_type=client のファイルの最大version - 1</p>
-              <p className="text-[10px]">計算式: Σ(各シーケンスの最大version - 1) ÷ シーケンス数</p>
+
+            <div className="space-y-2">
+              <h4 className="text-base font-bold text-foreground flex items-center gap-2">
+                <RotateCcw className="h-4 w-4 text-status-warning" />
+                ③ 平均修正回数
+              </h4>
+              <div className="pl-4 border-l-[3px] border-status-warning/30 space-y-2">
+                <p className="text-muted-foreground">提出タイプごとに、各案件×工程のシーケンスにおける最大バージョン番号から1を引いた値の平均を算出します。</p>
+                <div className="bg-muted/50 rounded-lg p-3 space-y-1">
+                  <p className="text-muted-foreground"><span className="font-medium text-foreground">社内修正:</span> submission_type=internal のファイルのみで集計</p>
+                  <p className="text-muted-foreground"><span className="font-medium text-foreground">クライアント修正:</span> submission_type=client のファイルのみで集計</p>
+                </div>
+                <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">計算式: Σ(最大バージョン番号 - 1) ÷ シーケンス数</p>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-3 border-t border-border">
+              <h4 className="text-base font-bold text-foreground">📌 補足：完了条件</h4>
+              <div className="pl-4 border-l-[3px] border-border space-y-2">
+                <p className="text-muted-foreground"><span className="font-medium text-foreground">工程の完了:</span> 全ファイルが「クライアント提出済み」または「FIX済み」でなければ完了ステータスに変更不可。</p>
+                <p className="text-muted-foreground"><span className="font-medium text-foreground">案件の完了:</span> 全ファイルが「FIX済み」でなければ完了ステータスに変更不可。完了日が納期を超過している場合は「遅延」、間に合っている場合は「納期遵守OK」と表示。</p>
+              </div>
             </div>
           </CardContent>
         </Card>
