@@ -419,20 +419,58 @@ export default function CheckPage() {
         const videoMimeType = mediaFile?.type || "";
         console.log("[QuickCheck] video webhook payload:", { videoStorageUrl, videoMimeType, process: selectedProcess });
 
+        // Insert pending record before sending video webhook
+        const { data: pendingCr } = await supabase.from("check_results").insert([{
+          user_id: user.id,
+          client_name: client?.name ?? "",
+          product_code: product.code,
+          product_name: product.name,
+          process_type: selectedProcess,
+          input_type: "text",
+          input_text: videoScriptText,
+          status: "pending",
+          input_data: { script_text: videoScriptText, video_url: videoStorageUrl || "" } as unknown as Json,
+        }]).select("id").single();
+        const pendingRecordId = pendingCr?.id || null;
+
         const webhookSentAt = new Date().toISOString();
         const videoRes = await runVideoCheck(product.id, selectedProcess, videoScriptText, {
           videoUrl: videoStorageUrl || "",
           videoMimeType,
           videoBase64: "", // Always empty - n8n fetches video via URL
           metadata,
-        }, referenceContext, selectedProjectId || undefined);
+        }, referenceContext, selectedProjectId || undefined, undefined, pendingRecordId);
 
         if (videoRes === VIDEO_ASYNC_ACCEPTED) {
           // Async mode: poll for result
           const polled = await videoPolling.startPolling(product.code, selectedProcess, webhookSentAt);
           if (!polled) {
-            toast({ title: "チェック処理がタイムアウトしました", description: "ページを更新して結果を確認してください。", variant: "destructive" });
-            return;
+            // Check pending record directly
+            if (pendingRecordId) {
+              const { data: updatedCr } = await supabase.from("check_results").select("*").eq("id", pendingRecordId).maybeSingle();
+              if (updatedCr && updatedCr.status === "completed" && updatedCr.check_items) {
+                res = {
+                  overall_status: (updatedCr.overall_status || "D") as "A" | "B" | "C" | "D",
+                  detected_case: updatedCr.detected_case || "",
+                  check_items: (updatedCr.check_items as unknown as CheckItem[]) || [],
+                  ng_count: updatedCr.ng_count ?? 0,
+                  warning_count: updatedCr.warning_count ?? 0,
+                  ok_count: updatedCr.ok_count ?? 0,
+                  total_checks: updatedCr.total_checks ?? 0,
+                };
+                setResult(res);
+                setCheckedAt(updatedCr.updated_at || new Date().toISOString());
+                checkProgress.complete();
+                toast({ title: "チェック完了", description: `Grade: ${res.overall_status}` });
+                // Already have result — skip to save section
+              } else {
+                toast({ title: "チェック処理がタイムアウトしました", description: "ページを更新して結果を確認してください。", variant: "destructive" });
+                return;
+              }
+            } else {
+              toast({ title: "チェック処理がタイムアウトしました", description: "ページを更新して結果を確認してください。", variant: "destructive" });
+              return;
+            }
           }
           res = {
             overall_status: (polled.overall_status || "D") as "A" | "B" | "C" | "D",

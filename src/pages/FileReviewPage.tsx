@@ -338,12 +338,36 @@ export default function FileReviewPage() {
         }
 
         // For video processes, include related files from the same project
-        const isVideoProcess = ["vcon", "video_horizontal", "video_vertical"].includes(processKey);
-        if (isVideoProcess && projectId) {
+        const isVideoProc = ["vcon", "video_horizontal", "video_vertical"].includes(processKey);
+        if (isVideoProc && projectId) {
           const relatedFiles = await getRelatedProcessData(projectId, processKey, file.pattern_id);
           if (Object.keys(relatedFiles).length > 0) {
             body.related_files = relatedFiles;
             console.log("[CheckMate] Including related_files:", Object.keys(relatedFiles));
+          }
+        }
+
+        // For video async checks, insert a pending record first so n8n can UPDATE it
+        const isVideoProcess = ["vcon", "video_horizontal", "video_vertical"].includes(processKey);
+        let pendingRecordId: string | null = null;
+        if (isVideoProcess) {
+          const { data: pendingCr, error: pendingErr } = await supabase.from("check_results").insert([{
+            user_id: user.id,
+            client_name: client?.name || "",
+            product_code: product.code,
+            product_name: product.name,
+            process_type: processKey,
+            input_type: "text",
+            input_text: body.script_text || null,
+            status: "pending",
+            input_data: inputData as unknown as Json,
+          }]).select("id").single();
+          if (pendingErr || !pendingCr) {
+            console.error("[CheckMate] Failed to create pending record:", pendingErr);
+          } else {
+            pendingRecordId = pendingCr.id;
+            body.record_id = pendingRecordId;
+            console.log("[CheckMate] Created pending record:", pendingRecordId);
           }
         }
 
@@ -354,10 +378,30 @@ export default function FileReviewPage() {
         const rawRes = await webhookFetch(webhookUrl, body);
 
         if (rawRes === VIDEO_ASYNC_ACCEPTED) {
-          // Async video check: poll for result from DB
+          // Async video check: poll for result from DB using the pending record ID
+          if (pendingRecordId) {
+            // Link to file immediately so UI shows "checking" state
+            await supabase.from("project_files").update({
+              status: "checking",
+              check_result_id: pendingRecordId,
+            }).eq("id", file.id);
+            setFile({ ...file, status: "checking", check_result_id: pendingRecordId });
+          }
           const polled = await videoPolling.startPolling(product.code, processKey, webhookSentAt);
           if (!polled) {
             isRecheckingRef.current = false;
+            // Check the pending record directly — n8n may have updated it
+            if (pendingRecordId) {
+              const { data: updatedCr } = await supabase.from("check_results").select("*").eq("id", pendingRecordId).maybeSingle();
+              if (updatedCr && updatedCr.status === "completed" && updatedCr.check_items) {
+                setRecord(updatedCr);
+                await supabase.from("project_files").update({ status: "checked", check_result_id: updatedCr.id }).eq("id", file.id);
+                setFile({ ...file, status: "checked", check_result_id: updatedCr.id });
+                checkProgress.complete();
+                toast({ title: "チェック完了", description: `Grade: ${updatedCr.overall_status}` });
+                return;
+              }
+            }
             // Restore previous result if available
             if (previousCheckResultId) {
               const { data: prevCr } = await supabase.from("check_results").select("*").eq("id", previousCheckResultId).maybeSingle();

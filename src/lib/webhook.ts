@@ -230,7 +230,8 @@ export async function runVideoCheck(
   },
   referenceContext?: string,
   projectId?: string,
-  patternId?: string | null
+  patternId?: string | null,
+  recordId?: string | null
 ): Promise<WebhookResult> {
   const url = getWebhookUrl(processType);
   if (!url) throw new Error(`動画チェックのWebhookが見つかりません (${processType})`);
@@ -245,6 +246,7 @@ export async function runVideoCheck(
     video_base64: options?.videoBase64 || "",
     metadata: options?.metadata || {},
     pattern_id: patternId || null,
+    record_id: recordId || null,
   };
   if (referenceContext) {
     try { body.reference_context = JSON.parse(referenceContext); } catch { body.reference_context = referenceContext; }
