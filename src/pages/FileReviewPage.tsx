@@ -1255,11 +1255,11 @@ export default function FileReviewPage() {
                 <Button
                   size="lg"
                   variant="outline"
-                  className="w-full gap-2 text-sm h-12"
+                  className="w-full gap-2 text-sm h-12 border-primary/30 text-primary hover:bg-primary/5"
                   onClick={() => setInternalRevisionOpen(true)}
                 >
-                  <ArrowDown className="h-5 w-5" />
-                  社内で初稿を修正する
+                  <GitCompare className="h-5 w-5" />
+                  修正版をアップロードして比較チェック
                 </Button>
               </div>
             )}
@@ -1272,11 +1272,11 @@ export default function FileReviewPage() {
                 <Button
                   size="lg"
                   variant="outline"
-                  className="w-full gap-2 text-sm h-12"
+                  className="w-full gap-2 text-sm h-12 border-primary/30 text-primary hover:bg-primary/5"
                   onClick={() => setInternalRevisionOpen(true)}
                 >
-                  <ArrowDown className="h-5 w-5" />
-                  社内で修正する
+                  <GitCompare className="h-5 w-5" />
+                  修正版をアップロードして比較チェック
                 </Button>
               </div>
             )}
@@ -1344,7 +1344,19 @@ export default function FileReviewPage() {
 
       {/* Upload revision */}
       <UploadRevisionModal open={uploadRevisionOpen} onOpenChange={setUploadRevisionOpen} file={file} projectId={projectId!}
-        onUploaded={() => { setUploadRevisionOpen(false); fetchVersions(); }} />
+        onUploaded={(fileData, fileType, versionNumber) => {
+          setUploadRevisionOpen(false);
+          fetchVersions();
+          // Auto-switch to comparison mode with uploaded file as the new draft
+          const isImg = AI_CHECK_CONFIG[file.process_type]?.inputMode === "image";
+          setComparisonDrafts([
+            { label: "初稿", data: file.file_data, text: "" },
+            { label: `第${versionNumber}稿`, data: fileData, text: isImg ? "" : fileData },
+          ]);
+          setComparisonActivePairIndex(0);
+          setComparisonMode(true);
+          toast({ title: "比較チェックモードに切り替えました", description: "比較チェックを実行してください" });
+        }} />
 
       {/* Compare: use project_files mode */}
       <CompareView
@@ -1398,9 +1410,9 @@ export default function FileReviewPage() {
       <AlertDialog open={internalRevisionOpen} onOpenChange={setInternalRevisionOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>社内修正</AlertDialogTitle>
+            <AlertDialogTitle>社内修正 → 比較チェック</AlertDialogTitle>
             <AlertDialogDescription>
-              このファイルを「社内修正」としてマークし、次の稿をアップロードします。修正回数としてカウントされます。
+              修正版をアップロードすると、自動で比較チェックモードに切り替わります。初稿と修正稿を並べてAI比較チェックを実行できます。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1427,7 +1439,7 @@ export default function FileReviewPage() {
               // Open the upload revision modal to add next draft
               setUploadRevisionOpen(true);
             }}>
-              社内修正する
+              修正版をアップロード
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1437,7 +1449,8 @@ export default function FileReviewPage() {
 }
 
 function UploadRevisionModal({ open, onOpenChange, file, projectId, onUploaded }: {
-  open: boolean; onOpenChange: (o: boolean) => void; file: ProjectFile; projectId: string; onUploaded: () => void;
+  open: boolean; onOpenChange: (o: boolean) => void; file: ProjectFile; projectId: string;
+  onUploaded: (fileData: string, fileType: string, versionNumber: number) => void;
 }) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -1480,7 +1493,7 @@ function UploadRevisionModal({ open, onOpenChange, file, projectId, onUploaded }
 
       if (handleSupabaseError(insertErr, "revision upload")) return;
       toast({ title: `v${nextVersion} をアップロードしました` });
-      onUploaded();
+      onUploaded(fileData, fileType, nextVersion);
     } catch {
       toast({ title: "エラー", variant: "destructive" });
     }
@@ -1500,6 +1513,9 @@ function UploadRevisionModal({ open, onOpenChange, file, projectId, onUploaded }
               accept={file.file_type === "image" ? "image/png,image/jpeg,image/webp" : ".txt,.docx"}
               onChange={handleUpload} />
           </div>
+          <p className="text-xs text-muted-foreground text-center">
+            アップロード後、自動で比較チェックモードに切り替わります
+          </p>
         </div>
       </DialogContent>
     </Dialog>
