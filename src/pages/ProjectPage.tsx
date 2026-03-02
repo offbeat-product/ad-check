@@ -37,7 +37,7 @@ import ReferenceMaterialsSection from "@/components/reference/ReferenceMaterials
 import CheckRulesTab from "@/components/product/CheckRulesTab";
 import {
   Upload, FileText, Image, Film, MessageCircle, Plus, Settings, GripVertical,
-  ChevronDown, CalendarIcon, AlertTriangle, Trash2, Grid3X3, List, Bot, Loader2, Pencil, Lock, CheckSquare,
+  ChevronDown, ChevronRight, CalendarIcon, AlertTriangle, Trash2, Grid3X3, List, Bot, Loader2, Pencil, Lock, CheckSquare,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import NotificationBell from "@/components/NotificationBell";
@@ -147,6 +147,7 @@ export default function ProjectPage() {
   const [batchFixing, setBatchFixing] = useState(false);
   const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
+  const [collapsedProcesses, setCollapsedProcesses] = useState<Set<string>>(new Set());
   const handleBatchFix = async (processFiles: ProjectFile[], processKey: string) => {
     if (!id || !user) return;
     // Only fix files that are checked and have check_result_id
@@ -692,6 +693,17 @@ export default function ProjectPage() {
                   const cfg = PROCESS_FILE_CONFIG[proc.process_key];
                   const webhookAvailable = !!AI_CHECK_CONFIG[proc.process_key]?.enabled;
 
+                  const isCollapsed = collapsedProcesses.has(proc.id);
+                  const toggleCollapse = () => {
+                    setCollapsedProcesses(prev => {
+                      const next = new Set(prev);
+                      if (next.has(proc.id)) next.delete(proc.id); else next.add(proc.id);
+                      return next;
+                    });
+                  };
+                  const fileCount = sectionFiles.filter(f => !f.parent_file_id).length;
+                  const checkedCount = sectionFiles.filter(f => f.status === "checked" || f.status === "fixed").length;
+
                   return (
                     <div
                       key={proc.id}
@@ -703,8 +715,16 @@ export default function ProjectPage() {
                       className={cn("glass-card overflow-hidden transition-all",
                         dragOverIdx === index && "ring-2 ring-primary/30")}
                     >
-                      <div className="px-4 py-3 border-b border-border flex flex-wrap items-center gap-2">
-                        <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab shrink-0" />
+                      <div className="px-4 py-3 border-b border-border flex flex-wrap items-center gap-2 cursor-pointer select-none"
+                        onClick={(e) => {
+                          // Don't toggle if clicking on buttons/popovers inside the header
+                          if ((e.target as HTMLElement).closest("button, [role='combobox'], [data-radix-popper-content-wrapper]")) return;
+                          toggleCollapse();
+                        }}>
+                        <button className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground transition-colors" onClick={(e) => { e.stopPropagation(); toggleCollapse(); }}>
+                          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                        </button>
+                        <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab shrink-0" onClick={(e) => e.stopPropagation()} />
                         <span className="text-xs text-muted-foreground shrink-0">
                           {String.fromCodePoint(0x2460 + index)}
                         </span>
@@ -743,9 +763,15 @@ export default function ProjectPage() {
                             <Lock className="h-2.5 w-2.5" /> FIX済 ({sectionFiles.filter(f => f.status === "fixed").length})
                           </Badge>
                         )}
+                        {fileCount > 0 && (
+                          <Badge variant="secondary" className="text-[9px] ml-1 gap-0.5">
+                            {fileCount}件{checkedCount > 0 && ` (${checkedCount}✓)`}
+                          </Badge>
+                        )}
 
-                        <div className="ml-auto flex items-center gap-2 flex-wrap">
-                          {webhookAvailable && sectionFiles.filter(f => f.file_data && !f.parent_file_id).length > 0 && (() => {
+                        {!isCollapsed && (
+                          <div className="ml-auto flex items-center gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                           {webhookAvailable && sectionFiles.filter(f => f.file_data && !f.parent_file_id).length > 0 && (() => {
                             const allTargets = sectionFiles.filter(f => f.file_data && !f.parent_file_id);
                             const selectedInSection = allTargets.filter(f => selectedFileIds.has(f.id));
                             const uncheckedTargets = allTargets.filter(f => f.status !== "checked" && f.status !== "fixed");
@@ -827,8 +853,24 @@ export default function ProjectPage() {
                             }}>
                             <Plus className="h-3 w-3 mr-1" />アップロード
                           </Button>
-                        </div>
+                          </div>
+                        )}
+                        {isCollapsed && fileCount === 0 && (
+                          <div className="ml-auto" onClick={(e) => e.stopPropagation()}>
+                            <Button size="sm" variant="outline" className="text-xs h-7"
+                              onClick={() => {
+                                setUploadModal(proc.process_key);
+                                setUploadPatternId(null);
+                                setUploadPatternMode("common");
+                                setUseTextInput(false);
+                                setSelectedFiles([]);
+                              }}>
+                              <Plus className="h-3 w-3 mr-1" />アップロード
+                            </Button>
+                          </div>
+                        )}
                       </div>
+                      {!isCollapsed && (
                       <div className="p-4">
                         {sectionFiles.length === 0 ? (
                           <p className="text-xs text-muted-foreground/60 italic py-4 text-center">ファイルなし — アップロードしてください</p>
@@ -867,7 +909,7 @@ export default function ProjectPage() {
                                       <Badge variant="outline" className="text-[10px] font-bold">{group.label}</Badge>
                                     </h4>
                                   )}
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
                                     {group.files.map((file) => {
                                       const cr = file.check_result_id ? checkResults[file.check_result_id] : null;
                                       const st = FILE_STATUS_CONFIG[file.status ?? "uploaded"] ?? FILE_STATUS_CONFIG.uploaded;
@@ -904,7 +946,7 @@ export default function ProjectPage() {
                                                 navigate(`/project/${id}/file/${file.id}`);
                                               }
                                             }}
-                                            className={cn("glass-card p-3 text-left hover:border-primary/30 transition-colors w-full relative",
+                                            className={cn("glass-card p-2 text-left hover:border-primary/30 transition-colors w-full relative",
                                               file.status === "fixed" && "border-muted-foreground/30 ring-1 ring-muted-foreground/20",
                                               isSelected && selectMode && "ring-2 ring-primary border-primary/50"
                                             )}>
@@ -919,7 +961,7 @@ export default function ProjectPage() {
                                                 </div>
                                               </>
                                             )}
-                                            <div className="h-20 rounded-md bg-muted/50 flex items-center justify-center mb-2 overflow-hidden">
+                                            <div className="h-16 rounded-md bg-muted/50 flex items-center justify-center mb-1.5 overflow-hidden">
                                               {isImageFile && file.file_data ? (
                                                 <img src={file.file_data} alt="" className="w-full h-full object-cover" />
                                               ) : (file.file_type === "video" || proc.process_key.includes("video") || proc.process_key === "vcon") && file.file_data ? (
@@ -994,6 +1036,7 @@ export default function ProjectPage() {
                           );
                         })()}
                       </div>
+                      )}
                     </div>
                   );
                 })}
