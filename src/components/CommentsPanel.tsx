@@ -345,8 +345,8 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
               }}
               onDelete={async (id) => {
                 const { error } = await supabase.from("comments").delete().eq("id", id);
-                handleSupabaseError(error, "comment delete");
-                fetchComments();
+                if (handleSupabaseError(error, "comment delete")) return;
+                await fetchComments();
                 onCommentDeleted?.();
               }}
               timeAgo={timeAgo}
@@ -368,8 +368,8 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
                   }}
                   onDelete={async (id) => {
                     const { error } = await supabase.from("comments").delete().eq("id", id);
-                    handleSupabaseError(error, "comment delete");
-                    fetchComments();
+                    if (handleSupabaseError(error, "comment delete")) return;
+                    await fetchComments();
                     onCommentDeleted?.();
                   }}
                   timeAgo={timeAgo}
