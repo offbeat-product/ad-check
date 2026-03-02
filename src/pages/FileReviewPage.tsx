@@ -4,6 +4,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { runScriptCheck, getWebhookUrl, webhookFetch, getRelatedProcessData, VIDEO_ASYNC_ACCEPTED } from "@/lib/webhook";
+import { resolveWebhookProductId } from "@/lib/resolve-product-id";
 import { useVideoCheckPolling } from "@/hooks/useVideoCheckPolling";
 import { tusUploadBlob } from "@/lib/tus-upload";
 import { gatherReferenceMaterials } from "@/lib/reference-materials";
@@ -286,8 +287,9 @@ export default function FileReviewPage() {
         const webhookUrl = getWebhookUrl(processKey);
         if (!webhookUrl) throw new Error(`この工程(${processKey})のWebhookが見つかりません`);
 
+        const webhookProductId = await resolveWebhookProductId(product.id);
         const body: Record<string, any> = {
-          product_id: product.id,
+          product_id: webhookProductId,
           process_type: processKey,
           script_text: "",
           reference_context: refMaterials,
@@ -326,8 +328,14 @@ export default function FileReviewPage() {
             const urlExt = fileData.split('.').pop()?.split('?')[0]?.toLowerCase() || "mp3";
             body.audio_mime_type = urlExt === "wav" ? "audio/wav" : urlExt === "m4a" ? "audio/mp4" : urlExt === "ogg" ? "audio/ogg" : "audio/mpeg";
           }
+          // Ensure all audio fields are present for n8n (matching runAudioCheck format)
+          body.audio_url = body.audio_url || "";
+          body.audio_mime_type = body.audio_mime_type || "";
+          body.audio_base64 = body.audio_base64 || "";
+          body.audio_description = "";
+          body.metadata = { file_name: file.file_name, duration: null, format: body.audio_mime_type || null };
           body.script_text = file.file_data?.startsWith("data:") || file.file_data?.startsWith("http") ? "" : (file.file_data || "");
-          inputData = { script_text: body.script_text, audio_url: body.audio_url || "", audio_base64: body.audio_base64 || "" };
+          inputData = { script_text: body.script_text, audio_url: body.audio_url, audio_base64: body.audio_base64 };
         } else if (inputMode === "video") {
           const fileData = file.file_data || "";
           if (fileData.startsWith("data:")) {
