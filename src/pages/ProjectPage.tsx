@@ -1184,7 +1184,7 @@ export default function ProjectPage() {
           </TabsContent>
 
           <TabsContent value="history">
-            <CheckHistory projectId={id!} files={files} checkResults={checkResults} onRenameFile={handleRenameFile} />
+            <CheckHistory projectId={id!} files={files} checkResults={checkResults} onRenameFile={handleRenameFile} patterns={patterns} />
           </TabsContent>
 
           <TabsContent value="patterns">
@@ -1414,11 +1414,12 @@ export default function ProjectPage() {
   );
 }
 
-function CheckHistory({ projectId, files, checkResults, onRenameFile }: {
+function CheckHistory({ projectId, files, checkResults, onRenameFile, patterns }: {
   projectId: string;
   files: ProjectFile[];
   checkResults: Record<string, Pick<CheckResultRow, "id" | "overall_status" | "ng_count" | "warning_count" | "created_at" | "user_id" | "check_type" | "comparison_round">>;
   onRenameFile: (fileId: string, newName: string) => Promise<void>;
+  patterns: { id: string; name: string }[];
 }) {
   const navigate = useNavigate();
   const [editingFileId, setEditingFileId] = useState<string | null>(null);
@@ -1427,7 +1428,6 @@ function CheckHistory({ projectId, files, checkResults, onRenameFile }: {
 
   const filesWithChecks = files.filter(f => f.check_result_id && checkResults[f.check_result_id]);
 
-  // Fetch user display names
   useEffect(() => {
     const userIds = [...new Set(filesWithChecks.map(f => checkResults[f.check_result_id!]?.user_id).filter(Boolean))] as string[];
     if (userIds.length === 0) return;
@@ -1446,7 +1446,6 @@ function CheckHistory({ projectId, files, checkResults, onRenameFile }: {
     return <p className="text-sm text-muted-foreground text-center py-12">チェック履歴はまだありません</p>;
   }
 
-  // Sort by check date (newest first)
   const sorted = [...filesWithChecks].sort((a, b) => {
     const aDate = checkResults[a.check_result_id!]?.created_at || "";
     const bDate = checkResults[b.check_result_id!]?.created_at || "";
@@ -1459,6 +1458,8 @@ function CheckHistory({ projectId, files, checkResults, onRenameFile }: {
     video_horizontal: "横動画", video_vertical: "縦動画",
   };
 
+  const patternMap = new Map(patterns.map(p => [p.id, p.name]));
+
   return (
     <div className="glass-card overflow-hidden">
       <table className="w-full text-sm">
@@ -1467,8 +1468,9 @@ function CheckHistory({ projectId, files, checkResults, onRenameFile }: {
             <th className="px-4 py-2.5 font-medium">チェック日時</th>
             <th className="px-4 py-2.5 font-medium">実行者</th>
             <th className="px-4 py-2.5 font-medium">工程</th>
+            {patterns.length > 0 && <th className="px-4 py-2.5 font-medium">パターン</th>}
             <th className="px-4 py-2.5 font-medium">ファイル名</th>
-            <th className="px-4 py-2.5 font-medium text-center">種別</th>
+            <th className="px-4 py-2.5 font-medium text-center">稿数</th>
             <th className="px-4 py-2.5 font-medium text-center">Grade</th>
             <th className="px-4 py-2.5 font-medium text-center">NG</th>
             <th className="px-4 py-2.5 font-medium text-center">WARN</th>
@@ -1481,7 +1483,8 @@ function CheckHistory({ projectId, files, checkResults, onRenameFile }: {
             const checkDate = cr?.created_at ? format(new Date(cr.created_at), "MM/dd HH:mm") : "—";
             const processLabel = processLabelMap[f.process_type] || f.process_type;
             const isComparison = cr?.check_type === "comparison";
-            const roundLabel = isComparison ? `第${(cr?.comparison_round ?? 0) + 1}稿` : "";
+            const draftLabel = isComparison ? `第${(cr?.comparison_round ?? 0) + 1}稿` : "初稿";
+            const patternName = f.pattern_id ? patternMap.get(f.pattern_id) || "—" : "共通";
 
             return (
               <tr key={f.id} onClick={() => navigate(`/project/${projectId}/file/${f.id}`)} className="border-b border-border/50 hover:bg-muted/50 cursor-pointer">
@@ -1490,6 +1493,9 @@ function CheckHistory({ projectId, files, checkResults, onRenameFile }: {
                 <td className="px-4 py-2.5">
                   <Badge variant="outline" className="text-[10px] font-normal">{processLabel}</Badge>
                 </td>
+                {patterns.length > 0 && (
+                  <td className="px-4 py-2.5 text-xs text-muted-foreground">{patternName}</td>
+                )}
                 <td className="px-4 py-2.5 font-medium">
                   {editingFileId === f.id ? (
                     <form onSubmit={(e) => { e.preventDefault(); onRenameFile(f.id, editFileName).then(() => setEditingFileId(null)); }}
@@ -1510,11 +1516,7 @@ function CheckHistory({ projectId, files, checkResults, onRenameFile }: {
                   )}
                 </td>
                 <td className="px-4 py-2.5 text-center">
-                  {isComparison ? (
-                    <Badge variant="secondary" className="text-[10px]">比較 {roundLabel}</Badge>
-                  ) : (
-                    <Badge variant="outline" className="text-[10px]">初回</Badge>
-                  )}
+                  <Badge variant={isComparison ? "secondary" : "outline"} className="text-[10px]">{draftLabel}</Badge>
                 </td>
                 <td className="px-4 py-2.5 text-center">
                   <Badge className={cn("text-[10px] font-bold", getSubmitBadgeClass(cr?.overall_status))}>
