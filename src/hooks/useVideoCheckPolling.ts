@@ -93,8 +93,8 @@ export function useVideoCheckPolling() {
               .eq("product_code", productCode)
               .eq("process_type", processType)
               .eq("status", "completed")
-              .gt("created_at", sentAt)
-              .order("created_at", { ascending: false })
+              .gte("updated_at", sentAt)
+              .order("updated_at", { ascending: false })
               .limit(1)
               .maybeSingle();
 
