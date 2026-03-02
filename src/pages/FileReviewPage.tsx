@@ -252,6 +252,8 @@ export default function FileReviewPage() {
     if (!file || !product || !user || !projectId) return;
     if (isExecutingRef.current) return;
     isExecutingRef.current = true;
+    // Save old check_result_id for recovery on timeout
+    const previousCheckResultId = file.check_result_id;
     // Clear old results before re-check
     isRecheckingRef.current = true;
     setRecord(null);
@@ -356,7 +358,12 @@ export default function FileReviewPage() {
           const polled = await videoPolling.startPolling(product.code, processKey, webhookSentAt);
           if (!polled) {
             isRecheckingRef.current = false;
-            toast({ title: "チェック処理がタイムアウトしました", description: "ページを更新して結果を確認してください。", variant: "destructive" });
+            // Restore previous result if available
+            if (previousCheckResultId) {
+              const { data: prevCr } = await supabase.from("check_results").select("*").eq("id", previousCheckResultId).maybeSingle();
+              if (prevCr) setRecord(prevCr);
+            }
+            toast({ title: "チェック処理がタイムアウトしました", description: "n8nの結果書き込みを確認してください。前回の結果を表示しています。", variant: "destructive" });
             return;
           }
           // n8n wrote the result directly — load it
@@ -418,6 +425,11 @@ export default function FileReviewPage() {
       // After timeout/error, check if n8n already wrote the result to DB
       await recoverCheckResult();
       if (!record) {
+        // Restore previous result so user doesn't see "未実行"
+        if (previousCheckResultId) {
+          const { data: prevCr } = await supabase.from("check_results").select("*").eq("id", previousCheckResultId).maybeSingle();
+          if (prevCr) setRecord(prevCr);
+        }
         toast({ title: "チェック送信に失敗しました。再度お試しください", description: message, variant: "destructive" });
       }
     } finally {
