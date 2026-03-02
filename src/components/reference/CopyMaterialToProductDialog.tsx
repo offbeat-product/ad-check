@@ -14,8 +14,6 @@ import type { Product } from "@/lib/db-types";
 import { resolveWebhookProductId } from "@/lib/resolve-product-id";
 
 const PARSE_REFERENCE_URL = "https://offbeat-inc.app.n8n.cloud/webhook/parse-reference";
-const EXTERNAL_SUPABASE_URL = "https://vhvgnslszruyztcoikqq.supabase.co/rest/v1/check_rules";
-const EXTERNAL_SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZodmduc2xzenJ1eXp0Y29pa3FxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE4NzkxNzksImV4cCI6MjA4NzQ1NTE3OX0.JChqETzSd1HJFuSBJNZ8xJy6lPENql_lprbTVLvTFeA";
 const ALL_PROCESS_TYPES = ["script", "styleframe", "storyboard", "na_script", "bgm", "narration", "vcon", "video_horizontal", "video_vertical"];
 
 interface Props {
@@ -61,16 +59,12 @@ export default function CopyMaterialToProductDialog({ open, onOpenChange, materi
     const idsToTry = [webhookPid];
     if (webhookPid !== productId) idsToTry.push(productId);
 
-    let externalRules: any[] = [];
-    for (const pid of idsToTry) {
-      const res = await fetch(`${EXTERNAL_SUPABASE_URL}?product_id=eq.${pid}&select=*`, {
-        headers: { apikey: EXTERNAL_SUPABASE_ANON, Authorization: `Bearer ${EXTERNAL_SUPABASE_ANON}` },
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (Array.isArray(data) && data.length > 0) { externalRules = data; break; }
-      }
-    }
+    // Fetch rules via secure edge function proxy
+    const { data: fnData, error: fnError } = await supabase.functions.invoke("fetch-external-rules", {
+      body: { product_ids: idsToTry },
+    });
+
+    const externalRules: any[] = (fnError || !fnData?.data) ? [] : fnData.data;
 
     const normalizedRules = externalRules
       .filter((r: any) => r?.rule_id && r?.process_type && r?.category && r?.description)
