@@ -142,16 +142,23 @@ export default function FileReviewPage() {
       if (handleSupabaseError(fErr, "file") || !f) { setLoading(false); return; }
       setFile(f);
 
+      // Reset comparison state when navigating to a new file
+      setComparisonMode(false);
+      setComparisonDrafts([]);
+      setComparisonActivePairIndex(0);
+
       const { data: proj, error: projErr } = await supabase.from("projects").select("*").eq("id", projectId).maybeSingle();
       if (cancelled) return;
       handleSupabaseError(projErr, "project");
       setProject(proj);
 
+      let loadedProduct: Product | null = null;
       if (proj?.product_id) {
         const { data: prod, error: prodErr } = await supabase.from("products").select("*").eq("id", proj.product_id).maybeSingle();
         if (cancelled) return;
         handleSupabaseError(prodErr, "product");
         setProduct(prod);
+        loadedProduct = prod;
         if (prod?.client_id) {
           const { data: cl, error: clErr } = await supabase.from("clients").select("*").eq("id", prod.client_id).maybeSingle();
           if (cancelled) return;
@@ -168,7 +175,38 @@ export default function FileReviewPage() {
         if (f.status === "checking" && (!cr || !cr.check_items || !(cr.check_items as unknown[]).length)) {
           setChecking(true);
         } else {
-          setRecord(cr);
+          // Check for comparison history — if exists, show latest comparison result by default
+          const { data: compHistory } = await supabase
+            .from("check_results")
+            .select("id, created_at, overall_status, ng_count, warning_count, ok_count, total_checks, check_items, comparison_round, input_data")
+            .eq("parent_check_result_id", f.check_result_id)
+            .eq("check_type", "comparison")
+            .order("comparison_round", { ascending: false })
+            .limit(1);
+
+          if (!cancelled && compHistory && compHistory.length > 0) {
+            const latest = compHistory[0];
+            // Show latest comparison result by default
+            setRecord(latest as any);
+
+            // Restore the after-draft image from input_data
+            const inputData = latest.input_data as Record<string, unknown> | null;
+            const aiCfgLocal = AI_CHECK_CONFIG[f.process_type];
+            const isImg = aiCfgLocal?.inputMode === "image";
+
+            if (inputData) {
+              const afterData = isImg ? (inputData.after_image as string) : (inputData.after_text as string);
+              if (afterData) {
+                // Initialize comparison drafts with original + latest draft
+                setComparisonDrafts([
+                  { label: "初稿", data: f.file_data, text: "" },
+                  { label: `第${(latest.comparison_round ?? 1) + 1}稿`, data: afterData, text: isImg ? "" : (afterData || "") },
+                ]);
+              }
+            }
+          } else {
+            setRecord(cr);
+          }
         }
       } else if (f.status === "checking") {
         // File marked as checking but no check_result_id yet
@@ -268,10 +306,76 @@ export default function FileReviewPage() {
 
   const isExecutingRef = useRef(false);
   const videoPolling = useVideoCheckPolling();
+  const [lockedByUser, setLockedByUser] = useState<string | null>(null);
+
+  // Check lock status on mount and periodically
+  useEffect(() => {
+    if (!fileId || !user) return;
+    let cancelled = false;
+    const checkLock = async () => {
+      const { data: f } = await supabase.from("project_files").select("checking_by, checking_started_at").eq("id", fileId).maybeSingle();
+      if (cancelled || !f) return;
+      if (f.checking_by && f.checking_by !== user.id) {
+        // Check if lock is stale (> 15 minutes old)
+        const startedAt = f.checking_started_at ? new Date(f.checking_started_at).getTime() : 0;
+        if (Date.now() - startedAt < 15 * 60 * 1000) {
+          // Fetch the locking user's display name
+          const { data: profile } = await supabase.from("profiles").select("display_name, email").eq("id", f.checking_by).maybeSingle();
+          if (!cancelled) setLockedByUser(profile?.display_name || profile?.email?.split("@")[0] || "他のユーザー");
+        } else {
+          // Stale lock — release it
+          await supabase.from("project_files").update({ checking_by: null, checking_started_at: null } as any).eq("id", fileId);
+          if (!cancelled) setLockedByUser(null);
+        }
+      } else {
+        if (!cancelled) setLockedByUser(null);
+      }
+    };
+    checkLock();
+    const interval = setInterval(checkLock, 10000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [fileId, user?.id]);
+
+  // Release lock on unmount / navigation
+  useEffect(() => {
+    return () => {
+      if (fileId && user && isExecutingRef.current) {
+        supabase.from("project_files").update({ checking_by: null, checking_started_at: null } as any).eq("id", fileId).eq("checking_by", user.id);
+      }
+    };
+  }, [fileId, user?.id]);
+
+  const acquireLock = async (): Promise<boolean> => {
+    if (!fileId || !user) return false;
+    // Try to acquire lock — only if not locked by someone else
+    const { data: current } = await supabase.from("project_files").select("checking_by, checking_started_at").eq("id", fileId).maybeSingle();
+    if (current?.checking_by && current.checking_by !== user.id) {
+      const startedAt = current.checking_started_at ? new Date(current.checking_started_at).getTime() : 0;
+      if (Date.now() - startedAt < 15 * 60 * 1000) {
+        const { data: profile } = await supabase.from("profiles").select("display_name, email").eq("id", current.checking_by).maybeSingle();
+        const name = profile?.display_name || profile?.email?.split("@")[0] || "他のユーザー";
+        toast({ title: "チェック中のため操作できません", description: `${name}さんが現在チェック中です。完了をお待ちください。`, variant: "destructive" });
+        return false;
+      }
+    }
+    await supabase.from("project_files").update({ checking_by: user.id, checking_started_at: new Date().toISOString() } as any).eq("id", fileId);
+    return true;
+  };
+
+  const releaseLock = async () => {
+    if (!fileId || !user) return;
+    await supabase.from("project_files").update({ checking_by: null, checking_started_at: null } as any).eq("id", fileId).eq("checking_by", user.id);
+    setLockedByUser(null);
+  };
 
   const handleRunCheck = async () => {
     if (!file || !product || !user || !projectId) return;
     if (isExecutingRef.current) return;
+
+    // Acquire lock
+    const locked = await acquireLock();
+    if (!locked) return;
+
     isExecutingRef.current = true;
     // Save old check_result_id for recovery on timeout
     const previousCheckResultId = file.check_result_id;
@@ -558,6 +662,7 @@ export default function FileReviewPage() {
       isExecutingRef.current = false;
       checkProgress.reset();
       videoPolling.cancelPolling();
+      await releaseLock();
     }
   };
 
@@ -844,13 +949,24 @@ export default function FileReviewPage() {
             </div>
           )}
 
+          {/* Lock banner */}
+          {lockedByUser && (
+            <div className="flex items-center gap-2 px-4 pb-1">
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-destructive/10 border border-destructive/20 text-destructive text-xs">
+                <Lock className="h-3 w-3" />
+                <span className="font-medium">{lockedByUser}さんがチェック中</span>
+                <span className="text-destructive/70">— チェック操作はロックされています</span>
+              </div>
+            </div>
+          )}
+
           {/* Row 2: Action buttons */}
           <div className="flex items-center gap-1 px-4 pb-2 overflow-x-auto">
             {canCheck && (
               <div className="flex items-center gap-2">
-                <Button size="sm" className="text-xs h-8" onClick={handleRunCheck} disabled={checking || videoPolling.pollingState.isPolling}>
+                <Button size="sm" className="text-xs h-8" onClick={handleRunCheck} disabled={checking || videoPolling.pollingState.isPolling || !!lockedByUser}>
                   {checking ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Bot className="h-3 w-3 mr-1" />}
-                  {checking ? "チェック中..." : "AIチェック実行"}
+                  {checking ? "チェック中..." : lockedByUser ? "ロック中" : "AIチェック実行"}
                 </Button>
                 {checking && !videoPolling.pollingState.isPolling && checkProgress.isRunning && (
                   <div className="flex items-center gap-2 min-w-[140px]">
@@ -1100,7 +1216,7 @@ export default function FileReviewPage() {
         commentCounts={commentCounts}
         highlightCard={highlightCard}
         commentFilter={commentFilter}
-        checkResultId={record?.id || null}
+        checkResultId={file.check_result_id || record?.id || null}
         hasCheckResult={!!record}
         onCommentClick={handleCommentClick}
         onCheckItemClick={scrollToCard}
@@ -1158,6 +1274,9 @@ export default function FileReviewPage() {
             return prev;
           });
         }}
+        lockedByUser={lockedByUser}
+        onAcquireLock={acquireLock}
+        onReleaseLock={releaseLock}
         emptyCheckMessage={
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
             <Bot className="h-10 w-10 mb-3 opacity-30" />
