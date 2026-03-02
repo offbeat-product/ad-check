@@ -16,13 +16,14 @@ export interface GapFileRow {
   parent_file_id: string | null;
   fixed_at: string | null;
   created_at: string | null;
+  submission_type: string;
 }
 
 interface PatternCounts {
   pattern1: number;
   pattern2: number;
   pattern3: number;
-  both: number; // internal fix + client revision
+  both: number;
   total: number;
 }
 
@@ -33,61 +34,64 @@ interface Props {
 }
 
 /**
- * Pattern detection based on workflow events (not AI OK/NG counts):
+ * submission_type-based pattern detection:
  *
- * Pattern 1 (Ideal):       No internal fix, no client revision
- * Pattern 2 (Rule gap):    Client revision occurred (v2+ exists or revision_requested/revised)
- *                          → チェックルールの見直し・追加が必要
- * Pattern 3 (Creator gap): Internal fix occurred (fixed_at is set)
+ * We group files by (project_id, process_type, pattern_id-or-null) to form "sequences".
+ * Within each sequence, we sort by created_at and analyze the submission_type timeline:
+ *
+ * Pattern 1 (Ideal):       Client submission exists, and no re-upload after first client submission.
+ * Pattern 2 (Rule gap):    Multiple client submissions exist (client → ... → client again).
+ *                          → AIチェックルールの見直し・追加が必要
+ * Pattern 3 (Creator gap): Multiple internal submissions before client submission.
  *                          → 社内ルール強化・クリエイター育成が必要
- * Both:                    Internal fix AND client revision both occurred
+ * Both:                    Pattern 2 + Pattern 3 both detected in the same sequence.
+ * Unclassified:            No client submission yet (still in internal cycle) — excluded from analysis.
  */
 function computePatterns(files: GapFileRow[]): PatternCounts {
-  // Build set of file IDs that have child files (= client revision / v2+)
-  const filesWithChild = new Set(
-    files.filter((f) => f.parent_file_id).map((f) => f.parent_file_id!)
-  );
+  // Group files by project + process to form submission sequences
+  const groups = new Map<string, GapFileRow[]>();
+  for (const f of files) {
+    const key = `${f.project_id}::${f.process_type}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(f);
+  }
 
-  let pattern1 = 0;
-  let pattern2 = 0;
-  let pattern3 = 0;
-  let both = 0;
+  let pattern1 = 0, pattern2 = 0, pattern3 = 0, both = 0;
 
-  // Only analyze v1 files that have progressed past upload
-  const v1Checked = files.filter(
-    (f) =>
-      (f.version_number ?? 1) === 1 &&
-      f.status &&
-      f.status !== "uploaded" &&
-      f.status !== "checking"
-  );
+  for (const [, group] of groups) {
+    // Sort by created_at ascending
+    const sorted = [...group].sort((a, b) =>
+      (a.created_at || "").localeCompare(b.created_at || "")
+    );
 
-  for (const file of v1Checked) {
-    const hadInternalFix = !!file.fixed_at;
-    const hadClientRevision =
-      filesWithChild.has(file.id) ||
-      file.status === "revision_requested" ||
-      file.status === "revised";
+    const clientSubmissions = sorted.filter(f => f.submission_type === "client");
+    if (clientSubmissions.length === 0) continue; // Not yet submitted to client
 
-    if (hadInternalFix && hadClientRevision) {
+    const firstClientIdx = sorted.indexOf(clientSubmissions[0]);
+    const internalBeforeClient = sorted.slice(0, firstClientIdx).filter(f => f.submission_type === "internal");
+    const hasMultipleInternalBefore = internalBeforeClient.length >= 2;
+    const hasMultipleClientSubmissions = clientSubmissions.length >= 2;
+
+    if (hasMultipleInternalBefore && hasMultipleClientSubmissions) {
       both++;
-    } else if (hadClientRevision) {
+    } else if (hasMultipleClientSubmissions) {
       pattern2++;
-    } else if (hadInternalFix) {
+    } else if (hasMultipleInternalBefore) {
       pattern3++;
     } else {
       pattern1++;
     }
   }
 
-  return { pattern1, pattern2, pattern3, both, total: v1Checked.length };
+  const total = pattern1 + pattern2 + pattern3 + both;
+  return { pattern1, pattern2, pattern3, both, total };
 }
 
 const PATTERN_CONFIG = [
   {
     key: "pattern1" as const,
     label: "パターン1: 理想",
-    description: "内部修正なし → クライアント修正なし",
+    description: "クライアント提出が一発合格",
     icon: CheckCircle2,
     color: "text-status-ok",
     bgColor: "bg-status-ok/10",
@@ -97,7 +101,7 @@ const PATTERN_CONFIG = [
   {
     key: "pattern2" as const,
     label: "パターン2: ルール不備",
-    description: "内部修正なし → クライアント修正あり",
+    description: "クライアント提出が複数回発生",
     icon: ShieldAlert,
     color: "text-status-ng",
     bgColor: "bg-status-ng/10",
@@ -107,7 +111,7 @@ const PATTERN_CONFIG = [
   {
     key: "pattern3" as const,
     label: "パターン3: 制作課題",
-    description: "内部修正あり → クライアント修正なし",
+    description: "社内提出で複数回修正後にクライアント提出",
     icon: AlertTriangle,
     color: "text-status-warning",
     bgColor: "bg-status-warning/10",
@@ -117,7 +121,7 @@ const PATTERN_CONFIG = [
   {
     key: "both" as const,
     label: "両方発生",
-    description: "内部修正あり → クライアント修正もあり",
+    description: "社内修正ループ＋クライアント再提出の両方",
     icon: ShieldAlert,
     color: "text-status-ng",
     bgColor: "bg-status-ng/10",
@@ -171,7 +175,7 @@ export default function QualityGapSection({ files, projectNameMap, getProcessLab
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground text-center py-8">
-            分析対象のデータがありません（チェック済みの初稿ファイルが必要です）
+            分析対象のデータがありません（クライアント提出済みのシーケンスが必要です）
           </p>
         </CardContent>
       </Card>
@@ -193,8 +197,9 @@ export default function QualityGapSection({ files, projectNameMap, getProcessLab
       </div>
 
       <div className="text-[11px] text-muted-foreground bg-muted/50 rounded-md px-3 py-2 space-y-0.5">
-        <p>• <strong>内部修正</strong>: AIチェック後のFIX（fixed_atの有無で判定）</p>
-        <p>• <strong>クライアント修正</strong>: クライアント提出後の修正依頼（第2稿以降の有無 or ステータスで判定）</p>
+        <p>• <strong>社内提出</strong>: submission_type=internal のアップロード</p>
+        <p>• <strong>クライアント提出</strong>: submission_type=client のアップロード</p>
+        <p>• 分析単位: 案件×工程ごとの提出シーケンス</p>
       </div>
 
       {/* Overview cards */}
