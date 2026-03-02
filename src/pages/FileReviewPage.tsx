@@ -1381,7 +1381,7 @@ export default function FileReviewPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>クライアントに提出</AlertDialogTitle>
             <AlertDialogDescription>
-              このファイルを「クライアント提出済み」としてマークします。品質ギャップ分析に反映されます。
+              このファイルを「クライアント提出済み」としてマークします。このファイルを「クライアント提出済み」としてマークします。品質レポートに反映されます。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

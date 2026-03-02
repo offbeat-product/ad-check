@@ -1479,7 +1479,7 @@ export default function ProjectPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>クライアント提出に変更</AlertDialogTitle>
             <AlertDialogDescription>
-              このファイルを「クライアント提出」としてマークします。品質ギャップ分析に反映されます。
+              このファイルを「クライアント提出」としてマークします。このファイルを「クライアント提出」としてマークします。品質レポートに反映されます。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
