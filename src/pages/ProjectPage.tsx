@@ -854,13 +854,16 @@ export default function ProjectPage() {
                               return (a.created_at ?? "").localeCompare(b.created_at ?? "");
                             });
                             const selectedInSection = sortedTargets.filter(f => selectedFileIds.has(f.id));
-                            const uncheckedTargets = sortedTargets.filter(f => f.status !== "checked" && f.status !== "fixed");
+                            const uncheckedTargets = sortedTargets.filter(f => f.status !== "checked" && f.status !== "fixed" && f.status !== "checking");
                             const hasSelection = selectedInSection.length > 0;
                             const actualTargets = hasSelection ? selectedInSection : uncheckedTargets;
-                            const MAX_BATCH = 5;
+                            // Apply video limits
+                            const VIDEO_LIMITS: Record<string, number> = { vcon: 3, video_horizontal: 1, video_vertical: 1 };
+                            const videoLimit = VIDEO_LIMITS[proc.process_key];
+                            const MAX_BATCH = videoLimit ? Math.min(5, videoLimit) : 5;
                             const overLimit = actualTargets.length > MAX_BATCH;
                             const label = hasSelection
-                              ? `選択分をAIチェック (${selectedInSection.length}${overLimit ? "/最大5" : ""})`
+                              ? `選択分をAIチェック (${selectedInSection.length}${overLimit ? `/最大${MAX_BATCH}` : ""})`
                               : `未チェック分を一括AIチェック (${Math.min(uncheckedTargets.length, MAX_BATCH)}/${uncheckedTargets.length})`;
                             const limitedTargets = actualTargets.slice(0, MAX_BATCH);
                             return (
