@@ -536,16 +536,9 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
             <button onClick={() => setIsEditing(true)} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1">
               <Pencil className="h-3 w-3" />編集
             </button>
-            {confirmDelete ? (
-              <span className="flex items-center gap-1">
-                <button onClick={() => { if (onDelete) onDelete(comment.id); setConfirmDelete(false); }} className="text-[10px] text-destructive font-medium">削除する</button>
-                <button onClick={() => setConfirmDelete(false)} className="text-[10px] text-muted-foreground">取消</button>
-              </span>
-            ) : (
-              <button onClick={() => setConfirmDelete(true)} className="text-[10px] text-muted-foreground hover:text-destructive flex items-center gap-1">
-                <Trash2 className="h-3 w-3" />削除
-              </button>
-            )}
+            <button onClick={() => { if (onDelete) onDelete(comment.id); }} className="text-[10px] text-muted-foreground hover:text-destructive flex items-center gap-1">
+              <Trash2 className="h-3 w-3" />削除
+            </button>
           </>
         )}
       </div>
