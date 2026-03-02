@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -33,6 +34,31 @@ serve(async (req) => {
   }
 
   try {
+    // --- Authentication ---
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(JSON.stringify({ error: "認証が必要です" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabase = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: authError } = await supabase.auth.getClaims(token);
+    if (authError || !claimsData?.claims) {
+      return new Response(JSON.stringify({ error: "無効なトークンです" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // --- Input validation ---
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
     if (!GEMINI_API_KEY) {
       return new Response(JSON.stringify({ error: "GEMINI_API_KEY not configured" }), {
@@ -48,6 +74,14 @@ serve(async (req) => {
       });
     }
 
+    // --- SSRF protection: only allow Supabase storage URLs ---
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    if (!fileUrl.startsWith(supabaseUrl)) {
+      return new Response(JSON.stringify({ error: "許可されていないURLです" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Get file size via HEAD request first
     const headRes = await fetch(fileUrl, { method: "HEAD" });
     const contentLength = parseInt(headRes.headers.get("content-length") || "0", 10);
@@ -57,7 +91,7 @@ serve(async (req) => {
     const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
     if (contentLength <= 8 * 1024 * 1024) {
-      // Small file (≤8MB): inlineData - safe for edge function memory
+      // Small file (≤8MB): inlineData
       const fileRes = await fetch(fileUrl);
       if (!fileRes.ok) throw new Error(`Failed to fetch file: ${fileRes.status}`);
       const fileBytes = new Uint8Array(await fileRes.arrayBuffer());
@@ -93,10 +127,8 @@ serve(async (req) => {
       });
     } else {
       // Large file (>8MB): Use Gemini File API with streaming upload
-      // Stream from storage → Gemini without buffering full file in memory
       const uploadUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${GEMINI_API_KEY}`;
 
-      // Step 1: Initiate resumable upload
       const initiateRes = await fetch(uploadUrl, {
         method: "POST",
         headers: {
@@ -118,7 +150,6 @@ serve(async (req) => {
       const resumeUrl = initiateRes.headers.get("X-Goog-Upload-URL");
       if (!resumeUrl) throw new Error("No upload URL returned");
 
-      // Step 2: Stream file directly from storage to Gemini
       const fileRes = await fetch(fileUrl);
       if (!fileRes.ok) throw new Error(`Failed to fetch file: ${fileRes.status}`);
 
@@ -129,7 +160,6 @@ serve(async (req) => {
           "X-Goog-Upload-Offset": "0",
           "Content-Type": mimeType,
         },
-        // Stream the body directly without buffering
         body: fileRes.body,
       });
 
@@ -143,7 +173,6 @@ serve(async (req) => {
       const fileInfo = uploadResult.file;
       if (!fileInfo?.name || !fileInfo?.uri) throw new Error("Invalid upload response");
 
-      // Step 3: Poll until ACTIVE
       const filesBase = `https://generativelanguage.googleapis.com/v1beta`;
       const startTime = Date.now();
       while (Date.now() - startTime < 120000) {
@@ -155,7 +184,6 @@ serve(async (req) => {
         await new Promise((r) => setTimeout(r, 3000));
       }
 
-      // Step 4: Generate content
       const body = {
         contents: [{ parts: [{ fileData: { mimeType, fileUri: fileInfo.uri } }, { text: EXTRACT_PROMPT }] }],
         generationConfig: { maxOutputTokens: 8192, temperature: 1.0 },

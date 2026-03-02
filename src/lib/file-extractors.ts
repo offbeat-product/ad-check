@@ -46,9 +46,18 @@ async function callExtractFunction(fileUrl: string, mimeType: string): Promise<s
   const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
   const url = `https://${projectId}.supabase.co/functions/v1/extract-text`;
 
+  // Get auth token for authenticated request
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    throw new Error("認証が必要です。ログインしてください。");
+  }
+
   const res = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${session.access_token}`,
+    },
     body: JSON.stringify({ fileUrl, mimeType }),
   });
 
