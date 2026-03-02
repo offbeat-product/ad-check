@@ -32,7 +32,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight, Lock, Unlock, Trash2, Pencil, CalendarDays, User } from "lucide-react";
+import { ArrowLeft, ArrowDown, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight, Lock, Unlock, Trash2, Pencil, CalendarDays, User } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 import { cn } from "@/lib/utils";
@@ -1214,19 +1214,41 @@ export default function FileReviewPage() {
 
             {/* Submit to client button */}
             {file.submission_type !== "client" && (
-              <Button
-                size="lg"
-                className="w-full mt-4 gap-2 text-sm font-bold h-12"
-                onClick={() => setSubmitToClientOpen(true)}
-              >
-                <CheckCircle2 className="h-5 w-5" />
-                クライアントに提出する
-              </Button>
+              <div className="space-y-2 mt-4">
+                <Button
+                  size="lg"
+                  className="w-full gap-2 text-sm font-bold h-12"
+                  onClick={() => setSubmitToClientOpen(true)}
+                >
+                  <CheckCircle2 className="h-5 w-5" />
+                  クライアントに提出する
+                </Button>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="w-full gap-2 text-sm h-12"
+                  onClick={() => setInternalRevisionOpen(true)}
+                >
+                  <ArrowDown className="h-5 w-5" />
+                  社内で初稿を修正する
+                </Button>
+              </div>
             )}
             {file.submission_type === "client" && (
-              <div className="mt-4 flex items-center justify-center gap-2 py-3 rounded-lg border border-primary/30 bg-primary/5 text-primary text-sm font-medium">
-                <CheckCircle2 className="h-4 w-4" />
-                クライアント提出済み
+              <div className="space-y-2 mt-4">
+                <div className="flex items-center justify-center gap-2 py-3 rounded-lg border border-primary/30 bg-primary/5 text-primary text-sm font-medium">
+                  <CheckCircle2 className="h-4 w-4" />
+                  クライアント提出済み
+                </div>
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="w-full gap-2 text-sm h-12"
+                  onClick={() => setInternalRevisionOpen(true)}
+                >
+                  <ArrowDown className="h-5 w-5" />
+                  社内で修正する
+                </Button>
               </div>
             )}
           </div>
