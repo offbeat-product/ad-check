@@ -346,7 +346,8 @@ export default function FileReviewPage() {
         // For video and audio processes, include related files from the same project
         const isVideoProc = ["vcon", "video_horizontal", "video_vertical"].includes(processKey);
         const isAudioProc = ["narration", "bgm"].includes(processKey);
-        if ((isVideoProc || isAudioProc) && projectId) {
+        const isNaScriptProc = processKey === "na_script";
+        if ((isVideoProc || isAudioProc || isNaScriptProc) && projectId) {
           const relatedFiles = await getRelatedProcessData(projectId, processKey, file.pattern_id);
           if (Object.keys(relatedFiles).length > 0) {
             body.related_files = relatedFiles;

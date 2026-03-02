@@ -210,9 +210,12 @@ export async function getRelatedProcessData(
   if (!projectId) return {};
 
   const isAudioProcess = ["narration", "bgm"].includes(currentProcessType);
+  const isNaScript = currentProcessType === "na_script";
   const relatedProcessTypes = isAudioProcess
     ? ["script", "na_script", "narration", "bgm"]
-    : ["script", "storyboard", "styleframe", "na_script", "vcon"];
+    : isNaScript
+      ? ["script"]
+      : ["script", "storyboard", "styleframe", "na_script", "vcon"];
   const targetTypes = relatedProcessTypes.filter((pt) => pt !== currentProcessType);
 
   const { data: files } = await supabase
