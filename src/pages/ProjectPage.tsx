@@ -1322,20 +1322,8 @@ export default function ProjectPage() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>ファイルアップロード</DialogTitle></DialogHeader>
           <div className="space-y-4">
-            {/* Submission type selection */}
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">提出先</Label>
-              <RadioGroup value={uploadSubmissionType} onValueChange={(v) => setUploadSubmissionType(v as "internal" | "client")} className="flex gap-4">
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="internal" id="sub-internal" />
-                  <Label htmlFor="sub-internal" className="text-xs">社内提出</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="client" id="sub-client" />
-                  <Label htmlFor="sub-client" className="text-xs">クライアント提出</Label>
-                </div>
-              </RadioGroup>
-            </div>
+
+
 
             {/* Pattern selection (only when patterns exist) */}
             {patterns.length > 0 && (
