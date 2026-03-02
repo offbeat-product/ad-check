@@ -417,6 +417,7 @@ export default function CheckPage() {
         const videoMimeType = mediaFile?.type || "";
         console.log("[QuickCheck] video webhook payload:", { videoStorageUrl, videoMimeType, process: selectedProcess });
 
+        const webhookSentAt = new Date().toISOString();
         const videoRes = await runVideoCheck(product.id, selectedProcess, videoScriptText, {
           videoUrl: videoStorageUrl || "",
           videoMimeType,
@@ -426,7 +427,7 @@ export default function CheckPage() {
 
         if (videoRes === VIDEO_ASYNC_ACCEPTED) {
           // Async mode: poll for result
-          const polled = await videoPolling.startPolling(product.code, selectedProcess);
+          const polled = await videoPolling.startPolling(product.code, selectedProcess, webhookSentAt);
           if (!polled) {
             toast({ title: "チェック処理がタイムアウトしました", description: "ページを更新して結果を確認してください。", variant: "destructive" });
             return;

@@ -48,9 +48,10 @@ export function useVideoCheckPolling() {
    * Returns the CheckResultRow when found, or null on timeout.
    */
   const startPolling = useCallback(
-    (productCode: string, processType: string): Promise<CheckResultRow | null> => {
+    (productCode: string, processType: string, webhookSentAt?: string): Promise<CheckResultRow | null> => {
       cancelledRef.current = false;
       startTimeRef.current = Date.now();
+      const sentAt = webhookSentAt || new Date().toISOString();
 
       setPollingState({
         isPolling: true,
@@ -65,7 +66,6 @@ export function useVideoCheckPolling() {
       }, 1000);
 
       return new Promise<CheckResultRow | null>((resolve) => {
-        const fiveMinAgo = () => new Date(Date.now() - 5 * 60 * 1000).toISOString();
 
         const poll = async () => {
           if (cancelledRef.current) {
@@ -93,7 +93,7 @@ export function useVideoCheckPolling() {
               .eq("product_code", productCode)
               .eq("process_type", processType)
               .eq("status", "completed")
-              .gte("created_at", fiveMinAgo())
+              .gt("created_at", sentAt)
               .order("created_at", { ascending: false })
               .limit(1)
               .maybeSingle();
