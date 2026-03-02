@@ -33,6 +33,7 @@ export type Database = {
           raw_response: Json | null
           status: string | null
           total_checks: number | null
+          updated_at: string | null
           user_id: string
           warning_count: number | null
         }
@@ -54,6 +55,7 @@ export type Database = {
           raw_response?: Json | null
           status?: string | null
           total_checks?: number | null
+          updated_at?: string | null
           user_id: string
           warning_count?: number | null
         }
@@ -75,6 +77,7 @@ export type Database = {
           raw_response?: Json | null
           status?: string | null
           total_checks?: number | null
+          updated_at?: string | null
           user_id?: string
           warning_count?: number | null
         }
@@ -1197,6 +1200,7 @@ export type Database = {
           raw_response: Json | null
           status: string | null
           total_checks: number | null
+          updated_at: string | null
           user_id: string
           warning_count: number | null
         }[]
