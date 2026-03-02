@@ -63,6 +63,7 @@ export default function FileReviewPage() {
   const [record, setRecord] = useState<CheckResultRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
+  const isRecheckingRef = useRef(false);
   const [compareOpen, setCompareOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [uploadRevisionOpen, setUploadRevisionOpen] = useState(false);
@@ -155,9 +156,9 @@ export default function FileReviewPage() {
         }
       }
 
-      if (f.check_result_id) {
+      if (f.check_result_id && !isRecheckingRef.current) {
         const { data: cr, error: crErr } = await supabase.from("check_results").select("*").eq("id", f.check_result_id).maybeSingle();
-        if (cancelled) return;
+        if (cancelled || isRecheckingRef.current) return;
         handleSupabaseError(crErr, "check_result");
         setRecord(cr);
       }
@@ -211,13 +212,13 @@ export default function FileReviewPage() {
 
   // Recovery: re-fetch file & check_result from DB (e.g. after webhook timeout but n8n completed)
   const recoverCheckResult = useCallback(async () => {
-    if (!fileId) return;
+    if (!fileId || isRecheckingRef.current) return;
     const { data: freshFile } = await supabase.from("project_files").select("*").eq("id", fileId).maybeSingle();
-    if (freshFile) {
+    if (freshFile && !isRecheckingRef.current) {
       setFile(freshFile);
       if (freshFile.check_result_id) {
         const { data: cr } = await supabase.from("check_results").select("*").eq("id", freshFile.check_result_id).maybeSingle();
-        if (cr && cr.check_items) {
+        if (cr && cr.check_items && !isRecheckingRef.current) {
           setRecord(cr);
           toast({ title: "チェック完了", description: `Grade: ${cr.overall_status}` });
           return;
@@ -228,10 +229,11 @@ export default function FileReviewPage() {
 
   // Poll for check result when checking is in progress (handles n8n completing after frontend timeout)
   useEffect(() => {
-    if (!checking || !file?.check_result_id) return;
+    if (!checking || !file?.check_result_id || isRecheckingRef.current) return;
     const interval = setInterval(async () => {
+      if (isRecheckingRef.current) return;
       const { data: cr } = await supabase.from("check_results").select("*").eq("id", file.check_result_id!).maybeSingle();
-      if (cr && cr.check_items && Array.isArray(cr.check_items) && (cr.check_items as unknown[]).length > 0) {
+      if (cr && cr.check_items && Array.isArray(cr.check_items) && (cr.check_items as unknown[]).length > 0 && !isRecheckingRef.current) {
         setRecord(cr);
         setChecking(false);
         toast({ title: "チェック完了", description: `Grade: ${cr.overall_status}` });
@@ -251,6 +253,7 @@ export default function FileReviewPage() {
     if (isExecutingRef.current) return;
     isExecutingRef.current = true;
     // Clear old results before re-check
+    isRecheckingRef.current = true;
     setRecord(null);
     setChecking(true);
     checkProgress.start();
@@ -352,6 +355,7 @@ export default function FileReviewPage() {
           // Async video check: poll for result from DB
           const polled = await videoPolling.startPolling(product.code, processKey, webhookSentAt);
           if (!polled) {
+            isRecheckingRef.current = false;
             toast({ title: "チェック処理がタイムアウトしました", description: "ページを更新して結果を確認してください。", variant: "destructive" });
             return;
           }
@@ -409,12 +413,15 @@ export default function FileReviewPage() {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "不明なエラー";
       console.error("[FileReview] AIチェックエラー:", err);
+      // Allow recovery to fetch results after error
+      isRecheckingRef.current = false;
       // After timeout/error, check if n8n already wrote the result to DB
       await recoverCheckResult();
       if (!record) {
         toast({ title: "チェック送信に失敗しました。再度お試しください", description: message, variant: "destructive" });
       }
     } finally {
+      isRecheckingRef.current = false;
       setChecking(false);
       isExecutingRef.current = false;
       checkProgress.reset();
