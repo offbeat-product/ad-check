@@ -9,8 +9,13 @@ interface TimestampBadgeProps {
 
 export function formatTimestamp(seconds: number): string {
   const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, "0")}`;
+  const s = seconds % 60;
+  const wholeS = Math.floor(s);
+  const ms = Math.round((s - wholeS) * 1000);
+  if (ms > 0) {
+    return `${m}:${wholeS.toString().padStart(2, "0")}.${ms.toString().padStart(3, "0")}`;
+  }
+  return `${m}:${wholeS.toString().padStart(2, "0")}`;
 }
 
 export default function TimestampBadge({ seconds, onClick, className }: TimestampBadgeProps) {
