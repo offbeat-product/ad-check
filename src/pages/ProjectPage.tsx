@@ -997,6 +997,11 @@ export default function ProjectPage() {
                                       const cc = file.check_result_id ? (commentCounts[file.check_result_id] || 0) : 0;
                                       const isImageFile = file.file_type === "image";
                                       const childVersions = files.filter(f => f.parent_file_id === file.id);
+                                      // Use latest version's file_data for thumbnail
+                                      const latestVersion = childVersions.length > 0
+                                        ? childVersions.sort((a, b) => (b.version_number ?? 0) - (a.version_number ?? 0))[0]
+                                        : null;
+                                      const thumbnailData = latestVersion?.file_data || file.file_data;
                                       const versionLabel = file.parent_file_id ? `v${file.version_number}` : childVersions.length > 0 ? "v1" : null;
                                       const isSelected = selectedFileIds.has(file.id);
 
@@ -1043,18 +1048,18 @@ export default function ProjectPage() {
                                               </>
                                             )}
                                             <div className="h-16 rounded-md bg-muted/50 flex items-center justify-center mb-1.5 overflow-hidden">
-                                              {isImageFile && file.file_data ? (
-                                                <img src={file.file_data} alt="" className="w-full h-full object-cover" />
-                                              ) : (file.file_type === "video" || proc.process_key.includes("video") || proc.process_key === "vcon") && file.file_data ? (
-                                                <video src={file.file_data} className="w-full h-full object-cover" muted preload="metadata" />
+                                              {isImageFile && thumbnailData ? (
+                                                <img src={thumbnailData} alt="" className="w-full h-full object-cover" />
+                                              ) : (file.file_type === "video" || proc.process_key.includes("video") || proc.process_key === "vcon") && thumbnailData ? (
+                                                <video src={thumbnailData} className="w-full h-full object-cover" muted preload="metadata" />
                                               ) : file.file_type === "video" || proc.process_key.includes("video") || proc.process_key === "vcon" ? (
                                                 <Film className="h-8 w-8 text-muted-foreground/30" />
                                               ) : file.file_type === "audio" || proc.process_key === "na_narration" || proc.process_key === "bgm" ? (
                                                 <FileText className="h-8 w-8 text-muted-foreground/30" />
                                               ) : proc.process_key.includes("script") || proc.process_key === "na_script" ? (
                                                 <FileText className="h-8 w-8 text-muted-foreground/30" />
-                                              ) : file.file_data && (file.file_data.startsWith("data:image") || file.file_data.match(/\.(jpg|jpeg|png|gif|webp)(\?|$)/i)) ? (
-                                                <img src={file.file_data} alt="" className="w-full h-full object-cover" />
+                                              ) : thumbnailData && (thumbnailData.startsWith("data:image") || thumbnailData.match(/\.(jpg|jpeg|png|gif|webp)(\?|$)/i)) ? (
+                                                <img src={thumbnailData} alt="" className="w-full h-full object-cover" />
                                               ) : (
                                                 <Image className="h-8 w-8 text-muted-foreground/30" />
                                               )}
