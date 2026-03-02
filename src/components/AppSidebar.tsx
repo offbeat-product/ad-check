@@ -85,7 +85,6 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
 
   const navItems = [
     { icon: Home, label: "ホーム", path: "/dashboard" },
-    ...(canEdit ? [{ icon: Zap, label: "クイックチェック", path: "/check" }] : []),
   ];
 
   const activeProjectId = location.pathname.match(/\/project\/([^/]+)/)?.[1];
