@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useProjectTree } from "@/hooks/useProjectTree";
 import {
-  Home, Zap, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search, Rocket, PanelLeftClose, PanelLeftOpen, Sparkles,
+  Home, Zap, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search, Rocket, PanelLeftClose, PanelLeftOpen, Sparkles, BarChart3,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import NotificationBell from "@/components/NotificationBell";
@@ -393,6 +393,16 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
               )}
             </span>
           )}
+        </button>
+
+        <button onClick={() => navigate("/report")}
+          title={collapsed ? "レポート" : undefined}
+          className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium transition-colors",
+            collapsed ? "justify-center px-0" : "px-5",
+            location.pathname === "/report" ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-[3px] border-primary"
+              : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent")}>
+          <BarChart3 className="h-4 w-4 shrink-0" />
+          {!collapsed && "レポート"}
         </button>
 
         <button onClick={() => navigate("/settings")}

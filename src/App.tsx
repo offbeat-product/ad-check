@@ -20,6 +20,7 @@ import SettingsPage from "./pages/SettingsPage";
 import AcceptInvitePage from "./pages/AcceptInvitePage";
 import RuleCandidatesPage from "./pages/RuleCandidatesPage";
 import NotificationsPage from "./pages/NotificationsPage";
+import ReportPage from "./pages/ReportPage";
 
 const queryClient = new QueryClient();
 
@@ -60,6 +61,7 @@ const App = () => (
                 <Route path="/settings" element={<SettingsPage />} />
                 <Route path="/rule-candidates" element={<RuleCandidatesPage />} />
                 <Route path="/notifications" element={<NotificationsPage />} />
+                <Route path="/report" element={<ReportPage />} />
               </Route>
               <Route path="/shared/:token" element={<SharedViewPage />} />
               <Route path="*" element={<NotFound />} />

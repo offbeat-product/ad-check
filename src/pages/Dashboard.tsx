@@ -7,7 +7,7 @@ import { FILE_STATUS_CONFIG } from "@/lib/db-types";
 import { PROJECT_STATUS_CONFIG, getProcessLabel } from "@/lib/process-config";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Badge } from "@/components/ui/badge";
-import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderOpen, ChevronLeft, ChevronRight, Plus, RefreshCw, WifiOff, User } from "lucide-react";
+import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderOpen, ChevronLeft, ChevronRight, Plus, RefreshCw, WifiOff, User, Target, CheckCircle } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import { cn } from "@/lib/utils";
@@ -65,6 +65,11 @@ export default function Dashboard() {
   // Phase 3: Recent files (loaded lazily)
   const [recentFiles, setRecentFiles] = useState<(ProjectFile & { project_name?: string })[]>([]);
   const [filesLoaded, setFilesLoaded] = useState(false);
+
+  // KPI stats
+  const [kpiDeadlineRate, setKpiDeadlineRate] = useState<number | null>(null);
+  const [kpiFirstDraftRate, setKpiFirstDraftRate] = useState<number | null>(null);
+  const [kpiLoaded, setKpiLoaded] = useState(false);
 
   const [fetchError, setFetchError] = useState(false);
   const [page, setPage] = useState(0);
@@ -214,6 +219,47 @@ export default function Dashboard() {
     return () => { supabase.removeChannel(channel); };
   }, [user]);
 
+  // KPI: fetch current month deadline compliance & first draft pass rate
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    const fetchKpi = async () => {
+      try {
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+
+        const [procRes, fileRes] = await Promise.all([
+          supabase.from("project_processes").select("status, deadline, updated_at")
+            .eq("status", "completed").not("deadline", "is", null)
+            .gte("updated_at", monthStart).lte("updated_at", monthEnd),
+          supabase.from("project_files").select("status, version_number, created_at")
+            .eq("version_number", 1).neq("status", "uploaded")
+            .gte("created_at", monthStart).lte("created_at", monthEnd),
+        ]);
+        if (cancelled) return;
+
+        const procs = procRes.data ?? [];
+        const onTime = procs.filter((p: any) => {
+          const completed = new Date(p.updated_at);
+          const deadline = new Date(p.deadline + "T23:59:59");
+          return completed <= deadline;
+        }).length;
+        setKpiDeadlineRate(procs.length > 0 ? Math.round((onTime / procs.length) * 100) : null);
+
+        const fFiles = fileRes.data ?? [];
+        const fixed = fFiles.filter((f: any) => f.status === "fixed" || f.status === "approved").length;
+        setKpiFirstDraftRate(fFiles.length > 0 ? Math.round((fixed / fFiles.length) * 100) : null);
+
+        setKpiLoaded(true);
+      } catch (e) {
+        console.warn("[Dashboard] KPI fetch failed:", e);
+      }
+    };
+    const timer = setTimeout(fetchKpi, 500);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [user, refetchKey]);
+
   const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
 
   const stats = useMemo(() => {
@@ -277,16 +323,15 @@ export default function Dashboard() {
 
       <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
         {/* Stats - show skeleton while checks loading */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           {checksLoaded ? (
             <>
               <StatCard icon={ClipboardCheck} label="今日のチェック数" value={stats.todayChecks} color="text-primary" />
-              <StatCard icon={AlertTriangle} label="修正必須（累計）" value={stats.totalNg} color="text-status-ng" />
-              <StatCard icon={BarChart3} label="GO率" value={`${stats.okRate}%`} color="text-status-ok" />
-              <StatCard icon={TrendingUp} label="直近7日" value={`${stats.weekChecks} 件`} color="text-primary" />
+              <StatCard icon={Target} label="今月の納期遵守率" value={kpiLoaded ? (kpiDeadlineRate !== null ? `${kpiDeadlineRate}%` : "—") : "..."} color="text-primary" />
+              <StatCard icon={CheckCircle} label="今月の初稿合格率" value={kpiLoaded ? (kpiFirstDraftRate !== null ? `${kpiFirstDraftRate}%` : "—") : "..."} color="text-status-ok" />
             </>
           ) : (
-            Array.from({ length: 4 }).map((_, i) => (
+            Array.from({ length: 3 }).map((_, i) => (
               <div key={i} className="glass-card p-4 flex items-center gap-4">
                 <div className="p-2.5 rounded-lg bg-muted w-10 h-10 animate-pulse" />
                 <div>
