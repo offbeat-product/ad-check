@@ -17,6 +17,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { exportReportExcel, exportReportPdf } from "@/lib/export-report";
+import QualityGapSection from "@/components/report/QualityGapSection";
 
 interface ProcessRow {
   id: string;
@@ -34,8 +35,18 @@ interface FileRow {
   process_type: string;
   status: string | null;
   version_number: number | null;
+  parent_file_id: string | null;
+  check_result_id: string | null;
   pattern_id: string | null;
   created_at: string | null;
+}
+
+interface CheckResultMini {
+  id: string;
+  ng_count: number | null;
+  warning_count: number | null;
+  ok_count: number | null;
+  overall_status: string | null;
 }
 
 interface ProjectRow {
@@ -74,6 +85,7 @@ export default function ReportPage() {
   const { user, isAdmin } = useAuth();
   const [processes, setProcesses] = useState<ProcessRow[]>([]);
   const [files, setFiles] = useState<FileRow[]>([]);
+  const [checkResultsMini, setCheckResultsMini] = useState<CheckResultMini[]>([]);
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [clients, setClients] = useState<ClientRow[]>([]);
@@ -97,13 +109,14 @@ export default function ReportPage() {
     const fetch = async () => {
       setLoading(true);
       try {
-        const [procRes, fileRes, projRes, prodRes, clientRes, targetRes] = await Promise.all([
+        const [procRes, fileRes, projRes, prodRes, clientRes, targetRes, crRes] = await Promise.all([
           supabase.from("project_processes").select("id, project_id, process_key, process_label, status, deadline, updated_at"),
-          supabase.from("project_files").select("id, project_id, process_type, status, version_number, pattern_id, created_at"),
+          supabase.from("project_files").select("id, project_id, process_type, status, version_number, parent_file_id, check_result_id, pattern_id, created_at"),
           supabase.from("projects").select("id, name, product_id"),
           supabase.from("products").select("id, name, client_id"),
           supabase.from("clients").select("id, name"),
           supabase.from("kpi_targets").select("*"),
+          supabase.from("check_results").select("id, ng_count, warning_count, ok_count, overall_status"),
         ]);
         if (cancelled) return;
         handleSupabaseError(procRes.error, "project_processes");
@@ -111,6 +124,7 @@ export default function ReportPage() {
         handleSupabaseError(projRes.error, "projects");
         setProcesses(procRes.data ?? []);
         setFiles(fileRes.data ?? []);
+        setCheckResultsMini((crRes.data ?? []) as CheckResultMini[]);
         setProjects(projRes.data ?? []);
         setProducts(prodRes.data ?? []);
         setClients(clientRes.data ?? []);
@@ -504,6 +518,14 @@ export default function ReportPage() {
             targets={targetMap}
           />
         )}
+
+        {/* Quality Gap Analysis - shown in all view modes */}
+        <QualityGapSection
+          files={files}
+          checkResults={checkResultsMini}
+          projectNameMap={projectNameMap}
+          getProcessLabel={getProcessLabel}
+        />
       </div>
     </div>
   );
