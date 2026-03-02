@@ -48,7 +48,6 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
     seekTo: (seconds: number) => {
       if (mediaRef.current) {
         mediaRef.current.currentTime = seconds;
-        mediaRef.current.play().catch(() => {});
       }
     },
   }), []);
