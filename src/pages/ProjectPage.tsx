@@ -410,6 +410,21 @@ export default function ProjectPage() {
 
   const handleStatusChange = async (newStatus: string) => {
     if (!project || !id) return;
+
+    // 案件完了バリデーション: 全ファイルがFIX済みでなければ完了不可
+    if (newStatus === "completed") {
+      const rootFiles = files.filter(f => !f.parent_file_id);
+      const nonFixedFiles = rootFiles.filter(f => f.status !== "fixed" && f.status !== "approved");
+      if (nonFixedFiles.length > 0) {
+        toast({
+          title: "完了にできません",
+          description: `FIX済みでないファイルが${nonFixedFiles.length}件あります。全てのクリエイティブをFIXしてから完了にしてください。`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     const { error } = await supabase.from("projects").update({ status: newStatus }).eq("id", id);
     if (!handleSupabaseError(error, "status update")) {
       setProject({ ...project, status: newStatus });
@@ -433,6 +448,27 @@ export default function ProjectPage() {
   };
 
   const handleProcessStatusChange = async (processId: string, status: string) => {
+    // 工程完了バリデーション: クライアント提出済み or FIX済みでないファイルがあれば完了不可
+    if (status === "completed") {
+      const proc = processes.find(p => p.id === processId);
+      if (proc) {
+        const processFiles = files.filter(f => f.process_type === proc.process_key && !f.parent_file_id);
+        const blockers = processFiles.filter(f => {
+          // Must be either client-submitted or fixed/approved
+          const isClientSubmitted = f.submission_type === "client";
+          const isFixed = f.status === "fixed" || f.status === "approved";
+          return !(isClientSubmitted || isFixed);
+        });
+        if (blockers.length > 0) {
+          toast({
+            title: "工程を完了にできません",
+            description: `クライアント提出済みまたはFIX済みでないファイルが${blockers.length}件あります。`,
+            variant: "destructive",
+          });
+          return;
+        }
+      }
+    }
     await updateProcess(processId, { status } as Partial<ProjectProcess>);
     toast({ title: "工程ステータスを更新しました" });
   };
@@ -647,6 +683,32 @@ export default function ProjectPage() {
             <h1 className="text-base md:text-lg font-bold mt-0.5 truncate">{project.name}</h1>
           </div>
           <div className="flex items-center gap-2 flex-wrap shrink-0">
+            {/* Deadline compliance badge */}
+            {(() => {
+              const overallDeadline = (project as any).overall_deadline;
+              if (project.status === "completed" && overallDeadline) {
+                const dl = new Date(overallDeadline + "T23:59:59");
+                const completedAt = new Date(project.updated_at || "");
+                const isLate = completedAt > dl;
+                return (
+                  <Badge className={cn("text-xs font-bold gap-1", isLate ? "bg-status-ng/10 text-status-ng border-status-ng" : "bg-status-ok/10 text-status-ok border-status-ok")} variant="outline">
+                    {isLate ? <AlertTriangle className="h-3 w-3" /> : <CheckSquare className="h-3 w-3" />}
+                    {isLate ? "遅延" : "納期遵守OK"}
+                  </Badge>
+                );
+              }
+              if (overallDeadline && !["completed"].includes(project.status || "")) {
+                const dl = new Date(overallDeadline + "T23:59:59");
+                if (isPast(dl)) {
+                  return (
+                    <Badge className="text-xs font-bold gap-1 bg-status-ng/10 text-status-ng border-status-ng" variant="outline">
+                      <AlertTriangle className="h-3 w-3" />遅延
+                    </Badge>
+                  );
+                }
+              }
+              return null;
+            })()}
             <DeadlinePicker
               deadline={(project as any).overall_deadline ?? null}
               onChange={handleDeadlineChange}
