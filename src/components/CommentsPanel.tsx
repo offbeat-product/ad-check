@@ -157,6 +157,43 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
     }
   };
 
+  const sendCommentNotifications = async (content: string, excludeUserIds: string[]) => {
+    if (!user) return;
+    const authorName = user.email?.split("@")[0] || "User";
+    const excludeSet = new Set([user.id, ...excludeUserIds]);
+
+    // Fetch workspace members who have notify_comment enabled
+    const { data: wsMembers } = await supabase
+      .from("workspace_members")
+      .select("user_id")
+      .eq("status", "accepted")
+      .not("user_id", "is", null);
+    if (!wsMembers || wsMembers.length === 0) return;
+
+    const targetUserIds = wsMembers
+      .map((m) => m.user_id!)
+      .filter((uid) => !excludeSet.has(uid));
+    if (targetUserIds.length === 0) return;
+
+    // Check notify_comment preference
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, notify_comment")
+      .in("id", targetUserIds)
+      .eq("notify_comment", true);
+    if (!profiles || profiles.length === 0) return;
+
+    const notifications = profiles.map((p) => ({
+      user_id: p.id,
+      type: "comment",
+      title: "新しいコメントが投稿されました",
+      message: `${authorName}: ${content.slice(0, 80)}`,
+      data: { check_result_id: checkResultId },
+    }));
+
+    await supabase.from("notifications").insert(notifications);
+  };
+
   const saveCorrectionLog = async (commentId: string, commentText: string) => {
     if (!productId || !processType) return;
     try {
@@ -206,6 +243,9 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
 
     // Send mention notifications
     await sendMentionNotifications(newComment, mentionedUserIds);
+
+    // Send general comment notifications (exclude mentioned users to avoid duplicates)
+    await sendCommentNotifications(newComment, mentionedUserIds);
 
     // Save to correction_logs if checked
     if (isCorrectionChecked && savedComment?.id) {
