@@ -208,6 +208,11 @@ export default function ReportPage() {
   const [periodFrom, setPeriodFrom] = useState(currentMonth);
   const [periodTo, setPeriodTo] = useState(currentMonth);
 
+  // Drill-down filters
+  const [filterClientId, setFilterClientId] = useState<string>("all");
+  const [filterProductId, setFilterProductId] = useState<string>("all");
+  const [filterProjectId, setFilterProjectId] = useState<string>("all");
+
   const targetMap = useMemo(() => new Map(targets.map(t => [t.key, t.target_value])), [targets]);
   const getTarget = (key: string, fallback: number) => targetMap.get(key) ?? fallback;
   const getClientTarget = (base: string, fallback: number) => targetMap.get(`client_${base}`) ?? targetMap.get(base) ?? fallback;
@@ -254,6 +259,40 @@ export default function ReportPage() {
   const productClientMap = useMemo(() => new Map(products.map(p => [p.id, p.client_id])), [products]);
   const projectNameMap = useMemo(() => new Map(projects.map(p => [p.id, p.name])), [projects]);
 
+  // Cascading filter options
+  const filteredProducts = useMemo(() => {
+    if (filterClientId === "all") return products;
+    return products.filter(p => p.client_id === filterClientId);
+  }, [products, filterClientId]);
+
+  const filteredProjects = useMemo(() => {
+    let filtered = projects;
+    if (filterProductId !== "all") {
+      filtered = filtered.filter(p => p.product_id === filterProductId);
+    } else if (filterClientId !== "all") {
+      const productIds = new Set(filteredProducts.map(p => p.id));
+      filtered = filtered.filter(p => p.product_id && productIds.has(p.product_id));
+    }
+    return filtered;
+  }, [projects, filterClientId, filterProductId, filteredProducts]);
+
+  // Reset dependent filters on parent change
+  const handleClientChange = (v: string) => {
+    setFilterClientId(v);
+    setFilterProductId("all");
+    setFilterProjectId("all");
+  };
+  const handleProductChange = (v: string) => {
+    setFilterProductId(v);
+    setFilterProjectId("all");
+  };
+
+  // Determine which project IDs are in scope
+  const scopeProjectIds = useMemo(() => {
+    if (filterProjectId !== "all") return new Set([filterProjectId]);
+    return new Set(filteredProjects.map(p => p.id));
+  }, [filterProjectId, filteredProjects]);
+
   // Period-filtered data
   const isInPeriod = (dateStr: string) => {
     const mk = toMonthKey(dateStr);
@@ -261,13 +300,13 @@ export default function ReportPage() {
   };
 
   const periodProcesses = useMemo(() =>
-    processes.filter(p => isInPeriod(p.updated_at)),
-    [processes, periodFrom, periodTo]
+    processes.filter(p => scopeProjectIds.has(p.project_id) && isInPeriod(p.updated_at)),
+    [processes, scopeProjectIds, periodFrom, periodTo]
   );
 
   const periodFiles = useMemo(() =>
-    files.filter(f => f.created_at && isInPeriod(f.created_at)),
-    [files, periodFrom, periodTo]
+    files.filter(f => f.created_at && f.project_id && scopeProjectIds.has(f.project_id) && isInPeriod(f.created_at)),
+    [files, scopeProjectIds, periodFrom, periodTo]
   );
 
   // Submission type summary
@@ -385,6 +424,39 @@ export default function ReportPage() {
               <SelectTrigger className="w-28 h-7 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
                 {monthOptions.map(m => <SelectItem key={m} value={m} className="text-xs">{monthLabel(m)}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">クライアント:</span>
+            <Select value={filterClientId} onValueChange={handleClientChange}>
+              <SelectTrigger className="w-36 h-7 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-xs">すべて</SelectItem>
+                {clients.map(c => <SelectItem key={c.id} value={c.id} className="text-xs">{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">商材:</span>
+            <Select value={filterProductId} onValueChange={handleProductChange}>
+              <SelectTrigger className="w-36 h-7 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-xs">すべて</SelectItem>
+                {filteredProducts.map(p => <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">案件:</span>
+            <Select value={filterProjectId} onValueChange={setFilterProjectId}>
+              <SelectTrigger className="w-44 h-7 text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all" className="text-xs">すべて</SelectItem>
+                {filteredProjects.map(p => <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
