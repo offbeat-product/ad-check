@@ -45,6 +45,8 @@ interface ComparisonCheckPanelProps {
   onOpenComparisonMode: () => void;
   onCheckComplete?: (result: CheckResult) => void;
   onComparisonSaved?: (savedRecord: ComparisonHistoryEntry) => void;
+  /** Clear after-data after comparison check completes (force user to upload new draft) */
+  onClearAfterData?: () => void;
   /** Comment counts per pattern_id */
   commentCounts?: Record<string, number>;
   /** Currently highlighted card */
@@ -62,7 +64,7 @@ interface ComparisonCheckPanelProps {
 export default function ComparisonCheckPanel({
   file, productId, projectId, fileId, checkResultId, clientName, productCode, productName,
   comparisonBeforeData, comparisonAfterData, comparisonAfterText, comparisonRoundLabel,
-  onOpenComparisonMode, onCheckComplete, onComparisonSaved,
+  onOpenComparisonMode, onCheckComplete, onComparisonSaved, onClearAfterData,
   commentCounts = {}, highlightCard, onCommentClick, onTabChange, onSeekMedia, onMarkerClick,
 }: ComparisonCheckPanelProps) {
   const { toast } = useToast();
@@ -197,6 +199,8 @@ export default function ComparisonCheckPanel({
         }
 
         onComparisonSaved?.(entry);
+        // Clear after-data so user must upload new draft for next round
+        onClearAfterData?.();
       }
 
       // Reset selection state for new result
