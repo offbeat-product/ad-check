@@ -93,10 +93,12 @@ interface CheckItemCardProps {
   onCommentClick: () => void;
   onSeekMedia?: (seconds: number) => void;
   onMarkerClick?: (patternId: string) => void;
+  /** Label tag e.g. "AIチェック" or "比較チェック" */
+  sourceLabel?: string;
 }
 
 const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
-  ({ item, index, marker, isResolved, isSelected, isHighlighted, isApplied, commentCount, productCode, onToggleSelect, onToggleResolved, onCommentClick, onSeekMedia, onMarkerClick }, ref) => {
+  ({ item, index, marker, isResolved, isSelected, isHighlighted, isApplied, commentCount, productCode, onToggleSelect, onToggleResolved, onCommentClick, onSeekMedia, onMarkerClick, sourceLabel = "AIチェック" }, ref) => {
     const innerRef = useRef<HTMLDivElement>(null);
 
     // Auto-scroll into view when highlighted
@@ -146,7 +148,7 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap mb-1">
-              <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">AIチェック</span>
+              <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{sourceLabel}</span>
               <span className="text-[10px] font-mono text-muted-foreground">{item.pattern_id}</span>
               <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", severityBadge[item.severity] || "")}>
                 {item.severity}
