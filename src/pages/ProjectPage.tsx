@@ -133,6 +133,7 @@ export default function ProjectPage() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [processModalOpen, setProcessModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ file: ProjectFile; hasCheck: boolean } | null>(null);
+  const [submissionChangeTarget, setSubmissionChangeTarget] = useState<string | null>(null);
   const [editingFileId, setEditingFileId] = useState<string | null>(null);
   const [editFileName, setEditFileName] = useState("");
   const [addPatternOpen, setAddPatternOpen] = useState(false);
@@ -1071,14 +1072,32 @@ export default function ProjectPage() {
                                                 navigate(`/project/${id}/file/${file.id}`);
                                               }
                                             }}
-                                            className={cn("glass-card p-2 text-left hover:border-primary/30 transition-colors w-full relative",
+                                            className={cn("glass-card p-2 text-left hover:border-primary/30 transition-colors w-full relative overflow-hidden",
                                               file.status === "fixed" && "border-muted-foreground/30 ring-1 ring-muted-foreground/20",
                                               isSelected && selectMode && "ring-2 ring-primary border-primary/50"
                                             )}>
+                                            {/* Submission type ribbon */}
+                                            <div
+                                              className={cn(
+                                                "absolute top-0 right-0 z-[5] px-2 py-0.5 text-[9px] font-bold rounded-bl-md cursor-default transition-colors",
+                                                file.submission_type === "client"
+                                                  ? "bg-primary text-primary-foreground"
+                                                  : "bg-muted text-muted-foreground hover:bg-muted-foreground/20"
+                                              )}
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                if (!selectMode && file.submission_type === "internal") {
+                                                  setSubmissionChangeTarget(file.id);
+                                                }
+                                              }}
+                                              title={file.submission_type === "internal" ? "クリックでクライアント提出に変更" : "クライアント提出済み"}
+                                            >
+                                              {file.submission_type === "client" ? "Client" : "社内"}
+                                            </div>
                                             {file.status === "fixed" && (
                                               <>
                                                 <div className="absolute inset-0 bg-foreground/50 rounded-lg z-[1] pointer-events-none" />
-                                                <div className="absolute top-1.5 right-1.5 z-10 bg-muted-foreground text-white rounded-full p-0.5">
+                                                <div className="absolute top-1.5 left-1.5 z-10 bg-muted-foreground text-white rounded-full p-0.5">
                                                   <Lock className="h-3 w-3" />
                                                 </div>
                                                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex items-center gap-1 bg-muted-foreground/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm pointer-events-none">
@@ -1132,25 +1151,7 @@ export default function ProjectPage() {
                                                 </Badge>
                                               )}
                                               {versionLabel && <span className="text-[10px] text-muted-foreground">{versionLabel}</span>}
-                                              <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5",
-                                                file.submission_type === "client"
-                                                  ? "bg-primary/10 text-primary border-primary/30"
-                                                  : "bg-muted text-muted-foreground"
-                                              )}>
-                                                {file.submission_type === "client" ? "クライアント" : "社内"}
-                                              </Badge>
                                             </div>
-                                            {!selectMode && file.submission_type === "internal" && (
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  handleChangeSubmissionType(file.id);
-                                                }}
-                                                className="mt-1 text-[10px] text-primary hover:underline hover:text-primary/80 transition-colors text-left"
-                                              >
-                                                → クライアント提出に変更
-                                              </button>
-                                            )}
                                             {cc > 0 && (
                                               <div className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground">
                                                 <MessageCircle className="h-3 w-3" />{cc}
@@ -1288,6 +1289,29 @@ export default function ProjectPage() {
               }}
             >
               削除する
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Submission type change confirmation */}
+      <AlertDialog open={!!submissionChangeTarget} onOpenChange={(o) => !o && setSubmissionChangeTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>クライアント提出に変更</AlertDialogTitle>
+            <AlertDialogDescription>
+              このファイルを「クライアント提出」としてマークします。品質ギャップ分析に反映されます。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>キャンセル</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              if (submissionChangeTarget) {
+                handleChangeSubmissionType(submissionChangeTarget);
+                setSubmissionChangeTarget(null);
+              }
+            }}>
+              変更する
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
