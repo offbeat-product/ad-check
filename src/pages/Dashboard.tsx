@@ -219,7 +219,7 @@ export default function Dashboard() {
     return () => { supabase.removeChannel(channel); };
   }, [user]);
 
-  // KPI: fetch current month deadline compliance & first draft pass rate
+  // KPI: fetch current month client deadline compliance & client first draft pass rate
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
@@ -230,23 +230,29 @@ export default function Dashboard() {
         const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
 
         const [procRes, fileRes] = await Promise.all([
-          supabase.from("project_processes").select("status, deadline, updated_at")
-            .eq("status", "completed").not("deadline", "is", null)
+          // クライアント納期遵守率: クライアント期限までにFIX済みか
+          supabase.from("project_processes").select("status, client_deadline, updated_at")
+            .not("client_deadline", "is", null)
             .gte("updated_at", monthStart).lte("updated_at", monthEnd),
-          supabase.from("project_files").select("status, version_number, created_at")
-            .eq("version_number", 1).neq("status", "uploaded")
+          // クライアント初稿合格率: submission_type=client, v1がFIX済みか
+          supabase.from("project_files").select("status, version_number, submission_type, created_at")
+            .eq("version_number", 1).eq("submission_type", "client")
             .gte("created_at", monthStart).lte("created_at", monthEnd),
         ]);
         if (cancelled) return;
 
+        // 納期遵守率: クライアント期限内にFIX済みの工程
         const procs = procRes.data ?? [];
         const onTime = procs.filter((p: any) => {
+          if (!p.client_deadline) return false;
           const completed = new Date(p.updated_at);
-          const deadline = new Date(p.deadline + "T23:59:59");
+          const deadline = new Date(p.client_deadline + "T23:59:59");
           return completed <= deadline;
         }).length;
-        setKpiDeadlineRate(procs.length > 0 ? Math.round((onTime / procs.length) * 100) : null);
+        const procsWithDeadline = procs.filter((p: any) => p.client_deadline).length;
+        setKpiDeadlineRate(procsWithDeadline > 0 ? Math.round((onTime / procsWithDeadline) * 100) : null);
 
+        // 初稿合格率: クライアント提出v1でFIX済み
         const fFiles = fileRes.data ?? [];
         const fixed = fFiles.filter((f: any) => f.status === "fixed" || f.status === "approved").length;
         setKpiFirstDraftRate(fFiles.length > 0 ? Math.round((fixed / fFiles.length) * 100) : null);
@@ -263,9 +269,10 @@ export default function Dashboard() {
   const totalPages = Math.max(1, Math.ceil(totalCount / ITEMS_PER_PAGE));
 
   const stats = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const todayChecks = records.filter(r => r.created_at && new Date(r.created_at) >= today).length;
+    const now = new Date();
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    monthStart.setHours(0, 0, 0, 0);
+    const monthChecks = records.filter(r => r.created_at && new Date(r.created_at) >= monthStart).length;
     const totalNg = records.reduce((s, r) => s + (r.ng_count ?? 0), 0);
     const okCount = records.filter(r => {
       const s = (r.overall_status || "").toUpperCase();
@@ -275,7 +282,7 @@ export default function Dashboard() {
     const week = new Date();
     week.setDate(week.getDate() - 7);
     const weekChecks = records.filter(r => r.created_at && new Date(r.created_at) >= week).length;
-    return { todayChecks, totalNg, okRate, weekChecks };
+    return { monthChecks, totalNg, okRate, weekChecks };
   }, [records]);
 
   const getProductName = (productId: string | null) => products.find(p => p.id === productId)?.name || "";
@@ -326,9 +333,9 @@ export default function Dashboard() {
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           {checksLoaded ? (
             <>
-              <StatCard icon={ClipboardCheck} label="今日のチェック数" value={stats.todayChecks} color="text-primary" />
-              <StatCard icon={Target} label="今月の納期遵守率" value={kpiLoaded ? (kpiDeadlineRate !== null ? `${kpiDeadlineRate}%` : "—") : "..."} color="text-primary" />
-              <StatCard icon={CheckCircle} label="今月の初稿合格率" value={kpiLoaded ? (kpiFirstDraftRate !== null ? `${kpiFirstDraftRate}%` : "—") : "..."} color="text-status-ok" />
+              <StatCard icon={ClipboardCheck} label="今月のチェック数" value={stats.monthChecks} color="text-primary" />
+              <StatCard icon={Target} label="納期遵守率（クライアント提出）" value={kpiLoaded ? (kpiDeadlineRate !== null ? `${kpiDeadlineRate}%` : "—") : "..."} color="text-primary" />
+              <StatCard icon={CheckCircle} label="初稿合格率（クライアント提出）" value={kpiLoaded ? (kpiFirstDraftRate !== null ? `${kpiFirstDraftRate}%` : "—") : "..."} color="text-status-ok" />
             </>
           ) : (
             Array.from({ length: 3 }).map((_, i) => (
