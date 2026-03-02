@@ -101,6 +101,10 @@ interface MetricSet {
   internalRevSequences: number;
   clientRevisions: number | null;
   clientRevSequences: number;
+  /** 社内修正率: クライアント提出が初稿→第2稿以降になった件数 / クライアント提出総件数 */
+  internalRevisionRate: number | null;
+  internalRevisionCount: number;
+  clientSubmissionTotal: number;
 }
 
 function computeMetrics(procs: ProcessRow[], fileSet: FileRow[], submissionType?: "internal" | "client"): MetricSet {
@@ -172,6 +176,23 @@ function computeMetrics(procs: ProcessRow[], fileSet: FileRow[], submissionType?
   const internalRev = computeRevForType(internalFiles);
   const clientRev = computeRevForType(clientFiles);
 
+  // 社内修正率: クライアント提出のうち、第2稿以降がある（= 社内修正が発生した）件数
+  // Each client submission sequence where max version > 1 means internal revision happened
+  const clientChains = new Map<string, number>();
+  for (const f of clientFiles) {
+    const key = `${f.project_id}::${f.process_type}`;
+    const ver = f.version_number ?? 1;
+    clientChains.set(key, Math.max(clientChains.get(key) ?? 0, ver));
+  }
+  const clientSubmissionTotal = clientChains.size;
+  let internalRevisionCount = 0;
+  for (const [, maxVer] of clientChains) {
+    if (maxVer > 1) internalRevisionCount++;
+  }
+  const internalRevisionRate = clientSubmissionTotal > 0
+    ? Math.round((internalRevisionCount / clientSubmissionTotal) * 100)
+    : null;
+
   return {
     deadlineRate: deadlineTotal > 0 ? Math.round((deadlineOnTime / deadlineTotal) * 100) : null,
     deadlineTotal,
@@ -186,6 +207,9 @@ function computeMetrics(procs: ProcessRow[], fileSet: FileRow[], submissionType?
     internalRevSequences: internalRev.count,
     clientRevisions: clientRev.count > 0 ? Math.round((clientRev.total / clientRev.count) * 10) / 10 : null,
     clientRevSequences: clientRev.count,
+    internalRevisionRate,
+    internalRevisionCount,
+    clientSubmissionTotal,
   };
 }
 
@@ -350,6 +374,7 @@ export default function ReportPage() {
         clientAvgRevisions: clientM.avgRevisions,
         clientDeadlineTotal: clientM.deadlineTotal,
         clientFirstDraftTotal: clientM.firstDraftTotal,
+        clientInternalRevisionRate: clientM.internalRevisionRate,
         internalDeadlineRate: internalM.deadlineRate,
         internalFirstDraftRate: internalM.firstDraftRate,
         internalAvgRevisions: internalM.avgRevisions,
@@ -467,7 +492,7 @@ export default function ReportPage() {
           <h2 className="text-sm font-bold mb-3 flex items-center gap-2">
             <Badge variant="outline" className="text-xs">クライアント提出</Badge>
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <KpiCard
               icon={Target}
               label="納期遵守率"
@@ -495,6 +520,15 @@ export default function ReportPage() {
               detail={`${submissionSummary.client.clientRevSequences}シーケンス`}
               color="text-status-warning"
               isRevision
+            />
+            <KpiCard
+              icon={RotateCcw}
+              label="社内修正率"
+              value={submissionSummary.client.internalRevisionRate !== null ? `${submissionSummary.client.internalRevisionRate}%` : "—"}
+              rate={submissionSummary.client.internalRevisionRate}
+              target={null}
+              detail={`${submissionSummary.client.internalRevisionCount}/${submissionSummary.client.clientSubmissionTotal}件で社内修正発生`}
+              color="text-status-warning"
             />
           </div>
         </div>
@@ -595,13 +629,14 @@ export default function ReportPage() {
               <thead>
                 <tr className="border-b border-border text-muted-foreground text-left">
                   <th className="px-4 py-2 font-medium" rowSpan={2}>月</th>
-                  <th className="px-4 py-2 font-medium text-center border-l border-border" colSpan={3}>クライアント提出</th>
+                  <th className="px-4 py-2 font-medium text-center border-l border-border" colSpan={4}>クライアント提出</th>
                   <th className="px-4 py-2 font-medium text-center border-l border-border" colSpan={3}>社内提出</th>
                 </tr>
                 <tr className="border-b border-border text-muted-foreground text-left">
                   <th className="px-4 py-2 font-medium text-right border-l border-border">納期遵守率</th>
                   <th className="px-4 py-2 font-medium text-right">初稿合格率</th>
                   <th className="px-4 py-2 font-medium text-right">修正回数</th>
+                  <th className="px-4 py-2 font-medium text-right">社内修正率</th>
                   <th className="px-4 py-2 font-medium text-right border-l border-border">納期遵守率</th>
                   <th className="px-4 py-2 font-medium text-right">初稿合格率</th>
                   <th className="px-4 py-2 font-medium text-right">修正回数</th>
@@ -609,7 +644,7 @@ export default function ReportPage() {
               </thead>
               <tbody>
                 {monthlyChartData.length === 0 ? (
-                  <tr><td colSpan={7} className="text-center py-8 text-muted-foreground">データなし</td></tr>
+                  <tr><td colSpan={8} className="text-center py-8 text-muted-foreground">データなし</td></tr>
                 ) : (
                   [...monthlyChartData].reverse().map(d => (
                     <tr key={d.month} className="border-b border-border/50">
@@ -622,6 +657,9 @@ export default function ReportPage() {
                       </td>
                       <td className="px-4 py-2 text-right">
                         {d.clientAvgRevisions !== null ? <span className="font-bold">{d.clientAvgRevisions}回</span> : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="px-4 py-2 text-right">
+                        {d.clientInternalRevisionRate !== null ? <span className={cn("font-bold", d.clientInternalRevisionRate > 0 ? "text-status-warning" : "text-status-ok")}>{d.clientInternalRevisionRate}%</span> : <span className="text-muted-foreground">—</span>}
                       </td>
                       <td className="px-4 py-2 text-right border-l border-border">
                         <RateCell rate={d.internalDeadlineRate} target={getInternalTarget("deadline_compliance", 100)} total={d.internalDeadlineTotal} />
@@ -691,6 +729,21 @@ export default function ReportPage() {
                   <p className="text-muted-foreground"><span className="font-medium text-foreground">クライアント修正:</span> submission_type=client のファイルのみで集計</p>
                 </div>
                 <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">計算式: Σ(最大バージョン番号 - 1) ÷ シーケンス数</p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <h4 className="text-base font-bold text-foreground flex items-center gap-2">
+                <RotateCcw className="h-4 w-4 text-status-warning" />
+                ④ 社内修正率
+              </h4>
+              <div className="pl-4 border-l-[3px] border-status-warning/30 space-y-2">
+                <p className="text-muted-foreground">クライアントに提出されたクリエイティブのうち、<span className="font-medium text-foreground">第2稿以降の提出が発生した</span>（= 社内での修正が必要だった）割合を算出します。</p>
+                <div className="bg-muted/50 rounded-lg p-3 space-y-1">
+                  <p className="text-muted-foreground"><span className="font-medium text-foreground">カウント条件:</span> クライアント提出ファイル（submission_type=client）のシーケンスで、最大バージョン番号が2以上であるもの</p>
+                  <p className="text-muted-foreground"><span className="font-medium text-foreground">意味:</span> 初稿提出 → 第2稿提出が発生した場合、その間に社内修正が1回発生したとカウント</p>
+                </div>
+                <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">計算式: 社内修正発生シーケンス数 ÷ クライアント提出シーケンス総数 × 100</p>
               </div>
             </div>
 

@@ -330,15 +330,15 @@ export default function ComparisonLeftPanel({
           <TextDiff original={beforeDraft.data} revised={afterDraft.data} />
         )}
 
-        {/* Submit to client button */}
-        {submissionType !== "client" && onSubmitToClient && (
+        {/* Submit to client button — show draft number */}
+        {submissionType !== "client" && onSubmitToClient && afterDraft && (
           <Button
             size="sm"
             className="w-full text-xs gap-1.5 h-10"
             onClick={onSubmitToClient}
           >
             <CheckCircle2 className="h-4 w-4" />
-            クライアントに提出する
+            クライアントに第{activePairIndex + 2}稿を提出する
           </Button>
         )}
         {submissionType === "client" && (

@@ -1169,24 +1169,7 @@ export default function ProjectPage() {
                                               file.status === "fixed" && "border-muted-foreground/30 ring-1 ring-muted-foreground/20",
                                               isSelected && selectMode && "ring-2 ring-primary border-primary/50"
                                             )}>
-                                            {/* Submission type ribbon */}
-                                            <div
-                                              className={cn(
-                                                "absolute top-0 right-0 z-[5] px-2 py-0.5 text-[9px] font-bold rounded-bl-md cursor-default transition-colors",
-                                                file.submission_type === "client"
-                                                  ? "bg-primary text-primary-foreground"
-                                                  : "bg-muted text-muted-foreground hover:bg-muted-foreground/20"
-                                              )}
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (!selectMode && file.submission_type === "internal") {
-                                                  setSubmissionChangeTarget(file.id);
-                                                }
-                                              }}
-                                              title={file.submission_type === "internal" ? "クリックでクライアント提出に変更" : "クライアント提出済み"}
-                                            >
-                                              {file.submission_type === "client" ? "Client" : "社内"}
-                                            </div>
+                                            {/* Ribbon removed — submission type managed via check screen */}
                                             {file.status === "fixed" && (
                                               <>
                                                 <div className="absolute inset-0 bg-foreground/50 rounded-lg z-[1] pointer-events-none" />
@@ -1316,24 +1299,7 @@ export default function ProjectPage() {
                                             file.status === "fixed" && "border-muted-foreground/30 ring-1 ring-muted-foreground/20",
                                             isSelected && selectMode && "ring-2 ring-primary border-primary/50"
                                           )}>
-                                          {/* Submission type ribbon */}
-                                          <div
-                                            className={cn(
-                                              "absolute top-0 right-0 z-[5] px-2 py-0.5 text-[9px] font-bold rounded-bl-md cursor-default transition-colors",
-                                              file.submission_type === "client"
-                                                ? "bg-primary text-primary-foreground"
-                                                : "bg-muted text-muted-foreground hover:bg-muted-foreground/20"
-                                            )}
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              if (!selectMode && file.submission_type === "internal") {
-                                                setSubmissionChangeTarget(file.id);
-                                              }
-                                            }}
-                                            title={file.submission_type === "internal" ? "クリックでクライアント提出に変更" : "クライアント提出済み"}
-                                          >
-                                            {file.submission_type === "client" ? "Client" : "社内"}
-                                          </div>
+                                          {/* Ribbon removed — submission type managed via check screen */}
                                           {file.status === "fixed" && (
                                             <>
                                               <div className="absolute inset-0 bg-foreground/50 rounded-lg z-[1] pointer-events-none" />
