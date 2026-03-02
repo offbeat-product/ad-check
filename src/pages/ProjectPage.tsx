@@ -357,6 +357,30 @@ export default function ProjectPage() {
     return () => { supabase.removeChannel(channel); };
   }, [id]);
 
+  // Watch for check_results updates (n8n completing async checks) and auto-update file status
+  useEffect(() => {
+    if (!id) return;
+    const checkingFiles = files.filter(f => f.status === "checking" && f.check_result_id);
+    if (checkingFiles.length === 0) return;
+
+    const interval = setInterval(async () => {
+      for (const f of checkingFiles) {
+        const { data: cr } = await supabase
+          .from("check_results")
+          .select("id, overall_status, ng_count, warning_count, check_items")
+          .eq("id", f.check_result_id!)
+          .maybeSingle();
+        if (cr && cr.check_items && Array.isArray(cr.check_items) && (cr.check_items as unknown[]).length > 0) {
+          // Check result is complete — update file status
+          await supabase.from("project_files").update({ status: "checked" }).eq("id", f.id);
+          setFiles(prev => prev.map(pf => pf.id === f.id ? { ...pf, status: "checked" } : pf));
+          setCheckResults(prev => ({ ...prev, [cr.id]: cr }));
+        }
+      }
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [id, files.filter(f => f.status === "checking").map(f => f.id).join(",")]);
+
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   useEffect(() => {
     if (!id) return;

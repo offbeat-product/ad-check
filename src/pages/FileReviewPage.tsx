@@ -232,6 +232,12 @@ export default function FileReviewPage() {
         const { data: cr } = await supabase.from("check_results").select("*").eq("id", freshFile.check_result_id).maybeSingle();
         if (cr && cr.check_items && !isRecheckingRef.current) {
           setRecord(cr);
+          setChecking(false);
+          // Update file status if still "checking"
+          if (freshFile.status === "checking") {
+            await supabase.from("project_files").update({ status: "checked" }).eq("id", fileId);
+            setFile(prev => prev ? { ...prev, status: "checked" } : prev);
+          }
           toast({ title: "チェック完了", description: `Grade: ${cr.overall_status}` });
           return;
         }
@@ -248,6 +254,9 @@ export default function FileReviewPage() {
       if (cr && cr.check_items && Array.isArray(cr.check_items) && (cr.check_items as unknown[]).length > 0 && !isRecheckingRef.current) {
         setRecord(cr);
         setChecking(false);
+        // Update file status in DB to "checked"
+        await supabase.from("project_files").update({ status: "checked" }).eq("id", fileId);
+        setFile(prev => prev ? { ...prev, status: "checked" } : prev);
         toast({ title: "チェック完了", description: `Grade: ${cr.overall_status}` });
       }
     }, 5000);
