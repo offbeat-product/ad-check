@@ -125,6 +125,12 @@ export default function ReviewRightPanel({
               comparisonRoundLabel={comparisonRoundLabel ?? "第2稿"}
               onOpenComparisonMode={onOpenComparisonMode ?? (() => {})}
               onComparisonSaved={onComparisonSaved}
+              commentCounts={commentCounts}
+              highlightCard={highlightCard}
+              onCommentClick={onCommentClick}
+              onTabChange={onTabChange}
+              onSeekMedia={onSeekMedia}
+              onMarkerClick={onMarkerClick}
             />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
