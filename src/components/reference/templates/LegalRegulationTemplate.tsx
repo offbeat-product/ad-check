@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -151,6 +151,12 @@ export default function LegalRegulationTemplate({ initialData, onChange }: Props
   );
   const [customRules, setCustomRules] = useState(initialData?.custom_rules || "");
   const [industryCustom, setIndustryCustom] = useState("");
+
+  // Emit initial data on mount so parent receives preset content
+  useEffect(() => {
+    buildAndNotify(activeLaws, customRules, industryCustom);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const buildAndNotify = (laws: string[], custom: string, industryText: string) => {
     const lawContents = laws
