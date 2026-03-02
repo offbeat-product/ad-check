@@ -358,10 +358,10 @@ export default function FileReviewPage() {
           }
         }
 
-        // For video async checks, insert a pending record first so n8n can UPDATE it
-        const isVideoProcess = ["vcon", "video_horizontal", "video_vertical"].includes(processKey);
+        // For video/audio async checks, insert a pending record first so n8n can UPDATE it
+        const isAsyncProcess = ["vcon", "video_horizontal", "video_vertical", "narration", "bgm"].includes(processKey);
         // pendingRecordId is hoisted above try block
-        if (isVideoProcess) {
+        if (isAsyncProcess) {
           const { data: pendingCr, error: pendingErr } = await supabase.from("check_results").insert([{
             user_id: user.id,
             client_name: client?.name || "",
@@ -389,7 +389,7 @@ export default function FileReviewPage() {
         const rawRes = await webhookFetch(webhookUrl, body);
 
         if (rawRes === VIDEO_ASYNC_ACCEPTED) {
-          // Async video check: poll for result from DB using the pending record ID
+          // Async check (video/audio): poll for result from DB using the pending record ID
           if (pendingRecordId) {
             // Link to file immediately so UI shows "checking" state
             await supabase.from("project_files").update({

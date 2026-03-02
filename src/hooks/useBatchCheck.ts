@@ -129,23 +129,20 @@ export function useBatchCheck() {
             } else if (fileData.startsWith("http")) {
               body.video_url = fileData;
             }
-            body.script_text = file.file_data?.startsWith("data:") ? "" : (file.file_data || "");
-            inputData = { script_text: body.script_text, video_url: body.video_url || "" };
+          }
 
-            // Related files for video and audio processes
-            // Include related files (all prior process FIX data) for cross-reference
-            const isFirstProcess = processKey === "script";
-            if (!isFirstProcess) {
-              const relatedFiles = await getRelatedProcessData(projectId, processKey, file.pattern_id);
-              if (Object.keys(relatedFiles).length > 0) {
-                body.related_files = relatedFiles;
-              }
+          // Include related files (all prior process FIX data) for cross-reference
+          const isFirstProcess = processKey === "script";
+          if (!isFirstProcess) {
+            const relatedFiles = await getRelatedProcessData(projectId, processKey, file.pattern_id);
+            if (Object.keys(relatedFiles).length > 0) {
+              body.related_files = relatedFiles;
             }
           }
 
-          // For video async, insert pending record first so n8n can UPDATE it
-          const isVideoProcess = ["vcon", "video_horizontal", "video_vertical"].includes(processKey);
-          if (isVideoProcess) {
+          // For video/audio async, insert pending record first so n8n can UPDATE it
+          const isAsyncProcess = ["vcon", "video_horizontal", "video_vertical", "narration", "bgm"].includes(processKey);
+          if (isAsyncProcess) {
             const { data: pendingCr } = await supabase.from("check_results").insert([{
               user_id: user.id,
               client_name: client?.name || "",
@@ -165,8 +162,16 @@ export function useBatchCheck() {
 
           const rawRes = await webhookFetch(webhookUrl, body);
           if (rawRes === VIDEO_ASYNC_ACCEPTED) {
-            // Video async — n8n will update the pending record
-            console.log("[BatchCheck] Video check accepted asynchronously");
+            // Async check (video/audio) — n8n will update the pending record
+            console.log("[BatchCheck] Async check accepted, n8n will update pending record");
+            // Link pending record to the file
+            if (body.record_id) {
+              await supabase.from("project_files").update({
+                status: "checking",
+                check_result_id: body.record_id,
+              }).eq("id", file.id);
+            }
+            results.push({ fileId: file.id, fileName: file.file_name, success: true, grade: "pending" });
             continue;
           }
           res = rawRes as { overall_status: string; detected_case?: string; check_items: CheckItem[]; ng_count: number; warning_count: number; ok_count: number; total_checks: number };

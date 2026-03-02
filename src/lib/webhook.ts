@@ -70,7 +70,8 @@ export type WebhookResult = CheckResult | typeof VIDEO_ASYNC_ACCEPTED;
 
 export async function webhookFetch(url: string, body: Record<string, any>): Promise<WebhookResult> {
   const isVideo = url.includes("check-video");
-  const retryOpts = isVideo ? VIDEO_WEBHOOK_RETRY_OPTIONS : WEBHOOK_RETRY_OPTIONS;
+  const isAudio = url.includes("check-audio");
+  const retryOpts = (isVideo || isAudio) ? VIDEO_WEBHOOK_RETRY_OPTIONS : WEBHOOK_RETRY_OPTIONS;
   console.log("[Webhook] Sending request:", { url, isVideo, timeout: retryOpts.timeoutMs, body: { ...body, image_base64: body.image_base64 ? `[${body.image_base64.length} chars]` : undefined, video_base64: body.video_base64 ? `[${body.video_base64.length} chars]` : undefined, audio_base64: body.audio_base64 ? `[${body.audio_base64.length} chars]` : undefined } });
   try {
     const res = await fetchWithRetry(
@@ -119,21 +120,26 @@ export async function webhookFetch(url: string, body: Record<string, any>): Prom
 
     console.log("[Webhook] Response received:", { status: res.status, raw });
 
-    // Detect async acceptance from n8n (video checks)
-    // n8n "Immediately" mode returns {"message": "Workflow was started"}
-    if (isVideo) {
+    // Detect async acceptance from n8n (video & audio checks)
+    // n8n saves results directly to DB and returns {success: true, record_id: "..."}
+    // or "Immediately" mode returns {"message": "Workflow was started"}
+    const isAsync = isVideo || url.includes("check-audio");
+    if (isAsync) {
       let candidate = raw;
       if (Array.isArray(candidate)) candidate = candidate[0];
       if (candidate && typeof candidate === "object") {
         const statusVal = candidate.status;
         const messageVal = candidate.message;
+        const successVal = candidate.success;
+        const recordIdVal = candidate.record_id;
         const hasCheckItems = candidate.check_items || (candidate.data && candidate.data.check_items);
         if (
           statusVal === "accepted" ||
           messageVal === "Workflow was started" ||
+          (successVal === true && recordIdVal) ||
           !hasCheckItems
         ) {
-          console.log("[Webhook] Video check accepted asynchronously — will poll for results", { statusVal, messageVal });
+          console.log("[Webhook] Async check accepted — will poll for results", { statusVal, messageVal, successVal, recordIdVal });
           return VIDEO_ASYNC_ACCEPTED;
         }
       }
