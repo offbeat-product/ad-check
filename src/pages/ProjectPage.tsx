@@ -37,8 +37,9 @@ import ReferenceMaterialsSection from "@/components/reference/ReferenceMaterials
 import CheckRulesTab from "@/components/product/CheckRulesTab";
 import {
   Upload, FileText, Image, Film, MessageCircle, Plus, Settings, GripVertical,
-  ChevronDown, CalendarIcon, AlertTriangle, Trash2, Grid3X3, List, Bot, Loader2, Pencil, Lock,
+  ChevronDown, CalendarIcon, AlertTriangle, Trash2, Grid3X3, List, Bot, Loader2, Pencil, Lock, CheckSquare,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import NotificationBell from "@/components/NotificationBell";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -144,7 +145,8 @@ export default function ProjectPage() {
 
   const { progress: batchProgress, runBatchCheck, resetProgress: resetBatchProgress } = useBatchCheck();
   const [batchFixing, setBatchFixing] = useState(false);
-
+  const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
+  const [selectMode, setSelectMode] = useState(false);
   const handleBatchFix = async (processFiles: ProjectFile[], processKey: string) => {
     if (!id || !user) return;
     // Only fix files that are checked and have check_result_id
@@ -196,6 +198,49 @@ export default function ProjectPage() {
       toast({ title: "ファイル名を変更しました" });
     }
     setEditingFileId(null);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedFileIds.size === 0) return;
+    const targetFiles = files.filter(f => selectedFileIds.has(f.id));
+    const hasChecked = targetFiles.some(f => f.check_result_id);
+    const confirmed = window.confirm(
+      `${targetFiles.length}件のファイルを削除しますか？この操作は元に戻せません。${hasChecked ? "\n⚠️ チェック結果も同時に削除されます。" : ""}`
+    );
+    if (!confirmed) return;
+    try {
+      for (const f of targetFiles) {
+        const bucket = getStorageBucket(f.process_type);
+        if (bucket && f.file_data && !f.file_data.startsWith("data:")) {
+          try {
+            const url = new URL(f.file_data);
+            const pathMatch = url.pathname.match(new RegExp(`/storage/v1/object/public/${bucket}/(.+)`));
+            if (pathMatch) await supabase.storage.from(bucket).remove([decodeURIComponent(pathMatch[1])]);
+          } catch {}
+        }
+        if (f.check_result_id) {
+          await supabase.from("comments").delete().eq("check_result_id", f.check_result_id);
+          await supabase.from("file_versions").delete().eq("check_result_id", f.check_result_id);
+          await supabase.from("check_results").delete().eq("id", f.check_result_id);
+        }
+        const childFiles = files.filter(cf => cf.parent_file_id === f.id);
+        for (const child of childFiles) {
+          if (child.check_result_id) {
+            await supabase.from("comments").delete().eq("check_result_id", child.check_result_id);
+            await supabase.from("file_versions").delete().eq("check_result_id", child.check_result_id);
+            await supabase.from("check_results").delete().eq("id", child.check_result_id);
+          }
+          await supabase.from("project_files").delete().eq("id", child.id);
+        }
+        await supabase.from("project_files").delete().eq("id", f.id);
+      }
+      toast({ title: `${targetFiles.length}件のファイルを削除しました` });
+      setSelectedFileIds(new Set());
+      setSelectMode(false);
+      fetchData();
+    } catch (err) {
+      toast({ title: "削除エラー", description: err instanceof Error ? err.message : "削除に失敗しました", variant: "destructive" });
+    }
   };
 
   // Drag state for process sections
@@ -736,6 +781,23 @@ export default function ProjectPage() {
                               一括FIX ({sectionFiles.filter(f => f.check_result_id && !f.parent_file_id && f.status !== "fixed").length})
                             </Button>
                           )}
+                          {sectionFiles.length > 0 && (
+                            <Button size="sm" variant={selectMode ? "default" : "outline"} className="text-xs h-7 gap-1"
+                              onClick={() => {
+                                setSelectMode(!selectMode);
+                                setSelectedFileIds(new Set());
+                              }}>
+                              <CheckSquare className="h-3 w-3" />
+                              {selectMode ? "選択解除" : "選択"}
+                            </Button>
+                          )}
+                          {selectMode && selectedFileIds.size > 0 && (
+                            <Button size="sm" variant="destructive" className="text-xs h-7 gap-1"
+                              onClick={handleBulkDelete}>
+                              <Trash2 className="h-3 w-3" />
+                              {selectedFileIds.size}件削除
+                            </Button>
+                          )}
                           <Button size="sm" variant="outline" className="text-xs h-7"
                             onClick={() => {
                               setUploadModal(proc.process_key);
@@ -751,103 +813,167 @@ export default function ProjectPage() {
                       <div className="p-4">
                         {sectionFiles.length === 0 ? (
                           <p className="text-xs text-muted-foreground/60 italic py-4 text-center">ファイルなし — アップロードしてください</p>
-                        ) : (
-                          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-                            {sectionFiles.map((file) => {
-                              const cr = file.check_result_id ? checkResults[file.check_result_id] : null;
-                              const st = FILE_STATUS_CONFIG[file.status ?? "uploaded"] ?? FILE_STATUS_CONFIG.uploaded;
-                              const cc = file.check_result_id ? (commentCounts[file.check_result_id] || 0) : 0;
-                              const isImageFile = file.file_type === "image";
-                              const childVersions = files.filter(f => f.parent_file_id === file.id);
-                              const versionLabel = file.parent_file_id ? `v${file.version_number}` : childVersions.length > 0 ? "v1" : null;
+                        ) : (() => {
+                          // Group files by pattern
+                          const groupedFiles: { label: string; files: ProjectFile[] }[] = [];
+                          if (patterns.length > 0) {
+                            const patternMap = new Map<string | null, ProjectFile[]>();
+                            for (const f of sectionFiles) {
+                              const key = f.pattern_id || null;
+                              if (!patternMap.has(key)) patternMap.set(key, []);
+                              patternMap.get(key)!.push(f);
+                            }
+                            // Common files first
+                            const commonFiles = patternMap.get(null);
+                            if (commonFiles && commonFiles.length > 0) {
+                              groupedFiles.push({ label: "共通", files: commonFiles });
+                            }
+                            // Then by pattern
+                            for (const p of patterns) {
+                              const pFiles = patternMap.get(p.id);
+                              if (pFiles && pFiles.length > 0) {
+                                groupedFiles.push({ label: p.name, files: pFiles });
+                              }
+                            }
+                          } else {
+                            groupedFiles.push({ label: "", files: sectionFiles });
+                          }
 
-                              return (
-                                <div key={file.id} className="relative group">
-                                  <button onClick={() => navigate(`/project/${id}/file/${file.id}`)}
-                                    className={cn("glass-card p-3 text-left hover:border-primary/30 transition-colors w-full relative", file.status === "fixed" && "border-muted-foreground/30 ring-1 ring-muted-foreground/20")}>
-                                    {file.status === "fixed" && (
-                                      <>
-                                        <div className="absolute inset-0 bg-foreground/50 rounded-lg z-[1] pointer-events-none" />
-                                        <div className="absolute top-1.5 right-1.5 z-10 bg-muted-foreground text-white rounded-full p-0.5">
-                                          <Lock className="h-3 w-3" />
+                          return (
+                            <div className="space-y-4">
+                              {groupedFiles.map((group, gi) => (
+                                <div key={gi}>
+                                  {group.label && patterns.length > 0 && (
+                                    <h4 className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                                      <Badge variant="outline" className="text-[10px] font-bold">{group.label}</Badge>
+                                    </h4>
+                                  )}
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                    {group.files.map((file) => {
+                                      const cr = file.check_result_id ? checkResults[file.check_result_id] : null;
+                                      const st = FILE_STATUS_CONFIG[file.status ?? "uploaded"] ?? FILE_STATUS_CONFIG.uploaded;
+                                      const cc = file.check_result_id ? (commentCounts[file.check_result_id] || 0) : 0;
+                                      const isImageFile = file.file_type === "image";
+                                      const childVersions = files.filter(f => f.parent_file_id === file.id);
+                                      const versionLabel = file.parent_file_id ? `v${file.version_number}` : childVersions.length > 0 ? "v1" : null;
+                                      const isSelected = selectedFileIds.has(file.id);
+
+                                      return (
+                                        <div key={file.id} className="relative group">
+                                          {selectMode && (
+                                            <div className="absolute top-1 left-1 z-20" onClick={(e) => e.stopPropagation()}>
+                                              <Checkbox
+                                                checked={isSelected}
+                                                onCheckedChange={(checked) => {
+                                                  setSelectedFileIds(prev => {
+                                                    const next = new Set(prev);
+                                                    if (checked) next.add(file.id); else next.delete(file.id);
+                                                    return next;
+                                                  });
+                                                }}
+                                              />
+                                            </div>
+                                          )}
+                                          <button onClick={() => {
+                                              if (selectMode) {
+                                                setSelectedFileIds(prev => {
+                                                  const next = new Set(prev);
+                                                  if (next.has(file.id)) next.delete(file.id); else next.add(file.id);
+                                                  return next;
+                                                });
+                                              } else {
+                                                navigate(`/project/${id}/file/${file.id}`);
+                                              }
+                                            }}
+                                            className={cn("glass-card p-3 text-left hover:border-primary/30 transition-colors w-full relative",
+                                              file.status === "fixed" && "border-muted-foreground/30 ring-1 ring-muted-foreground/20",
+                                              isSelected && selectMode && "ring-2 ring-primary border-primary/50"
+                                            )}>
+                                            {file.status === "fixed" && (
+                                              <>
+                                                <div className="absolute inset-0 bg-foreground/50 rounded-lg z-[1] pointer-events-none" />
+                                                <div className="absolute top-1.5 right-1.5 z-10 bg-muted-foreground text-white rounded-full p-0.5">
+                                                  <Lock className="h-3 w-3" />
+                                                </div>
+                                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex items-center gap-1 bg-muted-foreground/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm pointer-events-none">
+                                                  <Lock className="h-2.5 w-2.5" /> FIX済
+                                                </div>
+                                              </>
+                                            )}
+                                            <div className="h-20 rounded-md bg-muted/50 flex items-center justify-center mb-2 overflow-hidden">
+                                              {isImageFile && file.file_data ? (
+                                                <img src={file.file_data} alt="" className="w-full h-full object-cover" />
+                                              ) : (file.file_type === "video" || proc.process_key.includes("video") || proc.process_key === "vcon") && file.file_data ? (
+                                                <video src={file.file_data} className="w-full h-full object-cover" muted preload="metadata" />
+                                              ) : file.file_type === "video" || proc.process_key.includes("video") || proc.process_key === "vcon" ? (
+                                                <Film className="h-8 w-8 text-muted-foreground/30" />
+                                              ) : file.file_type === "audio" || proc.process_key === "na_narration" || proc.process_key === "bgm" ? (
+                                                <FileText className="h-8 w-8 text-muted-foreground/30" />
+                                              ) : proc.process_key.includes("script") || proc.process_key === "na_script" ? (
+                                                <FileText className="h-8 w-8 text-muted-foreground/30" />
+                                              ) : file.file_data && (file.file_data.startsWith("data:image") || file.file_data.match(/\.(jpg|jpeg|png|gif|webp)(\?|$)/i)) ? (
+                                                <img src={file.file_data} alt="" className="w-full h-full object-cover" />
+                                              ) : (
+                                                <Image className="h-8 w-8 text-muted-foreground/30" />
+                                              )}
+                                            </div>
+                                            {editingFileId === file.id ? (
+                                              <form onSubmit={(e) => { e.preventDefault(); handleRenameFile(file.id, editFileName); }}
+                                                onClick={(e) => e.stopPropagation()}>
+                                                <Input value={editFileName} onChange={(e) => setEditFileName(e.target.value)}
+                                                  className="h-5 text-xs w-full" autoFocus
+                                                  onBlur={() => handleRenameFile(file.id, editFileName)}
+                                                  onKeyDown={(e) => { if (e.key === "Escape") setEditingFileId(null); }} />
+                                              </form>
+                                            ) : (
+                                              <p className="text-xs font-medium truncate flex items-center gap-1 group/name">
+                                                <span className="truncate">{file.file_name}</span>
+                                                <button onClick={(e) => { e.stopPropagation(); setEditingFileId(file.id); setEditFileName(file.file_name); }}
+                                                  className="opacity-0 group-hover/name:opacity-100 shrink-0 text-muted-foreground/50 hover:text-primary transition-all">
+                                                  <Pencil className="h-2.5 w-2.5" />
+                                                </button>
+                                              </p>
+                                            )}
+                                            <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
+                                              {file.created_at && <span>{format(new Date(file.created_at), "MM/dd HH:mm")}</span>}
+                                              {file.created_by && <span>/ {(file.created_by as string).includes("@") ? (file.created_by as string).split("@")[0] : file.created_by}</span>}
+                                            </div>
+                                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                              <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
+                                              {cr && (
+                                                <Badge className={cn("text-[10px] h-4 px-1.5", getSubmitBadgeClass(cr.overall_status))}>
+                                                  {getSubmitLabel(cr.overall_status).label}
+                                                </Badge>
+                                              )}
+                                              {versionLabel && <span className="text-[10px] text-muted-foreground">{versionLabel}</span>}
+                                            </div>
+                                            {cc > 0 && (
+                                              <div className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground">
+                                                <MessageCircle className="h-3 w-3" />{cc}
+                                              </div>
+                                            )}
+                                          </button>
+                                          {!selectMode && (
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setDeleteTarget({ file, hasCheck: !!cr });
+                                              }}
+                                              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:scale-110 z-10"
+                                              title="削除"
+                                            >
+                                              <span className="text-xs font-bold leading-none">×</span>
+                                            </button>
+                                          )}
                                         </div>
-                                        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex items-center gap-1 bg-muted-foreground/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm pointer-events-none">
-                                          <Lock className="h-2.5 w-2.5" /> FIX済
-                                        </div>
-                                      </>
-                                    )}
-                                    <div className="h-20 rounded-md bg-muted/50 flex items-center justify-center mb-2 overflow-hidden">
-                                      {isImageFile && file.file_data ? (
-                                        <img src={file.file_data} alt="" className="w-full h-full object-cover" />
-                                      ) : (file.file_type === "video" || proc.process_key.includes("video") || proc.process_key === "vcon") && file.file_data ? (
-                                        file.file_data.startsWith("http") ? (
-                                          <video src={file.file_data} className="w-full h-full object-cover" muted preload="metadata" />
-                                        ) : (
-                                          <video src={file.file_data} className="w-full h-full object-cover" muted preload="metadata" />
-                                        )
-                                      ) : file.file_type === "video" || proc.process_key.includes("video") || proc.process_key === "vcon" ? (
-                                        <Film className="h-8 w-8 text-muted-foreground/30" />
-                                      ) : file.file_type === "audio" || proc.process_key === "na_narration" || proc.process_key === "bgm" ? (
-                                        <FileText className="h-8 w-8 text-muted-foreground/30" />
-                                      ) : proc.process_key.includes("script") || proc.process_key === "na_script" ? (
-                                        <FileText className="h-8 w-8 text-muted-foreground/30" />
-                                      ) : file.file_data && (file.file_data.startsWith("data:image") || file.file_data.match(/\.(jpg|jpeg|png|gif|webp)(\?|$)/i)) ? (
-                                        <img src={file.file_data} alt="" className="w-full h-full object-cover" />
-                                      ) : (
-                                        <Image className="h-8 w-8 text-muted-foreground/30" />
-                                      )}
-                                    </div>
-                                    {editingFileId === file.id ? (
-                                      <form onSubmit={(e) => { e.preventDefault(); handleRenameFile(file.id, editFileName); }}
-                                        onClick={(e) => e.stopPropagation()}>
-                                        <Input value={editFileName} onChange={(e) => setEditFileName(e.target.value)}
-                                          className="h-5 text-xs w-full" autoFocus
-                                          onBlur={() => handleRenameFile(file.id, editFileName)}
-                                          onKeyDown={(e) => { if (e.key === "Escape") setEditingFileId(null); }} />
-                                      </form>
-                                    ) : (
-                                      <p className="text-xs font-medium truncate flex items-center gap-1 group/name">
-                                        <span className="truncate">{file.file_name}</span>
-                                        <button onClick={(e) => { e.stopPropagation(); setEditingFileId(file.id); setEditFileName(file.file_name); }}
-                                          className="opacity-0 group-hover/name:opacity-100 shrink-0 text-muted-foreground/50 hover:text-primary transition-all">
-                                          <Pencil className="h-2.5 w-2.5" />
-                                        </button>
-                                      </p>
-                                    )}
-                                    <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
-                                      {file.created_at && <span>{format(new Date(file.created_at), "MM/dd HH:mm")}</span>}
-                                      {file.created_by && <span>/ {(file.created_by as string).includes("@") ? (file.created_by as string).split("@")[0] : file.created_by}</span>}
-                                    </div>
-                                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                                      <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
-                                      {cr && (
-                                        <Badge className={cn("text-[10px] h-4 px-1.5", getSubmitBadgeClass(cr.overall_status))}>
-                                          {getSubmitLabel(cr.overall_status).label}
-                                        </Badge>
-                                      )}
-                                      {versionLabel && <span className="text-[10px] text-muted-foreground">{versionLabel}</span>}
-                                    </div>
-                                    {cc > 0 && (
-                                      <div className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground">
-                                        <MessageCircle className="h-3 w-3" />{cc}
-                                      </div>
-                                    )}
-                                  </button>
-                                  <button
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setDeleteTarget({ file, hasCheck: !!cr });
-                                    }}
-                                    className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:scale-110 z-10"
-                                    title="削除"
-                                  >
-                                    <span className="text-xs font-bold leading-none">×</span>
-                                  </button>
+                                      );
+                                    })}
+                                  </div>
                                 </div>
-                              );
-                            })}
-                          </div>
-                        )}
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </div>
                   );
