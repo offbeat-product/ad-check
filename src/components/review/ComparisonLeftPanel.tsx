@@ -1,11 +1,13 @@
-import { useRef, useState } from "react";
+import { useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Upload, ArrowDown, X, GitCompare, Plus } from "lucide-react";
+import { Upload, ArrowDown, X, GitCompare, Plus, Pin } from "lucide-react";
 import { compressImage } from "@/lib/image-compress";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import AnnotationCanvas from "@/components/AnnotationCanvas";
+import type { MentionMember } from "@/components/comments/MentionInput";
 
 export interface DraftEntry {
   label: string;
@@ -15,28 +17,38 @@ export interface DraftEntry {
 
 interface ComparisonLeftPanelProps {
   file: { file_data: string | null; file_type: string; process_type: string; file_name?: string };
-  /** All drafts: index 0 = 初稿 (current file), index 1+ = uploaded drafts */
   drafts: DraftEntry[];
   onDraftsChange: (drafts: DraftEntry[]) => void;
-  /** Which pair is selected for comparison: compares drafts[activePairIndex] vs drafts[activePairIndex+1] */
   activePairIndex: number;
   onActivePairIndexChange: (index: number) => void;
   onClose: () => void;
-  /** Comparison history for showing past rounds */
   checkResultId?: string | null;
+  /** Paint mode support */
+  paintMode?: boolean;
+  onPaintModeToggle?: () => void;
+  onAnnotationSave?: (annotations: unknown[], comment: string, mentionedUserIds?: string[]) => void;
+  savedAnnotations?: Array<{ type: string; points: { x: number; y: number }[]; color: string; strokeWidth: number; text?: string; imagePosition?: { x: number; y: number; width: number; height: number } }>;
+  highlightAnnotation?: { type: string; points: { x: number; y: number }[]; color: string; strokeWidth: number; text?: string; imagePosition?: { x: number; y: number; width: number; height: number } } | null;
+  members?: MentionMember[];
 }
 
 export default function ComparisonLeftPanel({
   file, drafts, onDraftsChange, activePairIndex, onActivePairIndexChange, onClose, checkResultId,
+  paintMode, onPaintModeToggle, onAnnotationSave, savedAnnotations, highlightAnnotation, members,
 }: ComparisonLeftPanelProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
+  const [imageSizes, setImageSizes] = useState<Record<number, { width: number; height: number }>>({});
   const aiCfg = AI_CHECK_CONFIG[file.process_type];
   const isImage = aiCfg?.inputMode === "image";
   const isAudio = aiCfg?.inputMode === "audio";
   const isVideo = aiCfg?.inputMode === "video";
   const isMedia = isAudio || isVideo;
+
+  const handleImageLoad = useCallback((index: number, e: React.SyntheticEvent<HTMLImageElement>) => {
+    setImageSizes(prev => ({ ...prev, [index]: { width: e.currentTarget.clientWidth, height: e.currentTarget.clientHeight } }));
+  }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, targetIndex: number) => {
     const f = e.target.files?.[0];
@@ -69,12 +81,10 @@ export default function ComparisonLeftPanel({
     }
     onDraftsChange(updated);
 
-    // Auto-select this pair for comparison (compare previous draft vs this one)
     if (targetIndex > 0) {
       onActivePairIndexChange(targetIndex - 1);
     }
 
-    // Reset file input
     e.target.value = "";
   };
 
@@ -85,41 +95,77 @@ export default function ComparisonLeftPanel({
   };
 
   const handleRemoveDraft = (index: number) => {
-    if (index === 0) return; // Can't remove 初稿
+    if (index === 0) return;
     const updated = drafts.filter((_, i) => i !== index).map((d, i) => ({
       ...d,
       label: i === 0 ? "初稿" : `第${i + 1}稿`,
     }));
     onDraftsChange(updated);
-    // Adjust active pair if needed
     if (activePairIndex >= updated.length - 1) {
       onActivePairIndexChange(Math.max(0, updated.length - 2));
     }
   };
 
-  const renderFilePreview = (data: string | null, label: string, compact = false) => {
-    const maxH = compact ? "max-h-[20vh]" : "max-h-[30vh]";
+  const renderImageWithPaint = (data: string, label: string, draftIndex: number) => {
+    const size = imageSizes[draftIndex] || { width: 800, height: 400 };
+    const isActiveDraft = draftIndex === activePairIndex || draftIndex === activePairIndex + 1;
+    return (
+      <div className={cn("relative rounded-lg border border-border bg-muted/30", paintMode && isActiveDraft ? "overflow-visible" : "overflow-hidden")}>
+        <img src={data} alt={label} className="w-full max-h-[25vh] object-contain" onLoad={(e) => handleImageLoad(draftIndex, e)} />
+        
+        {/* Saved annotations overlay */}
+        {savedAnnotations && savedAnnotations.length > 0 && draftIndex === 0 && (
+          <svg className="absolute inset-0 w-full h-full pointer-events-none z-[15]" viewBox={`0 0 ${size.width} ${size.height}`} preserveAspectRatio="none">
+            {savedAnnotations.map((ann, i) => (
+              <SavedAnnotationSvg key={i} ann={ann} containerWidth={size.width} containerHeight={size.height} />
+            ))}
+          </svg>
+        )}
+
+        {/* Highlight annotation */}
+        {highlightAnnotation?.imagePosition && draftIndex === 0 && (
+          <div
+            className="absolute border-3 border-primary border-dashed rounded animate-pulse z-[25] pointer-events-none"
+            style={{
+              left: `${highlightAnnotation.imagePosition.x}%`,
+              top: `${highlightAnnotation.imagePosition.y}%`,
+              width: `${highlightAnnotation.imagePosition.width}%`,
+              height: `${highlightAnnotation.imagePosition.height}%`,
+              borderWidth: '3px',
+            }}
+          />
+        )}
+
+        {/* Annotation canvas - only on active draft pair */}
+        {paintMode && isActiveDraft && (
+          <AnnotationCanvas active={paintMode} width={size.width} height={size.height} onSaveAnnotations={onAnnotationSave} members={members} />
+        )}
+      </div>
+    );
+  };
+
+  const renderFilePreview = (data: string | null, label: string, draftIndex: number) => {
     if (!data) return (
       <div className="h-20 bg-muted rounded-lg flex items-center justify-center text-muted-foreground text-xs">データなし</div>
     );
 
     if (isImage) {
-      return <img src={data} alt={label} className={cn("w-full rounded-lg border border-border object-contain", maxH)} />;
+      return renderImageWithPaint(data, label, draftIndex);
     }
     if (isVideo || (data.startsWith("http") && /\.(mp4|mov|webm|avi)(\?|$)/i.test(data))) {
-      return <video src={data} controls playsInline className={cn("w-full rounded-lg border border-border", maxH)} />;
+      return <video src={data} controls playsInline className="w-full max-h-[20vh] rounded-lg border border-border" />;
     }
     if (isAudio || (data.startsWith("http") && /\.(mp3|wav|m4a|ogg|aac)(\?|$)/i.test(data))) {
       return <audio src={data} controls className="w-full" />;
     }
     if (data.startsWith("http") && /\/(videos|deliverables)\//.test(data)) {
-      return <video src={data} controls playsInline className={cn("w-full rounded-lg border border-border", maxH)} />;
+      return <video src={data} controls playsInline className="w-full max-h-[20vh] rounded-lg border border-border" />;
     }
     if (data.startsWith("http") && /\/audios\//.test(data)) {
       return <audio src={data} controls className="w-full" />;
     }
     if (data.startsWith("blob:")) {
-      if (isVideo) return <video src={data} controls playsInline className={cn("w-full rounded-lg border border-border", maxH)} />;
+      if (isVideo) return <video src={data} controls playsInline className="w-full max-h-[20vh] rounded-lg border border-border" />;
       if (isAudio) return <audio src={data} controls className="w-full" />;
     }
     return (
@@ -134,7 +180,6 @@ export default function ComparisonLeftPanel({
     : isAudio ? "audio/mpeg,audio/wav,audio/mp4,audio/ogg"
     : ".txt,.docx";
 
-  // The active comparison pair
   const beforeDraft = drafts[activePairIndex];
   const afterDraft = drafts[activePairIndex + 1];
 
@@ -145,16 +190,22 @@ export default function ComparisonLeftPanel({
           <GitCompare className="h-4 w-4 text-primary" />
           <span className="text-sm font-medium">比較チェックモード</span>
         </div>
-        <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={onClose}>
-          <X className="h-3 w-3 mr-1" />閉じる
-        </Button>
+        <div className="flex items-center gap-1">
+          {isImage && onPaintModeToggle && (
+            <Button size="sm" variant={paintMode ? "default" : "outline"} onClick={onPaintModeToggle} className="text-xs h-7">
+              <Pin className="h-3 w-3 mr-1" />
+              ペイント
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={onClose}>
+            <X className="h-3 w-3 mr-1" />閉じる
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 p-4 space-y-2 overflow-y-auto">
-        {/* Draft timeline */}
         {drafts.map((draft, i) => (
           <div key={i}>
-            {/* Draft entry */}
             <div className={cn(
               "rounded-lg border p-3 transition-colors",
               (i === activePairIndex || i === activePairIndex + 1)
@@ -191,15 +242,15 @@ export default function ComparisonLeftPanel({
 
               {draft.data ? (
                 <div className="relative">
-                  {renderFilePreview(draft.data, draft.label, true)}
-                  {i > 0 && (
+                  {renderFilePreview(draft.data, draft.label, i)}
+                  {i > 0 && !paintMode && (
                     <button
                       onClick={() => {
                         const updated = [...drafts];
                         updated[i] = { ...updated[i], data: null, text: "" };
                         onDraftsChange(updated);
                       }}
-                      className="absolute top-1 right-1 bg-background/80 backdrop-blur-sm rounded-full p-1 text-xs hover:bg-background shadow-sm border border-border"
+                      className="absolute top-1 right-1 bg-background/80 backdrop-blur-sm rounded-full p-1 text-xs hover:bg-background shadow-sm border border-border z-40"
                     >
                       <X className="h-3 w-3" />
                     </button>
@@ -240,7 +291,6 @@ export default function ComparisonLeftPanel({
               ) : null}
             </div>
 
-            {/* Arrow between drafts */}
             {i < drafts.length - 1 && (
               <div className="flex justify-center py-1">
                 <button
@@ -260,7 +310,6 @@ export default function ComparisonLeftPanel({
           </div>
         ))}
 
-        {/* Add next draft button */}
         <div className="pt-2">
           <Button
             size="sm"
@@ -273,7 +322,6 @@ export default function ComparisonLeftPanel({
           </Button>
         </div>
 
-        {/* Text diff for active pair */}
         {!isImage && !isMedia && beforeDraft?.data && afterDraft?.data && (
           <TextDiff original={beforeDraft.data} revised={afterDraft.data} />
         )}
@@ -288,6 +336,23 @@ export default function ComparisonLeftPanel({
       />
     </div>
   );
+}
+
+function SavedAnnotationSvg({ ann, containerWidth, containerHeight }: { ann: { type: string; points: { x: number; y: number }[]; color: string; strokeWidth: number; imagePosition?: { x: number; y: number; width: number; height: number } }; containerWidth: number; containerHeight: number }) {
+  if (!ann.imagePosition) return null;
+  const { x, y, width, height } = ann.imagePosition;
+  const px = (x / 100) * containerWidth;
+  const py = (y / 100) * containerHeight;
+  const pw = (width / 100) * containerWidth;
+  const ph = (height / 100) * containerHeight;
+
+  if (ann.type === "rect") {
+    return <rect x={px} y={py} width={pw} height={ph} fill="none" stroke={ann.color} strokeWidth={ann.strokeWidth} opacity={0.7} />;
+  }
+  if (ann.type === "ellipse") {
+    return <ellipse cx={px + pw / 2} cy={py + ph / 2} rx={pw / 2} ry={ph / 2} fill="none" stroke={ann.color} strokeWidth={ann.strokeWidth} opacity={0.7} />;
+  }
+  return <rect x={px} y={py} width={Math.max(pw, 10)} height={Math.max(ph, 10)} fill="none" stroke={ann.color} strokeWidth={ann.strokeWidth} strokeDasharray="6 4" opacity={0.5} />;
 }
 
 function TextDiff({ original, revised }: { original: string; revised: string }) {

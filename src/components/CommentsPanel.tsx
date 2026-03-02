@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { tusUpload } from "@/lib/tus-upload";
 import { useAuth } from "@/hooks/useAuth";
@@ -45,9 +46,11 @@ interface CommentsPanelProps {
   patternId?: string | null;
   fileId?: string;
   onCommentCountChange?: (count: number) => void;
+  /** File name to display on comments */
+  fileName?: string;
 }
 
-export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia, onCommentDeleted, productId, projectId, processType, patternId, fileId, onCommentCountChange }: CommentsPanelProps) {
+export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia, onCommentDeleted, productId, projectId, processType, patternId, fileId, onCommentCountChange, fileName }: CommentsPanelProps) {
   const { user } = useAuth();
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
@@ -316,6 +319,10 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
               onAnnotationClick={onAnnotationClick}
               onCheckItemClick={onCheckItemClick}
               onSeekMedia={onSeekMedia}
+              fileName={fileName}
+              onRecordCorrection={productId ? async (id, content) => {
+                await saveCorrectionLog(id, content);
+              } : undefined}
             />
             {replies(c.id).map((r) => (
               <div key={r.id} className="ml-5">
@@ -393,31 +400,34 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
 
         {/* Correction log toggle */}
         {productId && (
-          <div className="space-y-1.5">
+          <div className="rounded-lg border border-primary/20 bg-primary/5 p-2.5 space-y-2">
             <div className="flex items-center gap-2">
               <Checkbox
                 id="correction-toggle"
                 checked={isCorrectionChecked}
                 onCheckedChange={(v) => setIsCorrectionChecked(!!v)}
-                className="h-3.5 w-3.5"
+                className="h-4 w-4"
               />
-              <Label htmlFor="correction-toggle" className="text-[10px] text-muted-foreground cursor-pointer leading-tight">
-                修正指示として記録（AIルール学習に使用）
+              <Label htmlFor="correction-toggle" className="text-xs font-medium text-foreground cursor-pointer leading-tight">
+                📝 修正指示として記録する
               </Label>
             </div>
+            <p className="text-[10px] text-muted-foreground ml-6">
+              チェックすると修正パターンとしてAIルール学習に使用されます
+            </p>
             {isCorrectionChecked && (
               <RadioGroup
                 value={correctionScope}
                 onValueChange={(v) => setCorrectionScope(v as "project" | "product")}
-                className="flex items-center gap-3 ml-5"
+                className="flex items-center gap-3 ml-6"
               >
                 <div className="flex items-center gap-1">
-                  <RadioGroupItem value="project" id="scope-project" className="h-3 w-3" />
-                  <Label htmlFor="scope-project" className="text-[10px] text-muted-foreground cursor-pointer">この案件のみ</Label>
+                  <RadioGroupItem value="project" id="scope-project" className="h-3.5 w-3.5" />
+                  <Label htmlFor="scope-project" className="text-[11px] text-muted-foreground cursor-pointer">この案件のみ</Label>
                 </div>
                 <div className="flex items-center gap-1">
-                  <RadioGroupItem value="product" id="scope-product" className="h-3 w-3" />
-                  <Label htmlFor="scope-product" className="text-[10px] text-muted-foreground cursor-pointer">この商材全体</Label>
+                  <RadioGroupItem value="product" id="scope-product" className="h-3.5 w-3.5" />
+                  <Label htmlFor="scope-product" className="text-[11px] text-muted-foreground cursor-pointer">この商材全体</Label>
                 </div>
               </RadioGroup>
             )}
@@ -428,12 +438,14 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   );
 }
 
-function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdit, onDelete, timeAgo, isReply, onAnnotationClick, onCheckItemClick, onSeekMedia }: {
-  comment: CommentRow; currentUserEmail: string; onToggleStatus: () => void; onReply: () => void; onEdit?: (id: string, content: string) => void; onDelete?: (id: string) => void; timeAgo: (d: string) => string; isReply?: boolean; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void;
+function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdit, onDelete, timeAgo, isReply, onAnnotationClick, onCheckItemClick, onSeekMedia, fileName, onRecordCorrection }: {
+  comment: CommentRow; currentUserEmail: string; onToggleStatus: () => void; onReply: () => void; onEdit?: (id: string, content: string) => void; onDelete?: (id: string) => void; timeAgo: (d: string) => string; isReply?: boolean; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void; fileName?: string; onRecordCorrection?: (id: string, content: string) => Promise<void>;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.content);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [recordingCorrection, setRecordingCorrection] = useState(false);
+  const { toast } = useToast();
 
   const isOwn = currentUserEmail === comment.author_email;
   const initial = comment.author_name.charAt(0).toUpperCase();
@@ -487,6 +499,12 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
         )}
         <span className="text-[10px] text-muted-foreground">{timeAgo(comment.created_at)}</span>
       </div>
+      {fileName && (
+        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+          <FileText className="h-3 w-3 shrink-0" />
+          <span className="truncate">{fileName}</span>
+        </div>
+      )}
 
       {isEditing ? (
         <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
@@ -547,6 +565,25 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
               <Trash2 className="h-3 w-3" />削除
             </button>
           </>
+        )}
+        {onRecordCorrection && !isReply && (
+          <button
+            onClick={async () => {
+              setRecordingCorrection(true);
+              try {
+                await onRecordCorrection(comment.id, comment.content);
+                toast({ title: "📝 修正指示として記録しました" });
+              } catch {
+                toast({ title: "記録に失敗しました", variant: "destructive" });
+              } finally {
+                setRecordingCorrection(false);
+              }
+            }}
+            disabled={recordingCorrection}
+            className="text-[10px] text-primary hover:text-primary/80 flex items-center gap-1 font-medium"
+          >
+            📝 {recordingCorrection ? "記録中..." : "修正指示として記録"}
+          </button>
         )}
       </div>
     </div>
