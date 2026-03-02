@@ -131,10 +131,30 @@ export function useBatchCheck() {
             }
           }
 
+          // For video async, insert pending record first so n8n can UPDATE it
+          const isVideoProcess = ["vcon", "video_horizontal", "video_vertical"].includes(processKey);
+          if (isVideoProcess) {
+            const { data: pendingCr } = await supabase.from("check_results").insert([{
+              user_id: user.id,
+              client_name: client?.name || "",
+              product_code: product.code,
+              product_name: product.name,
+              process_type: file.process_type,
+              input_type: "text",
+              input_text: body.script_text || null,
+              status: "pending",
+              input_data: inputData as unknown as Json,
+            }]).select("id").single();
+            if (pendingCr) {
+              body.record_id = pendingCr.id;
+              console.log("[BatchCheck] Created pending record:", pendingCr.id);
+            }
+          }
+
           const rawRes = await webhookFetch(webhookUrl, body);
           if (rawRes === VIDEO_ASYNC_ACCEPTED) {
-            // Video async — skip saving, n8n writes directly to DB
-            console.log("[BatchCheck] Video check accepted asynchronously, skipping save");
+            // Video async — n8n will update the pending record
+            console.log("[BatchCheck] Video check accepted asynchronously");
             continue;
           }
           res = rawRes as { overall_status: string; detected_case?: string; check_items: CheckItem[]; ng_count: number; warning_count: number; ok_count: number; total_checks: number };
