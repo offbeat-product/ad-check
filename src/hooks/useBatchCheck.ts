@@ -110,8 +110,12 @@ export function useBatchCheck() {
                 body.audio_url = publicUrl;
               }
               body.audio_mime_type = mediaType;
+            } else if (fileData.startsWith("http")) {
+              body.audio_url = fileData;
+              const urlExt = fileData.split('.').pop()?.split('?')[0]?.toLowerCase() || "mp3";
+              body.audio_mime_type = urlExt === "wav" ? "audio/wav" : urlExt === "m4a" ? "audio/mp4" : urlExt === "ogg" ? "audio/ogg" : "audio/mpeg";
             }
-            body.script_text = file.file_data?.startsWith("data:") ? "" : (file.file_data || "");
+            body.script_text = file.file_data?.startsWith("data:") || file.file_data?.startsWith("http") ? "" : (file.file_data || "");
             inputData = { script_text: body.script_text, audio_url: body.audio_url || "" };
           } else if (inputMode === "video") {
             const fileData = file.file_data || "";
