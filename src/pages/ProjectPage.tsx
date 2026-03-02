@@ -199,6 +199,14 @@ export default function ProjectPage() {
     }
   };
 
+  const handleChangeSubmissionType = async (fileId: string) => {
+    const { error } = await supabase.from("project_files").update({ submission_type: "client" } as any).eq("id", fileId);
+    if (!handleSupabaseError(error, "submission_type")) {
+      setFiles(prev => prev.map(f => f.id === fileId ? { ...f, submission_type: "client" as any } : f));
+      toast({ title: "クライアント提出に変更しました" });
+    }
+  };
+
   const handleRenameFile = async (fileId: string, newName: string) => {
     if (!newName.trim()) { setEditingFileId(null); return; }
     const { error } = await supabase.from("project_files").update({ file_name: newName.trim() }).eq("id", fileId);
@@ -1124,7 +1132,25 @@ export default function ProjectPage() {
                                                 </Badge>
                                               )}
                                               {versionLabel && <span className="text-[10px] text-muted-foreground">{versionLabel}</span>}
+                                              <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5",
+                                                file.submission_type === "client"
+                                                  ? "bg-primary/10 text-primary border-primary/30"
+                                                  : "bg-muted text-muted-foreground"
+                                              )}>
+                                                {file.submission_type === "client" ? "クライアント" : "社内"}
+                                              </Badge>
                                             </div>
+                                            {!selectMode && file.submission_type === "internal" && (
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleChangeSubmissionType(file.id);
+                                                }}
+                                                className="mt-1 text-[10px] text-primary hover:underline hover:text-primary/80 transition-colors text-left"
+                                              >
+                                                → クライアント提出に変更
+                                              </button>
+                                            )}
                                             {cc > 0 && (
                                               <div className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground">
                                                 <MessageCircle className="h-3 w-3" />{cc}
