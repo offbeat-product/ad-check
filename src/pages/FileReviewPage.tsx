@@ -1138,11 +1138,10 @@ export default function FileReviewPage() {
               checkResultId={record?.id}
               onRevisionUploaded={async (fileData, fileType, versionNumber, originalFile) => {
                 if (!file || !projectId || !user) return;
-                // Check existing versions to determine next version number
-                const { data: existing } = await supabase.from("project_files").select("version_number")
-                  .or(`id.eq.${file.id},parent_file_id.eq.${file.id}`).order("version_number", { ascending: false }).limit(1);
-                const nextVersion = existing && existing.length > 0 ? (existing[0].version_number ?? 1) + 1 : 2;
-                const actualVersion = Math.max(nextVersion, versionNumber);
+                // Count actual existing versions (not max version_number) to avoid gaps from deleted files
+                const { count: existingCount } = await supabase.from("project_files").select("*", { count: "exact", head: true })
+                  .or(`id.eq.${file.id},parent_file_id.eq.${file.id}`);
+                const actualVersion = (existingCount ?? 1) + 1;
 
                 const { error: insertErr } = await supabase.from("project_files").insert({
                   project_id: projectId,
@@ -1511,14 +1510,15 @@ function UploadRevisionModal({ open, onOpenChange, file, projectId, onUploaded }
         fileData = await f.text();
         fileType = "text";
       }
-      const { data: existing, error: verErr } = await supabase.from("project_files").select("version_number")
-        .or(`id.eq.${file.id},parent_file_id.eq.${file.id}`).order("version_number", { ascending: false }).limit(1);
+      // Count actual existing versions (not max version_number) to avoid gaps from deleted files
+      const { count: existingCount, error: verErr } = await supabase.from("project_files").select("*", { count: "exact", head: true })
+        .or(`id.eq.${file.id},parent_file_id.eq.${file.id}`);
       if (verErr) {
         toast({ title: "バージョン確認に失敗しました", description: verErr.message, variant: "destructive" });
         setUploading(false);
         return;
       }
-      const nextVersion = existing && existing.length > 0 ? (existing[0].version_number ?? 1) + 1 : 2;
+      const nextVersion = (existingCount ?? 1) + 1;
 
       const { error: insertErr } = await supabase.from("project_files").insert({
         project_id: projectId,
