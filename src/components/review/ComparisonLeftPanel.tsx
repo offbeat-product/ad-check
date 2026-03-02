@@ -56,7 +56,9 @@ export default function ComparisonLeftPanel({
   const isMedia = isAudio || isVideo;
 
   const handleImageLoad = useCallback((index: number, e: React.SyntheticEvent<HTMLImageElement>) => {
-    setImageSizes(prev => ({ ...prev, [index]: { width: e.currentTarget.clientWidth, height: e.currentTarget.clientHeight } }));
+    const target = e.currentTarget;
+    if (!target) return;
+    setImageSizes(prev => ({ ...prev, [index]: { width: target.clientWidth, height: target.clientHeight } }));
   }, []);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, targetIndex: number) => {
