@@ -126,11 +126,18 @@ export default function ScriptDisplay({ text, items, markers, onItemClick }: Scr
         const hasIssue = sectionMatch || hasInline;
         const isNG = !!ngMatch || inlineHighlights.some((h) => h.status === "NG");
 
+        // Collect all pattern IDs matched to this line for data attribute
+        const linePatternIds = [
+          ...(sectionMatch ? [sectionMatch.pattern_id] : []),
+          ...inlineHighlights.map((h) => h.marker.item.pattern_id),
+        ];
+
         return (
           <div
             key={i}
+            data-pattern-id={linePatternIds[0] || undefined}
             className={cn(
-              "px-3 py-1.5 rounded-md flex items-start gap-2 leading-relaxed",
+              "px-3 py-1.5 rounded-md flex items-start gap-2 leading-relaxed transition-all",
               hasIssue && isNG && "bg-destructive/5 border-l-2 border-status-ng",
               hasIssue && !isNG && "bg-status-warning/5 border-l-2 border-status-warning",
               !hasIssue && "text-foreground/80"

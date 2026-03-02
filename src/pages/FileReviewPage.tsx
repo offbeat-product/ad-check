@@ -651,6 +651,41 @@ export default function FileReviewPage() {
     }
   }, []);
 
+  // Handle right panel marker click → jump to left panel location
+  const handleMarkerJump = useCallback((patternId: string) => {
+    const item = items.find((i) => i.pattern_id === patternId);
+    if (!item) return;
+
+    const aiCfg = file ? AI_CHECK_CONFIG[file.process_type] : null;
+    const inputMode = aiCfg?.inputMode || "text";
+
+    if (inputMode === "audio" || inputMode === "video") {
+      // Parse timestamp from location and seek
+      if (item.location) {
+        const tsMatch = item.location.match(/(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,3})?)/);
+        if (tsMatch) {
+          const parts = tsMatch[1].split(".")[0].split(":").map(Number);
+          let seconds = 0;
+          if (parts.length === 2) seconds = parts[0] * 60 + parts[1];
+          else if (parts.length === 3) seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+          const msPart = tsMatch[1].split(".")[1];
+          if (msPart) seconds += Number(msPart) / (msPart.length === 1 ? 10 : msPart.length === 2 ? 100 : 1000);
+          mediaPreviewRef.current?.seekTo(seconds);
+        }
+      }
+    } else if (inputMode === "text") {
+      // Scroll to the matching line in ScriptDisplay
+      const el = document.querySelector(`[data-pattern-id="${patternId}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        el.classList.add("ring-2", "ring-primary");
+        setTimeout(() => el.classList.remove("ring-2", "ring-primary"), 2000);
+      }
+    }
+    // For image: markers are already visible, flash them
+    // No special handling needed since they're always on screen
+  }, [items, file]);
+
   if (loading) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">読み込み中...</div>;
   if (!file) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">ファイルが見つかりません</div>;
 
@@ -1013,6 +1048,7 @@ export default function FileReviewPage() {
         hasCheckResult={!!record}
         onCommentClick={handleCommentClick}
         onCheckItemClick={scrollToCard}
+        onMarkerClick={handleMarkerJump}
         onAnnotationClick={handleAnnotationClick}
         overallStatus={record?.overall_status}
         checkedAt={record?.created_at}

@@ -20,6 +20,7 @@ interface ReviewRightPanelProps {
   hasCheckResult: boolean;
   onCommentClick: (patternId: string) => void;
   onCheckItemClick?: (patternId: string) => void;
+  onMarkerClick?: (patternId: string) => void;
   emptyCheckMessage?: React.ReactNode;
   onAnnotationClick?: (annotationData: unknown) => void;
   overallStatus?: string | null;
@@ -41,7 +42,7 @@ interface ReviewRightPanelProps {
 
 export default function ReviewRightPanel({
   rightTab, onTabChange, items, markers, productCode, commentCounts, highlightCard,
-  commentFilter, checkResultId, hasCheckResult, onCommentClick, onCheckItemClick, emptyCheckMessage, onAnnotationClick,
+  commentFilter, checkResultId, hasCheckResult, onCommentClick, onCheckItemClick, onMarkerClick, emptyCheckMessage, onAnnotationClick,
   overallStatus, checkedAt, file, productId, projectId, mediaCurrentTime, onSeekMedia, patternId, fileId, onCommentDeleted,
 }: ReviewRightPanelProps) {
   const [totalCommentCount, setTotalCommentCount] = useState(0);
@@ -82,6 +83,7 @@ export default function ReviewRightPanel({
               projectId={projectId}
               processKey={file?.process_type}
               onSeekMedia={onSeekMedia}
+              onMarkerClick={onMarkerClick}
             />
           ) : (
             emptyCheckMessage || (

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { STATUS_LABEL } from "@/lib/check-display";
 import type { CheckItem } from "@/lib/types";
 import type { CheckMarker } from "@/lib/marker-positions";
-import { forwardRef, type ReactNode } from "react";
+import { forwardRef, useEffect, useRef, type ReactNode } from "react";
 
 const borderColors: Record<string, string> = {
   NG: "border-l-status-ng",
@@ -92,13 +92,28 @@ interface CheckItemCardProps {
   onToggleResolved: () => void;
   onCommentClick: () => void;
   onSeekMedia?: (seconds: number) => void;
+  onMarkerClick?: (patternId: string) => void;
 }
 
 const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
-  ({ item, index, marker, isResolved, isSelected, isHighlighted, isApplied, commentCount, productCode, onToggleSelect, onToggleResolved, onCommentClick, onSeekMedia }, ref) => {
+  ({ item, index, marker, isResolved, isSelected, isHighlighted, isApplied, commentCount, productCode, onToggleSelect, onToggleResolved, onCommentClick, onSeekMedia, onMarkerClick }, ref) => {
+    const innerRef = useRef<HTMLDivElement>(null);
+
+    // Auto-scroll into view when highlighted
+    useEffect(() => {
+      if (isHighlighted) {
+        const el = innerRef.current;
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, [isHighlighted]);
+
     return (
       <div
-        ref={ref}
+        ref={(el) => {
+          innerRef.current = el;
+          if (typeof ref === "function") ref(el);
+          else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = el;
+        }}
         className={cn(
           "border-l-4 rounded-lg border border-border p-3 space-y-2 transition-all bg-card",
           borderColors[item.status] || "",
@@ -116,12 +131,16 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
               <CheckCheck className="h-4 w-4 text-status-ok" />
             )}
             {marker && (
-              <div className={cn(
-                "w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold",
-                item.status === "NG" ? "bg-status-ng" : "bg-status-warning"
-              )}>
+              <button
+                onClick={(e) => { e.stopPropagation(); onMarkerClick?.(item.pattern_id); }}
+                className={cn(
+                  "w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold cursor-pointer hover:scale-110 transition-transform",
+                  item.status === "NG" ? "bg-status-ng" : "bg-status-warning"
+                )}
+                title="プレビューで該当箇所を表示"
+              >
                 {marker.number}
-              </div>
+              </button>
             )}
           </div>
 
