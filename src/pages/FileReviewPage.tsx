@@ -27,7 +27,7 @@ import ImagePreview from "@/components/review/ImagePreview";
 import ScriptDisplay from "@/components/review/ScriptDisplay";
 import MediaPreview, { type MediaPreviewHandle } from "@/components/review/MediaPreview";
 import ReviewRightPanel from "@/components/review/ReviewRightPanel";
-import ComparisonLeftPanel from "@/components/review/ComparisonLeftPanel";
+import ComparisonLeftPanel, { type DraftEntry } from "@/components/review/ComparisonLeftPanel";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -81,8 +81,8 @@ export default function FileReviewPage() {
   const [candidateCount, setCandidateCount] = useState<number>(0);
   const [mentionMembers, setMentionMembers] = useState<MentionMember[]>([]);
   const [comparisonMode, setComparisonMode] = useState(false);
-  const [comparisonNewFileData, setComparisonNewFileData] = useState<string | null>(null);
-  const [comparisonNewText, setComparisonNewText] = useState("");
+  const [comparisonDrafts, setComparisonDrafts] = useState<DraftEntry[]>([]);
+  const [comparisonActivePairIndex, setComparisonActivePairIndex] = useState(0);
   const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
   const { items, markers, commentCounts, paintMode, setPaintMode, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
     useReviewState(record?.id, checkItems);
@@ -985,11 +985,12 @@ export default function FileReviewPage() {
           {comparisonMode ? (
             <ComparisonLeftPanel
               file={file}
-              newFileData={comparisonNewFileData}
-              onNewFileDataChange={setComparisonNewFileData}
-              newText={comparisonNewText}
-              onNewTextChange={setComparisonNewText}
+              drafts={comparisonDrafts}
+              onDraftsChange={setComparisonDrafts}
+              activePairIndex={comparisonActivePairIndex}
+              onActivePairIndexChange={setComparisonActivePairIndex}
               onClose={() => setComparisonMode(false)}
+              checkResultId={record?.id}
             />
           ) : (
           <div className="p-4">
@@ -1087,9 +1088,22 @@ export default function FileReviewPage() {
         file={file}
         productId={product?.id}
         projectId={projectId}
-        comparisonNewFileData={comparisonNewFileData}
-        comparisonNewText={comparisonNewText}
-        onOpenComparisonMode={() => { setComparisonMode(true); setRightTab("comparison"); }}
+        comparisonBeforeData={comparisonDrafts[comparisonActivePairIndex]?.data ?? null}
+        comparisonAfterData={comparisonDrafts[comparisonActivePairIndex + 1]?.data ?? null}
+        comparisonAfterText={comparisonDrafts[comparisonActivePairIndex + 1]?.text ?? ""}
+        comparisonRoundLabel={`第${comparisonActivePairIndex + 2}稿`}
+        onOpenComparisonMode={() => {
+          // Initialize drafts with current file as 初稿 if empty
+          if (comparisonDrafts.length === 0) {
+            setComparisonDrafts([
+              { label: "初稿", data: file.file_data, text: "" },
+              { label: "第2稿", data: null, text: "" },
+            ]);
+            setComparisonActivePairIndex(0);
+          }
+          setComparisonMode(true);
+          setRightTab("comparison");
+        }}
         patternId={file?.pattern_id}
         fileId={fileId}
         mediaCurrentTime={mediaCurrentTime}
