@@ -503,6 +503,31 @@ export default function ProjectPage() {
     return (safeName || `file_${Date.now()}`) + ext;
   };
 
+  // Validate deadlines before allowing upload
+  const canUploadToProcess = (processKey: string): string | null => {
+    const overallDeadline = (project as any)?.overall_deadline;
+    if (!overallDeadline) return "案件の納期が設定されていません。先に納期を設定してください。";
+    const proc = processes.find(p => p.process_key === processKey);
+    if (!proc) return "工程が見つかりません。";
+    if (!proc.internal_deadline) return `「${proc.process_label}」の社内期限が設定されていません。先に期限を設定してください。`;
+    if (!proc.client_deadline) return `「${proc.process_label}」のクライアント期限が設定されていません。先に期限を設定してください。`;
+    return null;
+  };
+
+  // Wrapper to validate deadlines before opening upload modal
+  const openUploadModal = (processKey: string, patternId?: string | null, patternMode?: "common" | "specific") => {
+    const err = canUploadToProcess(processKey);
+    if (err) {
+      toast({ title: "アップロード不可", description: err, variant: "destructive" });
+      return;
+    }
+    setUploadModal(processKey);
+    setUploadPatternId(patternId ?? null);
+    setUploadPatternMode(patternMode ?? "common");
+    setUseTextInput(false);
+    setSelectedFiles([]);
+  };
+
   // Determine storage bucket by process type
   const getStorageBucket = (processType: string): string | null => {
     const audioProcesses = ["narration", "bgm"];
@@ -829,11 +854,7 @@ export default function ProjectPage() {
                 files={files}
                 checkResults={checkResults}
                 onUpload={(processKey, patternId) => {
-                  setUploadModal(processKey);
-                  setUploadPatternId(patternId);
-                  setUploadPatternMode(patternId ? "specific" : "common");
-                  setUseTextInput(false);
-                  setSelectedFiles([]);
+                  openUploadModal(processKey, patternId, patternId ? "specific" : "common");
                 }}
                 onUpdatePattern={updatePattern}
                 onDeletePattern={deletePattern}
@@ -1034,13 +1055,7 @@ export default function ProjectPage() {
                             </Button>
                           )}
                           <Button size="sm" variant="outline" className="text-xs h-7"
-                            onClick={() => {
-                              setUploadModal(proc.process_key);
-                              setUploadPatternId(null);
-                              setUploadPatternMode("common");
-                              setUseTextInput(false);
-                              setSelectedFiles([]);
-                            }}>
+                            onClick={() => openUploadModal(proc.process_key)}>
                             <Plus className="h-3 w-3 mr-1" />アップロード
                           </Button>
                           </div>
@@ -1048,13 +1063,7 @@ export default function ProjectPage() {
                         {isCollapsed && fileCount === 0 && (
                           <div className="ml-auto" onClick={(e) => e.stopPropagation()}>
                             <Button size="sm" variant="outline" className="text-xs h-7"
-                              onClick={() => {
-                                setUploadModal(proc.process_key);
-                                setUploadPatternId(null);
-                                setUploadPatternMode("common");
-                                setUseTextInput(false);
-                                setSelectedFiles([]);
-                              }}>
+                              onClick={() => openUploadModal(proc.process_key)}>
                               <Plus className="h-3 w-3 mr-1" />アップロード
                             </Button>
                           </div>
