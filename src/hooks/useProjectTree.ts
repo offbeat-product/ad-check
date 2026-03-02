@@ -41,6 +41,8 @@ export function useProjectTree(): TreeData & {
     queryKey: PROJECT_TREE_QUERY_KEY,
     queryFn: fetchTreeData,
     staleTime: 30_000,
+    retry: 3,
+    retryDelay: (attempt) => Math.min(1000 * Math.pow(2, attempt), 10000),
   });
 
   const clients = data?.clients ?? [];
