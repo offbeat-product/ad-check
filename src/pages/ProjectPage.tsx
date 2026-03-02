@@ -745,26 +745,35 @@ export default function ProjectPage() {
                         )}
 
                         <div className="ml-auto flex items-center gap-2 flex-wrap">
-                          {webhookAvailable && sectionFiles.filter(f => f.file_data && !f.parent_file_id).length > 0 && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="text-xs h-7 gap-1"
-                              disabled={batchProgress.status === "running"}
-                              onClick={() => {
-                                if (!product || !id) return;
-                                const targetFiles = sectionFiles.filter(f => f.file_data && !f.parent_file_id);
-                                runBatchCheck(targetFiles, product, client, id, () => fetchData());
-                              }}
-                            >
-                              {batchProgress.status === "running" ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <Bot className="h-3 w-3" />
-                              )}
-                              一括AIチェック ({sectionFiles.filter(f => f.file_data && !f.parent_file_id).length})
-                            </Button>
-                          )}
+                          {webhookAvailable && sectionFiles.filter(f => f.file_data && !f.parent_file_id).length > 0 && (() => {
+                            const allTargets = sectionFiles.filter(f => f.file_data && !f.parent_file_id);
+                            const selectedInSection = allTargets.filter(f => selectedFileIds.has(f.id));
+                            const uncheckedTargets = allTargets.filter(f => f.status !== "checked" && f.status !== "fixed");
+                            const hasSelection = selectedInSection.length > 0;
+                            const actualTargets = hasSelection ? selectedInSection : uncheckedTargets;
+                            const label = hasSelection
+                              ? `選択分をAIチェック (${selectedInSection.length})`
+                              : `未チェック分を一括AIチェック (${uncheckedTargets.length})`;
+                            return (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-xs h-7 gap-1"
+                                disabled={batchProgress.status === "running" || actualTargets.length === 0}
+                                onClick={() => {
+                                  if (!product || !id) return;
+                                  runBatchCheck(actualTargets, product, client, id, () => fetchData());
+                                }}
+                              >
+                                {batchProgress.status === "running" ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  <Bot className="h-3 w-3" />
+                                )}
+                                {label}
+                              </Button>
+                            );
+                          })()}
                           {sectionFiles.some(f => f.check_result_id && !f.parent_file_id && f.status !== "fixed") && (
                             <Button
                               size="sm"
