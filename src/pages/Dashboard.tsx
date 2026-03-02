@@ -7,7 +7,7 @@ import { FILE_STATUS_CONFIG } from "@/lib/db-types";
 import { PROJECT_STATUS_CONFIG, getProcessLabel } from "@/lib/process-config";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Badge } from "@/components/ui/badge";
-import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderOpen, ChevronLeft, ChevronRight, Plus, RefreshCw, WifiOff } from "lucide-react";
+import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderOpen, ChevronLeft, ChevronRight, Plus, RefreshCw, WifiOff, User } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import { cn } from "@/lib/utils";
@@ -15,13 +15,6 @@ import CreateProjectModal from "@/components/CreateProjectModal";
 import { getSubmitLabel, getSubmitBadgeClass } from "@/lib/check-display";
 
 const ITEMS_PER_PAGE = 10;
-
-const statusBadgeMap: Record<string, { label: string; class: string }> = {
-  pending: { label: "チェック済", class: "bg-muted text-muted-foreground" },
-  in_progress: { label: "修正中", class: "bg-primary/10 text-primary" },
-  resolved: { label: "修正完了", class: "bg-status-ok/10 text-status-ok" },
-  approved: { label: "承認済", class: "bg-product-cta/10 text-product-cta" },
-};
 
 function StatCard({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: string | number; color: string }) {
   return (
@@ -67,6 +60,7 @@ export default function Dashboard() {
   const [totalCount, setTotalCount] = useState(0);
   const [checksLoading, setChecksLoading] = useState(true);
   const [checksLoaded, setChecksLoaded] = useState(false);
+  const [profileMap, setProfileMap] = useState<Map<string, string>>(new Map());
 
   // Phase 3: Recent files (loaded lazily)
   const [recentFiles, setRecentFiles] = useState<(ProjectFile & { project_name?: string })[]>([]);
@@ -131,6 +125,19 @@ export default function Dashboard() {
         if (cancelled) return;
         handleSupabaseError(cr.error, "check_results");
         setRecords(cr.data ?? []);
+
+        // Resolve user profiles
+        const userIds = [...new Set((cr.data ?? []).map(r => r.user_id).filter(Boolean))];
+        if (userIds.length > 0) {
+          const { data: profiles } = await supabase.rpc("get_profiles_by_ids", { p_ids: userIds });
+          if (!cancelled && profiles) {
+            const map = new Map<string, string>();
+            profiles.forEach((p: { id: string; display_name: string; email: string }) => {
+              map.set(p.id, p.display_name || p.email);
+            });
+            setProfileMap(map);
+          }
+        }
 
         const countRes = await fetchWithRetry(() =>
           supabase.from("check_results").select("*", { count: "exact", head: true })
@@ -346,53 +353,43 @@ export default function Dashboard() {
               <thead>
                  <tr className="border-b border-border text-muted-foreground text-left">
                    <th className="px-3 py-2 font-medium whitespace-nowrap">日時</th>
+                   <th className="px-3 py-2 font-medium whitespace-nowrap">実行者</th>
+                   <th className="px-3 py-2 font-medium whitespace-nowrap">クライアント</th>
                    <th className="px-3 py-2 font-medium whitespace-nowrap">商材</th>
                    <th className="px-3 py-2 font-medium whitespace-nowrap">工程</th>
-                   <th className="px-3 py-2 font-medium text-center whitespace-nowrap">判定</th>
-                   <th className="px-3 py-2 font-medium text-center whitespace-nowrap">修正必須</th>
-                   <th className="px-3 py-2 font-medium text-center whitespace-nowrap">要確認</th>
-                   <th className="px-3 py-2 font-medium text-center whitespace-nowrap">ステータス</th>
                  </tr>
               </thead>
               <tbody>
                 {checksLoading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <tr key={i}>
-                      <td className="px-4 py-3"><div className="h-4 w-20 bg-muted animate-pulse rounded" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-24 bg-muted animate-pulse rounded" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-16 bg-muted animate-pulse rounded" /></td>
-                      <td className="px-4 py-3 text-center"><div className="h-5 w-14 bg-muted animate-pulse rounded-full mx-auto" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-8 bg-muted animate-pulse rounded mx-auto" /></td>
-                      <td className="px-4 py-3"><div className="h-4 w-8 bg-muted animate-pulse rounded mx-auto" /></td>
-                      <td className="px-4 py-3 text-center"><div className="h-5 w-16 bg-muted animate-pulse rounded-full mx-auto" /></td>
+                      <td className="px-3 py-3"><div className="h-4 w-20 bg-muted animate-pulse rounded" /></td>
+                      <td className="px-3 py-3"><div className="h-4 w-16 bg-muted animate-pulse rounded" /></td>
+                      <td className="px-3 py-3"><div className="h-4 w-20 bg-muted animate-pulse rounded" /></td>
+                      <td className="px-3 py-3"><div className="h-4 w-24 bg-muted animate-pulse rounded" /></td>
+                      <td className="px-3 py-3"><div className="h-4 w-16 bg-muted animate-pulse rounded" /></td>
                     </tr>
                   ))
                 ) : records.length === 0 ? (
-                  <tr><td colSpan={7} className="text-center py-12 text-muted-foreground">チェック結果がありません</td></tr>
+                  <tr><td colSpan={5} className="text-center py-12 text-muted-foreground">チェック結果がありません</td></tr>
                 ) : (
-                  records.map((r) => {
-                    const st = statusBadgeMap[r.status || "pending"] || statusBadgeMap.pending;
-                    return (
-                      <tr key={r.id} onClick={() => navigate(`/check-result/${r.id}`)}
-                        className="border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors">
-                        <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
-                          {r.created_at ? new Date(r.created_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
-                        </td>
-                        <td className="px-3 py-2 font-medium">{r.product_name}</td>
-                        <td className="px-3 py-2 whitespace-nowrap">{getProcessLabel(r.process_type)}</td>
-                         <td className="px-3 py-2 text-center">
-                           <Badge className={cn("text-[10px] font-bold", getSubmitBadgeClass(r.overall_status))}>
-                             {getSubmitLabel(r.overall_status).label}
-                           </Badge>
-                         </td>
-                         <td className="px-3 py-2 text-center text-status-ng font-bold">{r.ng_count ?? 0}</td>
-                         <td className="px-3 py-2 text-center text-status-warning font-bold">{r.warning_count ?? 0}</td>
-                        <td className="px-3 py-2 text-center">
-                          <Badge variant="outline" className={cn("text-[10px]", st.class)}>{st.label}</Badge>
-                        </td>
-                      </tr>
-                    );
-                  })
+                  records.map((r) => (
+                    <tr key={r.id} onClick={() => navigate(`/check-result/${r.id}`)}
+                      className="border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors">
+                      <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
+                        {r.created_at ? new Date(r.created_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1">
+                          <User className="h-3 w-3 text-muted-foreground" />
+                          {profileMap.get(r.user_id) || "—"}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">{r.client_name}</td>
+                      <td className="px-3 py-2 font-medium">{r.product_name}</td>
+                      <td className="px-3 py-2 whitespace-nowrap">{getProcessLabel(r.process_type)}</td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>
@@ -409,32 +406,24 @@ export default function Dashboard() {
               ) : records.length === 0 ? (
                 <div className="p-8 text-center text-muted-foreground text-sm">チェック結果がありません</div>
               ) : (
-                records.map((r) => {
-                  const st = statusBadgeMap[r.status || "pending"] || statusBadgeMap.pending;
-                  return (
-                    <button key={r.id} onClick={() => navigate(`/check-result/${r.id}`)}
-                      className="w-full p-4 text-left hover:bg-muted/50 transition-colors">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-sm font-medium">{r.product_name}</span>
-                        <Badge className={cn("text-[10px] font-bold", getSubmitBadgeClass(r.overall_status))}>
-                          {getSubmitLabel(r.overall_status).label}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{getProcessLabel(r.process_type)}</span>
-                        <span>·</span>
-                        <span className="text-status-ng">修正必須 {r.ng_count ?? 0}</span>
-                        <span className="text-status-warning">要確認 {r.warning_count ?? 0}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] text-muted-foreground">
-                          {r.created_at ? new Date(r.created_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
-                        </span>
-                        <Badge variant="outline" className={cn("text-[10px]", st.class)}>{st.label}</Badge>
-                      </div>
-                    </button>
-                  );
-                })
+                records.map((r) => (
+                  <button key={r.id} onClick={() => navigate(`/check-result/${r.id}`)}
+                    className="w-full p-4 text-left hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium">{r.product_name}</span>
+                      <span className="text-[10px] text-muted-foreground">
+                        {r.created_at ? new Date(r.created_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <span className="inline-flex items-center gap-1"><User className="h-3 w-3" />{profileMap.get(r.user_id) || "—"}</span>
+                      <span>·</span>
+                      <span>{r.client_name}</span>
+                      <span>·</span>
+                      <span>{getProcessLabel(r.process_type)}</span>
+                    </div>
+                  </button>
+                ))
               )}
             </div>
 
