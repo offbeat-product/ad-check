@@ -293,10 +293,10 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
           return (
             <button key={item.path} onClick={() => navigate(item.path)}
               title={collapsed ? item.label : undefined}
-              className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium transition-colors",
+              className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium press-feedback",
                 collapsed ? "justify-center px-0" : "px-5",
                 isActive ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-[3px] border-primary"
-                  : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent")}>
+                  : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent nav-item-interactive")}>
               <item.icon className="h-4 w-4 shrink-0" />
               {!collapsed && item.label}
             </button>
