@@ -158,6 +158,22 @@ export default function ProjectPage() {
   const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
   const [collapsedProcesses, setCollapsedProcesses] = useState<Set<string>>(new Set());
+
+  // Auto-collapse completed processes on load
+  useEffect(() => {
+    if (processes.length > 0) {
+      const completedIds = new Set(
+        processes.filter(p => p.status === "completed").map(p => p.id)
+      );
+      if (completedIds.size > 0) {
+        setCollapsedProcesses(prev => {
+          const next = new Set(prev);
+          completedIds.forEach(id => next.add(id));
+          return next;
+        });
+      }
+    }
+  }, [processes]);
   const handleBatchFix = async (processFiles: ProjectFile[], processKey: string) => {
     if (!id || !user) return;
     // All root files with check_result_id are targets for batch fix
