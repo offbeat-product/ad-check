@@ -88,6 +88,7 @@ interface CheckItemCardProps {
   isApplied?: boolean;
   commentCount: number;
   productCode: string;
+  dupeCount?: number;
   onToggleSelect: () => void;
   onToggleResolved: () => void;
   onCommentClick: () => void;
@@ -98,7 +99,7 @@ interface CheckItemCardProps {
 }
 
 const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
-  ({ item, index, marker, isResolved, isSelected, isHighlighted, isApplied, commentCount, productCode, onToggleSelect, onToggleResolved, onCommentClick, onSeekMedia, onMarkerClick, sourceLabel = "AIチェック" }, ref) => {
+  ({ item, index, marker, isResolved, isSelected, isHighlighted, isApplied, commentCount, productCode, dupeCount = 1, onToggleSelect, onToggleResolved, onCommentClick, onSeekMedia, onMarkerClick, sourceLabel = "AIチェック" }, ref) => {
     const innerRef = useRef<HTMLDivElement>(null);
 
     // Auto-scroll into view when highlighted
@@ -156,6 +157,11 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
               <Badge className={cn("text-[10px] h-4 px-1.5", statusBadgeColors[item.status] || "")}>
                 {STATUS_LABEL[item.status] || item.status}
               </Badge>
+              {dupeCount > 1 && (
+                <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-muted-foreground/30 text-muted-foreground bg-muted/50">
+                  同様 ×{dupeCount}
+                </Badge>
+              )}
               {isApplied && (
                 <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-status-ok/30 text-status-ok bg-status-ok/10">反映済み</Badge>
               )}
