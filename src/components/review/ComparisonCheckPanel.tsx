@@ -84,6 +84,7 @@ export default function ComparisonCheckPanel({
   const [result, setResult] = useState<CheckResult | null>(null);
   const [history, setHistory] = useState<ComparisonHistoryEntry[]>([]);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
+  const [historyResolvedMap, setHistoryResolvedMap] = useState<Record<string, string[]>>({});
 
   // For the interactive result view
   const [resolvedItems, setResolvedItems] = useState<Set<string>>(new Set());
