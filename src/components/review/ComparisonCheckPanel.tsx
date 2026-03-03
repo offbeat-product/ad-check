@@ -127,6 +127,19 @@ export default function ComparisonCheckPanel({
     setActiveFilters(new Set(["NG", "WARNING"]));
   }, [fileId]);
 
+  // Load persisted resolved_items from DB
+  useEffect(() => {
+    const targetId = selectedHistoryId || checkResultId;
+    if (!targetId) return;
+    let cancelled = false;
+    supabase.from("check_results").select("resolved_items").eq("id", targetId).maybeSingle().then(({ data }) => {
+      if (cancelled || !data?.resolved_items) return;
+      const ids = Array.isArray(data.resolved_items) ? data.resolved_items as string[] : [];
+      if (ids.length > 0) setResolvedItems(new Set(ids));
+    });
+    return () => { cancelled = true; };
+  }, [selectedHistoryId, checkResultId]);
+
   const aiCfg = AI_CHECK_CONFIG[file.process_type];
   const isImage = aiCfg?.inputMode === "image";
   const enabled = aiCfg?.enabled ?? false;
