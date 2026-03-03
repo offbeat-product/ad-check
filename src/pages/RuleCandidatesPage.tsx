@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { Brain, Sparkles, Loader2, ChevronDown, Pencil, Check, X, AlertTriangle } from "lucide-react";
+import { Brain, Sparkles, Loader2, ChevronDown, Pencil, Check, X, AlertTriangle, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -44,10 +44,11 @@ export default function RuleCandidatesPage() {
   const [candidates, setCandidates] = useState<RuleCandidate[]>([]);
   const [correctionMap, setCorrectionMap] = useState<Record<string, CorrectionLog[]>>({});
   const [similarRuleMap, setSimilarRuleMap] = useState<Record<string, { rule_id: string; description: string }>>({});
+  const [allCorrectionLogs, setAllCorrectionLogs] = useState<CorrectionLog[]>([]);
 
   const [selectedProduct, setSelectedProduct] = useState<string>("all");
   const [selectedProcess, setSelectedProcess] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("pending");
+  const [statusFilter, setStatusFilter] = useState<string>("corrections");
 
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -76,33 +77,35 @@ export default function RuleCandidatesPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // Build query
-      let query = supabase.from("rule_candidates").select("*").eq("status", statusFilter).order("created_at", { ascending: false });
-      if (selectedProduct !== "all") query = query.eq("product_id", selectedProduct);
-      if (selectedProcess !== "all") query = query.eq("process_type", selectedProcess);
-      const { data } = await query;
-      setCandidates(data || []);
+      // Build query — skip rule_candidates query when viewing corrections tab
+      if (statusFilter !== "corrections") {
+        let query = supabase.from("rule_candidates").select("*").eq("status", statusFilter).order("created_at", { ascending: false });
+        if (selectedProduct !== "all") query = query.eq("product_id", selectedProduct);
+        if (selectedProcess !== "all") query = query.eq("process_type", selectedProcess);
+        const { data } = await query;
+        setCandidates(data || []);
 
-      // Load correction logs for source_correction_ids
-      if (data && data.length > 0) {
-        const allIds = data.flatMap((c) => (c.source_correction_ids as string[]) || []).filter(Boolean);
-        if (allIds.length > 0) {
-          const { data: logs } = await supabase.from("correction_logs").select("*").in("id", allIds);
-          const map: Record<string, CorrectionLog[]> = {};
-          data.forEach((c) => {
-            const ids = (c.source_correction_ids as string[]) || [];
-            map[c.id] = (logs || []).filter((l) => ids.includes(l.id));
-          });
-          setCorrectionMap(map);
-        }
+        // Load correction logs for source_correction_ids
+        if (data && data.length > 0) {
+          const allIds = data.flatMap((c) => (c.source_correction_ids as string[]) || []).filter(Boolean);
+          if (allIds.length > 0) {
+            const { data: logs } = await supabase.from("correction_logs").select("*").in("id", allIds);
+            const map: Record<string, CorrectionLog[]> = {};
+            data.forEach((c) => {
+              const ids = (c.source_correction_ids as string[]) || [];
+              map[c.id] = (logs || []).filter((l) => ids.includes(l.id));
+            });
+            setCorrectionMap(map);
+          }
 
-        // Load similar rules
-        const similarIds = data.map((c) => c.similar_existing_rule_id).filter(Boolean) as string[];
-        if (similarIds.length > 0) {
-          const { data: rules } = await supabase.from("check_rules").select("id, rule_id, description").in("id", similarIds);
-          const rMap: Record<string, { rule_id: string; description: string }> = {};
-          (rules || []).forEach((r) => { rMap[r.id] = { rule_id: r.rule_id, description: r.description }; });
-          setSimilarRuleMap(rMap);
+          // Load similar rules
+          const similarIds = data.map((c) => c.similar_existing_rule_id).filter(Boolean) as string[];
+          if (similarIds.length > 0) {
+            const { data: rules } = await supabase.from("check_rules").select("id, rule_id, description").in("id", similarIds);
+            const rMap: Record<string, { rule_id: string; description: string }> = {};
+            (rules || []).forEach((r) => { rMap[r.id] = { rule_id: r.rule_id, description: r.description }; });
+            setSimilarRuleMap(rMap);
+          }
         }
       }
 
@@ -123,6 +126,13 @@ export default function RuleCandidatesPage() {
       if (productFilter) cq = cq.eq("product_id", productFilter);
       const { count: cCount } = await cq;
       setTotalCorrections(cCount || 0);
+
+      // Load all correction logs for display
+      let clQuery = supabase.from("correction_logs").select("*").order("created_at", { ascending: false }).limit(100);
+      if (productFilter) clQuery = clQuery.eq("product_id", productFilter);
+      if (selectedProcess !== "all") clQuery = clQuery.eq("process_type", selectedProcess);
+      const { data: clData } = await clQuery;
+      setAllCorrectionLogs(clData || []);
     } finally {
       setLoading(false);
     }
@@ -339,14 +349,52 @@ export default function RuleCandidatesPage() {
         {/* Status Tabs */}
         <Tabs value={statusFilter} onValueChange={setStatusFilter}>
           <TabsList>
+            <TabsTrigger value="corrections">修正指示 ({totalCorrections})</TabsTrigger>
             <TabsTrigger value="pending">未承認 ({pendingCount})</TabsTrigger>
             <TabsTrigger value="approved">承認済み ({approvedCount})</TabsTrigger>
             <TabsTrigger value="rejected">却下 ({rejectedCount})</TabsTrigger>
           </TabsList>
         </Tabs>
 
-        {/* Candidate Cards */}
-        {loading ? (
+        {/* Correction Logs List */}
+        {statusFilter === "corrections" ? (
+          loading ? (
+            <div className="flex items-center justify-center py-12 text-muted-foreground">
+              <Loader2 className="h-5 w-5 animate-spin mr-2" /> 読み込み中...
+            </div>
+          ) : allCorrectionLogs.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              修正指示はまだ記録されていません
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {allCorrectionLogs.map((log) => (
+                <Card key={log.id}>
+                  <CardContent className="p-4 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                        <MessageSquare className="h-3.5 w-3.5" />
+                        <span>工程: {PROCESS_LABELS[log.process_type] || log.process_type}</span>
+                        <span>|</span>
+                        <span>商材: {getProductName(log.product_id)}</span>
+                        {log.created_at && (
+                          <>
+                            <span>|</span>
+                            <span>{new Date(log.created_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                          </>
+                        )}
+                      </div>
+                      <Badge variant="outline" className={cn("text-xs shrink-0", log.rule_status === "active" ? "bg-primary/10 text-primary border-primary/30" : log.rule_status === "rejected" ? "bg-destructive/10 text-destructive border-destructive/30" : "bg-muted text-muted-foreground border-border")}>
+                        {log.rule_status === "active" ? "ルール化済" : log.rule_status === "rejected" ? "却下" : "未処理"}
+                      </Badge>
+                    </div>
+                    <p className="text-sm whitespace-pre-wrap">{log.correction_text}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )
+        ) : loading ? (
           <div className="flex items-center justify-center py-12 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin mr-2" /> 読み込み中...
           </div>
