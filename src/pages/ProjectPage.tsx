@@ -1775,6 +1775,7 @@ function CheckHistory({ projectId, files, checkResults, onRenameFile, patterns }
             const isComparison = cr?.check_type === "comparison";
             const draftLabel = isComparison ? `第${(cr?.comparison_round ?? 0) + 1}稿` : "初稿";
             const patternName = f.pattern_id ? patternMap.get(f.pattern_id) || "—" : "共通";
+            const fileSt = FILE_STATUS_CONFIG[f.status ?? "uploaded"] ?? FILE_STATUS_CONFIG.uploaded;
 
             return (
               <tr key={f.id} onClick={() => navigate(`/project/${projectId}/file/${f.id}`)} className="border-b border-border/50 hover:bg-muted/50 cursor-pointer">
