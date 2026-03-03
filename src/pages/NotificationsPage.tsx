@@ -10,11 +10,22 @@ export default function NotificationsPage() {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
   const navigate = useNavigate();
 
-  const handleClick = (n: (typeof notifications)[0]) => {
+  const handleClick = async (n: (typeof notifications)[0]) => {
     markAsRead(n.id);
     const data = n.data as Record<string, string> | null;
     if (data?.check_result_id) {
-      navigate(`/check-result/${data.check_result_id}`);
+      const { supabase } = await import("@/integrations/supabase/client");
+      const { data: pf } = await supabase
+        .from("project_files")
+        .select("id, project_id")
+        .eq("check_result_id", data.check_result_id)
+        .limit(1)
+        .maybeSingle();
+      if (pf?.project_id) {
+        navigate(`/project/${pf.project_id}/file/${pf.id}`);
+      } else if (data.project_id) {
+        navigate(`/project/${data.project_id}`);
+      }
     } else if (data?.project_id) {
       navigate(`/project/${data.project_id}`);
     }
