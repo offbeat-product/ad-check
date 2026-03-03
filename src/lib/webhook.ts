@@ -276,7 +276,8 @@ export async function runVideoCheck(
   referenceContext?: string,
   projectId?: string,
   patternId?: string | null,
-  recordId?: string | null
+  recordId?: string | null,
+  correctionComments?: { content: string; status: string; check_item_id?: string | null }[]
 ): Promise<WebhookResult> {
   const url = getWebhookUrl(processType);
   if (!url) throw new Error(`動画チェックのWebhookが見つかりません (${processType})`);
@@ -304,6 +305,12 @@ export async function runVideoCheck(
       body.related_files = relatedFiles;
       console.log("[Webhook] Including related_files:", Object.keys(relatedFiles));
     }
+  }
+
+  // Include correction comments from this creative for the AI to verify fixes
+  if (correctionComments && correctionComments.length > 0) {
+    body.correction_comments = correctionComments;
+    console.log("[Webhook] Including correction_comments:", correctionComments.length);
   }
 
   return webhookFetch(url, body);
