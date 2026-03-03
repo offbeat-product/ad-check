@@ -1809,9 +1809,7 @@ function CheckHistory({ projectId, files, checkResults, onRenameFile, patterns }
                   <Badge variant={isComparison ? "secondary" : "outline"} className="text-[10px]">{draftLabel}</Badge>
                 </td>
                 <td className="px-4 py-2.5 text-center">
-                  <Badge className={cn("text-[10px] font-bold", getEffectiveSubmitBadgeClass(cr?.overall_status, cr?.check_items as any, cr?.resolved_items as any))}>
-                    {getEffectiveSubmitLabel(cr?.overall_status, cr?.check_items as any, cr?.resolved_items as any).label}
-                  </Badge>
+                  <Badge variant="outline" className={cn("text-[10px] font-bold", st.class)}>{st.label}</Badge>
                 </td>
                 <td className="px-4 py-2.5 text-center text-status-ng font-bold">{cr?.ng_count ?? 0}</td>
                 <td className="px-4 py-2.5 text-center text-status-warning font-bold">{cr?.warning_count ?? 0}</td>
