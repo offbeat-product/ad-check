@@ -27,6 +27,38 @@ export function getSubmitBadgeClassFromCounts(ngCount: number | null | undefined
     : "bg-status-ng text-white border-status-ng";
 }
 
+/**
+ * Compute effective GO/NG considering resolved items.
+ * If the original status is NG (C/D) but ALL NG check items have been resolved, return GO.
+ */
+export function getEffectiveSubmitLabel(
+  overallStatus: string | null | undefined,
+  checkItems: Array<{ status: string; pattern_id: string }> | null | undefined,
+  resolvedItems: string[] | null | undefined,
+): { label: string; isOk: boolean } {
+  const base = getSubmitLabel(overallStatus);
+  if (base.isOk) return base; // Already GO
+  if (!checkItems || !resolvedItems || resolvedItems.length === 0) return base;
+
+  const resolvedSet = new Set(resolvedItems);
+  const ngItems = checkItems.filter(i => i.status === "NG");
+  if (ngItems.length > 0 && ngItems.every(i => resolvedSet.has(i.pattern_id))) {
+    return { label: "GO", isOk: true };
+  }
+  return base;
+}
+
+export function getEffectiveSubmitBadgeClass(
+  overallStatus: string | null | undefined,
+  checkItems: Array<{ status: string; pattern_id: string }> | null | undefined,
+  resolvedItems: string[] | null | undefined,
+): string {
+  const { isOk } = getEffectiveSubmitLabel(overallStatus, checkItems, resolvedItems);
+  return isOk
+    ? "bg-status-ok text-white border-status-ok"
+    : "bg-status-ng text-white border-status-ng";
+}
+
 /** Japanese labels for check item statuses */
 export const STATUS_LABEL: Record<string, string> = {
   NG: "修正必須",

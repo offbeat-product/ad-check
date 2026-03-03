@@ -34,6 +34,7 @@ export type Database = {
           product_code: string
           product_name: string
           raw_response: Json | null
+          resolved_items: Json | null
           status: string | null
           total_checks: number | null
           updated_at: string | null
@@ -59,6 +60,7 @@ export type Database = {
           product_code: string
           product_name: string
           raw_response?: Json | null
+          resolved_items?: Json | null
           status?: string | null
           total_checks?: number | null
           updated_at?: string | null
@@ -84,6 +86,7 @@ export type Database = {
           product_code?: string
           product_name?: string
           raw_response?: Json | null
+          resolved_items?: Json | null
           status?: string | null
           total_checks?: number | null
           updated_at?: string | null
@@ -1299,6 +1302,7 @@ export type Database = {
           product_code: string
           product_name: string
           raw_response: Json | null
+          resolved_items: Json | null
           status: string | null
           total_checks: number | null
           updated_at: string | null

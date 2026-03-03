@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useCallback } from "react";
+import { useRef, useState, useMemo, useCallback, useEffect } from "react";
 import { format } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
-import { getSubmitLabel, getSubmitBadgeClass, STATUS_LABEL, STATUS_FILTER_OPTIONS } from "@/lib/check-display";
+import { getSubmitLabel, getSubmitBadgeClass, STATUS_LABEL, STATUS_FILTER_OPTIONS, getEffectiveSubmitLabel } from "@/lib/check-display";
 import { cn } from "@/lib/utils";
 import CheckItemCard from "./CheckItemCard";
 import ReferenceStatusIndicator from "@/components/reference/ReferenceStatusIndicator";
@@ -42,12 +42,38 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set(["NG", "WARNING"]));
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
+  // Load persisted resolved_items from DB
+  useEffect(() => {
+    if (!checkResultId) return;
+    let cancelled = false;
+    supabase.from("check_results").select("resolved_items").eq("id", checkResultId).maybeSingle().then(({ data }) => {
+      if (cancelled || !data?.resolved_items) return;
+      const ids = Array.isArray(data.resolved_items) ? data.resolved_items as string[] : [];
+      if (ids.length > 0) setResolvedItems(new Set(ids));
+    });
+    return () => { cancelled = true; };
+  }, [checkResultId]);
+
+  // Persist resolved_items to DB when changed
+  const persistResolved = useCallback(async (newSet: Set<string>) => {
+    if (!checkResultId) return;
+    await supabase.from("check_results").update({ resolved_items: [...newSet] }).eq("id", checkResultId);
+  }, [checkResultId]);
+
+  const toggleResolved = useCallback((patternId: string) => {
+    setResolvedItems((s) => {
+      const next = new Set(s);
+      next.has(patternId) ? next.delete(patternId) : next.add(patternId);
+      persistResolved(next);
+      return next;
+    });
+  }, [persistResolved]);
+
   const toggleFilter = (key: string) => {
     setActiveFilters((s) => {
       const next = new Set(s);
       if (next.has(key)) {
         next.delete(key);
-        // If all removed, show all
         if (next.size === 0) {
           STATUS_FILTER_OPTIONS.forEach((o) => next.add(o.key));
         }
@@ -73,15 +99,10 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
     return c;
   }, [items]);
 
-  // Dynamic GO/NG: if all NG items are resolved, override to GO
-  const allNgResolved = useMemo(() => {
-    const ngItems = items.filter(i => i.status === "NG");
-    return ngItems.length > 0 && ngItems.every(i => resolvedItems.has(i.pattern_id));
-  }, [items, resolvedItems]);
-
-  const effectiveSubmit = allNgResolved
-    ? { label: "GO", isOk: true }
-    : getSubmitLabel(overallStatus);
+  // Dynamic GO/NG using effective label
+  const effectiveSubmit = useMemo(() => {
+    return getEffectiveSubmitLabel(overallStatus, items, [...resolvedItems]);
+  }, [overallStatus, items, resolvedItems]);
 
   const toggleSelectItem = (id: string) => {
     setSelectedItems((s) => { const next = new Set(s); next.has(id) ? next.delete(id) : next.add(id); return next; });
@@ -168,7 +189,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
 
       await Promise.all(promises);
       setAppliedItems((s) => { const next = new Set(s); patternIds.forEach((id) => next.add(id)); return next; });
-      setResolvedItems((s) => { const next = new Set(s); patternIds.forEach((id) => next.add(id)); return next; });
+      setResolvedItems((s) => { const next = new Set(s); patternIds.forEach((id) => next.add(id)); persistResolved(next); return next; });
       toast({ title: `✅ ${selectedItems.size}件の修正パターンを保存しました` });
       setSelectedItems(new Set());
       if (onTabChange) onTabChange("comments");
@@ -243,7 +264,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
               commentCount={commentCounts[item.pattern_id] || 0}
               productCode={productCode}
               onToggleSelect={() => toggleSelectItem(item.pattern_id)}
-              onToggleResolved={() => setResolvedItems((s) => { const next = new Set(s); next.has(item.pattern_id) ? next.delete(item.pattern_id) : next.add(item.pattern_id); return next; })}
+              onToggleResolved={() => toggleResolved(item.pattern_id)}
               onCommentClick={() => onCommentClick(item.pattern_id)}
               onSeekMedia={onSeekMedia}
               onMarkerClick={onMarkerClick}
@@ -267,7 +288,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
               productCode={productCode}
               cardRefs={cardRefs}
               onToggleSelect={toggleSelectItem}
-              onToggleResolved={(id) => setResolvedItems((s) => { const next = new Set(s); next.has(id) ? next.delete(id) : next.add(id); return next; })}
+              onToggleResolved={(id) => toggleResolved(id)}
               onCommentClick={onCommentClick}
               onSeekMedia={onSeekMedia}
               onMarkerClick={onMarkerClick}

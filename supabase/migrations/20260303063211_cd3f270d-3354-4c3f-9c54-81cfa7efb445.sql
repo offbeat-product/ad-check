@@ -1,0 +1,1 @@
+ALTER TABLE public.check_results ADD COLUMN resolved_items jsonb DEFAULT '[]'::jsonb;
