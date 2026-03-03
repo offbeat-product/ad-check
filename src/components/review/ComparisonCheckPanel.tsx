@@ -105,9 +105,12 @@ export default function ComparisonCheckPanel({
     setResolvedItems((s) => {
       const next = new Set(s);
       next.has(patternId) ? next.delete(patternId) : next.add(patternId);
-      // For comparison, persist to the selected history entry or parent check result
       const targetId = selectedHistoryId || checkResultId;
       persistResolved(next, targetId);
+      // Also update the history resolved map for badge consistency
+      if (selectedHistoryId) {
+        setHistoryResolvedMap(prev => ({ ...prev, [selectedHistoryId]: [...next] }));
+      }
       return next;
     });
   }, [persistResolved, selectedHistoryId, checkResultId]);
