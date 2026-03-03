@@ -1,10 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useProjectTree } from "@/hooks/useProjectTree";
 import {
-  Home, Zap, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search, Rocket, PanelLeftClose, PanelLeftOpen, Sparkles, BarChart3,
+  Home, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search, Rocket, PanelLeftClose, PanelLeftOpen, Sparkles, BarChart3, X, EyeOff, Eye,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import NotificationBell from "@/components/NotificationBell";
@@ -35,6 +35,18 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
   });
   const [projectsOpen, setProjectsOpen] = useState(true);
   const [pendingRuleCount, setPendingRuleCount] = useState(0);
+
+  // New: inline search & active filter
+  const [sidebarSearch, setSidebarSearch] = useState("");
+  const [hideCompleted, setHideCompleted] = useState(() => {
+    try { return localStorage.getItem("sb_hide_completed") === "true"; }
+    catch { return false; }
+  });
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    localStorage.setItem("sb_hide_completed", String(hideCompleted));
+  }, [hideCompleted]);
 
   useEffect(() => {
     supabase.from("rule_candidates").select("*", { count: "exact", head: true }).eq("status", "pending")
@@ -89,56 +101,101 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
 
   const activeProjectId = location.pathname.match(/\/project\/([^/]+)/)?.[1];
 
+  // --- Filtered tree based on search & hide completed ---
+  const searchLower = sidebarSearch.toLowerCase().trim();
+  const isSearching = searchLower.length > 0;
+
+  const filteredTree = useMemo(() => {
+    const sortedClients = [...clients].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name, "ja"));
+
+    return sortedClients.map((client) => {
+      const clientProducts = [...products]
+        .filter((p) => p.client_id === client.id)
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name, "ja"));
+
+      const mappedProducts = clientProducts.map((product) => {
+        let productProjects = projects
+          .filter((pr) => pr.product_id === product.id)
+          .sort((a, b) => {
+            const orderDiff = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+            if (orderDiff !== 0) return orderDiff;
+            return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+          });
+
+        // Filter completed
+        if (hideCompleted) {
+          productProjects = productProjects.filter((pr) => pr.status !== "completed");
+        }
+
+        // Filter by search
+        if (isSearching) {
+          productProjects = productProjects.filter((pr) =>
+            pr.name.toLowerCase().includes(searchLower) ||
+            (pr.project_code && pr.project_code.toLowerCase().includes(searchLower))
+          );
+        }
+
+        return { product, projects: productProjects };
+      });
+
+      // Filter products: keep if product name matches or has matching projects
+      const filteredProducts = isSearching
+        ? mappedProducts.filter((mp) =>
+            mp.product.name.toLowerCase().includes(searchLower) ||
+            mp.product.code.toLowerCase().includes(searchLower) ||
+            mp.projects.length > 0
+          )
+        : hideCompleted
+          ? mappedProducts.filter((mp) => mp.projects.length > 0)
+          : mappedProducts;
+
+      return { client, products: filteredProducts };
+    }).filter((entry) => {
+      // Filter clients: keep if client name matches or has matching products
+      if (isSearching) {
+        return entry.client.name.toLowerCase().includes(searchLower) || entry.products.length > 0;
+      }
+      if (hideCompleted) {
+        return entry.products.length > 0;
+      }
+      return true;
+    });
+  }, [clients, products, projects, searchLower, isSearching, hideCompleted]);
+
+  // Auto-expand all when searching
+  const effectiveOpenClients = isSearching
+    ? new Set(filteredTree.map((e) => e.client.id))
+    : openClients;
+  const effectiveOpenProducts = isSearching
+    ? new Set(filteredTree.flatMap((e) => e.products.map((p) => p.product.id)))
+    : openProducts;
+
+  // Count filtered projects for display
+  const totalFilteredProjects = filteredTree.reduce((sum, c) => sum + c.products.reduce((s, p) => s + p.projects.length, 0), 0);
+
+  // --- Drag handlers (unchanged) ---
   const handleProjectDragStart = (projectId: string, productId: string) => {
     dragItem.current = { id: projectId, productId };
   };
-
-  const handleProjectDragEnter = (projectId: string) => {
-    setDragOverProjectId(projectId);
-  };
-
+  const handleProjectDragEnter = (projectId: string) => { setDragOverProjectId(projectId); };
   const handleProjectDragEnd = () => {
     if (!dragItem.current || !dragOverProjectId || dragItem.current.id === dragOverProjectId) {
-      setDragOverProjectId(null);
-      dragItem.current = null;
-      return;
+      setDragOverProjectId(null); dragItem.current = null; return;
     }
-
     const productId = dragItem.current.productId;
-    const productProjects = projects
-      .filter((p) => p.product_id === productId)
-      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-
+    const productProjects = projects.filter((p) => p.product_id === productId).sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
     const draggedIdx = productProjects.findIndex((p) => p.id === dragItem.current!.id);
     const targetIdx = productProjects.findIndex((p) => p.id === dragOverProjectId);
-
-    if (draggedIdx === -1 || targetIdx === -1) {
-      setDragOverProjectId(null);
-      dragItem.current = null;
-      return;
-    }
-
-    // Check same product group
+    if (draggedIdx === -1 || targetIdx === -1) { setDragOverProjectId(null); dragItem.current = null; return; }
     const targetProject = projects.find((p) => p.id === dragOverProjectId);
-    if (targetProject?.product_id !== productId) {
-      setDragOverProjectId(null);
-      dragItem.current = null;
-      return;
-    }
-
+    if (targetProject?.product_id !== productId) { setDragOverProjectId(null); dragItem.current = null; return; }
     const reordered = [...productProjects];
     const [removed] = reordered.splice(draggedIdx, 1);
     reordered.splice(targetIdx, 0, removed);
-
-    if (updateProjectOrder) {
-      updateProjectOrder(productId, reordered.map((p) => p.id));
-    }
-
-    setDragOverProjectId(null);
-    dragItem.current = null;
+    if (updateProjectOrder) updateProjectOrder(productId, reordered.map((p) => p.id));
+    setDragOverProjectId(null); dragItem.current = null;
   };
 
-  // Client drag handlers
   const handleClientDragStart = (clientId: string) => { dragClientItem.current = clientId; };
   const handleClientDragEnter = (clientId: string) => { setDragOverClientId(clientId); };
   const handleClientDragEnd = () => {
@@ -156,7 +213,6 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
     setDragOverClientId(null); dragClientItem.current = null;
   };
 
-  // Product drag handlers
   const handleProductDragStart = (productId: string, clientId: string) => { dragProductItem.current = { id: productId, clientId }; };
   const handleProductDragEnter = (productId: string) => { setDragOverProductId(productId); };
   const handleProductDragEnd = () => {
@@ -231,8 +287,6 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
         </button>
       )}
 
-      {/* profile section moved to bottom */}
-
       <nav className="flex-1 overflow-y-auto py-2">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
@@ -269,51 +323,99 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
             {projectsOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
           </button>
 
-          {projectsOpen && [...clients].sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name, "ja")).map((client) => (
+          {projectsOpen && (
+            <>
+              {/* Inline search + active filter */}
+              <div className="px-4 pb-2 space-y-1.5">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground/60" />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    value={sidebarSearch}
+                    onChange={(e) => setSidebarSearch(e.target.value)}
+                    placeholder="案件を絞り込み..."
+                    className="w-full pl-7 pr-7 py-1.5 text-xs rounded-md border border-border bg-muted/20 text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-1 focus:ring-primary/30 focus:border-primary/40"
+                  />
+                  {sidebarSearch && (
+                    <button
+                      onClick={() => setSidebarSearch("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground/60 hover:text-foreground"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+                <button
+                  onClick={() => setHideCompleted(!hideCompleted)}
+                  className={cn(
+                    "flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-md transition-colors w-full",
+                    hideCompleted
+                      ? "bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-muted/50"
+                  )}
+                >
+                  {hideCompleted ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                  {hideCompleted ? "完了済みを非表示中" : "完了済みも表示中"}
+                  {isSearching && (
+                    <span className="ml-auto text-muted-foreground">{totalFilteredProjects}件</span>
+                  )}
+                </button>
+              </div>
+
+              {/* No results */}
+              {filteredTree.length === 0 && (
+                <div className="px-5 py-4 text-center">
+                  <p className="text-xs text-muted-foreground">該当する案件がありません</p>
+                  {isSearching && (
+                    <button
+                      onClick={() => setSidebarSearch("")}
+                      className="mt-1 text-[10px] text-primary hover:underline"
+                    >
+                      検索をクリア
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {filteredTree.map(({ client, products: clientProducts }) => (
             <div key={client.id}
-              draggable
+              draggable={!isSearching}
               onDragStart={() => handleClientDragStart(client.id)}
               onDragEnter={() => handleClientDragEnter(client.id)}
               onDragEnd={handleClientDragEnd}
               onDragOver={(e) => e.preventDefault()}
             >
               <div className={cn("flex items-center w-full group", dragOverClientId === client.id && "bg-primary/5")}>
-                <GripVertical className="h-3 w-3 text-muted-foreground/30 ml-3 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab shrink-0" />
+                {!isSearching && <GripVertical className="h-3 w-3 text-muted-foreground/30 ml-3 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab shrink-0" />}
                 <button onClick={() => toggleClient(client.id)}
-                  className="flex items-center gap-1 px-2 py-2 text-sm text-muted-foreground hover:bg-muted/50 shrink-0">
-                  {openClients.has(client.id) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                  className={cn("flex items-center gap-1 py-2 text-sm text-muted-foreground hover:bg-muted/50 shrink-0", isSearching ? "px-3 ml-1" : "px-2")}>
+                  {effectiveOpenClients.has(client.id) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                 </button>
                 <button onClick={() => navigate(`/client/${client.id}`)}
                   className="flex-1 py-2 pr-3 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors truncate text-left">
                   {client.name}
                 </button>
+                {isSearching && (
+                  <span className="text-[10px] text-muted-foreground/60 pr-3">
+                    {clientProducts.reduce((s, p) => s + p.projects.length, 0)}
+                  </span>
+                )}
               </div>
 
-              {openClients.has(client.id) && [...products]
-                .filter((p) => p.client_id === client.id)
-                .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name, "ja"))
-                .map((product) => {
-                  const productProjects = projects
-                    .filter((pr) => pr.product_id === product.id)
-                    .sort((a, b) => {
-                      const orderDiff = (a.sort_order ?? 0) - (b.sort_order ?? 0);
-                      if (orderDiff !== 0) return orderDiff;
-                      return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-                    });
-
-                  return (
+              {effectiveOpenClients.has(client.id) && clientProducts.map(({ product, projects: productProjects }) => (
                     <div key={product.id}
-                      draggable
+                      draggable={!isSearching}
                       onDragStart={(e) => { e.stopPropagation(); handleProductDragStart(product.id, client.id); }}
                       onDragEnter={() => handleProductDragEnter(product.id)}
                       onDragEnd={handleProductDragEnd}
                       onDragOver={(e) => e.preventDefault()}
                     >
                       <div className={cn("flex items-center w-full group", dragOverProductId === product.id && "bg-primary/5")}>
-                        <GripVertical className="h-3 w-3 text-muted-foreground/30 ml-7 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab shrink-0" />
+                        {!isSearching && <GripVertical className="h-3 w-3 text-muted-foreground/30 ml-7 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab shrink-0" />}
                         <button onClick={() => toggleProduct(product.id)}
-                          className="flex items-center gap-1 px-2 py-1.5 text-sm text-muted-foreground hover:bg-muted/50 shrink-0">
-                          {openProducts.has(product.id) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                          className={cn("flex items-center gap-1 py-1.5 text-sm text-muted-foreground hover:bg-muted/50 shrink-0", isSearching ? "px-2 ml-5" : "px-2")}>
+                          {effectiveOpenProducts.has(product.id) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                         </button>
                         <button
                           onClick={() => navigate(`/product/${product.id}`)}
@@ -325,14 +427,14 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
                         </button>
                       </div>
 
-                      {openProducts.has(product.id) && productProjects.map((project) => {
+                      {effectiveOpenProducts.has(product.id) && productProjects.map((project) => {
                         const productColor = getProductColor(product.color);
                         const isCompleted = project.status === "completed";
 
                         return (
                           <div
                             key={project.id}
-                            draggable
+                            draggable={!isSearching}
                             onDragStart={() => handleProjectDragStart(project.id, product.id)}
                             onDragEnter={() => handleProjectDragEnter(project.id)}
                             onDragEnd={handleProjectDragEnd}
@@ -342,10 +444,11 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
                               dragOverProjectId === project.id && "bg-primary/5"
                             )}
                           >
-                            <GripVertical className="h-3 w-3 text-muted-foreground/30 ml-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab shrink-0" />
+                            {!isSearching && <GripVertical className="h-3 w-3 text-muted-foreground/30 ml-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab shrink-0" />}
                             <button
                               onClick={() => navigate(`/project/${project.id}`)}
                               className={cn("flex-1 flex items-center gap-2 px-1 py-1.5 text-xs transition-colors truncate",
+                                isSearching ? "ml-9" : "",
                                 activeProjectId === project.id
                                   ? "bg-sidebar-accent text-primary font-medium border-l-2 border-primary"
                                   : "text-muted-foreground hover:bg-muted/50",
@@ -358,7 +461,7 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
                           </div>
                         );
                       })}
-                      {openProducts.has(product.id) && productProjects.length === 0 && (
+                      {effectiveOpenProducts.has(product.id) && productProjects.length === 0 && !isSearching && (
                         <button
                           onClick={() => onCreateProject?.()}
                           className="px-12 py-1.5 text-[10px] text-primary/70 hover:text-primary transition-colors flex items-center gap-1"
@@ -367,11 +470,12 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
                         </button>
                       )}
                     </div>
-                  );
-                })
+                  ))
               }
             </div>
-          ))}
+              ))}
+            </>
+          )}
         </div>
         )}
 
