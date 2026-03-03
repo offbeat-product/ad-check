@@ -1809,7 +1809,7 @@ function CheckHistory({ projectId, files, checkResults, onRenameFile, patterns }
                   <Badge variant={isComparison ? "secondary" : "outline"} className="text-[10px]">{draftLabel}</Badge>
                 </td>
                 <td className="px-4 py-2.5 text-center">
-                  <Badge variant="outline" className={cn("text-[10px] font-bold", st.class)}>{st.label}</Badge>
+                  <Badge variant="outline" className={cn("text-[10px] font-bold", fileSt.class)}>{fileSt.label}</Badge>
                 </td>
                 <td className="px-4 py-2.5 text-center text-status-ng font-bold">{cr?.ng_count ?? 0}</td>
                 <td className="px-4 py-2.5 text-center text-status-warning font-bold">{cr?.warning_count ?? 0}</td>
