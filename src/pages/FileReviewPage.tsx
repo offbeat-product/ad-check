@@ -78,6 +78,7 @@ export default function FileReviewPage() {
   const mediaPreviewRef = useRef<MediaPreviewHandle>(null);
   const [mediaCurrentTime, setMediaCurrentTime] = useState<number | null>(null);
   const [correctionCount, setCorrectionCount] = useState<number>(0);
+  const [correctionRefreshKey, setCorrectionRefreshKey] = useState(0);
   const [candidateCount, setCandidateCount] = useState<number>(0);
   const [mentionMembers, setMentionMembers] = useState<MentionMember[]>([]);
   const [comparisonMode, setComparisonMode] = useState(false);
@@ -125,7 +126,7 @@ export default function FileReviewPage() {
       setCandidateCount(rCount ?? 0);
     };
     fetchStats();
-  }, [product?.id, file?.process_type]);
+  }, [product?.id, file?.process_type, correctionRefreshKey]);
 
   const fetchVersions = async () => {
     if (!fileId) return;
@@ -845,6 +846,7 @@ export default function FileReviewPage() {
             ai_scope: "project",
             created_by: user.id,
           } as any);
+          setCorrectionRefreshKey((k) => k + 1);
         } catch (err) {
           console.error("[correction_logs] silent error:", err);
         }
