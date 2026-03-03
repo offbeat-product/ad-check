@@ -48,8 +48,7 @@ export function getEffectiveSubmitLabel(
   const resolvedSet = new Set(resolvedItems);
   const ngItems = checkItems.filter(i => i.status === "NG");
   if (ngItems.length > 0 && ngItems.every(i => {
-    // Use pattern_id if available, otherwise fall back to item text as identifier
-    const id = i.pattern_id || i.item || "";
+    const id = getCheckItemId(i);
     return id ? resolvedSet.has(id) : false;
   })) {
     return { label: "GO", isOk: true };
