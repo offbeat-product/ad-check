@@ -102,7 +102,9 @@ export default function ComparisonCheckPanel({
     const targetId = crId || checkResultId;
     if (!targetId) return;
     const arr = [...newSet];
-    const { items: currentCheckItems, overallStatus: originalStatus } = displayDataRef.current;
+    const { items: currentCheckItems } = displayDataRef.current;
+    // Use the original NG status (C/D) for revert, not the possibly-overridden "B"
+    const originalStatus = originalStatusRef.current || displayDataRef.current.overallStatus;
 
     // Update the target (comparison or parent) record
     await supabase.from("check_results").update({ resolved_items: arr }).eq("id", targetId);
