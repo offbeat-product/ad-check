@@ -1288,7 +1288,13 @@ export default function FileReviewPage() {
               highlightAnnotation={highlightAnnotation}
               members={mentionMembers}
               submissionType={file.submission_type}
-              onSubmitToClient={() => setSubmitToClientOpen(true)}
+              onSubmitToClient={() => {
+                if (!record?.check_items) {
+                  toast({ title: "AIチェックを先に実行してください", description: "クライアント提出前にAIチェックが必要です。", variant: "destructive" });
+                  return;
+                }
+                setSubmitToClientOpen(true);
+              }}
               onInternalRevision={() => setInternalRevisionOpen(true)}
             />
           ) : (
@@ -1369,7 +1375,13 @@ export default function FileReviewPage() {
                 <Button
                   size="lg"
                   className="w-full gap-2 text-sm font-bold h-12"
-                  onClick={() => setSubmitToClientOpen(true)}
+                  onClick={() => {
+                    if (!record?.check_items) {
+                      toast({ title: "AIチェックを先に実行してください", description: "クライアント提出前にAIチェックが必要です。", variant: "destructive" });
+                      return;
+                    }
+                    setSubmitToClientOpen(true);
+                  }}
                 >
                   <CheckCircle2 className="h-5 w-5" />
                   クライアントに提出する
@@ -1468,7 +1480,13 @@ export default function FileReviewPage() {
         onAcquireLock={acquireLock}
         onReleaseLock={releaseLock}
         submissionType={file.submission_type}
-        onSubmitToClient={() => setSubmitToClientOpen(true)}
+        onSubmitToClient={() => {
+          if (!record?.check_items) {
+            toast({ title: "AIチェックを先に実行してください", description: "クライアント提出前にAIチェックが必要です。", variant: "destructive" });
+            return;
+          }
+          setSubmitToClientOpen(true);
+        }}
         onInternalRevision={() => setInternalRevisionOpen(true)}
         emptyCheckMessage={
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
