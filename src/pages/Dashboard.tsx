@@ -133,6 +133,24 @@ export default function Dashboard() {
         handleSupabaseError(cr.error, "check_results");
         setRecords(cr.data ?? []);
 
+        // Resolve check_result -> project_file mapping for navigation
+        const crIds = (cr.data ?? []).map(r => r.id);
+        if (crIds.length > 0) {
+          const { data: pfLinks } = await supabase
+            .from("project_files")
+            .select("id, project_id, check_result_id")
+            .in("check_result_id", crIds);
+          if (!cancelled && pfLinks) {
+            const map = new Map<string, { projectId: string; fileId: string }>();
+            pfLinks.forEach((pf: { id: string; project_id: string | null; check_result_id: string | null }) => {
+              if (pf.check_result_id && pf.project_id) {
+                map.set(pf.check_result_id, { projectId: pf.project_id, fileId: pf.id });
+              }
+            });
+            setCheckFileMap(map);
+          }
+        }
+
         // Resolve user profiles
         const userIds = [...new Set((cr.data ?? []).map(r => r.user_id).filter(Boolean))];
         if (userIds.length > 0) {
