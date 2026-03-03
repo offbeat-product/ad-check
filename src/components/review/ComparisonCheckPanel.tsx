@@ -319,14 +319,22 @@ export default function ComparisonCheckPanel({
     }
   };
 
-  // Determine which result to show: selected history or latest
+  // Determine which result to show: selected history, latest comparison, or initial AI check
   const displayResult: CheckResult | null = selectedHistoryId
     ? (() => {
         const h = history.find(h => h.id === selectedHistoryId);
         return h ? { overall_status: h.overall_status as any, ng_count: h.ng_count, warning_count: h.warning_count, ok_count: h.ok_count, total_checks: h.total_checks, check_items: h.check_items } : result;
       })()
-    : result;
+    : result || (initialItems && initialItems.length > 0 ? {
+        overall_status: (initialOverallStatus || "C") as any,
+        ng_count: initialItems.filter(i => i.status === "NG").length,
+        warning_count: initialItems.filter(i => i.status === "WARNING").length,
+        ok_count: initialItems.filter(i => i.status === "OK").length,
+        total_checks: initialItems.length,
+        check_items: initialItems,
+      } : null);
 
+  const isShowingInitialCheck = !selectedHistoryId && !result && !!initialItems && initialItems.length > 0;
   const displayItems = displayResult?.check_items || [];
 
   // Filter logic
