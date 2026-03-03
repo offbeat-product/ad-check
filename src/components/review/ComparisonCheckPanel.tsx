@@ -94,6 +94,8 @@ export default function ComparisonCheckPanel({
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set(["NG", "WARNING"]));
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const displayDataRef = useRef<{ items: CheckItem[]; overallStatus: string | null }>({ items: [], overallStatus: null });
+  // Track original overall_status before any resolved-based overrides
+  const originalStatusRef = useRef<string | null>(null);
 
   // Persist resolved_items to DB and sync effective GO/NG to parent's overall_status
   const persistResolved = useCallback(async (newSet: Set<string>, crId?: string | null) => {
