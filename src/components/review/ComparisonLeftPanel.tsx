@@ -28,7 +28,7 @@ interface ComparisonLeftPanelProps {
   /** Paint mode support */
   paintMode?: boolean;
   onPaintModeToggle?: () => void;
-  onAnnotationSave?: (annotations: unknown[], comment: string, mentionedUserIds?: string[]) => void;
+  onAnnotationSave?: (annotations: unknown[], comment: string, mentionedUserIds?: string[], isCorrection?: boolean) => void;
   savedAnnotations?: Array<{ type: string; points: { x: number; y: number }[]; color: string; strokeWidth: number; text?: string; imagePosition?: { x: number; y: number; width: number; height: number } }>;
   highlightAnnotation?: { type: string; points: { x: number; y: number }[]; color: string; strokeWidth: number; text?: string; imagePosition?: { x: number; y: number; width: number; height: number } } | null;
   members?: MentionMember[];

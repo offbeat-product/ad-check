@@ -56,6 +56,7 @@ interface ReviewRightPanelProps {
   submissionType?: string;
   onSubmitToClient?: () => void;
   onInternalRevision?: () => void;
+  commentRefreshKey?: number;
 }
 
 export default function ReviewRightPanel({
@@ -66,7 +67,7 @@ export default function ReviewRightPanel({
   comparisonMode, comparisonBeforeData, comparisonAfterData, comparisonAfterText, comparisonRoundLabel,
   onOpenComparisonMode, onComparisonCheckComplete, onComparisonSaved, onClearAfterData,
   clientName, productName, lockedByUser, onAcquireLock, onReleaseLock,
-  submissionType, onSubmitToClient, onInternalRevision,
+  submissionType, onSubmitToClient, onInternalRevision, commentRefreshKey,
 }: ReviewRightPanelProps) {
   const [totalCommentCount, setTotalCommentCount] = useState(0);
 
@@ -176,7 +177,7 @@ export default function ReviewRightPanel({
 
         <TabsContent value="comments" className="absolute inset-0 top-10 overflow-hidden mt-0 ring-0 focus-visible:ring-0 data-[state=inactive]:hidden">
           {checkResultId ? (
-            <CommentsPanel checkResultId={checkResultId} filterItemId={commentFilter} onAnnotationClick={onAnnotationClick} onCheckItemClick={onCheckItemClick} mediaCurrentTime={mediaCurrentTime} onSeekMedia={onSeekMedia} productId={productId} projectId={projectId} processType={file?.process_type} patternId={patternId} fileId={fileId} onCommentDeleted={onCommentDeleted} onCommentCountChange={setTotalCommentCount} fileName={file?.file_name} />
+            <CommentsPanel checkResultId={checkResultId} filterItemId={commentFilter} onAnnotationClick={onAnnotationClick} onCheckItemClick={onCheckItemClick} mediaCurrentTime={mediaCurrentTime} onSeekMedia={onSeekMedia} productId={productId} projectId={projectId} processType={file?.process_type} patternId={patternId} fileId={fileId} onCommentDeleted={onCommentDeleted} onCommentCountChange={setTotalCommentCount} fileName={file?.file_name} refreshKey={commentRefreshKey} />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
               <MessageCircle className="h-10 w-10 mb-3 opacity-30" />

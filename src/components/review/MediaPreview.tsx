@@ -27,7 +27,7 @@ interface MediaPreviewProps {
   scriptText?: string;
   paintMode?: boolean;
   onPaintModeToggle?: () => void;
-  onAnnotationSave?: (annotations: unknown[], comment: string, mentionedUserIds?: string[]) => void;
+  onAnnotationSave?: (annotations: unknown[], comment: string, mentionedUserIds?: string[], isCorrection?: boolean) => void;
   savedAnnotations?: AnnotationData[];
   highlightAnnotation?: AnnotationData | null;
   members?: MentionMember[];

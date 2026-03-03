@@ -48,9 +48,11 @@ interface CommentsPanelProps {
   onCommentCountChange?: (count: number) => void;
   /** File name to display on comments */
   fileName?: string;
+  /** Increment to force a refetch of comments */
+  refreshKey?: number;
 }
 
-export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia, onCommentDeleted, productId, projectId, processType, patternId, fileId, onCommentCountChange, fileName }: CommentsPanelProps) {
+export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia, onCommentDeleted, productId, projectId, processType, patternId, fileId, onCommentCountChange, fileName, refreshKey }: CommentsPanelProps) {
   const { user } = useAuth();
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
@@ -117,7 +119,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
     onCommentCountChange?.(result.length);
   };
 
-  useEffect(() => { fetchComments(); }, [checkResultId]);
+  useEffect(() => { fetchComments(); }, [checkResultId, refreshKey]);
 
   const filtered = comments.filter((c) => {
     if (filterItemId && c.check_item_id !== filterItemId) return false;
