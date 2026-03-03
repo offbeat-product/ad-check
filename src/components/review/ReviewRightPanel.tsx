@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { cn } from "@/lib/utils";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import CommentsPanel from "@/components/CommentsPanel";
 import AICheckPanel from "./AICheckPanel";
@@ -102,7 +103,7 @@ export default function ReviewRightPanel({
 
         {/* Comparison check tab */}
         {comparisonMode && (
-          <TabsContent value="comparison" className="absolute inset-0 top-10 flex flex-col overflow-hidden mt-0 ring-0 focus-visible:ring-0 data-[state=inactive]:hidden">
+          <TabsContent value="comparison" forceMount className={cn("absolute inset-0 top-10 flex flex-col overflow-hidden mt-0 ring-0 focus-visible:ring-0", effectiveTab !== "comparison" && "hidden")}>
             {file && productId && projectId ? (
               <ComparisonCheckPanel
                 file={file}
@@ -145,7 +146,7 @@ export default function ReviewRightPanel({
 
         {/* AI check tab (only when not in comparison mode) */}
         {!comparisonMode && (
-          <TabsContent value="ai-check" className="absolute inset-0 top-10 flex flex-col overflow-hidden mt-0 ring-0 focus-visible:ring-0 data-[state=inactive]:hidden">
+          <TabsContent value="ai-check" forceMount className={cn("absolute inset-0 top-10 flex flex-col overflow-hidden mt-0 ring-0 focus-visible:ring-0", effectiveTab !== "ai-check" && "hidden")}>
             {hasCheckResult ? (
               <AICheckPanel
                 items={items}
@@ -175,7 +176,7 @@ export default function ReviewRightPanel({
           </TabsContent>
         )}
 
-        <TabsContent value="comments" className="absolute inset-0 top-10 overflow-hidden mt-0 ring-0 focus-visible:ring-0 data-[state=inactive]:hidden">
+        <TabsContent value="comments" forceMount className={cn("absolute inset-0 top-10 overflow-hidden mt-0 ring-0 focus-visible:ring-0", effectiveTab !== "comments" && "hidden")}>
           {checkResultId ? (
             <CommentsPanel checkResultId={checkResultId} filterItemId={commentFilter} onAnnotationClick={onAnnotationClick} onCheckItemClick={onCheckItemClick} mediaCurrentTime={mediaCurrentTime} onSeekMedia={onSeekMedia} productId={productId} projectId={projectId} processType={file?.process_type} patternId={patternId} fileId={fileId} onCommentDeleted={onCommentDeleted} onCommentCountChange={setTotalCommentCount} fileName={file?.file_name} refreshKey={commentRefreshKey} />
           ) : (
