@@ -845,7 +845,7 @@ export default function FileReviewPage() {
   const totalVersions = versions.length;
 
   const isSf = displayFile.file_type === "image" || AI_CHECK_CONFIG[displayFile.process_type]?.inputMode === "image";
-  const currentStatus = displayFile.status || file.status || "uploaded";
+  const currentStatus = file.status || "uploaded";
   const sc = FILE_STATUS_CONFIG[currentStatus] ?? FILE_STATUS_CONFIG.uploaded;
   const hasCheckResult = !!record;
   const hasVersions = versions.length > 1;
