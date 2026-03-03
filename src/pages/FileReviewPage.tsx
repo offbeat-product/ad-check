@@ -10,6 +10,7 @@ import { tusUploadBlob } from "@/lib/tus-upload";
 import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import type { CheckItem } from "@/lib/types";
+import { getEffectiveSubmitLabel } from "@/lib/check-display";
 import type { MentionMember } from "@/components/comments/MentionInput";
 import type { Json } from "@/integrations/supabase/types";
 import type { ProjectFile, Product, Project, Client, CheckResultRow } from "@/lib/db-types";
