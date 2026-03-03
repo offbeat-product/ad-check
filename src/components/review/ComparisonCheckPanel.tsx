@@ -11,7 +11,7 @@ import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import { supabase } from "@/integrations/supabase/client";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
-import { getSubmitLabel, getSubmitBadgeClass, STATUS_FILTER_OPTIONS } from "@/lib/check-display";
+import { getSubmitLabel, getSubmitBadgeClass, STATUS_FILTER_OPTIONS, getEffectiveSubmitLabel } from "@/lib/check-display";
 import type { CheckItem, CheckResult } from "@/lib/types";
 import type { CheckMarker } from "@/lib/marker-positions";
 import type { Json } from "@/integrations/supabase/types";
@@ -96,6 +96,24 @@ export default function ComparisonCheckPanel({
   const [applying, setApplying] = useState(false);
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set(["NG", "WARNING"]));
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Persist resolved_items to DB
+  const persistResolved = useCallback(async (newSet: Set<string>, crId?: string | null) => {
+    const targetId = crId || checkResultId;
+    if (!targetId) return;
+    await supabase.from("check_results").update({ resolved_items: [...newSet] }).eq("id", targetId);
+  }, [checkResultId]);
+
+  const toggleResolved = useCallback((patternId: string) => {
+    setResolvedItems((s) => {
+      const next = new Set(s);
+      next.has(patternId) ? next.delete(patternId) : next.add(patternId);
+      // For comparison, persist to the selected history entry or parent check result
+      const targetId = selectedHistoryId || checkResultId;
+      persistResolved(next, targetId);
+      return next;
+    });
+  }, [persistResolved, selectedHistoryId, checkResultId]);
 
   // Reset state when navigating to a different file
   useEffect(() => {
@@ -299,15 +317,10 @@ export default function ComparisonCheckPanel({
     return c;
   }, [displayItems]);
 
-  // Dynamic GO/NG: if all NG items are resolved, override to GO
-  const allNgResolved = useMemo(() => {
-    const ngItems = displayItems.filter(i => i.status === "NG");
-    return ngItems.length > 0 && ngItems.every(i => resolvedItems.has(i.pattern_id));
-  }, [displayItems, resolvedItems]);
-
-  const submit = allNgResolved
-    ? { label: "GO", isOk: true }
-    : getSubmitLabel(displayResult?.overall_status);
+  // Dynamic GO/NG using effective label
+  const submit = useMemo(() => {
+    return getEffectiveSubmitLabel(displayResult?.overall_status, displayItems, [...resolvedItems]);
+  }, [displayResult?.overall_status, displayItems, resolvedItems]);
 
   const toggleSelectItem = (id: string) => {
     setSelectedItems((s) => { const next = new Set(s); next.has(id) ? next.delete(id) : next.add(id); return next; });
@@ -397,7 +410,7 @@ export default function ComparisonCheckPanel({
 
       await Promise.all(promises);
       setAppliedItems((s) => { const next = new Set(s); patternIds.forEach((id) => next.add(id)); return next; });
-      setResolvedItems((s) => { const next = new Set(s); patternIds.forEach((id) => next.add(id)); return next; });
+      setResolvedItems((s) => { const next = new Set(s); patternIds.forEach((id) => next.add(id)); persistResolved(next); return next; });
       toast({ title: `✅ ${selectedItems.size}件の修正パターンを保存しました` });
       setSelectedItems(new Set());
       if (onTabChange) onTabChange("comments");
@@ -552,7 +565,7 @@ export default function ComparisonCheckPanel({
                   commentCount={commentCounts[item.pattern_id] || 0}
                   productCode={productCode || ""}
                   onToggleSelect={() => toggleSelectItem(item.pattern_id)}
-                  onToggleResolved={() => setResolvedItems((s) => { const next = new Set(s); next.has(item.pattern_id) ? next.delete(item.pattern_id) : next.add(item.pattern_id); return next; })}
+                  onToggleResolved={() => toggleResolved(item.pattern_id)}
                   onCommentClick={() => onCommentClick?.(item.pattern_id)}
                   onSeekMedia={onSeekMedia}
                   onMarkerClick={onMarkerClick}
@@ -565,7 +578,7 @@ export default function ComparisonCheckPanel({
             {(() => {
               const okItems = filteredItems.filter((item) => item.status === "OK");
               if (okItems.length === 0) return null;
-              return <OkItemsCollapsed items={okItems} markers={markers} resolvedItems={resolvedItems} selectedItems={selectedItems} highlightCard={highlightCard} appliedItems={appliedItems} commentCounts={commentCounts} productCode={productCode || ""} cardRefs={cardRefs} onToggleSelect={toggleSelectItem} onToggleResolved={(id) => setResolvedItems((s) => { const next = new Set(s); next.has(id) ? next.delete(id) : next.add(id); return next; })} onCommentClick={(id) => onCommentClick?.(id)} onSeekMedia={onSeekMedia} onMarkerClick={onMarkerClick} />;
+              return <OkItemsCollapsed items={okItems} markers={markers} resolvedItems={resolvedItems} selectedItems={selectedItems} highlightCard={highlightCard} appliedItems={appliedItems} commentCounts={commentCounts} productCode={productCode || ""} cardRefs={cardRefs} onToggleSelect={toggleSelectItem} onToggleResolved={(id) => toggleResolved(id)} onCommentClick={(id) => onCommentClick?.(id)} onSeekMedia={onSeekMedia} onMarkerClick={onMarkerClick} />;
             })()}
 
             {filteredItems.length === 0 && (

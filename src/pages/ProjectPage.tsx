@@ -50,7 +50,7 @@ import { format, differenceInDays, isPast } from "date-fns";
 import { useBatchCheck } from "@/hooks/useBatchCheck";
 import BatchCheckFloatingBar from "@/components/BatchCheckFloatingBar";
 
-import { getSubmitBadgeClass, getSubmitLabel } from "@/lib/check-display";
+import { getSubmitBadgeClass, getSubmitLabel, getEffectiveSubmitLabel, getEffectiveSubmitBadgeClass } from "@/lib/check-display";
 
 function DeadlineDisplay({ deadline, className, isCompleted, label }: { deadline: string | null; className?: string; isCompleted?: boolean; label?: string }) {
   const prefix = label || "納期";
@@ -129,7 +129,7 @@ export default function ProjectPage() {
   const [useTextInput, setUseTextInput] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
-  const [checkResults, setCheckResults] = useState<Record<string, Pick<CheckResultRow, "id" | "overall_status" | "ng_count" | "warning_count" | "created_at" | "user_id" | "check_type" | "comparison_round">>>({});
+  const [checkResults, setCheckResults] = useState<Record<string, Pick<CheckResultRow, "id" | "overall_status" | "ng_count" | "warning_count" | "created_at" | "user_id" | "check_type" | "comparison_round"> & { resolved_items?: unknown; check_items?: unknown }>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [processModalOpen, setProcessModalOpen] = useState(false);
@@ -335,11 +335,11 @@ export default function ProjectPage() {
     if (checkResultIds.length > 0) {
       const { data: results, error: crErr } = await supabase
         .from("check_results")
-        .select("id, overall_status, ng_count, warning_count, created_at, user_id, check_type, comparison_round")
+        .select("id, overall_status, ng_count, warning_count, created_at, user_id, check_type, comparison_round, resolved_items, check_items")
         .in("id", checkResultIds);
       if (cancelled) return;
       handleSupabaseError(crErr, "check_results");
-      const map: Record<string, Pick<CheckResultRow, "id" | "overall_status" | "ng_count" | "warning_count" | "created_at" | "user_id" | "check_type" | "comparison_round">> = {};
+      const map: Record<string, Pick<CheckResultRow, "id" | "overall_status" | "ng_count" | "warning_count" | "created_at" | "user_id" | "check_type" | "comparison_round"> & { resolved_items?: unknown; check_items?: unknown }> = {};
       (results ?? []).forEach((r) => { map[r.id] = r; });
       setCheckResults(map);
     }
@@ -391,7 +391,7 @@ export default function ProjectPage() {
             if (newFile.check_result_id) {
               const { data: cr } = await supabase
                 .from("check_results")
-                .select("id, overall_status, ng_count, warning_count, created_at, user_id, check_type, comparison_round")
+                .select("id, overall_status, ng_count, warning_count, created_at, user_id, check_type, comparison_round, resolved_items, check_items")
                 .eq("id", newFile.check_result_id)
                 .maybeSingle();
               if (cr) {
@@ -1300,8 +1300,8 @@ export default function ProjectPage() {
                                             <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                                               <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
                                                 {cr && (
-                                                <Badge className={cn("text-[10px] h-4 px-1.5", getSubmitBadgeClass(cr.overall_status))}>
-                                                  {getSubmitLabel(cr.overall_status).label}
+                                                <Badge className={cn("text-[10px] h-4 px-1.5", getEffectiveSubmitBadgeClass(cr.overall_status, cr.check_items as any, cr.resolved_items as any))}>
+                                                  {getEffectiveSubmitLabel(cr.overall_status, cr.check_items as any, cr.resolved_items as any).label}
                                                 </Badge>
                                               )}
                                               {versionLabel && <span className="text-[10px] text-muted-foreground">{versionLabel}</span>}
@@ -1430,8 +1430,8 @@ export default function ProjectPage() {
                                           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                                             <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
                                             {cr && (
-                                              <Badge className={cn("text-[10px] h-4 px-1.5", getSubmitBadgeClass(cr.overall_status))}>
-                                                {getSubmitLabel(cr.overall_status).label}
+                                              <Badge className={cn("text-[10px] h-4 px-1.5", getEffectiveSubmitBadgeClass(cr.overall_status, cr.check_items as any, cr.resolved_items as any))}>
+                                                {getEffectiveSubmitLabel(cr.overall_status, cr.check_items as any, cr.resolved_items as any).label}
                                               </Badge>
                                             )}
                                             {versionLabel && <span className="text-[10px] text-muted-foreground">{versionLabel}</span>}
@@ -1731,7 +1731,7 @@ export default function ProjectPage() {
 function CheckHistory({ projectId, files, checkResults, onRenameFile, patterns }: {
   projectId: string;
   files: ProjectFile[];
-  checkResults: Record<string, Pick<CheckResultRow, "id" | "overall_status" | "ng_count" | "warning_count" | "created_at" | "user_id" | "check_type" | "comparison_round">>;
+  checkResults: Record<string, Pick<CheckResultRow, "id" | "overall_status" | "ng_count" | "warning_count" | "created_at" | "user_id" | "check_type" | "comparison_round"> & { resolved_items?: unknown; check_items?: unknown }>;
   onRenameFile: (fileId: string, newName: string) => Promise<void>;
   patterns: { id: string; name: string }[];
 }) {
@@ -1833,8 +1833,8 @@ function CheckHistory({ projectId, files, checkResults, onRenameFile, patterns }
                   <Badge variant={isComparison ? "secondary" : "outline"} className="text-[10px]">{draftLabel}</Badge>
                 </td>
                 <td className="px-4 py-2.5 text-center">
-                  <Badge className={cn("text-[10px] font-bold", getSubmitBadgeClass(cr?.overall_status))}>
-                    {getSubmitLabel(cr?.overall_status).label}
+                  <Badge className={cn("text-[10px] font-bold", getEffectiveSubmitBadgeClass(cr?.overall_status, cr?.check_items as any, cr?.resolved_items as any))}>
+                    {getEffectiveSubmitLabel(cr?.overall_status, cr?.check_items as any, cr?.resolved_items as any).label}
                   </Badge>
                 </td>
                 <td className="px-4 py-2.5 text-center text-status-ng font-bold">{cr?.ng_count ?? 0}</td>
