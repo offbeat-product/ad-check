@@ -21,7 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import CompareView from "@/components/CompareView";
+
 import ShareLinkModal from "@/components/ShareLinkModal";
 import ImagePreview from "@/components/review/ImagePreview";
 import ScriptDisplay from "@/components/review/ScriptDisplay";
@@ -66,7 +66,7 @@ export default function FileReviewPage() {
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const isRecheckingRef = useRef(false);
-  const [compareOpen, setCompareOpen] = useState(false);
+  
   const [shareOpen, setShareOpen] = useState(false);
   const [uploadRevisionOpen, setUploadRevisionOpen] = useState(false);
   const [versions, setVersions] = useState<ProjectFile[]>([]);
@@ -1218,11 +1218,6 @@ export default function FileReviewPage() {
             <Button size="sm" variant="outline" className="text-xs h-8" onClick={handleDownload}>
               <Download className="h-3 w-3 mr-1" />DL
             </Button>
-            {hasVersions && (
-              <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => setCompareOpen(true)}>
-                <GitCompare className="h-3 w-3 mr-1" />比較
-              </Button>
-            )}
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button size="sm" variant="ghost" className="text-xs h-8 text-destructive hover:text-destructive hover:bg-destructive/10">
@@ -1572,15 +1567,6 @@ export default function FileReviewPage() {
           }
         }} />
 
-      {/* Compare: use project_files mode */}
-      <CompareView
-        projectFileId={fileId}
-        projectFiles={versions}
-        processType={file.process_type}
-        originalText={file.file_data}
-        open={compareOpen}
-        onOpenChange={setCompareOpen}
-      />
       {record && <ShareLinkModal checkResultId={record.id} open={shareOpen} onOpenChange={setShareOpen} />}
 
       {/* Submit to client confirmation dialog */}
