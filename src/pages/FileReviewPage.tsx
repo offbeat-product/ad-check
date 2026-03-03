@@ -679,11 +679,12 @@ export default function FileReviewPage() {
 
   const handleDownload = () => {
     if (!file) return;
+    const dlFile = latestVersionFile && latestVersionFile.id !== file.id ? latestVersionFile : file;
     const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    if (file.file_type === "image" && file.file_data) {
-      downloadFile(file.file_data, `${file.file_name}_${date}.jpg`, true);
+    if (dlFile.file_type === "image" && dlFile.file_data) {
+      downloadFile(dlFile.file_data, `${file.file_name}_${date}.jpg`, true);
     } else {
-      downloadFile(file.file_data || "", `${file.file_name}_${date}.txt`, false);
+      downloadFile(dlFile.file_data || "", `${file.file_name}_${date}.txt`, false);
     }
   };
 
@@ -835,8 +836,16 @@ export default function FileReviewPage() {
   if (loading) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">読み込み中...</div>;
   if (!file) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">ファイルが見つかりません</div>;
 
-  const isSf = file.file_type === "image" || AI_CHECK_CONFIG[file.process_type]?.inputMode === "image";
-  const currentStatus = file.status || "uploaded";
+  // Determine the latest version file to display (instead of always showing initial draft)
+  const latestVersionFile = versions.length > 1
+    ? versions.reduce((latest, v) => (v.version_number ?? 1) > (latest.version_number ?? 1) ? v : latest, versions[0])
+    : null;
+  const displayFile = latestVersionFile && latestVersionFile.id !== file.id ? latestVersionFile : file;
+  const currentVersionNumber = displayFile.version_number ?? 1;
+  const totalVersions = versions.length;
+
+  const isSf = displayFile.file_type === "image" || AI_CHECK_CONFIG[displayFile.process_type]?.inputMode === "image";
+  const currentStatus = displayFile.status || file.status || "uploaded";
   const sc = FILE_STATUS_CONFIG[currentStatus] ?? FILE_STATUS_CONFIG.uploaded;
   const hasCheckResult = !!record;
   const hasVersions = versions.length > 1;
@@ -896,6 +905,17 @@ export default function FileReviewPage() {
                 <Pencil className="h-3 w-3 text-muted-foreground/50 shrink-0" />
               </button>
             )}
+
+            {/* Version badge */}
+            <span className={cn(
+              "shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap",
+              totalVersions > 1
+                ? "bg-primary/10 text-primary border border-primary/30"
+                : "bg-muted text-muted-foreground"
+            )}>
+              {currentVersionNumber === 1 ? "初稿" : `第${currentVersionNumber}稿`}
+              {totalVersions > 1 && ` / 全${totalVersions}稿`}
+            </span>
 
             {siblingFiles.length > 1 && (
               <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">({currentIndex + 1}/{siblingFiles.length})</span>
@@ -1176,7 +1196,7 @@ export default function FileReviewPage() {
           <div className="p-4">
             {isSf ? (
               <ImagePreview
-                imageSrc={file.file_data}
+                imageSrc={displayFile.file_data}
                 markers={hasCheckResult ? markers : []}
                 paintMode={paintMode}
                 onPaintModeToggle={() => setPaintMode(!paintMode)}
@@ -1197,7 +1217,7 @@ export default function FileReviewPage() {
               <div>
                 <MediaPreview
                   ref={mediaPreviewRef}
-                  src={file.file_data}
+                  src={displayFile.file_data}
                   mediaType={aiCfg.inputMode as "audio" | "video"}
                   label={`${client?.name} / ${product?.name} / ${aiCfg.inputMode === "audio" ? "音声" : "動画"}`}
                   noDataMessage="メディアファイルなし"
@@ -1211,7 +1231,7 @@ export default function FileReviewPage() {
               </div>
             ) : (
               <div>
-                <ScriptDisplay text={file.file_data || ""} items={items} markers={markers} onItemClick={scrollToCard} />
+                <ScriptDisplay text={displayFile.file_data || ""} items={items} markers={markers} onItemClick={scrollToCard} />
               </div>
             )}
 
