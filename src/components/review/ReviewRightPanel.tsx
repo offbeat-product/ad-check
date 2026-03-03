@@ -135,6 +135,7 @@ export default function ReviewRightPanel({
                 submissionType={submissionType}
                 onSubmitToClient={onSubmitToClient}
                 onInternalRevision={onInternalRevision}
+                autoRun={autoRunComparison}
               />
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
