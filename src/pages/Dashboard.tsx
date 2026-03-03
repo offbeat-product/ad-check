@@ -254,7 +254,7 @@ export default function Dashboard() {
 
         // 初稿合格率: クライアント提出v1でFIX済み
         const fFiles = fileRes.data ?? [];
-        const fixed = fFiles.filter((f: any) => f.status === "fixed" || f.status === "approved").length;
+        const fixed = fFiles.filter((f: any) => f.status === "fixed").length;
         setKpiFirstDraftRate(fFiles.length > 0 ? Math.round((fixed / fFiles.length) * 100) : null);
 
         setKpiLoaded(true);

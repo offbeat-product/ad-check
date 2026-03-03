@@ -224,9 +224,7 @@ export default function ComparisonCheckPanel({
         setSelectedHistoryId(crData.id);
 
         if (fileId) {
-          const isGo = res.overall_status === "A" || res.overall_status === "B";
-          const newStatus = isGo ? "checked" : "revision_requested";
-          await supabase.from("project_files").update({ status: newStatus }).eq("id", fileId);
+          await supabase.from("project_files").update({ status: "checked" }).eq("id", fileId);
         }
 
         onComparisonSaved?.(entry);

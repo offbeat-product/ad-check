@@ -202,9 +202,9 @@ export default function ProjectPage() {
   };
 
   const handleChangeSubmissionType = async (fileId: string) => {
-    const { error } = await supabase.from("project_files").update({ submission_type: "client" } as any).eq("id", fileId);
+    const { error } = await supabase.from("project_files").update({ submission_type: "client", status: "client_review" } as any).eq("id", fileId);
     if (!handleSupabaseError(error, "submission_type")) {
-      setFiles(prev => prev.map(f => f.id === fileId ? { ...f, submission_type: "client" as any } : f));
+      setFiles(prev => prev.map(f => f.id === fileId ? { ...f, submission_type: "client" as any, status: "client_review" } : f));
       toast({ title: "クライアント提出に変更しました" });
     }
   };
@@ -414,7 +414,7 @@ export default function ProjectPage() {
     // 案件完了バリデーション: 全ファイルがFIX済みでなければ完了不可
     if (newStatus === "completed") {
       const rootFiles = files.filter(f => !f.parent_file_id);
-      const nonFixedFiles = rootFiles.filter(f => f.status !== "fixed" && f.status !== "approved");
+      const nonFixedFiles = rootFiles.filter(f => f.status !== "fixed");
       if (nonFixedFiles.length > 0) {
         toast({
           title: "完了にできません",
@@ -454,9 +454,9 @@ export default function ProjectPage() {
       if (proc) {
         const processFiles = files.filter(f => f.process_type === proc.process_key && !f.parent_file_id);
         const blockers = processFiles.filter(f => {
-          // Must be either client-submitted or fixed/approved
+          // Must be either client-submitted or fixed
           const isClientSubmitted = f.submission_type === "client";
-          const isFixed = f.status === "fixed" || f.status === "approved";
+          const isFixed = f.status === "fixed";
           return !(isClientSubmitted || isFixed);
         });
         if (blockers.length > 0) {
