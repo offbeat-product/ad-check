@@ -33,7 +33,7 @@ export function getSubmitBadgeClassFromCounts(ngCount: number | null | undefined
  */
 export function getEffectiveSubmitLabel(
   overallStatus: string | null | undefined,
-  checkItems: Array<{ status: string; pattern_id: string }> | null | undefined,
+  checkItems: Array<{ status: string; pattern_id: string; item?: string }> | null | undefined,
   resolvedItems: string[] | null | undefined,
 ): { label: string; isOk: boolean } {
   const base = getSubmitLabel(overallStatus);
@@ -42,7 +42,11 @@ export function getEffectiveSubmitLabel(
 
   const resolvedSet = new Set(resolvedItems);
   const ngItems = checkItems.filter(i => i.status === "NG");
-  if (ngItems.length > 0 && ngItems.every(i => resolvedSet.has(i.pattern_id))) {
+  if (ngItems.length > 0 && ngItems.every(i => {
+    // Use pattern_id if available, otherwise fall back to item text as identifier
+    const id = i.pattern_id || i.item || "";
+    return id ? resolvedSet.has(id) : false;
+  })) {
     return { label: "GO", isOk: true };
   }
   return base;
