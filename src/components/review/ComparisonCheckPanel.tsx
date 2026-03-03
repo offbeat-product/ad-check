@@ -299,7 +299,15 @@ export default function ComparisonCheckPanel({
     return c;
   }, [displayItems]);
 
-  const submit = getSubmitLabel(displayResult?.overall_status);
+  // Dynamic GO/NG: if all NG items are resolved, override to GO
+  const allNgResolved = useMemo(() => {
+    const ngItems = displayItems.filter(i => i.status === "NG");
+    return ngItems.length > 0 && ngItems.every(i => resolvedItems.has(i.pattern_id));
+  }, [displayItems, resolvedItems]);
+
+  const submit = allNgResolved
+    ? { label: "GO", isOk: true }
+    : getSubmitLabel(displayResult?.overall_status);
 
   const toggleSelectItem = (id: string) => {
     setSelectedItems((s) => { const next = new Set(s); next.has(id) ? next.delete(id) : next.add(id); return next; });
@@ -476,7 +484,7 @@ export default function ComparisonCheckPanel({
       {displayResult && (
         <div className="shrink-0 border-b border-border px-3 py-2 space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <Badge className={cn("text-xs font-bold px-2.5 py-1", getSubmitBadgeClass(displayResult.overall_status))}>
+            <Badge className={cn("text-xs font-bold px-2.5 py-1", submit.isOk ? "bg-status-ok text-white border-status-ok" : "bg-status-ng text-white border-status-ng")}>
               {submit.label}
             </Badge>
             <span className="text-[10px] text-status-ng font-bold">修正必須 {counts.NG}</span>
