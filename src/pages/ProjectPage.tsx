@@ -1272,7 +1272,7 @@ export default function ProjectPage() {
                                                 </div>
                                               </>
                                             )}
-                                            <div className="h-16 rounded-md bg-muted/50 flex items-center justify-center mb-1.5 overflow-hidden">
+                                            <div className="h-16 rounded-md bg-muted/50 flex items-center justify-center mb-1.5 overflow-hidden relative">
                                               {isImageFile && thumbnailData ? (
                                                 <img src={thumbnailData} alt="" className="w-full h-full object-cover" />
                                               ) : (file.file_type === "video" || proc.process_key.includes("video") || proc.process_key === "vcon") && thumbnailData ? (
@@ -1287,6 +1287,11 @@ export default function ProjectPage() {
                                                 <img src={thumbnailData} alt="" className="w-full h-full object-cover" />
                                               ) : (
                                                 <Image className="h-8 w-8 text-muted-foreground/30" />
+                                              )}
+                                              {cr && file.status !== "fixed" && (
+                                                <span className={cn("absolute bottom-0.5 right-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-sm shadow-sm z-[2]", getEffectiveSubmitBadgeClass(cr.overall_status, cr.check_items as any, cr.resolved_items as any))}>
+                                                  {getEffectiveSubmitLabel(cr.overall_status, cr.check_items as any, cr.resolved_items as any).label}
+                                                </span>
                                               )}
                                             </div>
                                             {editingFileId === file.id ? (
