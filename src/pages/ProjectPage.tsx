@@ -50,7 +50,7 @@ import { format, differenceInDays, isPast } from "date-fns";
 import { useBatchCheck } from "@/hooks/useBatchCheck";
 import BatchCheckFloatingBar from "@/components/BatchCheckFloatingBar";
 
-import { getSubmitBadgeClassFromCounts, getSubmitLabelFromCounts } from "@/lib/check-display";
+import { getSubmitBadgeClass, getSubmitLabel } from "@/lib/check-display";
 
 function DeadlineDisplay({ deadline, className, isCompleted, label }: { deadline: string | null; className?: string; isCompleted?: boolean; label?: string }) {
   const prefix = label || "納期";
@@ -1300,8 +1300,8 @@ export default function ProjectPage() {
                                             <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                                               <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
                                                 {cr && (
-                                                <Badge className={cn("text-[10px] h-4 px-1.5", getSubmitBadgeClassFromCounts(cr.ng_count))}>
-                                                  {getSubmitLabelFromCounts(cr.ng_count).label}
+                                                <Badge className={cn("text-[10px] h-4 px-1.5", getSubmitBadgeClass(cr.overall_status))}>
+                                                  {getSubmitLabel(cr.overall_status).label}
                                                 </Badge>
                                               )}
                                               {versionLabel && <span className="text-[10px] text-muted-foreground">{versionLabel}</span>}
@@ -1430,8 +1430,8 @@ export default function ProjectPage() {
                                           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                                             <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
                                             {cr && (
-                                              <Badge className={cn("text-[10px] h-4 px-1.5", getSubmitBadgeClassFromCounts(cr.ng_count))}>
-                                                {getSubmitLabelFromCounts(cr.ng_count).label}
+                                              <Badge className={cn("text-[10px] h-4 px-1.5", getSubmitBadgeClass(cr.overall_status))}>
+                                                {getSubmitLabel(cr.overall_status).label}
                                               </Badge>
                                             )}
                                             {versionLabel && <span className="text-[10px] text-muted-foreground">{versionLabel}</span>}
@@ -1687,8 +1687,8 @@ export default function ProjectPage() {
       <BatchCheckFloatingBar
         progress={batchProgress}
         onDismiss={resetBatchProgress}
-        getGradeLabel={(g) => getSubmitLabelFromCounts(g === "pending" ? 0 : undefined)}
-        getGradeBadgeClass={(g) => getSubmitBadgeClassFromCounts(g === "pending" ? 0 : undefined)}
+        getGradeLabel={(g) => getSubmitLabel(g)}
+        getGradeBadgeClass={(g) => getSubmitBadgeClass(g)}
       />
 
       {/* Copy to other patterns dialog */}
@@ -1833,8 +1833,8 @@ function CheckHistory({ projectId, files, checkResults, onRenameFile, patterns }
                   <Badge variant={isComparison ? "secondary" : "outline"} className="text-[10px]">{draftLabel}</Badge>
                 </td>
                 <td className="px-4 py-2.5 text-center">
-                  <Badge className={cn("text-[10px] font-bold", getSubmitBadgeClassFromCounts(cr?.ng_count))}>
-                    {getSubmitLabelFromCounts(cr?.ng_count).label}
+                  <Badge className={cn("text-[10px] font-bold", getSubmitBadgeClass(cr?.overall_status))}>
+                    {getSubmitLabel(cr?.overall_status).label}
                   </Badge>
                 </td>
                 <td className="px-4 py-2.5 text-center text-status-ng font-bold">{cr?.ng_count ?? 0}</td>

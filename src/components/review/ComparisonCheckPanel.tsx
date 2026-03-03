@@ -11,7 +11,7 @@ import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import { supabase } from "@/integrations/supabase/client";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
-import { getSubmitLabelFromCounts, getSubmitBadgeClassFromCounts, STATUS_FILTER_OPTIONS } from "@/lib/check-display";
+import { getSubmitLabel, getSubmitBadgeClass, STATUS_FILTER_OPTIONS } from "@/lib/check-display";
 import type { CheckItem, CheckResult } from "@/lib/types";
 import type { CheckMarker } from "@/lib/marker-positions";
 import type { Json } from "@/integrations/supabase/types";
@@ -280,7 +280,7 @@ export default function ComparisonCheckPanel({
     return c;
   }, [displayItems]);
 
-  const submit = getSubmitLabelFromCounts(displayResult?.ng_count);
+  const submit = getSubmitLabel(displayResult?.overall_status);
 
   const toggleSelectItem = (id: string) => {
     setSelectedItems((s) => { const next = new Set(s); next.has(id) ? next.delete(id) : next.add(id); return next; });
@@ -457,7 +457,7 @@ export default function ComparisonCheckPanel({
       {displayResult && (
         <div className="shrink-0 border-b border-border px-3 py-2 space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
-            <Badge className={cn("text-xs font-bold px-2.5 py-1", getSubmitBadgeClassFromCounts(displayResult.ng_count))}>
+            <Badge className={cn("text-xs font-bold px-2.5 py-1", getSubmitBadgeClass(displayResult.overall_status))}>
               {submit.label}
             </Badge>
             <span className="text-[10px] text-status-ng font-bold">修正必須 {counts.NG}</span>

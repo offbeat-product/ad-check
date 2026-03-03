@@ -57,7 +57,7 @@ import type { Json } from "@/integrations/supabase/types";
 import type { CheckResultRow } from "@/lib/db-types";
 import { useReviewState, useDownload, useExportCsv } from "@/hooks/useReviewState";
 import { exportCheckExcel } from "@/lib/export-excel";
-import { getSubmitLabelFromCounts, getSubmitBadgeClassFromCounts } from "@/lib/check-display";
+import { getSubmitLabel, getSubmitBadgeClass } from "@/lib/check-display";
 import { getProcessLabel } from "@/lib/process-config";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
@@ -142,7 +142,7 @@ function FallbackCheckResultView({ id }: { id: string }) {
 
   const handleExportExcel = () => {
     if (!record) return;
-    const submit = getSubmitLabelFromCounts(record.ng_count);
+    const submit = getSubmitLabel(record.overall_status);
     exportCheckExcel(
       items,
       {
@@ -316,7 +316,7 @@ function FallbackCheckResultView({ id }: { id: string }) {
         onCommentClick={handleCommentClick}
         onCheckItemClick={scrollToCard}
         onAnnotationClick={handleAnnotationClick}
-        ngCount={record.ng_count}
+        overallStatus={record.overall_status}
       />
 
       <CompareView checkResultId={id!} processType={record.process_type} originalText={record.input_text} open={compareOpen} onOpenChange={setCompareOpen} />

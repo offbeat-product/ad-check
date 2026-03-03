@@ -1434,7 +1434,7 @@ export default function FileReviewPage() {
         onCheckItemClick={scrollToCard}
         onMarkerClick={handleMarkerJump}
         onAnnotationClick={handleAnnotationClick}
-        ngCount={record?.ng_count}
+        overallStatus={record?.overall_status}
         checkedAt={record?.created_at}
         file={file}
         productId={product?.id}

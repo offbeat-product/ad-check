@@ -12,7 +12,7 @@ import NotificationBell from "@/components/NotificationBell";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import { cn } from "@/lib/utils";
 import CreateProjectModal from "@/components/CreateProjectModal";
-import { getSubmitLabelFromCounts, getSubmitBadgeClassFromCounts } from "@/lib/check-display";
+import { getSubmitLabel, getSubmitBadgeClass } from "@/lib/check-display";
 
 const ITEMS_PER_PAGE = 10;
 
