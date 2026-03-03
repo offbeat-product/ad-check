@@ -721,22 +721,23 @@ function OkItemsCollapsed({ items, markers, resolvedItems, selectedItems, highli
         <span>問題なし ({items.length}件)</span>
       </button>
       {open && items.map((item, i) => {
+        const itemId = getCheckItemId(item);
         const marker = markers.find((m) => m.item.pattern_id === item.pattern_id);
         return (
           <CheckItemCard
-            key={item.pattern_id}
+            key={itemId}
             ref={(el) => { cardRefs.current[item.pattern_id] = el; }}
             item={item}
             index={i}
             marker={marker}
-            isResolved={resolvedItems.has(item.pattern_id)}
-            isSelected={selectedItems.has(item.pattern_id)}
+            isResolved={resolvedItems.has(itemId)}
+            isSelected={selectedItems.has(itemId)}
             isHighlighted={highlightCard === item.pattern_id}
-            isApplied={appliedItems.has(item.pattern_id)}
+            isApplied={appliedItems.has(itemId)}
             commentCount={commentCounts[item.pattern_id] || 0}
             productCode={productCode}
-            onToggleSelect={() => onToggleSelect(item.pattern_id)}
-            onToggleResolved={() => onToggleResolved(item.pattern_id)}
+            onToggleSelect={() => onToggleSelect(itemId)}
+            onToggleResolved={() => onToggleResolved(itemId)}
             onCommentClick={() => onCommentClick(item.pattern_id)}
             onSeekMedia={onSeekMedia}
             onMarkerClick={onMarkerClick}
