@@ -88,9 +88,38 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
     setActiveFilters(new Set(STATUS_FILTER_OPTIONS.map((o) => o.key)));
   };
 
-  const filteredItems = useMemo(() => {
-    return items.filter((item) => activeFilters.has(item.status));
+  // Deduplicate similar items: group by normalized item+detail text
+  const { deduped, dupeCounts } = useMemo(() => {
+    const filtered = items.filter((item) => activeFilters.has(item.status));
+    const seen = new Map<string, { representative: CheckItem; count: number; dupeIds: string[] }>();
+    const result: CheckItem[] = [];
+    const counts: Record<string, number> = {};
+
+    for (const item of filtered) {
+      // Normalize: lowercase, strip whitespace/punctuation for comparison
+      const normItem = item.item.replace(/[\s\u3000]/g, "").toLowerCase();
+      const normDetail = item.detail.replace(/[\s\u3000]/g, "").toLowerCase();
+      // Use a similarity key: same title OR very similar detail (first 60 chars)
+      const key = `${item.status}::${normItem}::${normDetail.slice(0, 60)}`;
+
+      const existing = seen.get(key);
+      if (existing) {
+        existing.count++;
+        existing.dupeIds.push(getCheckItemId(item));
+      } else {
+        seen.set(key, { representative: item, count: 1, dupeIds: [getCheckItemId(item)] });
+        result.push(item);
+      }
+    }
+
+    for (const [, v] of seen) {
+      counts[getCheckItemId(v.representative)] = v.count;
+    }
+
+    return { deduped: result, dupeCounts: counts };
   }, [items, activeFilters]);
+
+  const filteredItems = deduped;
 
   // Counts per status
   const counts = useMemo(() => {
