@@ -817,6 +817,10 @@ export default function FileReviewPage() {
 
   const handleAnnotationSave = async (annotations: unknown[], comment: string, mentionedUserIds?: string[], isCorrection?: boolean) => {
     if (!record?.id || !user) return;
+    // Auto-capture media timestamp for video/audio annotations
+    const currentMediaTime = mediaPreviewRef.current?.getCurrentTime() ?? null;
+    const aiCfgLocal = file ? AI_CHECK_CONFIG[file.process_type] : null;
+    const isMedia = aiCfgLocal?.inputMode === "audio" || aiCfgLocal?.inputMode === "video";
     const { data: savedComment, error } = await supabase.from("comments").insert([{
       check_result_id: record.id,
       author_name: user.email?.split("@")[0] || "User",
@@ -825,6 +829,7 @@ export default function FileReviewPage() {
       annotation_data: { annotations } as unknown as Json,
       status: "open",
       mentions: mentionedUserIds && mentionedUserIds.length > 0 ? mentionedUserIds : null,
+      media_timestamp: isMedia && currentMediaTime && currentMediaTime > 0 ? currentMediaTime : null,
     }]).select("id").single();
     if (!handleSupabaseError(error, "annotation save")) {
       toast({ title: "コメントを保存しました" });

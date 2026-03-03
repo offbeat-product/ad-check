@@ -23,6 +23,8 @@ interface AnnotationCanvasProps {
   height: number;
   onSaveAnnotations?: (annotations: Annotation[], comment: string, mentionedUserIds?: string[], isCorrection?: boolean) => void;
   members?: MentionMember[];
+  /** For video: returns current playback time in seconds */
+  getMediaCurrentTime?: () => number;
 }
 
 const COLORS = [
@@ -49,7 +51,7 @@ const TOOLS: { type: ToolType; icon: typeof Square; label: string }[] = [
   { type: "pin", icon: MapPin, label: "ピン" },
 ];
 
-export default function AnnotationCanvas({ active, width, height, onSaveAnnotations, members = [] }: AnnotationCanvasProps) {
+export default function AnnotationCanvas({ active, width, height, onSaveAnnotations, members = [], getMediaCurrentTime }: AnnotationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tool, setTool] = useState<ToolType>("rect");
   const [color, setColor] = useState("#EF4444");
@@ -206,10 +208,24 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
     };
   };
 
-  // Trigger mandatory comment popup after annotation is completed
+  const formatTimestamp = (seconds: number): string => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    const ms = Math.round((seconds % 1) * 1000);
+    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(ms).padStart(3, "0")}`;
+    return `${m}:${String(s).padStart(2, "0")}.${String(ms).padStart(3, "0")}`;
+  };
+
   const triggerCommentPopup = (ann: Annotation) => {
     setPendingAnnotation(ann);
-    setCommentText("");
+    // Auto-insert timestamp prefix for video annotations
+    if (getMediaCurrentTime) {
+      const t = getMediaCurrentTime();
+      setCommentText(`[${formatTimestamp(t)}] `);
+    } else {
+      setCommentText("");
+    }
     setCommentError(false);
   };
 

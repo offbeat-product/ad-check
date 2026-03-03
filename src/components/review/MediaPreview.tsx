@@ -151,6 +151,7 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
             height={containerSize.height || 400}
             onSaveAnnotations={onAnnotationSave}
             members={members}
+            getMediaCurrentTime={mediaType === "video" ? () => mediaRef.current?.currentTime ?? 0 : undefined}
           />
         )}
       </div>
