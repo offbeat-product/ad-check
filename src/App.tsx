@@ -7,8 +7,6 @@ import { ThemeProvider } from "next-themes";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
-import Check from "./pages/Check";
-import CheckResultDetail from "./pages/CheckResultDetail";
 import ProjectPage from "./pages/ProjectPage";
 import FileReviewPage from "./pages/FileReviewPage";
 import ProductPage from "./pages/ProductPage";
