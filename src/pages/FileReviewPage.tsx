@@ -1549,7 +1549,8 @@ export default function FileReviewPage() {
             setComparisonActivePairIndex(0);
             setComparisonMode(true);
             setRightTab("comparison");
-            toast({ title: "比較チェックモードに切り替えました", description: "右パネルの「比較チェック実行」ボタンを押してください" });
+            autoComparisonPendingRef.current = true;
+            toast({ title: "🤖 比較チェックを自動実行します", description: "修正版と初稿の比較チェック中..." });
           } catch (err) {
             console.error("[onUploaded] Error switching to comparison mode:", err);
             toast({ title: "比較モード切替エラー", description: err instanceof Error ? err.message : "不明なエラー", variant: "destructive" });
