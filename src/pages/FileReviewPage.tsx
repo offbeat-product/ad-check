@@ -1152,7 +1152,7 @@ export default function FileReviewPage() {
                   setComparisonActivePairIndex(0);
                 }
                 setComparisonMode(true);
-                setRightTab("comparison");
+                setRightTab("ai-check");
               }}>
                 <GitCompare className="h-3 w-3" />
                 <span className="hidden sm:inline ml-1">比較</span>
