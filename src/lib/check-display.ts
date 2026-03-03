@@ -27,6 +27,11 @@ export function getSubmitBadgeClassFromCounts(ngCount: number | null | undefined
     : "bg-status-ng text-white border-status-ng";
 }
 
+/** Get the effective ID for a check item, falling back to item text if pattern_id is missing */
+export function getCheckItemId(item: { pattern_id?: string; item?: string }): string {
+  return item.pattern_id || item.item || "";
+}
+
 /**
  * Compute effective GO/NG considering resolved items.
  * If the original status is NG (C/D) but ALL NG check items have been resolved, return GO.
