@@ -88,6 +88,7 @@ interface CheckItemCardProps {
   isApplied?: boolean;
   commentCount: number;
   productCode: string;
+  dupeCount?: number;
   onToggleSelect: () => void;
   onToggleResolved: () => void;
   onCommentClick: () => void;
