@@ -1260,7 +1260,7 @@ export default function ProjectPage() {
                                                 navigate(`/project/${id}/file/${file.id}`);
                                               }
                                             }}
-                                            className={cn("glass-card p-2 text-left hover:border-primary/30 transition-colors w-full relative overflow-hidden",
+                                            className={cn("glass-card p-2 text-left w-full relative overflow-hidden thumbnail-hover",
                                               file.status === "fixed" && "border-muted-foreground/30 ring-1 ring-muted-foreground/20",
                                               isSelected && selectMode && "ring-2 ring-primary border-primary/50"
                                             )}>
