@@ -282,6 +282,7 @@ export default function ProjectPage() {
     if (!confirmed) return;
     try {
       for (const f of targetFiles) {
+        // Delete from storage if applicable
         const bucket = getStorageBucket(f.process_type);
         if (bucket && f.file_data && !f.file_data.startsWith("data:")) {
           try {
@@ -290,18 +291,7 @@ export default function ProjectPage() {
             if (pathMatch) await supabase.storage.from(bucket).remove([decodeURIComponent(pathMatch[1])]);
           } catch {}
         }
-        if (f.check_result_id) {
-          await supabase.from("comments").delete().eq("check_result_id", f.check_result_id);
-          await supabase.from("check_results").delete().eq("id", f.check_result_id);
-        }
-        const childFiles = files.filter(cf => cf.parent_file_id === f.id);
-        for (const child of childFiles) {
-          if (child.check_result_id) {
-            await supabase.from("comments").delete().eq("check_result_id", child.check_result_id);
-            await supabase.from("check_results").delete().eq("id", child.check_result_id);
-          }
-          await supabase.from("project_files").delete().eq("id", child.id);
-        }
+        // cascade_delete_project_file trigger handles: child files, check_results → comments, share_links, correction_logs
         await supabase.from("project_files").delete().eq("id", f.id);
       }
       toast({ title: `${targetFiles.length}件のファイルを削除しました` });
