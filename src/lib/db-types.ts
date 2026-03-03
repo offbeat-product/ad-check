@@ -29,16 +29,15 @@ export function getWebhookPaths(product: Product): Record<string, string> {
   return product.webhook_paths as Record<string, string>;
 }
 
-export type ProjectFileStatus = "uploaded" | "checking" | "checked" | "fixed" | "revision_requested" | "revised" | "approved";
+export type ProjectFileStatus = "uploaded" | "checking" | "checked" | "internal_revision" | "client_review" | "fixed";
 
 export const FILE_STATUS_CONFIG: Record<string, { label: string; class: string }> = {
-  uploaded: { label: "未チェック", class: "bg-muted text-muted-foreground" },
-  checking: { label: "チェック中", class: "bg-primary/10 text-primary animate-pulse" },
-  checked: { label: "チェック済", class: "bg-primary/10 text-primary" },
+  uploaded: { label: "初稿チェック前", class: "bg-muted text-muted-foreground" },
+  checking: { label: "初稿チェック中", class: "bg-primary/10 text-primary animate-pulse" },
+  checked: { label: "初稿チェック完了", class: "bg-primary/10 text-primary" },
+  internal_revision: { label: "社内修正中", class: "bg-status-warning/10 text-status-warning" },
+  client_review: { label: "CL確認中", class: "bg-accent/10 text-accent-foreground border border-accent/30" },
   fixed: { label: "FIX済", class: "bg-status-ok/10 text-status-ok border border-status-ok" },
-  revision_requested: { label: "修正依頼", class: "bg-status-warning/10 text-status-warning" },
-  revised: { label: "修正済", class: "border border-status-ok text-status-ok" },
-  approved: { label: "承認済", class: "bg-status-ok/10 text-status-ok" },
 };
 
 // Legacy PROCESS_SECTIONS kept for backward compat (FileReviewPage uses it for upload accept)

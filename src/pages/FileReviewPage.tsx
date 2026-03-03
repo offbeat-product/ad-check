@@ -1034,7 +1034,7 @@ export default function FileReviewPage() {
               </Button>
             )}
             {/* FIX / Unfix button */}
-            {hasCheckResult && currentStatus !== "fixed" && ["checked", "revision_requested", "revised", "approved"].includes(currentStatus) && (
+            {hasCheckResult && currentStatus !== "fixed" && ["checked", "internal_revision", "client_review"].includes(currentStatus) && (
               <Button size="sm" variant="outline" className="text-xs h-8 border-status-ok text-status-ok hover:bg-status-ok/10" onClick={async () => {
                 const confirmed = window.confirm(
                   'このクリエイティブをFIX（最終確定）しますか？\nFIXしたデータは他工程のAIチェック時に照合用として使用されます。'
@@ -1174,7 +1174,7 @@ export default function FileReviewPage() {
                   version_number: actualVersion,
                   parent_file_id: file.id,
                   pattern_id: file.pattern_id,
-                  status: "revised",
+                  status: "uploaded",
                   created_by: user.email || user.id,
                 });
                 if (!handleSupabaseError(insertErr, "comparison revision save")) {
@@ -1447,12 +1447,12 @@ export default function FileReviewPage() {
             <AlertDialogAction onClick={async () => {
               try {
                 if (!file) return;
-                const { error } = await supabase.from("project_files").update({ submission_type: "client" } as any).eq("id", file.id);
+                const { error } = await supabase.from("project_files").update({ submission_type: "client", status: "client_review" } as any).eq("id", file.id);
                 if (error) {
                   toast({ title: "提出に失敗しました", description: error.message, variant: "destructive" });
                   return;
                 }
-                setFile({ ...file, submission_type: "client" as any });
+                setFile({ ...file, submission_type: "client" as any, status: "client_review" });
                 // Log the client submission action
                 await supabase.from("submission_logs").insert({
                   file_id: file.id,
@@ -1504,11 +1504,9 @@ export default function FileReviewPage() {
                   created_by: user?.id || null,
                 } as any);
                 if (logErr) console.error("[InternalRevision] log error:", logErr);
-                // Ensure submission_type stays internal
-                if (file.submission_type === "client") {
-                  await supabase.from("project_files").update({ submission_type: "internal" } as any).eq("id", file.id);
-                  setFile({ ...file, submission_type: "internal" as any });
-                }
+                // Update status to internal_revision and ensure submission_type stays internal
+                await supabase.from("project_files").update({ submission_type: "internal", status: "internal_revision" } as any).eq("id", file.id);
+                setFile({ ...file, submission_type: "internal" as any, status: "internal_revision" });
                 setInternalRevisionOpen(false);
                 // Open the upload revision modal to add next draft
                 setUploadRevisionOpen(true);
@@ -1584,7 +1582,7 @@ function UploadRevisionModal({ open, onOpenChange, file, projectId, onUploaded }
         version_number: nextVersion,
         parent_file_id: file.id,
         pattern_id: file.pattern_id,
-        status: "revised",
+        status: "uploaded",
         created_by: user.email || user.id,
       });
 

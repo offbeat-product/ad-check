@@ -136,7 +136,7 @@ function computeMetrics(procs: ProcessRow[], allFiles: FileRow[], submissionType
         const clientFiles = processFiles.filter(f => f.submission_type === "client");
         if (clientFiles.length > 0) {
           const allFixedOnTime = clientFiles.every(f => {
-            const isFixed = f.status === "fixed" || f.status === "approved";
+            const isFixed = f.status === "fixed";
             // fixed_at がある場合はそれを使い、なければ updated_at で判定
             const completedAt = f.fixed_at || f.created_at;
             return isFixed && completedAt && new Date(completedAt) <= deadlineDate;
@@ -155,7 +155,7 @@ function computeMetrics(procs: ProcessRow[], allFiles: FileRow[], submissionType
     // クライアント初稿合格率: クライアントに提出した初稿(v1, submission_type=client)がFIX済みか
     const clientFirstDrafts = allFiles.filter(f => f.submission_type === "client" && (f.version_number ?? 1) === 1);
     firstDraftTotal = clientFirstDrafts.length;
-    firstDraftPassed = clientFirstDrafts.filter(f => f.status === "fixed" || f.status === "approved").length;
+    firstDraftPassed = clientFirstDrafts.filter(f => f.status === "fixed").length;
   } else {
     // 社内初稿合格率: 社内に提出した初稿(v1)がクライアント提出済みになっているか
     // v1ファイル全体から、client_submitログがあるものを合格とする
