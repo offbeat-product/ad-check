@@ -1549,7 +1549,7 @@ export default function FileReviewPage() {
             ]);
             setComparisonActivePairIndex(0);
             setComparisonMode(true);
-            setRightTab("comparison");
+            setRightTab("ai-check");
             autoComparisonPendingRef.current = true;
             toast({ title: "🤖 比較チェックを自動実行します", description: "修正版と初稿の比較チェック中..." });
           } catch (err) {
