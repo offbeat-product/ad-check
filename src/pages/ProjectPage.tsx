@@ -53,7 +53,7 @@ import { format, differenceInDays, isPast } from "date-fns";
 import { useBatchCheck } from "@/hooks/useBatchCheck";
 import BatchCheckFloatingBar from "@/components/BatchCheckFloatingBar";
 
-import { getSubmitBadgeClass, getSubmitLabel, getEffectiveSubmitLabel, getEffectiveSubmitBadgeClass } from "@/lib/check-display";
+import { getSubmitBadgeClass, getSubmitLabel } from "@/lib/check-display";
 
 function DeadlineDisplay({ deadline, className, isCompleted, label }: { deadline: string | null; className?: string; isCompleted?: boolean; label?: string }) {
   const prefix = label || "納期";
