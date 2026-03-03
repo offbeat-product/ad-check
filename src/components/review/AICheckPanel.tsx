@@ -203,46 +203,37 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
 
   return (
     <div className="flex flex-col h-full min-h-0">
-      {/* Summary bar */}
-      <div className="shrink-0 border-b border-border px-3 py-2 space-y-2">
+      {/* Compact summary bar */}
+      <div className="shrink-0 border-b border-border px-3 py-1.5 space-y-1">
         {productId && projectId && (
           <ReferenceStatusIndicator projectId={projectId} productId={productId} processKey={processKey} />
         )}
-        {checkedAt && (
-          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-            <CalendarDays className="h-3 w-3" />
-            <span>チェック実行日時: {format(new Date(checkedAt), "yyyy/MM/dd HH:mm")}</span>
-          </div>
-        )}
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge className={cn("text-xs font-bold px-2.5 py-1", effectiveSubmit.isOk ? "bg-status-ok text-white border-status-ok" : "bg-status-ng text-white border-status-ng")}>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <Badge className={cn("text-[10px] font-bold px-2 py-0.5", effectiveSubmit.isOk ? "bg-status-ok text-white border-status-ok" : "bg-status-ng text-white border-status-ng")}>
             {effectiveSubmit.label}
           </Badge>
-          <span className="text-[10px] text-status-ng font-bold">修正必須 {counts.NG}</span>
-          <span className="text-[10px] text-status-warning font-bold">要確認 {counts.WARNING}</span>
-          <span className="text-[10px] text-status-ok font-bold">問題なし {counts.OK}</span>
-          {counts.MANUAL > 0 && <span className="text-[10px] text-status-manual font-bold">手動確認 {counts.MANUAL}</span>}
-        </div>
-
-        {/* Filter buttons */}
-        <div className="flex items-center gap-1 flex-wrap">
+          {/* Inline filter chips */}
           {STATUS_FILTER_OPTIONS.map((opt) => {
             const isActive = activeFilters.has(opt.key);
             const count = counts[opt.key] || 0;
+            if (count === 0 && !isActive) return null;
             return (
               <button
                 key={opt.key}
                 onClick={() => toggleFilter(opt.key)}
                 className={cn(
-                  "text-[10px] font-medium px-2 py-1 rounded-full border transition-colors",
+                  "text-[10px] font-medium px-1.5 py-0.5 rounded-full border transition-colors",
                   isActive ? opt.color : "bg-muted/30 text-muted-foreground/50 border-transparent"
                 )}
               >
-                {opt.label} ({count})
+                {opt.label} {count}
               </button>
             );
           })}
-          <button onClick={showAll} className="text-[10px] text-muted-foreground hover:text-foreground px-1.5">全て</button>
+          <button onClick={showAll} className="text-[10px] text-muted-foreground hover:text-foreground px-1">全て</button>
+          {checkedAt && (
+            <span className="text-[10px] text-muted-foreground ml-auto whitespace-nowrap">{format(new Date(checkedAt), "MM/dd HH:mm")}</span>
+          )}
         </div>
       </div>
 
