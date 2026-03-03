@@ -1212,12 +1212,11 @@ export default function ProjectPage() {
                                       const cc = file.check_result_id ? (commentCounts[file.check_result_id] || 0) : 0;
                                       const isImageFile = file.file_type === "image";
                                       const childVersions = files.filter(f => f.parent_file_id === file.id);
-                                      // Use latest version's file_data for thumbnail
-                                      const latestVersion = childVersions.length > 0
-                                        ? childVersions.sort((a, b) => (b.version_number ?? 0) - (a.version_number ?? 0))[0]
-                                        : null;
-                                      const thumbnailData = latestVersion?.file_data || file.file_data;
-                                      const versionLabel = file.parent_file_id ? `v${file.version_number}` : childVersions.length > 0 ? "v1" : null;
+                                      const thumbnailData = (childVersions.length > 0
+                                        ? childVersions.sort((a, b) => (b.version_number ?? 0) - (a.version_number ?? 0))[0]?.file_data
+                                        : null) || file.file_data;
+                                      const draftCount = 1 + childVersions.length;
+                                      const draftLabel = draftCount === 1 ? "初稿" : `第${draftCount}稿`;
                                       const isSelected = selectedFileIds.has(file.id);
 
                                       return (
@@ -1251,13 +1250,9 @@ export default function ProjectPage() {
                                               file.status === "fixed" && "border-muted-foreground/30 ring-1 ring-muted-foreground/20",
                                               isSelected && selectMode && "ring-2 ring-primary border-primary/50"
                                             )}>
-                                            {/* Ribbon removed — submission type managed via check screen */}
                                             {file.status === "fixed" && (
                                               <>
                                                 <div className="absolute inset-0 bg-foreground/50 rounded-lg z-[1] pointer-events-none" />
-                                                <div className="absolute top-1.5 left-1.5 z-10 bg-muted-foreground text-white rounded-full p-0.5">
-                                                  <Lock className="h-3 w-3" />
-                                                </div>
                                                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex items-center gap-1 bg-muted-foreground/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm pointer-events-none">
                                                   <Lock className="h-2.5 w-2.5" /> FIX済
                                                 </div>
@@ -1297,24 +1292,21 @@ export default function ProjectPage() {
                                                 </button>
                                               </p>
                                             )}
-                                            <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
-                                              {file.created_at && <span>{format(new Date(file.created_at), "MM/dd HH:mm")}</span>}
-                                              {file.created_by && <span>/ {(file.created_by as string).includes("@") ? (file.created_by as string).split("@")[0] : file.created_by}</span>}
-                                            </div>
-                                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                                              <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
-                                                {cr && (
+                                            <div className="flex items-center gap-1 mt-1 flex-wrap">
+                                              {cr ? (
                                                 <Badge className={cn("text-[10px] h-4 px-1.5", getEffectiveSubmitBadgeClass(cr.overall_status, cr.check_items as any, cr.resolved_items as any))}>
                                                   {getEffectiveSubmitLabel(cr.overall_status, cr.check_items as any, cr.resolved_items as any).label}
                                                 </Badge>
+                                              ) : (
+                                                <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
                                               )}
-                                              {versionLabel && <span className="text-[10px] text-muted-foreground">{versionLabel}</span>}
+                                              <span className="text-[10px] text-muted-foreground">{draftLabel}</span>
+                                              {cc > 0 && (
+                                                <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 ml-auto">
+                                                  <MessageCircle className="h-2.5 w-2.5" />{cc}
+                                                </span>
+                                              )}
                                             </div>
-                                            {cc > 0 && (
-                                              <div className="flex items-center gap-1 mt-1 text-[10px] text-muted-foreground">
-                                                <MessageCircle className="h-3 w-3" />{cc}
-                                              </div>
-                                            )}
                                           </button>
                                           {!selectMode && (
                                             <button
