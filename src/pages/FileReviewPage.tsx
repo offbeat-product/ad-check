@@ -1417,6 +1417,11 @@ export default function FileReviewPage() {
                       toast({ title: "AIチェックを先に実行してください", description: "クライアント提出前にAIチェックが必要です。", variant: "destructive" });
                       return;
                     }
+                    const effective = getEffectiveSubmitLabel(record.overall_status, record.check_items as CheckItem[], (record.resolved_items as string[]) ?? []);
+                    if (!effective.isOk) {
+                      toast({ title: "NG項目が未解消です", description: "全てのNG項目を修正済みにしてからクライアントに提出してください。", variant: "destructive" });
+                      return;
+                    }
                     setSubmitToClientOpen(true);
                   }}
                 >
