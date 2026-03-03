@@ -72,6 +72,8 @@ interface ComparisonCheckPanelProps {
   onSubmitToClient?: () => void;
   /** Internal revision */
   onInternalRevision?: () => void;
+  /** Auto-run comparison check on mount */
+  autoRun?: boolean;
 }
 
 export default function ComparisonCheckPanel({
@@ -80,7 +82,7 @@ export default function ComparisonCheckPanel({
   onOpenComparisonMode, onCheckComplete, onComparisonSaved, onClearAfterData,
   commentCounts = {}, highlightCard, onCommentClick, onTabChange, onSeekMedia, onMarkerClick,
   lockedByUser, onAcquireLock, onReleaseLock,
-  submissionType, onSubmitToClient, onInternalRevision,
+  submissionType, onSubmitToClient, onInternalRevision, autoRun,
 }: ComparisonCheckPanelProps) {
   const { toast } = useToast();
   const { user } = useAuth();
