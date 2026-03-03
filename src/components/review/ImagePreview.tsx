@@ -22,7 +22,7 @@ interface ImagePreviewProps {
   paintMode: boolean;
   onPaintModeToggle: () => void;
   onMarkerClick: (patternId: string) => void;
-  onAnnotationSave?: (annotations: unknown[], comment: string, mentionedUserIds?: string[]) => void;
+  onAnnotationSave?: (annotations: unknown[], comment: string, mentionedUserIds?: string[], isCorrection?: boolean) => void;
   label?: string;
   noDataMessage?: string;
   overlay?: React.ReactNode;

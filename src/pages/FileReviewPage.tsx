@@ -85,6 +85,7 @@ export default function FileReviewPage() {
   const [internalRevisionOpen, setInternalRevisionOpen] = useState(false);
   const [comparisonDrafts, setComparisonDrafts] = useState<DraftEntry[]>([]);
   const [comparisonActivePairIndex, setComparisonActivePairIndex] = useState(0);
+  const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
   const { items, markers, commentCounts, paintMode, setPaintMode, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
     useReviewState(record?.id, checkItems);
@@ -735,7 +736,7 @@ export default function FileReviewPage() {
     });
   }, []);
 
-  const handleAnnotationSave = async (annotations: unknown[], comment: string, mentionedUserIds?: string[]) => {
+  const handleAnnotationSave = async (annotations: unknown[], comment: string, mentionedUserIds?: string[], isCorrection?: boolean) => {
     if (!record?.id || !user) return;
     const { data: savedComment, error } = await supabase.from("comments").insert([{
       check_result_id: record.id,
@@ -749,6 +750,27 @@ export default function FileReviewPage() {
     if (!handleSupabaseError(error, "annotation save")) {
       toast({ title: "コメントを保存しました" });
       fetchSavedAnnotations();
+      setCommentRefreshKey((k) => k + 1);
+
+      // Save correction log if requested
+      if (isCorrection && savedComment?.id && product?.id && file?.process_type) {
+        try {
+          await supabase.from("correction_logs").insert({
+            product_id: product.id,
+            project_id: projectId || null,
+            process_type: file.process_type,
+            pattern_id: file?.pattern_id || null,
+            file_id: fileId || null,
+            check_result_id: record.id,
+            comment_id: savedComment.id,
+            correction_text: comment,
+            ai_scope: "project",
+            created_by: user.id,
+          } as any);
+        } catch (err) {
+          console.error("[correction_logs] silent error:", err);
+        }
+      }
 
       // Send mention notifications
       if (mentionedUserIds && mentionedUserIds.length > 0) {
@@ -1333,6 +1355,7 @@ export default function FileReviewPage() {
         mediaCurrentTime={mediaCurrentTime}
         onSeekMedia={handleSeekMedia}
         onCommentDeleted={fetchSavedAnnotations}
+        commentRefreshKey={commentRefreshKey}
         comparisonMode={comparisonMode}
         comparisonBeforeData={comparisonDrafts[comparisonActivePairIndex]?.data ?? null}
         comparisonAfterData={comparisonDrafts[comparisonActivePairIndex + 1]?.data ?? null}
