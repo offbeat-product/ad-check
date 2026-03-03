@@ -116,10 +116,7 @@ export default function ComparisonLeftPanel({
 
   const handleRemoveDraft = (index: number) => {
     if (index === 0) return;
-    const updated = drafts.filter((_, i) => i !== index).map((d, i) => ({
-      ...d,
-      label: i === 0 ? "初稿" : `第${i + 1}稿`,
-    }));
+    const updated = drafts.filter((_, i) => i !== index);
     onDraftsChange(updated);
     if (activePairIndex >= updated.length - 1) {
       onActivePairIndexChange(Math.max(0, updated.length - 2));

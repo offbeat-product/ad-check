@@ -941,7 +941,7 @@ export default function FileReviewPage() {
     ? versions.reduce((latest, v) => (v.version_number ?? 1) > (latest.version_number ?? 1) ? v : latest, versions[0])
     : null;
   const displayFile = latestVersionFile && latestVersionFile.id !== file.id ? latestVersionFile : file;
-  const currentVersionNumber = file.version_number ?? 1;
+  const currentVersionNumber = displayFile.version_number ?? 1;
   const totalVersions = versions.length;
 
   const isSf = displayFile.file_type === "image" || AI_CHECK_CONFIG[displayFile.process_type]?.inputMode === "image";
