@@ -319,7 +319,8 @@ export async function runComparisonCheck(
     media_type?: string;
     original_image_base64?: string;
   },
-  referenceContext?: string
+  referenceContext?: string,
+  correctionComments?: { content: string; status: string; check_item_id?: string | null }[]
 ): Promise<CheckResult> {
   const isImage = !!data.image_base64;
   const url = getWebhookUrl(isImage ? "styleframe" : "script");
@@ -338,6 +339,11 @@ export async function runComparisonCheck(
   if (data.original_image_base64) body.original_image_base64 = data.original_image_base64;
   if (referenceContext) {
     try { body.reference_context = JSON.parse(referenceContext); } catch { body.reference_context = referenceContext; }
+  }
+  // Include correction comments from this creative for the AI to verify fixes
+  if (correctionComments && correctionComments.length > 0) {
+    body.correction_comments = correctionComments;
+    console.log("[Webhook] Including correction_comments:", correctionComments.length);
   }
   return webhookFetch(url, body) as Promise<CheckResult>;
 }

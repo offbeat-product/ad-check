@@ -152,6 +152,25 @@ export default function ComparisonCheckPanel({
       const refMaterials = await gatherReferenceMaterials(projectId, productId, file.process_type);
       const referenceContext = JSON.stringify(refMaterials);
 
+      // Fetch correction comments for this creative to include in the comparison check
+      let correctionComments: { content: string; status: string; check_item_id?: string | null }[] = [];
+      if (checkResultId) {
+        const { data: commentsData } = await supabase
+          .from("comments")
+          .select("content, status, check_item_id")
+          .eq("check_result_id", checkResultId)
+          .is("parent_id", null)
+          .order("created_at", { ascending: true });
+        if (commentsData && commentsData.length > 0) {
+          correctionComments = commentsData.map(c => ({
+            content: c.content,
+            status: c.status,
+            check_item_id: c.check_item_id,
+          }));
+          console.log("[ComparisonCheck] Including", correctionComments.length, "comments for check");
+        }
+      }
+
       let data: Parameters<typeof runComparisonCheck>[2];
       if (isImage) {
         const newBase64 = comparisonAfterData?.replace(/^data:[^;]+;base64,/, "") || "";
@@ -169,7 +188,7 @@ export default function ComparisonCheckPanel({
         };
       }
 
-      const res = await runComparisonCheck(productId, file.process_type, data, referenceContext);
+      const res = await runComparisonCheck(productId, file.process_type, data, referenceContext, correctionComments);
       setResult(res);
       onCheckComplete?.(res);
 
