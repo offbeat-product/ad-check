@@ -33,7 +33,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, ArrowDown, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight, Lock, Unlock, Trash2, Pencil, CalendarDays, User } from "lucide-react";
+import { ArrowLeft, ArrowDown, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight, Lock, Unlock, Trash2, Pencil, CalendarDays, User, MoreHorizontal } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 
 import { cn } from "@/lib/utils";
@@ -993,22 +995,24 @@ export default function FileReviewPage() {
   return (
     <div className="flex h-screen overflow-hidden">
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <TooltipProvider delayDuration={300}>
         <header className="border-b border-border bg-card shrink-0">
-          {/* Row 1: Navigation + file name */}
-          <div className="flex items-center gap-2 px-4 pt-2 pb-1">
-            <button onClick={() => navigate(`/project/${projectId}`)} className="text-muted-foreground hover:text-foreground transition-colors shrink-0">
+          <div className="flex items-center gap-1.5 px-3 h-11">
+            {/* Back */}
+            <button onClick={() => navigate(`/project/${projectId}`)} className="text-muted-foreground hover:text-foreground transition-colors shrink-0 p-1">
               <ArrowLeft className="h-4 w-4" />
             </button>
 
+            {/* Prev */}
             <button
               onClick={() => prevFile && navigateToFile(prevFile.id)}
               disabled={!prevFile}
-              className={cn("shrink-0 p-1 rounded transition-colors", prevFile ? "hover:bg-muted text-muted-foreground hover:text-foreground" : "text-muted-foreground/30 cursor-not-allowed")}
-              title={prevFile ? `← ${prevFile.file_name}` : undefined}
+              className={cn("shrink-0 p-0.5 rounded transition-colors", prevFile ? "hover:bg-muted text-muted-foreground hover:text-foreground" : "text-muted-foreground/30 cursor-not-allowed")}
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-3.5 w-3.5" />
             </button>
 
+            {/* File name */}
             {editingName ? (
               <form
                 className="flex items-center gap-1 min-w-0 flex-1"
@@ -1026,26 +1030,34 @@ export default function FileReviewPage() {
                 <Input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="h-6 text-sm flex-1 min-w-0"
+                  className="h-6 text-xs flex-1 min-w-0"
                   autoFocus
                   onBlur={() => setEditingName(false)}
                   onKeyDown={(e) => { if (e.key === "Escape") setEditingName(false); }}
                 />
               </form>
             ) : (
-              <button
-                className="text-sm font-medium truncate hover:text-primary transition-colors flex items-center gap-1 min-w-0"
-                onClick={() => { setEditName(file?.file_name || ""); setEditingName(true); }}
-                title={`${file?.file_name} — クリックして名前を編集`}
-              >
-                <span className="truncate">{file?.file_name}</span>
-                <Pencil className="h-3 w-3 text-muted-foreground/50 shrink-0" />
-              </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    className="text-xs font-medium truncate hover:text-primary transition-colors flex items-center gap-1 min-w-0"
+                    onClick={() => { setEditName(file?.file_name || ""); setEditingName(true); }}
+                  >
+                    <span className="truncate max-w-[180px]">{file?.file_name}</span>
+                    <Pencil className="h-2.5 w-2.5 text-muted-foreground/40 shrink-0" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  {file?.file_name}
+                  {file?.created_at && <> · {format(new Date(file.created_at), "yyyy/MM/dd HH:mm")}</>}
+                  {file?.created_by && <> · {file.created_by.includes("@") ? file.created_by.split("@")[0] : file.created_by}</>}
+                </TooltipContent>
+              </Tooltip>
             )}
 
             {/* Version badge */}
             <span className={cn(
-              "shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap",
+              "shrink-0 px-1.5 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap",
               totalVersions > 1
                 ? "bg-primary/10 text-primary border border-primary/30"
                 : "bg-muted text-muted-foreground"
@@ -1053,107 +1065,64 @@ export default function FileReviewPage() {
               {currentVersionNumber === 1 ? "初稿" : `第${currentVersionNumber}稿`}
             </span>
 
-            {siblingFiles.length > 1 && (
-              <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">({currentIndex + 1}/{siblingFiles.length})</span>
-            )}
-
+            {/* Next */}
             <button
               onClick={() => nextFile && navigateToFile(nextFile.id)}
               disabled={!nextFile}
-              className={cn("shrink-0 p-1 rounded transition-colors", nextFile ? "hover:bg-muted text-muted-foreground hover:text-foreground" : "text-muted-foreground/30 cursor-not-allowed")}
-              title={nextFile ? `→ ${nextFile.file_name}` : undefined}
+              className={cn("shrink-0 p-0.5 rounded transition-colors", nextFile ? "hover:bg-muted text-muted-foreground hover:text-foreground" : "text-muted-foreground/30 cursor-not-allowed")}
             >
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-3.5 w-3.5" />
             </button>
 
-            <div className="ml-auto flex items-center gap-2 shrink-0">
-              {file?.created_at && (
-                <span className="flex items-center gap-1 text-[10px] text-muted-foreground whitespace-nowrap">
-                  <CalendarDays className="h-3 w-3" />
-                  {format(new Date(file.created_at), "MM/dd HH:mm")}
-                </span>
-              )}
-              {file?.created_by && (
-                <span className="flex items-center gap-1 text-[10px] text-muted-foreground whitespace-nowrap">
-                  <User className="h-3 w-3" />
-                  {file.created_by.includes("@") ? file.created_by.split("@")[0] : file.created_by}
-                </span>
-              )}
+            {siblingFiles.length > 1 && (
+              <span className="text-[10px] text-muted-foreground shrink-0">({currentIndex + 1}/{siblingFiles.length})</span>
+            )}
 
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button className={cn("px-3 py-1 rounded-full text-xs font-medium border whitespace-nowrap", sc.class)}>{sc.label}</button>
-                </PopoverTrigger>
-                <PopoverContent className="w-40 p-2" align="end">
-                  {Object.entries(FILE_STATUS_CONFIG).map(([key, cfg]) => (
-                    <button key={key} onClick={() => handleStatusChange(key)}
-                      className={cn("w-full text-left px-3 py-1.5 rounded text-xs font-medium transition-colors", currentStatus === key ? "bg-muted" : "hover:bg-muted/50")}>
-                      {cfg.label}
-                    </button>
-                  ))}
-                </PopoverContent>
-              </Popover>
-            </div>
-          </div>
+            {/* Lock indicator */}
+            {lockedByUser && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded bg-destructive/10 text-destructive text-[10px] font-medium">
+                    <Lock className="h-2.5 w-2.5" />{lockedByUser}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{lockedByUser}さんがチェック中 — 操作はロックされています</TooltipContent>
+              </Tooltip>
+            )}
 
-          {/* Correction stats badge */}
-          {correctionCount > 0 && (
-            <div className="flex items-center gap-1.5 px-4 pb-1">
-              <span className="text-[10px] text-muted-foreground">
-                📝 修正指示蓄積: <span className="font-medium text-foreground">{correctionCount}件</span>
-                {candidateCount > 0 && (
-                  <>（ルール候補: <span className="font-medium text-primary">{candidateCount}件待ち</span>）</>
-                )}
-              </span>
-            </div>
-          )}
+            {/* Spacer */}
+            <div className="flex-1" />
 
-          {/* Lock banner */}
-          {lockedByUser && (
-            <div className="flex items-center gap-2 px-4 pb-1">
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-destructive/10 border border-destructive/20 text-destructive text-xs">
-                <Lock className="h-3 w-3" />
-                <span className="font-medium">{lockedByUser}さんがチェック中</span>
-                <span className="text-destructive/70">— チェック操作はロックされています</span>
-              </div>
-            </div>
-          )}
-
-          {/* Row 2: Action buttons */}
-          <div className="flex items-center gap-1 px-4 pb-2 overflow-x-auto">
+            {/* Primary: AI Check button */}
             {canCheck && !comparisonMode && (
-              <div className="flex items-center gap-2">
-                <Button size="sm" className="text-xs h-8" onClick={handleRunCheck} disabled={checking || videoPolling.pollingState.isPolling || !!lockedByUser}>
-                  {checking ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Bot className="h-3 w-3 mr-1" />}
-                  {checking ? "チェック中..." : lockedByUser ? "ロック中" : "AIチェック実行"}
+              <>
+                <Button size="sm" className="text-xs h-7 px-2.5" onClick={handleRunCheck} disabled={checking || videoPolling.pollingState.isPolling || !!lockedByUser}>
+                  {checking ? <Loader2 className="h-3 w-3 animate-spin" /> : <Bot className="h-3 w-3" />}
+                  <span className="hidden sm:inline ml-1">{checking ? "チェック中..." : "AIチェック"}</span>
                 </Button>
                 {checking && !videoPolling.pollingState.isPolling && checkProgress.isRunning && (
-                  <div className="flex items-center gap-2 min-w-[140px]">
-                    <Progress value={checkProgress.progress} className="h-2 flex-1" />
-                    <span className="text-xs text-muted-foreground font-mono w-8">{checkProgress.progress}%</span>
+                  <div className="flex items-center gap-1.5 min-w-[100px]">
+                    <Progress value={checkProgress.progress} className="h-1.5 flex-1" />
+                    <span className="text-[10px] text-muted-foreground font-mono w-7">{checkProgress.progress}%</span>
                   </div>
                 )}
                 {videoPolling.pollingState.isPolling && (
-                  <div className="flex items-center gap-2 min-w-[200px]">
-                    <div className="flex flex-col gap-1 flex-1">
-                      <span className="text-xs text-muted-foreground">{videoPolling.pollingState.message}</span>
-                      <div className="flex items-center gap-2">
-                        <Progress value={Math.min((videoPolling.pollingState.elapsedSeconds / 300) * 100, 95)} className="h-2 flex-1" />
-                        <span className="text-xs text-muted-foreground font-mono whitespace-nowrap">経過: {videoPolling.formatElapsed(videoPolling.pollingState.elapsedSeconds)}</span>
-                      </div>
-                    </div>
+                  <div className="flex items-center gap-1.5 min-w-[160px]">
+                    <Progress value={Math.min((videoPolling.pollingState.elapsedSeconds / 300) * 100, 95)} className="h-1.5 flex-1" />
+                    <span className="text-[10px] text-muted-foreground font-mono whitespace-nowrap">{videoPolling.formatElapsed(videoPolling.pollingState.elapsedSeconds)}</span>
                   </div>
                 )}
-              </div>
+              </>
             )}
             {checkDisabled && !comparisonMode && (
-              <Button size="sm" variant="outline" className="text-xs h-8 opacity-50" disabled>
-                <Bot className="h-3 w-3 mr-1" />AIチェック（準備中）
+              <Button size="sm" variant="outline" className="text-[10px] h-7 opacity-50" disabled>
+                <Bot className="h-3 w-3" />準備中
               </Button>
             )}
+
             {/* Comparison check button */}
             {hasCheckResult && !comparisonMode && (
-              <Button size="sm" variant="outline" className="text-xs h-8 border-primary/50 text-primary hover:bg-primary/10" onClick={() => {
+              <Button size="sm" variant="outline" className="text-xs h-7 px-2 border-primary/50 text-primary hover:bg-primary/10" onClick={() => {
                 if (comparisonDrafts.length === 0) {
                   const inputMode = AI_CHECK_CONFIG[file.process_type]?.inputMode || "text";
                   const isText = inputMode === "text";
@@ -1166,105 +1135,102 @@ export default function FileReviewPage() {
                 setComparisonMode(true);
                 setRightTab("comparison");
               }}>
-                <GitCompare className="h-3 w-3 mr-1" />比較チェック
+                <GitCompare className="h-3 w-3" />
+                <span className="hidden sm:inline ml-1">比較</span>
               </Button>
             )}
-            {/* FIX / Unfix button */}
-            {hasCheckResult && currentStatus !== "fixed" && ["checked", "internal_revision", "client_review"].includes(currentStatus) && (
-              <Button size="sm" variant="outline" className="text-xs h-8 border-status-ok text-status-ok hover:bg-status-ok/10" onClick={async () => {
-                const confirmed = window.confirm(
-                  'このクリエイティブをFIX（最終確定）しますか？\nFIXしたデータは他工程のAIチェック時に照合用として使用されます。'
-                );
-                if (!confirmed || !file) return;
-                // Unfix other files in the same process
-                if (projectId) {
-                  await supabase.from("project_files")
-                    .update({ status: "checked", fixed_at: null, fixed_by: null } as any)
-                    .eq("project_id", projectId)
-                    .eq("process_type", file.process_type)
-                    .eq("status", "fixed");
-                }
-                const { error } = await supabase.from("project_files")
-                  .update({ status: "fixed", fixed_at: new Date().toISOString(), fixed_by: user?.email || user?.id || null } as any)
-                  .eq("id", file.id);
-                if (error) {
-                  toast({ title: "FIX更新に失敗しました", variant: "destructive" });
-                } else {
-                  setFile({ ...file, status: "fixed" });
-                  toast({ title: "✅ FIX確定しました", description: "他工程のAIチェック時にこのデータが照合用として使用されます" });
-                }
-              }}>
-                <Lock className="h-3 w-3 mr-1" />FIX確定
-              </Button>
-            )}
-            {currentStatus === "fixed" && (
-              <Button size="sm" variant="outline" className="text-xs h-8 border-status-warning text-status-warning hover:bg-status-warning/10" onClick={async () => {
-                if (!file) return;
-                const { error } = await supabase.from("project_files")
-                  .update({ status: "checked", fixed_at: null, fixed_by: null } as any)
-                  .eq("id", file.id);
-                if (error) {
-                  toast({ title: "FIX解除に失敗しました", variant: "destructive" });
-                } else {
-                  setFile({ ...file, status: "checked" });
-                  toast({ title: "FIX解除しました" });
-                }
-              }}>
-                <Unlock className="h-3 w-3 mr-1" />FIX解除
-              </Button>
-            )}
-            <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => setShareOpen(true)}>
-              <Link2 className="h-3 w-3 mr-1" />共有
-            </Button>
-            <Button size="sm" variant="outline" className="text-xs h-8" onClick={handleDownload}>
-              <Download className="h-3 w-3 mr-1" />DL
-            </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button size="sm" variant="ghost" className="text-xs h-8 text-destructive hover:text-destructive hover:bg-destructive/10">
-                  <Trash2 className="h-3 w-3" />
+
+            {/* Status badge */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium border whitespace-nowrap", sc.class)}>{sc.label}</button>
+              </PopoverTrigger>
+              <PopoverContent className="w-36 p-1.5" align="end">
+                {Object.entries(FILE_STATUS_CONFIG).map(([key, cfg]) => (
+                  <button key={key} onClick={() => handleStatusChange(key)}
+                    className={cn("w-full text-left px-2.5 py-1 rounded text-xs font-medium transition-colors", currentStatus === key ? "bg-muted" : "hover:bg-muted/50")}>
+                    {cfg.label}
+                  </button>
+                ))}
+              </PopoverContent>
+            </Popover>
+
+            {/* More menu */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0">
+                  <MoreHorizontal className="h-4 w-4" />
                 </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>ファイルを削除</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    「{file?.file_name}」を削除します。{record ? "関連するチェック結果・コメントも全て削除されます。" : ""}この操作は元に戻せません。
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                  <AlertDialogAction
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    onClick={async () => {
-                      if (!file || !projectId) return;
-                      // Delete storage file if applicable
-                      if (file.file_data?.includes("/storage/v1/object/public/")) {
-                        try {
-                          const url = new URL(file.file_data);
-                          const pathMatch = url.pathname.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)/);
-                          if (pathMatch) {
-                            await supabase.storage.from(pathMatch[1]).remove([pathMatch[2]]);
-                          }
-                        } catch {}
-                      }
-                      // cascade_delete_project_file trigger handles: child files, check_results → comments, share_links, correction_logs
-                      const { error } = await supabase.from("project_files").delete().eq("id", file.id);
-                      if (error) {
-                        toast({ title: "削除に失敗しました", description: error.message, variant: "destructive" });
-                      } else {
-                        toast({ title: "ファイルを削除しました" });
-                        navigate(`/project/${projectId}`);
-                      }
-                    }}
-                  >
-                    削除する
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-44">
+                {/* FIX / Unfix */}
+                {hasCheckResult && currentStatus !== "fixed" && ["checked", "internal_revision", "client_review"].includes(currentStatus) && (
+                  <DropdownMenuItem className="text-xs gap-2" onClick={async () => {
+                    const confirmed = window.confirm('このクリエイティブをFIX（最終確定）しますか？\nFIXしたデータは他工程のAIチェック時に照合用として使用されます。');
+                    if (!confirmed || !file) return;
+                    if (projectId) {
+                      await supabase.from("project_files")
+                        .update({ status: "checked", fixed_at: null, fixed_by: null } as any)
+                        .eq("project_id", projectId).eq("process_type", file.process_type).eq("status", "fixed");
+                    }
+                    const { error } = await supabase.from("project_files")
+                      .update({ status: "fixed", fixed_at: new Date().toISOString(), fixed_by: user?.email || user?.id || null } as any)
+                      .eq("id", file.id);
+                    if (error) { toast({ title: "FIX更新に失敗しました", variant: "destructive" }); }
+                    else { setFile({ ...file, status: "fixed" }); toast({ title: "✅ FIX確定しました" }); }
+                  }}>
+                    <Lock className="h-3 w-3" />FIX確定
+                  </DropdownMenuItem>
+                )}
+                {currentStatus === "fixed" && (
+                  <DropdownMenuItem className="text-xs gap-2" onClick={async () => {
+                    if (!file) return;
+                    const { error } = await supabase.from("project_files")
+                      .update({ status: "checked", fixed_at: null, fixed_by: null } as any).eq("id", file.id);
+                    if (error) { toast({ title: "FIX解除に失敗しました", variant: "destructive" }); }
+                    else { setFile({ ...file, status: "checked" }); toast({ title: "FIX解除しました" }); }
+                  }}>
+                    <Unlock className="h-3 w-3" />FIX解除
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuItem className="text-xs gap-2" onClick={() => setShareOpen(true)}>
+                  <Link2 className="h-3 w-3" />共有リンク
+                </DropdownMenuItem>
+                <DropdownMenuItem className="text-xs gap-2" onClick={handleDownload}>
+                  <Download className="h-3 w-3" />ダウンロード
+                </DropdownMenuItem>
+                {correctionCount > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="text-xs gap-2" disabled>
+                      <span>📝 修正蓄積 {correctionCount}件</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-xs gap-2 text-destructive focus:text-destructive" onClick={() => {
+                  if (!window.confirm(`「${file?.file_name}」を削除しますか？${record ? "関連するチェック結果・コメントも全て削除されます。" : ""}この操作は元に戻せません。`)) return;
+                  (async () => {
+                    if (!file || !projectId) return;
+                    if (file.file_data?.includes("/storage/v1/object/public/")) {
+                      try {
+                        const url = new URL(file.file_data);
+                        const pathMatch = url.pathname.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)/);
+                        if (pathMatch) { await supabase.storage.from(pathMatch[1]).remove([pathMatch[2]]); }
+                      } catch {}
+                    }
+                    const { error } = await supabase.from("project_files").delete().eq("id", file.id);
+                    if (error) { toast({ title: "削除に失敗しました", description: error.message, variant: "destructive" }); }
+                    else { toast({ title: "ファイルを削除しました" }); navigate(`/project/${projectId}`); }
+                  })();
+                }}>
+                  <Trash2 className="h-3 w-3" />削除
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </header>
+        </TooltipProvider>
 
         <div className="flex-1 overflow-y-auto">
           {comparisonMode ? (
