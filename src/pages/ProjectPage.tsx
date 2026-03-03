@@ -979,66 +979,42 @@ export default function ProjectPage() {
                         }
                         return null;
                       })()}
-                      <div className="px-4 py-3 border-b border-border flex flex-wrap items-center gap-2 cursor-pointer select-none"
+                      <div className="px-4 py-3 border-b border-border flex items-center gap-3 cursor-pointer select-none"
                         onClick={(e) => {
-                          // Don't toggle if clicking on buttons/popovers inside the header
                           if ((e.target as HTMLElement).closest("button, [role='combobox'], [data-radix-popper-content-wrapper]")) return;
                           toggleCollapse();
                         }}>
                         <button className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground transition-colors" onClick={(e) => { e.stopPropagation(); toggleCollapse(); }}>
                           {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                         </button>
-                        <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab shrink-0" onClick={(e) => e.stopPropagation()} />
                         <span className="text-xs text-muted-foreground shrink-0">
                           {String.fromCodePoint(0x2460 + index)}
                         </span>
                         <h2 className="text-sm font-semibold">{proc.process_label}</h2>
 
                         <DeadlinePicker
-                          deadline={proc.internal_deadline}
-                          onChange={(d) => handleProcessDeadlineChange(proc.id, "internal_deadline", d)}
-                          isCompleted={isProcessCompleted}
-                          label="社内"
-                        />
-                        <DeadlinePicker
                           deadline={proc.client_deadline}
                           onChange={(d) => handleProcessDeadlineChange(proc.id, "client_deadline", d)}
                           isCompleted={isProcessCompleted}
-                          label="Client"
+                          label="期限"
                         />
 
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium border flex items-center gap-1", psCfg.badgeClass)}>
-                              <span className={cn("w-1.5 h-1.5 rounded-full", psCfg.dotClass)} />
-                              {psCfg.label}
-                              <ChevronDown className="h-2.5 w-2.5" />
-                            </button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-36 p-1.5" align="start">
-                            {Object.entries(PROCESS_STATUS_CONFIG).map(([key, c]) => (
-                              <button key={key} onClick={() => handleProcessStatusChange(proc.id, key)}
-                                className={cn("w-full text-left px-2 py-1 rounded text-[11px] font-medium transition-colors flex items-center gap-1.5",
-                                  proc.status === key ? "bg-muted" : "hover:bg-muted/50")}>
-                                <span className={cn("w-1.5 h-1.5 rounded-full", c.dotClass)} />
-                                {c.label}
-                              </button>
-                            ))}
-                          </PopoverContent>
-                        </Popover>
+                        {/* FIX progress */}
+                        {fileCount > 0 && (() => {
+                          const fixedCount = sectionFiles.filter(f => !f.parent_file_id && f.status === "fixed").length;
+                          const allFixed = fixedCount === fileCount;
+                          return (
+                            <div className="flex items-center gap-1.5 ml-auto">
+                              <Progress value={(fixedCount / fileCount) * 100} className="w-16 h-1.5" />
+                              <span className={cn("text-[10px] font-medium tabular-nums", allFixed ? "text-status-ok" : "text-muted-foreground")}>
+                                {fixedCount}/{fileCount} FIX
+                              </span>
+                            </div>
+                          );
+                        })()}
 
                         {!webhookAvailable && (
                           <Badge variant="outline" className="text-[9px] ml-1 text-muted-foreground">準備中</Badge>
-                        )}
-                        {sectionFiles.some(f => f.status === "fixed") && (
-                          <Badge variant="outline" className="text-[9px] ml-1 border-muted-foreground text-muted-foreground bg-muted font-bold gap-0.5">
-                            <Lock className="h-2.5 w-2.5" /> FIX済 ({sectionFiles.filter(f => f.status === "fixed").length})
-                          </Badge>
-                        )}
-                        {fileCount > 0 && (
-                          <Badge variant="secondary" className="text-[9px] ml-1 gap-0.5">
-                            {fileCount}件{checkedCount > 0 && ` (${checkedCount}✓)`}
-                          </Badge>
                         )}
 
                         {!isCollapsed && (
