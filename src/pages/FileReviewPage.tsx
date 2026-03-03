@@ -1499,6 +1499,7 @@ export default function FileReviewPage() {
           setSubmitToClientOpen(true);
         }}
         onInternalRevision={() => setInternalRevisionOpen(true)}
+        autoRunComparison={autoComparisonPendingRef.current}
         emptyCheckMessage={
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
             <Bot className="h-10 w-10 mb-3 opacity-30" />
