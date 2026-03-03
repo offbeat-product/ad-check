@@ -443,7 +443,10 @@ export default function Dashboard() {
                   <tr><td colSpan={5} className="text-center py-12 text-muted-foreground">チェック結果がありません</td></tr>
                 ) : (
                   records.map((r) => (
-                    <tr key={r.id} onClick={() => navigate(`/check-result/${r.id}`)}
+                    <tr key={r.id} onClick={() => {
+                        const link = checkFileMap.get(r.id);
+                        if (link) navigate(`/project/${link.projectId}/file/${link.fileId}`);
+                      }}
                       className="border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors">
                       <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
                         {r.created_at ? new Date(r.created_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
