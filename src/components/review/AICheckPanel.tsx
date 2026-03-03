@@ -73,7 +73,15 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
     return c;
   }, [items]);
 
-  const submit = getSubmitLabel(overallStatus);
+  // Dynamic GO/NG: if all NG items are resolved, override to GO
+  const allNgResolved = useMemo(() => {
+    const ngItems = items.filter(i => i.status === "NG");
+    return ngItems.length > 0 && ngItems.every(i => resolvedItems.has(i.pattern_id));
+  }, [items, resolvedItems]);
+
+  const effectiveSubmit = allNgResolved
+    ? { label: "GO", isOk: true }
+    : getSubmitLabel(overallStatus);
 
   const toggleSelectItem = (id: string) => {
     setSelectedItems((s) => { const next = new Set(s); next.has(id) ? next.delete(id) : next.add(id); return next; });
@@ -186,8 +194,8 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
           </div>
         )}
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge className={cn("text-xs font-bold px-2.5 py-1", getSubmitBadgeClass(overallStatus))}>
-            {submit.label}
+          <Badge className={cn("text-xs font-bold px-2.5 py-1", effectiveSubmit.isOk ? "bg-status-ok text-white border-status-ok" : "bg-status-ng text-white border-status-ng")}>
+            {effectiveSubmit.label}
           </Badge>
           <span className="text-[10px] text-status-ng font-bold">修正必須 {counts.NG}</span>
           <span className="text-[10px] text-status-warning font-bold">要確認 {counts.WARNING}</span>
