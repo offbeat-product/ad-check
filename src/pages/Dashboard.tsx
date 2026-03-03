@@ -479,7 +479,10 @@ export default function Dashboard() {
                 <div className="p-8 text-center text-muted-foreground text-sm">チェック結果がありません</div>
               ) : (
                 records.map((r) => (
-                  <button key={r.id} onClick={() => navigate(`/check-result/${r.id}`)}
+                  <button key={r.id} onClick={() => {
+                      const link = checkFileMap.get(r.id);
+                      if (link) navigate(`/project/${link.projectId}/file/${link.fileId}`);
+                    }}
                     className="w-full p-4 text-left hover:bg-muted/50 transition-colors">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-medium">{r.product_name}</span>
