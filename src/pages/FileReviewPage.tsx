@@ -1424,7 +1424,7 @@ export default function FileReviewPage() {
                   onClick={() => setInternalRevisionOpen(true)}
                 >
                   <GitCompare className="h-5 w-5" />
-                  修正版をアップロードして比較チェック
+                  修正版をアップロードして比較チェック（社内で初稿を修正する）
                 </Button>
               </div>
             )}
@@ -1441,7 +1441,7 @@ export default function FileReviewPage() {
                   onClick={() => setInternalRevisionOpen(true)}
                 >
                   <GitCompare className="h-5 w-5" />
-                  修正版をアップロードして比較チェック
+                  修正版をアップロードして比較チェック（社内で初稿を修正する）
                 </Button>
               </div>
             )}
