@@ -1531,7 +1531,7 @@ export default function FileReviewPage() {
             const isText = inputMode === "text";
             setComparisonDrafts([
               { label: "初稿", data: file.file_data, text: isText ? (file.file_data || "") : "" },
-              { label: `第${versionNumber}稿`, data: fileData, text: isImg ? "" : fileData },
+              { label: "第2稿", data: fileData, text: isImg ? "" : fileData },
             ]);
             setComparisonActivePairIndex(0);
             setComparisonMode(true);
