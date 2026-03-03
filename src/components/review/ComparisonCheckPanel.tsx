@@ -95,14 +95,18 @@ export default function ComparisonCheckPanel({
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // Persist resolved_items to DB (both comparison result AND parent for badge sync)
-  const persistResolved = useCallback(async (newSet: Set<string>, crId?: string | null) => {
+  const persistResolved = useCallback(async (newSet: Set<string>, crId?: string | null, currentCheckItems?: CheckItem[], currentOverallStatus?: string | null) => {
     const targetId = crId || checkResultId;
     if (!targetId) return;
     const arr = [...newSet];
     await supabase.from("check_results").update({ resolved_items: arr }).eq("id", targetId);
-    // Also update parent check result so project page badges reflect resolved state
-    if (targetId !== checkResultId && checkResultId) {
-      await supabase.from("check_results").update({ resolved_items: arr }).eq("id", checkResultId);
+    // Also update parent check result: sync resolved_items, check_items and overall_status
+    // so the project page badge uses matching data for getEffectiveSubmitLabel
+    if (checkResultId) {
+      const parentUpdate: Record<string, unknown> = { resolved_items: arr };
+      if (currentCheckItems) parentUpdate.check_items = currentCheckItems;
+      if (currentOverallStatus !== undefined) parentUpdate.overall_status = currentOverallStatus;
+      await supabase.from("check_results").update(parentUpdate).eq("id", checkResultId);
     }
   }, [checkResultId]);
 
