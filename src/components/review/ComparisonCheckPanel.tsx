@@ -118,7 +118,7 @@ export default function ComparisonCheckPanel({
       await supabase.from("check_results").update({
         resolved_items: arr,
         overall_status: effectiveStatus,
-        check_items: currentCheckItems.length > 0 ? currentCheckItems : undefined,
+        check_items: currentCheckItems.length > 0 ? (currentCheckItems as unknown as Json) : undefined,
       }).eq("id", checkResultId);
     }
   }, [checkResultId]);
