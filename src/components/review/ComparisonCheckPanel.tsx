@@ -348,6 +348,9 @@ export default function ComparisonCheckPanel({
   const isShowingInitialCheck = !selectedHistoryId && !result && !!initialItems && initialItems.length > 0;
   const displayItems = displayResult?.check_items || [];
 
+  // Keep ref in sync so persistResolved always has latest display data
+  displayDataRef.current = { items: displayItems, overallStatus: displayResult?.overall_status ?? null };
+
   // Filter logic
   const toggleFilter = (key: string) => {
     setActiveFilters((s) => {
