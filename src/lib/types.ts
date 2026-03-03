@@ -21,28 +21,6 @@ export interface CheckResult {
   manual_count?: number;
 }
 
-export interface CheckRecord {
-  id: string;
-  created_at: string;
-  user_id: string;
-  client_name: string;
-  product_code: string;
-  product_name: string;
-  process_type: string;
-  input_type: string;
-  input_text?: string;
-  overall_status: string;
-  detected_case?: string;
-  ng_count: number;
-  warning_count: number;
-  ok_count: number;
-  total_checks: number;
-  check_items: CheckItem[];
-  raw_response: any;
-  status?: string;
-  input_data?: { image_base64?: string; script_text?: string } | null;
-}
-
 export type CheckStatus = "pending" | "in_progress" | "resolved" | "approved";
 
 export interface Comment {
@@ -55,16 +33,6 @@ export interface Comment {
   annotation_data?: { x: number; y: number } | null;
   status: "open" | "resolved";
   parent_id?: string | null;
-  created_at: string;
-}
-
-export interface FileVersion {
-  id: string;
-  check_result_id: string;
-  version_number: number;
-  file_type: string;
-  content_text?: string | null;
-  image_url?: string | null;
   created_at: string;
 }
 
