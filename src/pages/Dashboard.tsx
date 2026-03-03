@@ -61,6 +61,8 @@ export default function Dashboard() {
   const [checksLoading, setChecksLoading] = useState(true);
   const [checksLoaded, setChecksLoaded] = useState(false);
   const [profileMap, setProfileMap] = useState<Map<string, string>>(new Map());
+  // Map check_result_id -> { projectId, fileId } for navigation
+  const [checkFileMap, setCheckFileMap] = useState<Map<string, { projectId: string; fileId: string }>>(new Map());
 
   // Phase 3: Recent files (loaded lazily)
   const [recentFiles, setRecentFiles] = useState<(ProjectFile & { project_name?: string })[]>([]);
