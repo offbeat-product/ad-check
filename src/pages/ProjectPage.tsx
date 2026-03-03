@@ -53,7 +53,7 @@ import { format, differenceInDays, isPast } from "date-fns";
 import { useBatchCheck } from "@/hooks/useBatchCheck";
 import BatchCheckFloatingBar from "@/components/BatchCheckFloatingBar";
 
-import { getSubmitBadgeClass, getSubmitLabel, getEffectiveSubmitLabel, getEffectiveSubmitBadgeClass } from "@/lib/check-display";
+import { getSubmitBadgeClass, getSubmitLabel } from "@/lib/check-display";
 
 function DeadlineDisplay({ deadline, className, isCompleted, label }: { deadline: string | null; className?: string; isCompleted?: boolean; label?: string }) {
   const prefix = label || "納期";
@@ -1307,13 +1307,7 @@ export default function ProjectPage() {
                                               </p>
                                             )}
                                             <div className="flex items-center gap-1 mt-1 flex-wrap">
-                                              {cr ? (
-                                                <Badge className={cn("text-[10px] h-4 px-1.5", getEffectiveSubmitBadgeClass(cr.overall_status, cr.check_items as any, cr.resolved_items as any))}>
-                                                  {getEffectiveSubmitLabel(cr.overall_status, cr.check_items as any, cr.resolved_items as any).label}
-                                                </Badge>
-                                              ) : (
-                                                <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
-                                              )}
+                                              <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
                                               <span className="text-[10px] text-muted-foreground">{draftLabel}</span>
                                               {cc > 0 && (
                                                 <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 ml-auto">
@@ -1430,13 +1424,7 @@ export default function ProjectPage() {
                                             </p>
                                           )}
                                           <div className="flex items-center gap-1 mt-1 flex-wrap">
-                                            {cr ? (
-                                              <Badge className={cn("text-[10px] h-4 px-1.5", getEffectiveSubmitBadgeClass(cr.overall_status, cr.check_items as any, cr.resolved_items as any))}>
-                                                {getEffectiveSubmitLabel(cr.overall_status, cr.check_items as any, cr.resolved_items as any).label}
-                                              </Badge>
-                                            ) : (
-                                              <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
-                                            )}
+                                            <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
                                             <span className="text-[10px] text-muted-foreground">{draftLabel}</span>
                                             {cc > 0 && (
                                               <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 ml-auto">
@@ -1568,7 +1556,7 @@ export default function ProjectPage() {
           <DialogHeader><DialogTitle>ファイルアップロード</DialogTitle></DialogHeader>
           <div className="space-y-4">
 
-
+            const fileSt = FILE_STATUS_CONFIG[f.status ?? "uploaded"] ?? FILE_STATUS_CONFIG.uploaded;
 
             {/* Pattern selection (only when patterns exist) */}
             {patterns.length > 0 && (
@@ -1787,6 +1775,7 @@ function CheckHistory({ projectId, files, checkResults, onRenameFile, patterns }
             const isComparison = cr?.check_type === "comparison";
             const draftLabel = isComparison ? `第${(cr?.comparison_round ?? 0) + 1}稿` : "初稿";
             const patternName = f.pattern_id ? patternMap.get(f.pattern_id) || "—" : "共通";
+            const fileSt = FILE_STATUS_CONFIG[f.status ?? "uploaded"] ?? FILE_STATUS_CONFIG.uploaded;
 
             return (
               <tr key={f.id} onClick={() => navigate(`/project/${projectId}/file/${f.id}`)} className="border-b border-border/50 hover:bg-muted/50 cursor-pointer">
@@ -1821,9 +1810,7 @@ function CheckHistory({ projectId, files, checkResults, onRenameFile, patterns }
                   <Badge variant={isComparison ? "secondary" : "outline"} className="text-[10px]">{draftLabel}</Badge>
                 </td>
                 <td className="px-4 py-2.5 text-center">
-                  <Badge className={cn("text-[10px] font-bold", getEffectiveSubmitBadgeClass(cr?.overall_status, cr?.check_items as any, cr?.resolved_items as any))}>
-                    {getEffectiveSubmitLabel(cr?.overall_status, cr?.check_items as any, cr?.resolved_items as any).label}
-                  </Badge>
+                  <Badge variant="outline" className={cn("text-[10px] font-bold", fileSt.class)}>{fileSt.label}</Badge>
                 </td>
                 <td className="px-4 py-2.5 text-center text-status-ng font-bold">{cr?.ng_count ?? 0}</td>
                 <td className="px-4 py-2.5 text-center text-status-warning font-bold">{cr?.warning_count ?? 0}</td>
