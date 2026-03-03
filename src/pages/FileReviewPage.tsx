@@ -262,6 +262,18 @@ export default function FileReviewPage() {
     return () => { cancelled = true; };
   }, [fileId, projectId]);
 
+  // Auto-trigger AI check when file is loaded as "uploaded" with no check result
+  useEffect(() => {
+    if (!loading && autoCheckPendingRef.current && file && product && !checking && !record) {
+      autoCheckPendingRef.current = false;
+      const aiCfg = AI_CHECK_CONFIG[file.process_type];
+      if (aiCfg?.enabled) {
+        const timer = setTimeout(() => handleRunCheck(), 800);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [loading, file?.id, product?.id, checking, record]);
+
   // Fetch sibling files for navigation (all patterns in same process, ordered by pattern sort_order then file_name)
   useEffect(() => {
     if (!file || !projectId) return;
