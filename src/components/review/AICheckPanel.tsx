@@ -12,7 +12,7 @@ import { getSubmitLabel, getSubmitBadgeClass, STATUS_LABEL, STATUS_FILTER_OPTION
 import { cn } from "@/lib/utils";
 import CheckItemCard from "./CheckItemCard";
 import ReferenceStatusIndicator from "@/components/reference/ReferenceStatusIndicator";
-import { } from "lucide-react";
+
 
 interface AICheckPanelProps {
   items: CheckItem[];
