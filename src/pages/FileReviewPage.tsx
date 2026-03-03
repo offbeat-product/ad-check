@@ -252,22 +252,30 @@ export default function FileReviewPage() {
     return () => { cancelled = true; };
   }, [fileId, projectId]);
 
-  // Fetch sibling files for navigation
+  // Fetch sibling files for navigation (scoped to same pattern)
   useEffect(() => {
     if (!file || !projectId) return;
     let cancelled = false;
-    supabase.from("project_files").select("id, file_name, process_type, check_result_id, status, parent_file_id")
+    let query = supabase.from("project_files").select("id, file_name, process_type, check_result_id, status, parent_file_id, pattern_id")
       .eq("project_id", projectId)
       .eq("process_type", file.process_type)
       .is("parent_file_id", null)
-      .order("created_at", { ascending: true })
-      .then(({ data, error }) => {
+      .order("created_at", { ascending: true });
+    
+    // Scope to same pattern
+    if (file.pattern_id) {
+      query = query.eq("pattern_id", file.pattern_id);
+    } else {
+      query = query.is("pattern_id", null);
+    }
+    
+    query.then(({ data, error }) => {
         if (cancelled) return;
         handleSupabaseError(error, "sibling files");
         setSiblingFiles((data ?? []) as ProjectFile[]);
       });
     return () => { cancelled = true; };
-  }, [file?.process_type, projectId, file?.id]);
+  }, [file?.process_type, file?.pattern_id, projectId, file?.id]);
 
   const currentIndex = siblingFiles.findIndex(f => f.id === fileId);
   const prevFile = currentIndex > 0 ? siblingFiles[currentIndex - 1] : null;
