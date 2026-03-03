@@ -177,6 +177,83 @@
     @apply bg-[hsl(var(--status-ok))] text-white;
   }
 
+  /* Interactive card with lift effect */
+  .interactive-card {
+    @apply transition-all duration-200 ease-out;
+  }
+  .interactive-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px -5px rgb(0 0 0 / 0.1), 0 4px 10px -6px rgb(0 0 0 / 0.1);
+  }
+  .interactive-card:active {
+    transform: translateY(0px) scale(0.99);
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+    transition-duration: 100ms;
+  }
+
+  /* Sidebar nav item with smooth slide indicator */
+  .nav-item-interactive {
+    @apply transition-all duration-150 ease-out;
+    position: relative;
+  }
+  .nav-item-interactive::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%) scaleY(0);
+    width: 3px;
+    height: 60%;
+    border-radius: 0 4px 4px 0;
+    background: hsl(var(--primary));
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .nav-item-interactive:hover::before {
+    transform: translateY(-50%) scaleY(1);
+  }
+  .nav-item-interactive:active {
+    @apply scale-[0.98];
+    transition-duration: 100ms;
+  }
+
+  /* Clickable element subtle press feedback */
+  .press-feedback {
+    @apply transition-transform duration-150;
+  }
+  .press-feedback:active {
+    @apply scale-[0.97];
+    transition-duration: 75ms;
+  }
+
+  /* Badge bounce on appear */
+  .badge-pop {
+    animation: success-pop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* Checkbox satisfying tick */
+  .check-tick {
+    @apply transition-all duration-150;
+  }
+  .check-tick:active {
+    @apply scale-90;
+  }
+  .check-tick[data-state="checked"] {
+    animation: success-pop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  /* Thumbnail card hover */
+  .thumbnail-hover {
+    @apply transition-all duration-200 ease-out;
+  }
+  .thumbnail-hover:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 12px 30px -8px rgb(0 0 0 / 0.15);
+  }
+  .thumbnail-hover:active {
+    transform: translateY(0) scale(0.98);
+    transition-duration: 100ms;
+  }
+
   .check-marker-ng {
     background: hsl(var(--status-ng));
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
@@ -195,5 +272,16 @@
     50% {
       box-shadow: 0 0 0 8px hsla(var(--status-ng), 0);
     }
+  }
+
+  @keyframes ripple {
+    0% { transform: scale(0); opacity: 0.15; }
+    100% { transform: scale(4); opacity: 0; }
+  }
+
+  @keyframes success-pop {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.15); }
+    100% { transform: scale(1); }
   }
 }

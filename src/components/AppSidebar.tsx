@@ -293,10 +293,10 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
           return (
             <button key={item.path} onClick={() => navigate(item.path)}
               title={collapsed ? item.label : undefined}
-              className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium transition-colors",
+              className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium press-feedback",
                 collapsed ? "justify-center px-0" : "px-5",
                 isActive ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-[3px] border-primary"
-                  : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent")}>
+                  : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent nav-item-interactive")}>
               <item.icon className="h-4 w-4 shrink-0" />
               {!collapsed && item.label}
             </button>
@@ -447,11 +447,11 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
                             {!isSearching && <GripVertical className="h-3 w-3 text-muted-foreground/30 ml-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab shrink-0" />}
                             <button
                               onClick={() => navigate(`/project/${project.id}`)}
-                              className={cn("flex-1 flex items-center gap-2 px-1 py-1.5 text-xs transition-colors truncate",
+                              className={cn("flex-1 flex items-center gap-2 px-1 py-1.5 text-xs transition-all truncate press-feedback",
                                 isSearching ? "ml-9" : "",
                                 activeProjectId === project.id
                                   ? "bg-sidebar-accent text-primary font-medium border-l-2 border-primary"
-                                  : "text-muted-foreground hover:bg-muted/50",
+                                  : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
                                 isCompleted && "opacity-60"
                               )}
                             >
@@ -481,10 +481,10 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
 
         <button onClick={() => navigate("/rule-candidates")}
           title={collapsed ? "ルール学習" : undefined}
-          className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium transition-colors",
+          className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium press-feedback",
             collapsed ? "justify-center px-0" : "px-5",
             location.pathname === "/rule-candidates" ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-[3px] border-primary"
-              : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent")}>
+              : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent nav-item-interactive")}>
           <Sparkles className="h-4 w-4 shrink-0" />
           {!collapsed && (
             <span className="flex items-center gap-2">
@@ -500,20 +500,20 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
 
         <button onClick={() => navigate("/report")}
           title={collapsed ? "レポート" : undefined}
-          className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium transition-colors",
+          className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium press-feedback",
             collapsed ? "justify-center px-0" : "px-5",
             location.pathname === "/report" ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-[3px] border-primary"
-              : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent")}>
+              : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent nav-item-interactive")}>
           <BarChart3 className="h-4 w-4 shrink-0" />
           {!collapsed && "レポート"}
         </button>
 
         <button onClick={() => navigate("/settings")}
           title={collapsed ? "設定" : undefined}
-          className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium transition-colors",
+          className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium press-feedback",
             collapsed ? "justify-center px-0" : "px-5",
             location.pathname === "/settings" ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-[3px] border-primary"
-              : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent")}>
+              : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent nav-item-interactive")}>
           <Settings className="h-4 w-4 shrink-0" />
           {!collapsed && "設定"}
         </button>
