@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
-import { getSubmitLabel, getSubmitBadgeClass, STATUS_LABEL, STATUS_FILTER_OPTIONS, getEffectiveSubmitLabel } from "@/lib/check-display";
+import { getSubmitLabel, getSubmitBadgeClass, STATUS_LABEL, STATUS_FILTER_OPTIONS, getEffectiveSubmitLabel, getCheckItemId } from "@/lib/check-display";
 import { cn } from "@/lib/utils";
 import CheckItemCard from "./CheckItemCard";
 import ReferenceStatusIndicator from "@/components/reference/ReferenceStatusIndicator";
