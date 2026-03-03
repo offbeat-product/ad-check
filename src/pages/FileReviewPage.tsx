@@ -176,7 +176,22 @@ export default function FileReviewPage() {
         handleSupabaseError(crErr, "check_result");
         // If file is in "checking" state (e.g. batch check in progress), resume checking UI
         if (f.status === "checking" && (!cr || !cr.check_items || !(cr.check_items as unknown[]).length)) {
-          setChecking(true);
+          // Check if the checking state is stale (> 15 minutes old)
+          const checkingStarted = f.checking_started_at ? new Date(f.checking_started_at).getTime() : 0;
+          const isStale = checkingStarted > 0 && (Date.now() - checkingStarted > 15 * 60 * 1000);
+          if (isStale) {
+            // Stale check — reset status so user can retry
+            console.warn("[FileReview] Stale checking state detected, resetting file status");
+            await supabase.from("project_files").update({ 
+              status: cr ? "checked" : "uploaded", 
+              checking_by: null, 
+              checking_started_at: null 
+            } as any).eq("id", f.id);
+            setFile(prev => prev ? { ...prev, status: cr ? "checked" : "uploaded", checking_by: null, checking_started_at: null } : prev);
+            if (cr) setRecord(cr);
+          } else {
+            setChecking(true);
+          }
         } else {
           // Check for comparison history — if exists, show latest comparison result by default
           const { data: compHistory } = await supabase
@@ -214,7 +229,20 @@ export default function FileReviewPage() {
         }
       } else if (f.status === "checking") {
         // File marked as checking but no check_result_id yet
-        setChecking(true);
+        // Check if the checking state is stale (> 15 minutes old)
+        const checkingStarted = f.checking_started_at ? new Date(f.checking_started_at).getTime() : 0;
+        const isStale = checkingStarted > 0 && (Date.now() - checkingStarted > 15 * 60 * 1000);
+        if (isStale) {
+          console.warn("[FileReview] Stale checking state (no result), resetting");
+          await supabase.from("project_files").update({ 
+            status: "uploaded", 
+            checking_by: null, 
+            checking_started_at: null 
+          } as any).eq("id", f.id);
+          setFile(prev => prev ? { ...prev, status: "uploaded", checking_by: null, checking_started_at: null } : prev);
+        } else {
+          setChecking(true);
+        }
       }
 
       await fetchVersions();
@@ -288,14 +316,34 @@ export default function FileReviewPage() {
   }, [fileId]);
 
   // Poll for check result when checking is in progress (handles n8n completing after frontend timeout)
+  // Timeout after 15 minutes to prevent infinite polling
+  const pollingStartRef = useRef<number>(0);
   useEffect(() => {
     if (!checking || !file?.check_result_id || isRecheckingRef.current) return;
+    if (!pollingStartRef.current) pollingStartRef.current = Date.now();
+    const MAX_RECOVERY_POLL_MS = 15 * 60 * 1000; // 15 minutes
     const interval = setInterval(async () => {
       if (isRecheckingRef.current) return;
+      // Check if we've been polling too long
+      if (Date.now() - pollingStartRef.current > MAX_RECOVERY_POLL_MS) {
+        console.warn("[FileReview] Recovery polling timed out, resetting checking state");
+        setChecking(false);
+        // Reset file status in DB
+        await supabase.from("project_files").update({ 
+          status: "uploaded", 
+          checking_by: null, 
+          checking_started_at: null 
+        } as any).eq("id", file.id);
+        setFile(prev => prev ? { ...prev, status: "uploaded", checking_by: null, checking_started_at: null } : prev);
+        toast({ title: "チェック処理がタイムアウトしました", description: "再度AIチェックを実行してください。", variant: "destructive" });
+        pollingStartRef.current = 0;
+        return;
+      }
       const { data: cr } = await supabase.from("check_results").select("*").eq("id", file.check_result_id!).maybeSingle();
       if (cr && cr.check_items && Array.isArray(cr.check_items) && (cr.check_items as unknown[]).length > 0 && !isRecheckingRef.current) {
         setRecord(cr);
         setChecking(false);
+        pollingStartRef.current = 0;
         // Update file status in DB to "checked"
         await supabase.from("project_files").update({ status: "checked" }).eq("id", fileId);
         setFile(prev => prev ? { ...prev, status: "checked" } : prev);
@@ -549,12 +597,29 @@ export default function FileReviewPage() {
                 return;
               }
             }
-            // Restore previous result if available
+            // Restore previous result if available, and reset file status
             if (previousCheckResultId) {
               const { data: prevCr } = await supabase.from("check_results").select("*").eq("id", previousCheckResultId).maybeSingle();
-              if (prevCr) setRecord(prevCr);
+              if (prevCr) {
+                setRecord(prevCr);
+                await supabase.from("project_files").update({ 
+                  status: "checked", 
+                  check_result_id: prevCr.id,
+                  checking_by: null,
+                  checking_started_at: null,
+                } as any).eq("id", file.id);
+                setFile({ ...file, status: "checked", check_result_id: prevCr.id });
+              }
+            } else {
+              // No previous result — reset to uploadable state
+              await supabase.from("project_files").update({ 
+                status: "uploaded", 
+                checking_by: null, 
+                checking_started_at: null,
+              } as any).eq("id", file.id);
+              setFile({ ...file, status: "uploaded" });
             }
-            toast({ title: "チェック処理がタイムアウトしました", description: "n8nの結果書き込みを確認してください。前回の結果を表示しています。", variant: "destructive" });
+            toast({ title: "チェック処理がタイムアウトしました", description: "再度AIチェックを実行してください。", variant: "destructive" });
             return;
           }
           // n8n wrote the result directly — load it
@@ -655,9 +720,22 @@ export default function FileReviewPage() {
         const { data: prevCr } = await supabase.from("check_results").select("*").eq("id", previousCheckResultId).maybeSingle();
         if (prevCr) {
           setRecord(prevCr);
-          await supabase.from("project_files").update({ status: "checked", check_result_id: prevCr.id }).eq("id", file.id);
+          await supabase.from("project_files").update({ 
+            status: "checked", 
+            check_result_id: prevCr.id,
+            checking_by: null,
+            checking_started_at: null,
+          } as any).eq("id", file.id);
           setFile({ ...file, status: "checked", check_result_id: prevCr.id });
         }
+      } else {
+        // No previous result — reset to uploadable state so user can retry
+        await supabase.from("project_files").update({ 
+          status: "uploaded", 
+          checking_by: null, 
+          checking_started_at: null,
+        } as any).eq("id", file.id);
+        setFile({ ...file, status: "uploaded" });
       }
       toast({ title: "チェック送信に失敗しました", description: "n8nへの接続に失敗しました。再度お試しください。", variant: "destructive" });
     } finally {
