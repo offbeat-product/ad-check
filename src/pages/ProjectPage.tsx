@@ -630,6 +630,8 @@ export default function ProjectPage() {
 
     const cfg = PROCESS_FILE_CONFIG[uploadModal];
     const resolvedPatternId = (patterns.length > 0 && uploadPatternMode === "specific") ? uploadPatternId : null;
+    let lastInsertedFileId: string | null = null;
+    const uploadProcessType = uploadModal;
 
     try {
       if (useTextInput && cfg?.allowTextInput) {
@@ -638,13 +640,14 @@ export default function ProjectPage() {
         const fileName = `${cfg?.label || uploadModal}_${Date.now()}.txt`;
         setUploadProgress(50);
 
-        const { error } = await supabase.from("project_files").insert({
+        const { data: inserted, error } = await supabase.from("project_files").insert({
           project_id: id, process_type: uploadModal, file_name: fileName,
           file_type: "text", file_data: fileData, file_size_bytes: fileSize,
           created_by: user.email || user.id, pattern_id: resolvedPatternId,
           submission_type: uploadSubmissionType,
-        } as any);
+        } as any).select("id").single();
         if (error) throw error;
+        lastInsertedFileId = inserted?.id || null;
         setUploadProgress(100);
         toast({ title: "アップロード完了" });
       } else if (selectedFiles.length > 0) {
@@ -692,14 +695,15 @@ export default function ProjectPage() {
             fileData = await file.text();
           }
 
-          const { error } = await supabase.from("project_files").insert({
+          const { data: inserted, error } = await supabase.from("project_files").insert({
             project_id: id, process_type: uploadModal, file_name: fileName,
             file_type: fileType, file_data: fileData, file_size_bytes: fileSize,
             created_by: user.email || user.id, pattern_id: resolvedPatternId,
             submission_type: uploadSubmissionType,
-          } as any);
+          } as any).select("id").single();
           if (error) throw error;
 
+          lastInsertedFileId = inserted?.id || null;
           lastFileData = fileData;
           lastFileName = fileName;
           lastFileType = fileType;
@@ -729,6 +733,7 @@ export default function ProjectPage() {
     } catch (err) {
       const message = err instanceof Error ? err.message : "アップロードに失敗しました";
       toast({ title: "アップロードエラー", description: message, variant: "destructive" });
+      lastInsertedFileId = null;
     } finally {
       setUploadModal(null);
       setSelectedFiles([]);
@@ -740,6 +745,15 @@ export default function ProjectPage() {
       setUploadPatternMode("common");
       setUploadSubmissionType("internal");
       fetchData();
+
+      // Auto-navigate to file review for automatic AI check (single file only)
+      if (lastInsertedFileId) {
+        const aiCfg = AI_CHECK_CONFIG[uploadProcessType || ""];
+        if (aiCfg?.enabled) {
+          toast({ title: "🤖 AIチェックを自動実行します", description: "レビュー画面に移動中..." });
+          setTimeout(() => navigate(`/project/${id}/file/${lastInsertedFileId}`), 500);
+        }
+      }
     }
   };
 

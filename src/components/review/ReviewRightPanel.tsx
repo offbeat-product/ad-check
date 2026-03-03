@@ -58,6 +58,7 @@ interface ReviewRightPanelProps {
   onSubmitToClient?: () => void;
   onInternalRevision?: () => void;
   commentRefreshKey?: number;
+  autoRunComparison?: boolean;
 }
 
 export default function ReviewRightPanel({
@@ -68,7 +69,7 @@ export default function ReviewRightPanel({
   comparisonMode, comparisonBeforeData, comparisonAfterData, comparisonAfterText, comparisonRoundLabel,
   onOpenComparisonMode, onComparisonCheckComplete, onComparisonSaved, onClearAfterData,
   clientName, productName, lockedByUser, onAcquireLock, onReleaseLock,
-  submissionType, onSubmitToClient, onInternalRevision, commentRefreshKey,
+  submissionType, onSubmitToClient, onInternalRevision, commentRefreshKey, autoRunComparison,
 }: ReviewRightPanelProps) {
   const [totalCommentCount, setTotalCommentCount] = useState(0);
 
@@ -134,6 +135,7 @@ export default function ReviewRightPanel({
                 submissionType={submissionType}
                 onSubmitToClient={onSubmitToClient}
                 onInternalRevision={onInternalRevision}
+                autoRun={autoRunComparison}
               />
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">

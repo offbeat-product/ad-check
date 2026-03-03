@@ -72,6 +72,8 @@ interface ComparisonCheckPanelProps {
   onSubmitToClient?: () => void;
   /** Internal revision */
   onInternalRevision?: () => void;
+  /** Auto-run comparison check on mount */
+  autoRun?: boolean;
 }
 
 export default function ComparisonCheckPanel({
@@ -80,7 +82,7 @@ export default function ComparisonCheckPanel({
   onOpenComparisonMode, onCheckComplete, onComparisonSaved, onClearAfterData,
   commentCounts = {}, highlightCard, onCommentClick, onTabChange, onSeekMedia, onMarkerClick,
   lockedByUser, onAcquireLock, onReleaseLock,
-  submissionType, onSubmitToClient, onInternalRevision,
+  submissionType, onSubmitToClient, onInternalRevision, autoRun,
 }: ComparisonCheckPanelProps) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -170,6 +172,21 @@ export default function ComparisonCheckPanel({
     };
     fetchHistory();
   }, [checkResultId]);
+
+  // Auto-run comparison check when autoRun prop is set
+  const autoRunTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (autoRun && !autoRunTriggeredRef.current && hasNewContent && enabled && !checking) {
+      autoRunTriggeredRef.current = true;
+      const timer = setTimeout(() => handleRunComparison(), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [autoRun, hasNewContent, enabled, checking]);
+
+  // Reset auto-run flag when fileId changes
+  useEffect(() => {
+    autoRunTriggeredRef.current = false;
+  }, [fileId]);
 
   const handleRunComparison = async () => {
     if (!enabled || !user) return;

@@ -79,6 +79,8 @@ export default function FileReviewPage() {
   const [editingName, setEditingName] = useState(false);
   const [editName, setEditName] = useState("");
   const mediaPreviewRef = useRef<MediaPreviewHandle>(null);
+  const autoCheckPendingRef = useRef(false);
+  const autoComparisonPendingRef = useRef(false);
   const [mediaCurrentTime, setMediaCurrentTime] = useState<number | null>(null);
   const [correctionCount, setCorrectionCount] = useState<number>(0);
   const [correctionRefreshKey, setCorrectionRefreshKey] = useState(0);
@@ -251,9 +253,26 @@ export default function FileReviewPage() {
 
       await fetchVersions();
       if (!cancelled) setLoading(false);
+
+      // Auto-trigger AI check for newly uploaded files (status=uploaded, no check result)
+      if (!cancelled && f && f.status === "uploaded" && !f.check_result_id) {
+        autoCheckPendingRef.current = true;
+      }
     })();
     return () => { cancelled = true; };
   }, [fileId, projectId]);
+
+  // Auto-trigger AI check when file is loaded as "uploaded" with no check result
+  useEffect(() => {
+    if (!loading && autoCheckPendingRef.current && file && product && !checking && !record) {
+      autoCheckPendingRef.current = false;
+      const aiCfg = AI_CHECK_CONFIG[file.process_type];
+      if (aiCfg?.enabled) {
+        const timer = setTimeout(() => handleRunCheck(), 800);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [loading, file?.id, product?.id, checking, record]);
 
   // Fetch sibling files for navigation (all patterns in same process, ordered by pattern sort_order then file_name)
   useEffect(() => {
@@ -1480,6 +1499,7 @@ export default function FileReviewPage() {
           setSubmitToClientOpen(true);
         }}
         onInternalRevision={() => setInternalRevisionOpen(true)}
+        autoRunComparison={autoComparisonPendingRef.current}
         emptyCheckMessage={
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
             <Bot className="h-10 w-10 mb-3 opacity-30" />
@@ -1530,7 +1550,8 @@ export default function FileReviewPage() {
             setComparisonActivePairIndex(0);
             setComparisonMode(true);
             setRightTab("comparison");
-            toast({ title: "比較チェックモードに切り替えました", description: "右パネルの「比較チェック実行」ボタンを押してください" });
+            autoComparisonPendingRef.current = true;
+            toast({ title: "🤖 比較チェックを自動実行します", description: "修正版と初稿の比較チェック中..." });
           } catch (err) {
             console.error("[onUploaded] Error switching to comparison mode:", err);
             toast({ title: "比較モード切替エラー", description: err instanceof Error ? err.message : "不明なエラー", variant: "destructive" });
