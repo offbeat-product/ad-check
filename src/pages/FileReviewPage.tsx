@@ -79,6 +79,8 @@ export default function FileReviewPage() {
   const [editingName, setEditingName] = useState(false);
   const [editName, setEditName] = useState("");
   const mediaPreviewRef = useRef<MediaPreviewHandle>(null);
+  const autoCheckPendingRef = useRef(false);
+  const autoComparisonPendingRef = useRef(false);
   const [mediaCurrentTime, setMediaCurrentTime] = useState<number | null>(null);
   const [correctionCount, setCorrectionCount] = useState<number>(0);
   const [correctionRefreshKey, setCorrectionRefreshKey] = useState(0);
