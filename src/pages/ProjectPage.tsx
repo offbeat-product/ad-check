@@ -160,38 +160,36 @@ export default function ProjectPage() {
   const [collapsedProcesses, setCollapsedProcesses] = useState<Set<string>>(new Set());
   const handleBatchFix = async (processFiles: ProjectFile[], processKey: string) => {
     if (!id || !user) return;
-    // Only fix files that are checked and have check_result_id
-    const fixableFiles = processFiles.filter(f => 
-      f.check_result_id && !f.parent_file_id && f.status !== "fixed"
+    // All root files with check_result_id are targets for batch fix
+    const allTargetFiles = processFiles.filter(f => 
+      f.check_result_id && !f.parent_file_id
     );
-    if (fixableFiles.length === 0) {
+    const unfixedFiles = allTargetFiles.filter(f => f.status !== "fixed");
+    if (allTargetFiles.length === 0) {
       toast({ title: "FIX対象のファイルがありません", description: "チェック済みのファイルが必要です" });
       return;
     }
+    if (unfixedFiles.length === 0) {
+      toast({ title: "すべてのファイルは既にFIX済みです" });
+      return;
+    }
     const confirmed = window.confirm(
-      `この工程の${fixableFiles.length}件のチェック済みファイルを一括FIX（最終確定）しますか？\nFIXしたデータは他工程のAIチェック時に照合用として使用されます。`
+      `この工程の${unfixedFiles.length}件のチェック済みファイルを一括FIX（最終確定）しますか？\nFIXしたデータは他工程のAIチェック時に照合用として使用されます。`
     );
     if (!confirmed) return;
 
     setBatchFixing(true);
     try {
-      // Unfix any currently fixed files in this process
-      await supabase.from("project_files")
-        .update({ status: "checked", fixed_at: null, fixed_by: null } as any)
-        .eq("project_id", id)
-        .eq("process_type", processKey)
-        .eq("status", "fixed");
-
-      // Fix all target files
+      // Fix all unfixed target files
       const now = new Date().toISOString();
       const fixBy = user.email || user.id || null;
-      for (const f of fixableFiles) {
+      for (const f of unfixedFiles) {
         await supabase.from("project_files")
           .update({ status: "fixed", fixed_at: now, fixed_by: fixBy } as any)
           .eq("id", f.id);
       }
 
-      toast({ title: `✅ ${fixableFiles.length}件を一括FIXしました`, description: "他工程のAIチェック時にこれらのデータが照合用として使用されます" });
+      toast({ title: `✅ ${unfixedFiles.length}件を一括FIXしました`, description: "他工程のAIチェック時にこれらのデータが照合用として使用されます" });
       fetchData();
     } catch (err) {
       console.error("[BatchFix] error:", err);
