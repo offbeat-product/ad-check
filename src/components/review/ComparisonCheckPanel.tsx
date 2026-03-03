@@ -475,7 +475,9 @@ export default function ComparisonCheckPanel({
           </div>
           <div className="space-y-0.5">
             {history.map((h, i) => {
-              const isGo = h.overall_status === "A" || h.overall_status === "B";
+              // Use effective label considering resolved_items
+              const hResolved = h.id === selectedHistoryId ? [...resolvedItems] : (historyResolvedMap[h.id] || []);
+              const effectiveLabel = getEffectiveSubmitLabel(h.overall_status, h.check_items, hResolved);
               const isSelected = selectedHistoryId === h.id;
               return (
                 <button
@@ -490,8 +492,6 @@ export default function ComparisonCheckPanel({
                         ok_count: h.ok_count, total_checks: h.total_checks,
                         check_items: h.check_items,
                       });
-                      // Reset selection state
-                      setResolvedItems(new Set());
                       setSelectedItems(new Set());
                       setAppliedItems(new Set());
                     }
@@ -503,16 +503,16 @@ export default function ComparisonCheckPanel({
                 >
                   <span className={cn(
                     "inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold text-white shrink-0",
-                    isGo ? "bg-[hsl(var(--status-ok))]" : "bg-[hsl(var(--status-ng))]"
+                    effectiveLabel.isOk ? "bg-[hsl(var(--status-ok))]" : "bg-[hsl(var(--status-ng))]"
                   )}>
                     {i + 1}
                   </span>
                   <span className="truncate flex-1">第{i + 2}稿チェック</span>
                   <span className={cn(
                     "text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0",
-                    isGo ? "text-status-ok bg-status-ok/10" : "text-status-ng bg-status-ng/10"
+                    effectiveLabel.isOk ? "text-status-ok bg-status-ok/10" : "text-status-ng bg-status-ng/10"
                   )}>
-                    {isGo ? "GO" : "NG"}
+                    {effectiveLabel.label}
                   </span>
                   <span className="text-[10px] text-muted-foreground shrink-0">
                     {format(new Date(h.created_at), "MM/dd HH:mm")}
