@@ -252,30 +252,51 @@ export default function FileReviewPage() {
     return () => { cancelled = true; };
   }, [fileId, projectId]);
 
-  // Fetch sibling files for navigation (scoped to same pattern)
+  // Fetch sibling files for navigation (all patterns in same process, ordered by pattern sort_order then file_name)
   useEffect(() => {
     if (!file || !projectId) return;
     let cancelled = false;
-    let query = supabase.from("project_files").select("id, file_name, process_type, check_result_id, status, parent_file_id, pattern_id")
-      .eq("project_id", projectId)
-      .eq("process_type", file.process_type)
-      .is("parent_file_id", null)
-      .order("created_at", { ascending: true });
-    
-    // Scope to same pattern
-    if (file.pattern_id) {
-      query = query.eq("pattern_id", file.pattern_id);
-    } else {
-      query = query.is("pattern_id", null);
-    }
-    
-    query.then(({ data, error }) => {
-        if (cancelled) return;
-        handleSupabaseError(error, "sibling files");
-        setSiblingFiles((data ?? []) as ProjectFile[]);
+
+    const fetchSiblings = async () => {
+      // Fetch patterns for this project to get sort_order
+      const { data: projectPatterns } = await supabase
+        .from("patterns")
+        .select("id, sort_order")
+        .eq("project_id", projectId)
+        .order("sort_order", { ascending: true });
+
+      // Fetch all root files in the same process
+      const { data, error } = await supabase
+        .from("project_files")
+        .select("id, file_name, process_type, check_result_id, status, parent_file_id, pattern_id")
+        .eq("project_id", projectId)
+        .eq("process_type", file.process_type)
+        .is("parent_file_id", null)
+        .order("file_name", { ascending: true });
+
+      if (cancelled) return;
+      handleSupabaseError(error, "sibling files");
+
+      const allFiles = (data ?? []) as ProjectFile[];
+
+      // Sort: pattern sort_order (null/common first), then file_name within each pattern
+      const patternOrderMap = new Map<string | null, number>();
+      patternOrderMap.set(null, -1); // common files first
+      (projectPatterns ?? []).forEach((p, idx) => patternOrderMap.set(p.id, p.sort_order ?? idx));
+
+      allFiles.sort((a, b) => {
+        const aOrder = patternOrderMap.get(a.pattern_id ?? null) ?? 9999;
+        const bOrder = patternOrderMap.get(b.pattern_id ?? null) ?? 9999;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return (a.file_name || "").localeCompare(b.file_name || "", "ja");
       });
+
+      setSiblingFiles(allFiles);
+    };
+
+    fetchSiblings();
     return () => { cancelled = true; };
-  }, [file?.process_type, file?.pattern_id, projectId, file?.id]);
+  }, [file?.process_type, projectId, file?.id]);
 
   const currentIndex = siblingFiles.findIndex(f => f.id === fileId);
   const prevFile = currentIndex > 0 ? siblingFiles[currentIndex - 1] : null;
