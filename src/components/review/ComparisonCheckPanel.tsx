@@ -143,26 +143,32 @@ export default function ComparisonCheckPanel({
 
   const hasNewContent = isImage ? !!comparisonAfterData : !!(comparisonAfterText || comparisonAfterData);
 
-  // Fetch comparison history
+  // Fetch comparison history + their resolved_items
   useEffect(() => {
     if (!checkResultId) return;
     const fetchHistory = async () => {
       const { data, error } = await (supabase as any)
         .from("check_results")
-        .select("id, created_at, overall_status, ng_count, warning_count, ok_count, total_checks, check_items")
+        .select("id, created_at, overall_status, ng_count, warning_count, ok_count, total_checks, check_items, resolved_items")
         .eq("parent_check_result_id", checkResultId)
         .eq("check_type", "comparison")
         .order("created_at", { ascending: true });
       if (!error && data) {
-        setHistory(data.map((d: any) => ({
-          ...d,
-          ng_count: d.ng_count ?? 0,
-          warning_count: d.warning_count ?? 0,
-          ok_count: d.ok_count ?? 0,
-          total_checks: d.total_checks ?? 0,
-          comparison_round: (d as any).comparison_round ?? 0,
-          check_items: (d.check_items as unknown as CheckItem[]) || [],
-        })));
+        const resolvedMap: Record<string, string[]> = {};
+        setHistory(data.map((d: any) => {
+          const resolved = Array.isArray(d.resolved_items) ? d.resolved_items as string[] : [];
+          if (resolved.length > 0) resolvedMap[d.id] = resolved;
+          return {
+            ...d,
+            ng_count: d.ng_count ?? 0,
+            warning_count: d.warning_count ?? 0,
+            ok_count: d.ok_count ?? 0,
+            total_checks: d.total_checks ?? 0,
+            comparison_round: (d as any).comparison_round ?? 0,
+            check_items: (d.check_items as unknown as CheckItem[]) || [],
+          };
+        }));
+        setHistoryResolvedMap(resolvedMap);
       }
     };
     fetchHistory();
