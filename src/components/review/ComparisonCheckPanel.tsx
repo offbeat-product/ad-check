@@ -538,6 +538,13 @@ export default function ComparisonCheckPanel({
       {/* Result summary bar (when result exists) */}
       {displayResult && (
         <div className="shrink-0 border-b border-border px-3 py-2 space-y-2">
+          {isShowingInitialCheck && (
+            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <Bot className="h-3 w-3" />
+              <span>初稿AIチェック結果</span>
+              {initialCheckedAt && <span className="ml-auto">{format(new Date(initialCheckedAt), "MM/dd HH:mm")}</span>}
+            </div>
+          )}
           <div className="flex items-center gap-2 flex-wrap">
             <Badge className={cn("text-xs font-bold px-2.5 py-1", submit.isOk ? "bg-status-ok text-white border-status-ok" : "bg-status-ng text-white border-status-ng")}>
               {submit.label}
