@@ -99,16 +99,11 @@ export default function ComparisonCheckPanel({
     const targetId = crId || checkResultId;
     if (!targetId) return;
     const arr = [...newSet];
-    const promises: Promise<unknown>[] = [
-      supabase.from("check_results").update({ resolved_items: arr }).eq("id", targetId),
-    ];
+    await supabase.from("check_results").update({ resolved_items: arr }).eq("id", targetId);
     // Also update parent check result so project page badges reflect resolved state
     if (targetId !== checkResultId && checkResultId) {
-      promises.push(
-        supabase.from("check_results").update({ resolved_items: arr }).eq("id", checkResultId)
-      );
+      await supabase.from("check_results").update({ resolved_items: arr }).eq("id", checkResultId);
     }
-    await Promise.all(promises);
   }, [checkResultId]);
 
   const toggleResolved = useCallback((patternId: string) => {
