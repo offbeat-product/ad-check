@@ -1238,16 +1238,6 @@ export default function FileReviewPage() {
                     className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
                     onClick={async () => {
                       if (!file || !projectId) return;
-                      // Delete related check results, comments, versions, correction_logs
-                      if (record?.id) {
-                        await Promise.all([
-                          supabase.from("comments").delete().eq("check_result_id", record.id),
-                          supabase.from("correction_logs").delete().eq("check_result_id", record.id),
-                        ]);
-                        await supabase.from("check_results").delete().eq("id", record.id);
-                      }
-                      // Also delete correction_logs linked to this file
-                      await supabase.from("correction_logs").delete().eq("file_id", file.id);
                       // Delete storage file if applicable
                       if (file.file_data?.includes("/storage/v1/object/public/")) {
                         try {
@@ -1258,8 +1248,7 @@ export default function FileReviewPage() {
                           }
                         } catch {}
                       }
-                      // Delete child versions
-                      await supabase.from("project_files").delete().eq("parent_file_id", file.id);
+                      // cascade_delete_project_file trigger handles: child files, check_results → comments, share_links, correction_logs
                       const { error } = await supabase.from("project_files").delete().eq("id", file.id);
                       if (error) {
                         toast({ title: "削除に失敗しました", description: error.message, variant: "destructive" });

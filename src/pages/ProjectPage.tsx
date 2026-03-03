@@ -1533,35 +1533,22 @@ export default function ProjectPage() {
             <AlertDialogCancel>キャンセル</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={async () => {
+               onClick={async () => {
                 if (!deleteTarget) return;
                 const f = deleteTarget.file;
                 try {
                   // Delete from storage if applicable
                   const bucket = getStorageBucket(f.process_type);
                   if (bucket && f.file_data && !f.file_data.startsWith("data:")) {
-                    // Extract path from public URL
-                    const url = new URL(f.file_data);
-                    const pathMatch = url.pathname.match(new RegExp(`/storage/v1/object/public/${bucket}/(.+)`));
-                    if (pathMatch) {
-                      await supabase.storage.from(bucket).remove([decodeURIComponent(pathMatch[1])]);
-                    }
+                    try {
+                      const url = new URL(f.file_data);
+                      const pathMatch = url.pathname.match(new RegExp(`/storage/v1/object/public/${bucket}/(.+)`));
+                      if (pathMatch) {
+                        await supabase.storage.from(bucket).remove([decodeURIComponent(pathMatch[1])]);
+                      }
+                    } catch {}
                   }
-                  // Delete related check results, comments, etc.
-                  if (f.check_result_id) {
-                    await supabase.from("comments").delete().eq("check_result_id", f.check_result_id);
-                    await supabase.from("check_results").delete().eq("id", f.check_result_id);
-                  }
-                  // Delete child versions
-                  const childFiles = files.filter(cf => cf.parent_file_id === f.id);
-                  for (const child of childFiles) {
-                    if (child.check_result_id) {
-                      await supabase.from("comments").delete().eq("check_result_id", child.check_result_id);
-                      await supabase.from("check_results").delete().eq("id", child.check_result_id);
-                    }
-                    await supabase.from("project_files").delete().eq("id", child.id);
-                  }
-                  // Delete the file itself
+                  // cascade_delete_project_file trigger handles: child files, check_results → comments, share_links, correction_logs
                   const { error } = await supabase.from("project_files").delete().eq("id", f.id);
                   if (error) throw error;
                   toast({ title: "ファイルを削除しました" });
