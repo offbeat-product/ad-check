@@ -858,7 +858,6 @@ export default function ProjectPage() {
           </TabsList>
 
           <TabsContent value="files" className="space-y-6">
-            <ProcessTimeline processes={processes} />
 
             {product && (
               <ReferenceMaterialsSection
