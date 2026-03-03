@@ -37,7 +37,7 @@ import ReferenceMaterialsSection from "@/components/reference/ReferenceMaterials
 import CheckRulesTab from "@/components/product/CheckRulesTab";
 import {
   Upload, FileText, Image, Film, MessageCircle, Plus, Settings, GripVertical,
-  ChevronDown, ChevronRight, CalendarIcon, AlertTriangle, Trash2, Grid3X3, List, Bot, Loader2, Pencil, Lock, CheckSquare,
+  ChevronDown, ChevronRight, CalendarIcon, AlertTriangle, Trash2, Grid3X3, List, Bot, Loader2, Pencil, Lock, CheckSquare, Send,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import NotificationBell from "@/components/NotificationBell";
@@ -215,6 +215,45 @@ export default function ProjectPage() {
       toast({ title: "ファイル名を変更しました" });
     }
     setEditingFileId(null);
+  };
+
+  const handleBulkSubmitToClient = async () => {
+    if (selectedFileIds.size === 0) return;
+    const targetFiles = files.filter(f => selectedFileIds.has(f.id));
+    // Only files with completed AI checks can be submitted
+    const eligible = targetFiles.filter(f => f.check_result_id && f.submission_type !== "client");
+    const ineligible = targetFiles.filter(f => !f.check_result_id);
+    if (eligible.length === 0) {
+      toast({
+        title: "クライアント提出できるファイルがありません",
+        description: ineligible.length > 0
+          ? "AIチェックが完了しているファイルのみクライアント提出できます。"
+          : "選択されたファイルは既にクライアント提出済みです。",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (ineligible.length > 0) {
+      toast({
+        title: `${ineligible.length}件はAIチェック未実行のため除外されます`,
+        description: "AIチェック済みのファイルのみ提出されます。",
+      });
+    }
+    const confirmed = window.confirm(
+      `${eligible.length}件のファイルをクライアント提出済みに変更しますか？\nこの操作は品質レポートに反映されます。`
+    );
+    if (!confirmed) return;
+    try {
+      for (const f of eligible) {
+        await supabase.from("project_files").update({ submission_type: "client", status: "client_review" } as any).eq("id", f.id);
+      }
+      setFiles(prev => prev.map(f => eligible.some(e => e.id === f.id) ? { ...f, submission_type: "client" as any, status: "client_review" } : f));
+      toast({ title: `${eligible.length}件をクライアント提出済みに変更しました` });
+      setSelectedFileIds(new Set());
+      setSelectMode(false);
+    } catch (err) {
+      toast({ title: "提出変更エラー", description: err instanceof Error ? err.message : "変更に失敗しました", variant: "destructive" });
+    }
   };
 
   const handleBulkDelete = async () => {
@@ -1049,6 +1088,34 @@ export default function ProjectPage() {
                               一括FIX ({sectionFiles.filter(f => f.check_result_id && !f.parent_file_id && f.status !== "fixed").length})
                             </Button>
                           )}
+                          {(() => {
+                            const eligibleForSubmit = sectionFiles.filter(f => f.check_result_id && !f.parent_file_id && f.submission_type !== "client" && f.status !== "fixed");
+                            return eligibleForSubmit.length > 0 ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-xs h-7 gap-1 border-primary/50 text-primary hover:bg-primary/10"
+                                onClick={async () => {
+                                  const confirmed = window.confirm(
+                                    `この工程のチェック済み${eligibleForSubmit.length}件をクライアント提出済みに変更しますか？\nこの操作は品質レポートに反映されます。`
+                                  );
+                                  if (!confirmed) return;
+                                  try {
+                                    for (const f of eligibleForSubmit) {
+                                      await supabase.from("project_files").update({ submission_type: "client", status: "client_review" } as any).eq("id", f.id);
+                                    }
+                                    setFiles(prev => prev.map(f => eligibleForSubmit.some(e => e.id === f.id) ? { ...f, submission_type: "client" as any, status: "client_review" } : f));
+                                    toast({ title: `${eligibleForSubmit.length}件をクライアント提出済みに変更しました` });
+                                  } catch (err) {
+                                    toast({ title: "提出変更エラー", variant: "destructive" });
+                                  }
+                                }}
+                              >
+                                <Send className="h-3 w-3" />
+                                一括クライアント提出 ({eligibleForSubmit.length})
+                              </Button>
+                            ) : null;
+                          })()}
                           {sectionFiles.length > 0 && (
                             <Button size="sm" variant={selectMode ? "default" : "outline"} className="text-xs h-7 gap-1"
                               onClick={() => {
@@ -1060,11 +1127,24 @@ export default function ProjectPage() {
                             </Button>
                           )}
                           {selectMode && selectedFileIds.size > 0 && (
-                            <Button size="sm" variant="destructive" className="text-xs h-7 gap-1"
-                              onClick={handleBulkDelete}>
-                              <Trash2 className="h-3 w-3" />
-                              {selectedFileIds.size}件削除
-                            </Button>
+                            <>
+                              {(() => {
+                                const selectedInProc = sectionFiles.filter(f => selectedFileIds.has(f.id));
+                                const eligibleCount = selectedInProc.filter(f => f.check_result_id && f.submission_type !== "client").length;
+                                return eligibleCount > 0 ? (
+                                  <Button size="sm" variant="outline" className="text-xs h-7 gap-1 border-primary/50 text-primary hover:bg-primary/10"
+                                    onClick={handleBulkSubmitToClient}>
+                                    <Send className="h-3 w-3" />
+                                    {eligibleCount}件クライアント提出
+                                  </Button>
+                                ) : null;
+                              })()}
+                              <Button size="sm" variant="destructive" className="text-xs h-7 gap-1"
+                                onClick={handleBulkDelete}>
+                                <Trash2 className="h-3 w-3" />
+                                {selectedFileIds.size}件削除
+                              </Button>
+                            </>
                           )}
                           <Button size="sm" variant="outline" className="text-xs h-7"
                             onClick={() => openUploadModal(proc.process_key)}>
