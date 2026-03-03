@@ -481,10 +481,10 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
 
         <button onClick={() => navigate("/rule-candidates")}
           title={collapsed ? "ルール学習" : undefined}
-          className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium transition-colors",
+          className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium press-feedback",
             collapsed ? "justify-center px-0" : "px-5",
             location.pathname === "/rule-candidates" ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-[3px] border-primary"
-              : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent")}>
+              : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent nav-item-interactive")}>
           <Sparkles className="h-4 w-4 shrink-0" />
           {!collapsed && (
             <span className="flex items-center gap-2">
@@ -500,20 +500,20 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
 
         <button onClick={() => navigate("/report")}
           title={collapsed ? "レポート" : undefined}
-          className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium transition-colors",
+          className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium press-feedback",
             collapsed ? "justify-center px-0" : "px-5",
             location.pathname === "/report" ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-[3px] border-primary"
-              : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent")}>
+              : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent nav-item-interactive")}>
           <BarChart3 className="h-4 w-4 shrink-0" />
           {!collapsed && "レポート"}
         </button>
 
         <button onClick={() => navigate("/settings")}
           title={collapsed ? "設定" : undefined}
-          className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium transition-colors",
+          className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium press-feedback",
             collapsed ? "justify-center px-0" : "px-5",
             location.pathname === "/settings" ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-[3px] border-primary"
-              : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent")}>
+              : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent nav-item-interactive")}>
           <Settings className="h-4 w-4 shrink-0" />
           {!collapsed && "設定"}
         </button>
