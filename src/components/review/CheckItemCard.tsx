@@ -99,7 +99,7 @@ interface CheckItemCardProps {
 }
 
 const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
-  ({ item, index, marker, isResolved, isSelected, isHighlighted, isApplied, commentCount, productCode, onToggleSelect, onToggleResolved, onCommentClick, onSeekMedia, onMarkerClick, sourceLabel = "AIチェック" }, ref) => {
+  ({ item, index, marker, isResolved, isSelected, isHighlighted, isApplied, commentCount, productCode, dupeCount = 1, onToggleSelect, onToggleResolved, onCommentClick, onSeekMedia, onMarkerClick, sourceLabel = "AIチェック" }, ref) => {
     const innerRef = useRef<HTMLDivElement>(null);
 
     // Auto-scroll into view when highlighted
