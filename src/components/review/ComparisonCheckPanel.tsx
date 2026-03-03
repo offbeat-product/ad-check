@@ -76,6 +76,7 @@ export default function ComparisonCheckPanel({
   commentCounts = {}, highlightCard, onCommentClick, onTabChange, onSeekMedia, onMarkerClick,
   lockedByUser, onAcquireLock, onReleaseLock,
   submissionType, onSubmitToClient, onInternalRevision, autoRun,
+  initialItems, initialOverallStatus, initialCheckedAt,
 }: ComparisonCheckPanelProps) {
   const { toast } = useToast();
   const { user } = useAuth();
