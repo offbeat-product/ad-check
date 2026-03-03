@@ -157,6 +157,11 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
               <Badge className={cn("text-[10px] h-4 px-1.5", statusBadgeColors[item.status] || "")}>
                 {STATUS_LABEL[item.status] || item.status}
               </Badge>
+              {dupeCount > 1 && (
+                <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-muted-foreground/30 text-muted-foreground bg-muted/50">
+                  同様 ×{dupeCount}
+                </Badge>
+              )}
               {isApplied && (
                 <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-status-ok/30 text-status-ok bg-status-ok/10">反映済み</Badge>
               )}
