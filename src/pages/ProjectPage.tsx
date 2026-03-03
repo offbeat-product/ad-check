@@ -871,44 +871,47 @@ export default function ProjectPage() {
               />
             )}
 
-            {/* Pattern management section */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            {/* Pattern management header – compact */}
+            <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Grid3X3 className="h-4 w-4 text-muted-foreground" />
-                <h2 className="text-sm font-semibold">パターン管理</h2>
-                {patterns.length > 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    {patterns.length}パターン
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <div className="flex items-center border border-border rounded-md h-7 overflow-hidden">
+                <h2 className="text-xs font-semibold text-muted-foreground">
+                  ■ 進捗 {patterns.length > 0 && `(${patterns.length}パターン)`}
+                </h2>
+                <div className="flex items-center border border-border rounded h-6 overflow-hidden">
                   <button
                     onClick={() => setViewMode("list")}
-                    className={cn("px-2 h-full flex items-center text-xs transition-colors", viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
+                    className={cn("px-1.5 h-full flex items-center transition-colors", viewMode === "list" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground")}
                     title="リスト表示"
                   >
-                    <List className="h-3.5 w-3.5" />
+                    <List className="h-3 w-3" />
                   </button>
                   <button
                     onClick={() => setViewMode("matrix")}
-                    className={cn("px-2 h-full flex items-center text-xs transition-colors", viewMode === "matrix" ? "bg-primary text-primary-foreground" : "hover:bg-muted")}
-                    title="パターン管理"
+                    className={cn("px-1.5 h-full flex items-center transition-colors", viewMode === "matrix" ? "bg-primary text-primary-foreground" : "hover:bg-muted text-muted-foreground")}
+                    title="マトリクス表示"
                   >
-                    <Grid3X3 className="h-3.5 w-3.5" />
+                    <Grid3X3 className="h-3 w-3" />
                   </button>
                 </div>
-                <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => setBulkPatternOpen(true)}>
-                  一括生成
-                </Button>
-                <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => setAddPatternOpen(true)}>
-                  <Plus className="h-3 w-3 mr-1" />パターン追加
-                </Button>
-                <Button size="sm" variant="outline" className="text-xs h-7" onClick={() => setProcessModalOpen(true)}>
-                  <Settings className="h-3 w-3 mr-1" />工程管理
-                </Button>
               </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button size="sm" variant="ghost" className="h-6 w-6 p-0 text-muted-foreground">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-40">
+                  <DropdownMenuItem onClick={() => setAddPatternOpen(true)}>
+                    <Plus className="h-3.5 w-3.5 mr-2" />パターン追加
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setBulkPatternOpen(true)}>
+                    <Layers className="h-3.5 w-3.5 mr-2" />一括生成
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setProcessModalOpen(true)}>
+                    <Settings className="h-3.5 w-3.5 mr-2" />工程管理
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
 
             {/* Conditional: matrix view vs legacy list */}
