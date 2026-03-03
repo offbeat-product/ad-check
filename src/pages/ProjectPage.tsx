@@ -1560,7 +1560,6 @@ export default function ProjectPage() {
                   // Delete related check results, comments, etc.
                   if (f.check_result_id) {
                     await supabase.from("comments").delete().eq("check_result_id", f.check_result_id);
-                    await supabase.from("file_versions").delete().eq("check_result_id", f.check_result_id);
                     await supabase.from("check_results").delete().eq("id", f.check_result_id);
                   }
                   // Delete child versions
