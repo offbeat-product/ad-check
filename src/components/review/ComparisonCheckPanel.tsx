@@ -94,11 +94,21 @@ export default function ComparisonCheckPanel({
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set(["NG", "WARNING"]));
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // Persist resolved_items to DB
+  // Persist resolved_items to DB (both comparison result AND parent for badge sync)
   const persistResolved = useCallback(async (newSet: Set<string>, crId?: string | null) => {
     const targetId = crId || checkResultId;
     if (!targetId) return;
-    await supabase.from("check_results").update({ resolved_items: [...newSet] }).eq("id", targetId);
+    const arr = [...newSet];
+    const promises: Promise<unknown>[] = [
+      supabase.from("check_results").update({ resolved_items: arr }).eq("id", targetId),
+    ];
+    // Also update parent check result so project page badges reflect resolved state
+    if (targetId !== checkResultId && checkResultId) {
+      promises.push(
+        supabase.from("check_results").update({ resolved_items: arr }).eq("id", checkResultId)
+      );
+    }
+    await Promise.all(promises);
   }, [checkResultId]);
 
   const toggleResolved = useCallback((patternId: string) => {
