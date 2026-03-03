@@ -118,7 +118,7 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
           else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = el;
         }}
         className={cn(
-          "border-l-4 rounded-lg border border-border p-3 space-y-2 transition-all bg-card",
+          "border-l-4 rounded-lg border border-border p-3 space-y-2 bg-card interactive-card cursor-pointer",
           borderColors[item.status] || "",
           isResolved && "opacity-50",
           isApplied && "opacity-60 bg-status-ok/5",
