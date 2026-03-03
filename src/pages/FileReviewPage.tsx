@@ -1570,24 +1570,38 @@ export default function FileReviewPage() {
             <AlertDialogAction onClick={async () => {
               try {
                 if (!file) return;
+                // Determine which version is being submitted (latest version in comparison mode)
+                const submitTarget = versions.length > 1
+                  ? versions.reduce((latest, v) => (v.version_number ?? 1) > (latest.version_number ?? 1) ? v : latest, versions[0])
+                  : file;
+                const submitVersionNumber = submitTarget.version_number ?? 1;
+
+                // Update the root file
                 const { error } = await supabase.from("project_files").update({ submission_type: "client", status: "client_review" } as any).eq("id", file.id);
                 if (error) {
                   toast({ title: "提出に失敗しました", description: error.message, variant: "destructive" });
                   return;
                 }
+                // Also update the submitted version file if different from root
+                if (submitTarget.id !== file.id) {
+                  await supabase.from("project_files").update({ submission_type: "client", status: "client_review" } as any).eq("id", submitTarget.id);
+                }
                 setFile({ ...file, submission_type: "client" as any, status: "client_review" });
-                // Log the client submission action
+                // Log the client submission action with correct version number
                 await supabase.from("submission_logs").insert({
-                  file_id: file.id,
+                  file_id: submitTarget.id,
                   project_id: file.project_id,
                   product_id: product?.id || null,
                   process_type: file.process_type,
                   action_type: "client_submit",
-                  version_number: file.version_number ?? 1,
+                  version_number: submitVersionNumber,
                   pattern_id: file.pattern_id,
                   created_by: user?.id || null,
                 } as any);
-                toast({ title: "✅ クライアント提出に変更しました" });
+                // Refresh versions and exit comparison mode to show latest draft
+                await fetchVersions();
+                setComparisonMode(false);
+                toast({ title: `✅ 第${submitVersionNumber === 1 ? "初" : submitVersionNumber}稿をクライアント提出しました` });
               } catch (err) {
                 console.error("[ClientSubmit] Error:", err);
                 toast({ title: "エラーが発生しました", description: err instanceof Error ? err.message : "不明なエラー", variant: "destructive" });
