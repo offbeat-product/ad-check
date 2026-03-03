@@ -93,19 +93,21 @@ export default function ComparisonCheckPanel({
   const [applying, setApplying] = useState(false);
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set(["NG", "WARNING"]));
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const displayDataRef = useRef<{ items: CheckItem[]; overallStatus: string | null }>({ items: [], overallStatus: null });
 
   // Persist resolved_items to DB (both comparison result AND parent for badge sync)
-  const persistResolved = useCallback(async (newSet: Set<string>, crId?: string | null, currentCheckItems?: CheckItem[], currentOverallStatus?: string | null) => {
+  const persistResolved = useCallback(async (newSet: Set<string>, crId?: string | null) => {
     const targetId = crId || checkResultId;
     if (!targetId) return;
     const arr = [...newSet];
+    const { items: currentCheckItems, overallStatus: currentOverallStatus } = displayDataRef.current;
     await supabase.from("check_results").update({ resolved_items: arr }).eq("id", targetId);
     // Also update parent check result: sync resolved_items, check_items and overall_status
     // so the project page badge uses matching data for getEffectiveSubmitLabel
     if (checkResultId) {
       const parentUpdate: Record<string, unknown> = { resolved_items: arr };
-      if (currentCheckItems) parentUpdate.check_items = currentCheckItems;
-      if (currentOverallStatus !== undefined) parentUpdate.overall_status = currentOverallStatus;
+      if (currentCheckItems.length > 0) parentUpdate.check_items = currentCheckItems;
+      if (currentOverallStatus) parentUpdate.overall_status = currentOverallStatus;
       await supabase.from("check_results").update(parentUpdate).eq("id", checkResultId);
     }
   }, [checkResultId]);
