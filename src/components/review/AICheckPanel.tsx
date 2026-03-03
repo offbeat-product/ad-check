@@ -41,6 +41,11 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
   const [applying, setApplying] = useState(false);
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set(["NG", "WARNING"]));
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  // Store the original NG status (C/D) before any resolved-based overrides
+  const originalStatusRef = useRef<string | null>(null);
+  if (overallStatus && (overallStatus === "C" || overallStatus === "D")) {
+    originalStatusRef.current = overallStatus;
+  }
 
   // Load persisted resolved_items from DB
   useEffect(() => {
@@ -58,13 +63,14 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
   const persistResolved = useCallback(async (newSet: Set<string>) => {
     if (!checkResultId) return;
     const arr = [...newSet];
-    // Compute effective status: if all NG items are resolved → GO (B), else keep original
     const ngItems = items.filter(i => i.status === "NG");
     const allNgResolved = ngItems.length > 0 && ngItems.every(i => {
       const id = getCheckItemId(i);
       return id ? newSet.has(id) : false;
     });
-    const effectiveStatus = allNgResolved ? "B" : overallStatus;
+    // Use original NG status for revert, not potentially-overridden prop
+    const revertStatus = originalStatusRef.current || overallStatus;
+    const effectiveStatus = allNgResolved ? "B" : revertStatus;
     await supabase.from("check_results").update({ resolved_items: arr, overall_status: effectiveStatus }).eq("id", checkResultId);
   }, [checkResultId, items, overallStatus]);
 
