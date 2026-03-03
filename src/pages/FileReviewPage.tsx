@@ -965,7 +965,7 @@ export default function FileReviewPage() {
 
           {/* Row 2: Action buttons */}
           <div className="flex items-center gap-1 px-4 pb-2 overflow-x-auto">
-            {canCheck && (
+            {canCheck && !comparisonMode && (
               <div className="flex items-center gap-2">
                 <Button size="sm" className="text-xs h-8" onClick={handleRunCheck} disabled={checking || videoPolling.pollingState.isPolling || !!lockedByUser}>
                   {checking ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Bot className="h-3 w-3 mr-1" />}
@@ -990,13 +990,13 @@ export default function FileReviewPage() {
                 )}
               </div>
             )}
-            {checkDisabled && (
+            {checkDisabled && !comparisonMode && (
               <Button size="sm" variant="outline" className="text-xs h-8 opacity-50" disabled>
                 <Bot className="h-3 w-3 mr-1" />AIチェック（準備中）
               </Button>
             )}
             {/* Comparison check button */}
-            {hasCheckResult && (
+            {hasCheckResult && !comparisonMode && (
               <Button size="sm" variant="outline" className="text-xs h-8 border-primary/50 text-primary hover:bg-primary/10" onClick={() => {
                 if (comparisonDrafts.length === 0) {
                   const inputMode = AI_CHECK_CONFIG[file.process_type]?.inputMode || "text";
@@ -1008,6 +1008,7 @@ export default function FileReviewPage() {
                   setComparisonActivePairIndex(0);
                 }
                 setComparisonMode(true);
+                setRightTab("comparison");
               }}>
                 <GitCompare className="h-3 w-3 mr-1" />比較チェック
               </Button>
@@ -1312,6 +1313,35 @@ export default function FileReviewPage() {
         mediaCurrentTime={mediaCurrentTime}
         onSeekMedia={handleSeekMedia}
         onCommentDeleted={fetchSavedAnnotations}
+        comparisonMode={comparisonMode}
+        comparisonBeforeData={comparisonDrafts[comparisonActivePairIndex]?.data ?? null}
+        comparisonAfterData={comparisonDrafts[comparisonActivePairIndex + 1]?.data ?? null}
+        comparisonAfterText={comparisonDrafts[comparisonActivePairIndex + 1]?.text ?? ""}
+        comparisonRoundLabel={comparisonDrafts[comparisonActivePairIndex + 1]?.label ?? ""}
+        onOpenComparisonMode={() => { setComparisonMode(true); setRightTab("comparison"); }}
+        onComparisonCheckComplete={(res) => {
+          // Update record with comparison result
+          setRecord(prev => prev ? { ...prev, overall_status: res.overall_status, check_items: res.check_items as any } : prev);
+        }}
+        onComparisonSaved={(entry) => {
+          // Optionally update file status
+        }}
+        onClearAfterData={() => {
+          // After comparison check, clear the after-draft data so user uploads next version
+          const updated = [...comparisonDrafts];
+          if (updated.length > comparisonActivePairIndex + 1) {
+            updated[comparisonActivePairIndex + 1] = { ...updated[comparisonActivePairIndex + 1], data: null, text: "" };
+            setComparisonDrafts(updated);
+          }
+        }}
+        clientName={client?.name}
+        productName={product?.name}
+        lockedByUser={lockedByUser}
+        onAcquireLock={acquireLock}
+        onReleaseLock={releaseLock}
+        submissionType={file.submission_type}
+        onSubmitToClient={() => setSubmitToClientOpen(true)}
+        onInternalRevision={() => setInternalRevisionOpen(true)}
         emptyCheckMessage={
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
             <Bot className="h-10 w-10 mb-3 opacity-30" />
@@ -1361,7 +1391,8 @@ export default function FileReviewPage() {
             ]);
             setComparisonActivePairIndex(0);
             setComparisonMode(true);
-            toast({ title: "比較チェックモードに切り替えました", description: "比較チェックを実行してください" });
+            setRightTab("comparison");
+            toast({ title: "比較チェックモードに切り替えました", description: "右パネルの「比較チェック実行」ボタンを押してください" });
           } catch (err) {
             console.error("[onUploaded] Error switching to comparison mode:", err);
             toast({ title: "比較モード切替エラー", description: err instanceof Error ? err.message : "不明なエラー", variant: "destructive" });
