@@ -643,6 +643,29 @@ export default function ComparisonCheckPanel({
         {/* Apply corrections bar (when result exists) */}
         {displayResult && (
           <>
+            {/* Bulk resolve all NG items */}
+            {(() => {
+              const unresolvedNg = displayItems.filter(i => i.status === "NG" && !resolvedItems.has(getCheckItemId(i)));
+              return unresolvedNg.length > 0 ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full text-xs gap-1 border-status-ng/30 text-status-ng hover:bg-status-ng/10"
+                  onClick={() => {
+                    const next = new Set(resolvedItems);
+                    unresolvedNg.forEach(i => next.add(getCheckItemId(i)));
+                    setResolvedItems(next);
+                    const targetId = selectedHistoryId || checkResultId;
+                    persistResolved(next, targetId);
+                    if (selectedHistoryId) {
+                      setHistoryResolvedMap(prev => ({ ...prev, [selectedHistoryId]: [...next] }));
+                    }
+                  }}
+                >
+                  NG項目を一括で修正済みにする ({unresolvedNg.length})
+                </Button>
+              ) : null;
+            })()}
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">{selectedItems.size}件選択済み</span>
               <div className="flex gap-2">
