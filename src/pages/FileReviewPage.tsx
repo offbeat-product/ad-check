@@ -1350,11 +1350,16 @@ export default function FileReviewPage() {
           }
         }}
         onClearAfterData={() => {
-          // After comparison check, clear the after-draft data so user uploads next version
+          // After comparison check completes, keep the after-draft data visible
+          // but prepare for next round by adding a new empty draft slot
           const updated = [...comparisonDrafts];
-          if (updated.length > comparisonActivePairIndex + 1) {
-            updated[comparisonActivePairIndex + 1] = { ...updated[comparisonActivePairIndex + 1], data: null, text: "" };
+          // Only add a new draft slot if the last slot has data (i.e., don't keep adding empty slots)
+          const lastDraft = updated[updated.length - 1];
+          if (lastDraft && (lastDraft.data || lastDraft.text)) {
+            updated.push({ label: `第${updated.length + 1}稿`, data: null, text: "" });
             setComparisonDrafts(updated);
+            // Move active pair to the new comparison pair
+            setComparisonActivePairIndex(updated.length - 2);
           }
         }}
         clientName={client?.name}
