@@ -306,7 +306,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
       <div className="shrink-0 border-t border-border p-3 space-y-2 bg-card">
         {/* Bulk resolve all NG items */}
         {(() => {
-          const unresolvedNg = items.filter(i => i.status === "NG" && !resolvedItems.has(i.pattern_id));
+          const unresolvedNg = items.filter(i => i.status === "NG" && !resolvedItems.has(getCheckItemId(i)));
           return unresolvedNg.length > 0 ? (
             <Button
               size="sm"
@@ -314,7 +314,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
               className="w-full text-xs gap-1 border-status-ng/30 text-status-ng hover:bg-status-ng/10"
               onClick={() => {
                 const next = new Set(resolvedItems);
-                unresolvedNg.forEach(i => next.add(i.pattern_id));
+                unresolvedNg.forEach(i => next.add(getCheckItemId(i)));
                 setResolvedItems(next);
                 persistResolved(next);
               }}
