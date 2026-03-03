@@ -949,16 +949,10 @@ export default function ProjectPage() {
 
                   const isProcessCompleted = proc.status === "completed";
 
-                  return (
+                    return (
                     <div
                       key={proc.id}
-                      draggable
-                      onDragStart={() => handleProcessDragStart(index)}
-                      onDragEnter={() => handleProcessDragEnter(index)}
-                      onDragEnd={handleProcessDragEnd}
-                      onDragOver={(e) => e.preventDefault()}
                     className={cn("glass-card overflow-hidden transition-all relative",
-                      dragOverIdx === index && "ring-2 ring-primary/30",
                       (isProcessCompleted || (sectionFiles.length > 0 && sectionFiles.filter(f => !f.parent_file_id).every(f => f.status === "fixed"))) && "border-muted-foreground/30")}
                     >
                       {/* Completed / All-FIX overlay */}
