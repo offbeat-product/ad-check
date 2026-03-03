@@ -50,8 +50,6 @@ const App = () => (
               <Route path="/accept-invite" element={<AcceptInvitePage />} />
               <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
                 <Route path="/dashboard" element={<Dashboard />} />
-                <Route path="/check" element={<Check />} />
-                <Route path="/check-result/:id" element={<CheckResultDetail />} />
                 <Route path="/client/:id" element={<ClientPage />} />
                 <Route path="/product/:id" element={<ProductPage />} />
                 <Route path="/project/:id" element={<ProjectPage />} />
