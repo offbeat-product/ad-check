@@ -109,7 +109,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
   };
 
   const selectAll = () => {
-    setSelectedItems(new Set(filteredItems.filter((i) => i.status !== "OK" && !appliedItems.has(i.pattern_id)).map((i) => i.pattern_id)));
+    setSelectedItems(new Set(filteredItems.filter((i) => i.status !== "OK" && !appliedItems.has(getCheckItemId(i))).map((i) => getCheckItemId(i))));
   };
 
   const handleApplyCorrections = async () => {
