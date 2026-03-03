@@ -249,22 +249,23 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
       <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
         {/* Non-OK items */}
         {filteredItems.filter((item) => item.status !== "OK").map((item, i) => {
+          const itemId = getCheckItemId(item);
           const marker = markers.find((m) => m.item.pattern_id === item.pattern_id);
           return (
             <CheckItemCard
-              key={item.pattern_id}
+              key={itemId}
               ref={(el) => { cardRefs.current[item.pattern_id] = el; }}
               item={item}
               index={i}
               marker={marker}
-              isResolved={resolvedItems.has(item.pattern_id)}
-              isSelected={selectedItems.has(item.pattern_id)}
+              isResolved={resolvedItems.has(itemId)}
+              isSelected={selectedItems.has(itemId)}
               isHighlighted={highlightCard === item.pattern_id}
-              isApplied={appliedItems.has(item.pattern_id)}
+              isApplied={appliedItems.has(itemId)}
               commentCount={commentCounts[item.pattern_id] || 0}
               productCode={productCode}
-              onToggleSelect={() => toggleSelectItem(item.pattern_id)}
-              onToggleResolved={() => toggleResolved(item.pattern_id)}
+              onToggleSelect={() => toggleSelectItem(itemId)}
+              onToggleResolved={() => toggleResolved(itemId)}
               onCommentClick={() => onCommentClick(item.pattern_id)}
               onSeekMedia={onSeekMedia}
               onMarkerClick={onMarkerClick}
