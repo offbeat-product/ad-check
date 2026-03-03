@@ -1,7 +1,7 @@
 import { format } from "date-fns";
 import type { CheckResult, CheckItem } from "@/lib/types";
 import { Badge } from "@/components/ui/badge";
-import { getSubmitLabel, getSubmitBadgeClass, STATUS_LABEL } from "@/lib/check-display";
+import { getSubmitLabelFromCounts, getSubmitBadgeClassFromCounts, STATUS_LABEL } from "@/lib/check-display";
 import { CalendarDays } from "lucide-react";
 
 interface Props {
@@ -17,7 +17,7 @@ export default function CheckResultView({ result, title, checkedAt }: Props) {
     (a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3)
   );
 
-  const submit = getSubmitLabel(result.overall_status);
+  const submit = getSubmitLabelFromCounts(result.ng_count);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -35,7 +35,7 @@ export default function CheckResultView({ result, title, checkedAt }: Props) {
       </div>
 
       <div className={`grid grid-cols-2 ${result.manual_count ? "md:grid-cols-5" : "md:grid-cols-4"} gap-3`}>
-        <SummaryCard label="判定" value={submit.label} className={getSubmitBadgeClass(result.overall_status)} />
+        <SummaryCard label="判定" value={submit.label} className={getSubmitBadgeClassFromCounts(result.ng_count)} />
         <SummaryCard label="修正必須" value={result.ng_count} className="bg-status-ng/10 text-status-ng" />
         <SummaryCard label="要確認" value={result.warning_count} className="bg-status-warning/10 text-status-warning" />
         <SummaryCard label="問題なし" value={result.ok_count} className="bg-status-ok/10 text-status-ok" />
