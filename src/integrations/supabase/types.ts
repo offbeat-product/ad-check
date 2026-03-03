@@ -406,44 +406,6 @@ export type Database = {
         }
         Relationships: []
       }
-      file_versions: {
-        Row: {
-          check_result_id: string
-          content_text: string | null
-          created_at: string
-          file_type: string
-          id: string
-          image_url: string | null
-          version_number: number
-        }
-        Insert: {
-          check_result_id: string
-          content_text?: string | null
-          created_at?: string
-          file_type: string
-          id?: string
-          image_url?: string | null
-          version_number?: number
-        }
-        Update: {
-          check_result_id?: string
-          content_text?: string | null
-          created_at?: string
-          file_type?: string
-          id?: string
-          image_url?: string | null
-          version_number?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "file_versions_check_result_id_fkey"
-            columns: ["check_result_id"]
-            isOneToOne: false
-            referencedRelation: "check_results"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       invitations: {
         Row: {
           accepted_at: string | null

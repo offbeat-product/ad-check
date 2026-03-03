@@ -9,7 +9,7 @@ export type ProjectFile = Tables<"project_files">;
 export type CheckResultRow = Tables<"check_results">;
 export type CommentRow = Tables<"comments">;
 export type CorrectionPatternRow = Tables<"correction_patterns">;
-export type FileVersionRow = Tables<"file_versions">;
+
 export type ShareLinkRow = Tables<"share_links">;
 
 // Insert types

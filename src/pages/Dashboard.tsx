@@ -61,6 +61,8 @@ export default function Dashboard() {
   const [checksLoading, setChecksLoading] = useState(true);
   const [checksLoaded, setChecksLoaded] = useState(false);
   const [profileMap, setProfileMap] = useState<Map<string, string>>(new Map());
+  // Map check_result_id -> { projectId, fileId } for navigation
+  const [checkFileMap, setCheckFileMap] = useState<Map<string, { projectId: string; fileId: string }>>(new Map());
 
   // Phase 3: Recent files (loaded lazily)
   const [recentFiles, setRecentFiles] = useState<(ProjectFile & { project_name?: string })[]>([]);
@@ -130,6 +132,24 @@ export default function Dashboard() {
         if (cancelled) return;
         handleSupabaseError(cr.error, "check_results");
         setRecords(cr.data ?? []);
+
+        // Resolve check_result -> project_file mapping for navigation
+        const crIds = (cr.data ?? []).map(r => r.id);
+        if (crIds.length > 0) {
+          const { data: pfLinks } = await supabase
+            .from("project_files")
+            .select("id, project_id, check_result_id")
+            .in("check_result_id", crIds);
+          if (!cancelled && pfLinks) {
+            const map = new Map<string, { projectId: string; fileId: string }>();
+            pfLinks.forEach((pf: { id: string; project_id: string | null; check_result_id: string | null }) => {
+              if (pf.check_result_id && pf.project_id) {
+                map.set(pf.check_result_id, { projectId: pf.project_id, fileId: pf.id });
+              }
+            });
+            setCheckFileMap(map);
+          }
+        }
 
         // Resolve user profiles
         const userIds = [...new Set((cr.data ?? []).map(r => r.user_id).filter(Boolean))];
@@ -423,7 +443,10 @@ export default function Dashboard() {
                   <tr><td colSpan={5} className="text-center py-12 text-muted-foreground">チェック結果がありません</td></tr>
                 ) : (
                   records.map((r) => (
-                    <tr key={r.id} onClick={() => navigate(`/check-result/${r.id}`)}
+                    <tr key={r.id} onClick={() => {
+                        const link = checkFileMap.get(r.id);
+                        if (link) navigate(`/project/${link.projectId}/file/${link.fileId}`);
+                      }}
                       className="border-b border-border/50 hover:bg-muted/50 cursor-pointer transition-colors">
                       <td className="px-3 py-2 text-muted-foreground whitespace-nowrap">
                         {r.created_at ? new Date(r.created_at).toLocaleString("ja-JP", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : ""}
@@ -456,7 +479,10 @@ export default function Dashboard() {
                 <div className="p-8 text-center text-muted-foreground text-sm">チェック結果がありません</div>
               ) : (
                 records.map((r) => (
-                  <button key={r.id} onClick={() => navigate(`/check-result/${r.id}`)}
+                  <button key={r.id} onClick={() => {
+                      const link = checkFileMap.get(r.id);
+                      if (link) navigate(`/project/${link.projectId}/file/${link.fileId}`);
+                    }}
                     className="w-full p-4 text-left hover:bg-muted/50 transition-colors">
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-sm font-medium">{r.product_name}</span>

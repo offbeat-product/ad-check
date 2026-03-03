@@ -1242,7 +1242,6 @@ export default function FileReviewPage() {
                       if (record?.id) {
                         await Promise.all([
                           supabase.from("comments").delete().eq("check_result_id", record.id),
-                          supabase.from("file_versions").delete().eq("check_result_id", record.id),
                           supabase.from("correction_logs").delete().eq("check_result_id", record.id),
                         ]);
                         await supabase.from("check_results").delete().eq("id", record.id);
