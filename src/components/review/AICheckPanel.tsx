@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
-import { getSubmitLabelFromCounts, getSubmitBadgeClassFromCounts, STATUS_LABEL, STATUS_FILTER_OPTIONS } from "@/lib/check-display";
+import { getSubmitLabel, getSubmitBadgeClass, STATUS_LABEL, STATUS_FILTER_OPTIONS } from "@/lib/check-display";
 import { cn } from "@/lib/utils";
 import CheckItemCard from "./CheckItemCard";
 import ReferenceStatusIndicator from "@/components/reference/ReferenceStatusIndicator";
@@ -23,7 +23,7 @@ interface AICheckPanelProps {
   onCommentClick: (patternId: string) => void;
   checkResultId?: string | null;
   onTabChange?: (tab: string) => void;
-  ngCount?: number | null;
+  overallStatus?: string | null;
   checkedAt?: string | null;
   productId?: string;
   projectId?: string;
@@ -32,7 +32,7 @@ interface AICheckPanelProps {
   onMarkerClick?: (patternId: string) => void;
 }
 
-export default function AICheckPanel({ items, markers, productCode, commentCounts, highlightCard, onCommentClick, checkResultId, onTabChange, ngCount, checkedAt, productId, projectId, processKey, onSeekMedia, onMarkerClick }: AICheckPanelProps) {
+export default function AICheckPanel({ items, markers, productCode, commentCounts, highlightCard, onCommentClick, checkResultId, onTabChange, overallStatus, checkedAt, productId, projectId, processKey, onSeekMedia, onMarkerClick }: AICheckPanelProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [resolvedItems, setResolvedItems] = useState<Set<string>>(new Set());
@@ -73,7 +73,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
     return c;
   }, [items]);
 
-  const submit = getSubmitLabelFromCounts(ngCount);
+  const submit = getSubmitLabel(overallStatus);
 
   const toggleSelectItem = (id: string) => {
     setSelectedItems((s) => { const next = new Set(s); next.has(id) ? next.delete(id) : next.add(id); return next; });
@@ -186,7 +186,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
           </div>
         )}
         <div className="flex items-center gap-2 flex-wrap">
-          <Badge className={cn("text-xs font-bold px-2.5 py-1", getSubmitBadgeClassFromCounts(ngCount))}>
+          <Badge className={cn("text-xs font-bold px-2.5 py-1", getSubmitBadgeClass(overallStatus))}>
             {submit.label}
           </Badge>
           <span className="text-[10px] text-status-ng font-bold">修正必須 {counts.NG}</span>

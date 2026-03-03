@@ -24,7 +24,7 @@ interface ReviewRightPanelProps {
   onMarkerClick?: (patternId: string) => void;
   emptyCheckMessage?: React.ReactNode;
   onAnnotationClick?: (annotationData: unknown) => void;
-  ngCount?: number | null;
+  overallStatus?: string | null;
   checkedAt?: string | null;
   file?: { file_data: string | null; file_type: string; process_type: string; file_name?: string } | null;
   productId?: string;
@@ -62,7 +62,7 @@ interface ReviewRightPanelProps {
 export default function ReviewRightPanel({
   rightTab, onTabChange, items, markers, productCode, commentCounts, highlightCard,
   commentFilter, checkResultId, hasCheckResult, onCommentClick, onCheckItemClick, onMarkerClick, emptyCheckMessage, onAnnotationClick,
-  ngCount, checkedAt, file, productId, projectId,
+  overallStatus, checkedAt, file, productId, projectId,
   mediaCurrentTime, onSeekMedia, patternId, fileId, onCommentDeleted,
   comparisonMode, comparisonBeforeData, comparisonAfterData, comparisonAfterText, comparisonRoundLabel,
   onOpenComparisonMode, onComparisonCheckComplete, onComparisonSaved, onClearAfterData,
@@ -156,7 +156,7 @@ export default function ReviewRightPanel({
                 onCommentClick={onCommentClick}
                 checkResultId={checkResultId}
                 onTabChange={onTabChange}
-                ngCount={ngCount}
+                overallStatus={overallStatus}
                 checkedAt={checkedAt}
                 productId={productId}
                 projectId={projectId}
