@@ -1465,7 +1465,7 @@ export default function FileReviewPage() {
         comparisonAfterData={comparisonDrafts[comparisonActivePairIndex + 1]?.data ?? null}
         comparisonAfterText={comparisonDrafts[comparisonActivePairIndex + 1]?.text ?? ""}
         comparisonRoundLabel={comparisonDrafts[comparisonActivePairIndex + 1]?.label ?? ""}
-        onOpenComparisonMode={() => { setComparisonMode(true); setRightTab("comparison"); }}
+        onOpenComparisonMode={() => { setComparisonMode(true); setRightTab("ai-check"); }}
         onComparisonCheckComplete={(res) => {
           // Update record with comparison result — no-op here, handled in onComparisonSaved
         }}
