@@ -1320,11 +1320,14 @@ export default function FileReviewPage() {
         comparisonRoundLabel={comparisonDrafts[comparisonActivePairIndex + 1]?.label ?? ""}
         onOpenComparisonMode={() => { setComparisonMode(true); setRightTab("comparison"); }}
         onComparisonCheckComplete={(res) => {
-          // Update record with comparison result
-          setRecord(prev => prev ? { ...prev, overall_status: res.overall_status, check_items: res.check_items as any } : prev);
+          // Update record with comparison result — no-op here, handled in onComparisonSaved
         }}
-        onComparisonSaved={(entry) => {
-          // Optionally update file status
+        onComparisonSaved={async (entry) => {
+          // Load full comparison result from DB and set as the current displayed record
+          const { data: fullCr } = await supabase.from("check_results").select("*").eq("id", entry.id).maybeSingle();
+          if (fullCr) {
+            setRecord(fullCr);
+          }
         }}
         onClearAfterData={() => {
           // After comparison check, clear the after-draft data so user uploads next version
