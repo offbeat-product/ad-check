@@ -251,6 +251,11 @@ export default function FileReviewPage() {
 
       await fetchVersions();
       if (!cancelled) setLoading(false);
+
+      // Auto-trigger AI check for newly uploaded files (status=uploaded, no check result)
+      if (!cancelled && f && f.status === "uploaded" && !f.check_result_id) {
+        autoCheckPendingRef.current = true;
+      }
     })();
     return () => { cancelled = true; };
   }, [fileId, projectId]);
