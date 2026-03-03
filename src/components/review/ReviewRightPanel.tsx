@@ -58,6 +58,7 @@ interface ReviewRightPanelProps {
   onSubmitToClient?: () => void;
   onInternalRevision?: () => void;
   commentRefreshKey?: number;
+  autoRunComparison?: boolean;
 }
 
 export default function ReviewRightPanel({
