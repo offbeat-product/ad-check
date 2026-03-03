@@ -54,11 +54,19 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
     return () => { cancelled = true; };
   }, [checkResultId]);
 
-  // Persist resolved_items to DB when changed
+  // Persist resolved_items to DB and sync effective overall_status
   const persistResolved = useCallback(async (newSet: Set<string>) => {
     if (!checkResultId) return;
-    await supabase.from("check_results").update({ resolved_items: [...newSet] }).eq("id", checkResultId);
-  }, [checkResultId]);
+    const arr = [...newSet];
+    // Compute effective status: if all NG items are resolved → GO (B), else keep original
+    const ngItems = items.filter(i => i.status === "NG");
+    const allNgResolved = ngItems.length > 0 && ngItems.every(i => {
+      const id = getCheckItemId(i);
+      return id ? newSet.has(id) : false;
+    });
+    const effectiveStatus = allNgResolved ? "B" : overallStatus;
+    await supabase.from("check_results").update({ resolved_items: arr, overall_status: effectiveStatus }).eq("id", checkResultId);
+  }, [checkResultId, items, overallStatus]);
 
   const toggleResolved = useCallback((patternId: string) => {
     setResolvedItems((s) => {
