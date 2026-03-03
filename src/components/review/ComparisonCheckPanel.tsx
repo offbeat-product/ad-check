@@ -365,6 +365,10 @@ export default function ComparisonCheckPanel({
 
   // Keep ref in sync so persistResolved always has latest display data
   displayDataRef.current = { items: displayItems, overallStatus: displayResult?.overall_status ?? null };
+  // Capture original NG status before any resolved-based override to "B"
+  if (displayResult?.overall_status && (displayResult.overall_status === "C" || displayResult.overall_status === "D")) {
+    originalStatusRef.current = displayResult.overall_status;
+  }
 
   // Filter logic
   const toggleFilter = (key: string) => {
