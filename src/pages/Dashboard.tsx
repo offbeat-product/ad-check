@@ -12,7 +12,7 @@ import NotificationBell from "@/components/NotificationBell";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import { cn } from "@/lib/utils";
 import CreateProjectModal from "@/components/CreateProjectModal";
-import { getSubmitLabel, getSubmitBadgeClass } from "@/lib/check-display";
+import { getSubmitLabelFromCounts, getSubmitBadgeClassFromCounts } from "@/lib/check-display";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -274,10 +274,7 @@ export default function Dashboard() {
     monthStart.setHours(0, 0, 0, 0);
     const monthChecks = records.filter(r => r.created_at && new Date(r.created_at) >= monthStart).length;
     const totalNg = records.reduce((s, r) => s + (r.ng_count ?? 0), 0);
-    const okCount = records.filter(r => {
-      const s = (r.overall_status || "").toUpperCase();
-      return s === "A" || s === "B";
-    }).length;
+    const okCount = records.filter(r => (r.ng_count ?? 0) === 0).length;
     const okRate = records.length > 0 ? Math.round((okCount / records.length) * 100) : 0;
     const week = new Date();
     week.setDate(week.getDate() - 7);

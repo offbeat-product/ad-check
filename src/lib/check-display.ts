@@ -1,12 +1,26 @@
 // Shared helpers for check result display labels & colors
 
-/** Map overall_status (A/B/C/D) to GO / NG */
+/** Derive GO/NG from ng_count (dynamic calculation, single source of truth) */
+export function getSubmitLabelFromCounts(ngCount: number | null | undefined): { label: string; isOk: boolean } {
+  const isOk = (ngCount ?? 0) === 0;
+  return { label: isOk ? "GO" : "NG", isOk };
+}
+
+export function getSubmitBadgeClassFromCounts(ngCount: number | null | undefined): string {
+  const { isOk } = getSubmitLabelFromCounts(ngCount);
+  return isOk
+    ? "bg-status-ok text-white border-status-ok"
+    : "bg-status-ng text-white border-status-ng";
+}
+
+/** @deprecated Use getSubmitLabelFromCounts instead */
 export function getSubmitLabel(status: string | null | undefined): { label: string; isOk: boolean } {
   const s = (status || "").toUpperCase();
   const isOk = s === "A" || s === "B";
   return { label: isOk ? "GO" : "NG", isOk };
 }
 
+/** @deprecated Use getSubmitBadgeClassFromCounts instead */
 export function getSubmitBadgeClass(status: string | null | undefined): string {
   const { isOk } = getSubmitLabel(status);
   return isOk
