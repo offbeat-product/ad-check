@@ -71,6 +71,22 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
 
   const showingPopup = !!pendingAnnotation;
 
+  // Clear all drawing state when paint mode is deactivated
+  useEffect(() => {
+    if (!active) {
+      setAnnotations([]);
+      setUndoStack([]);
+      setPendingAnnotation(null);
+      setCommentText("");
+      setCommentError(false);
+      setTextInput(null);
+      setPinInput(null);
+      setDrawing(false);
+      setStartPoint(null);
+      setCurrentPoints([]);
+    }
+  }, [active]);
+
   const getPos = useCallback((e: React.MouseEvent) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };

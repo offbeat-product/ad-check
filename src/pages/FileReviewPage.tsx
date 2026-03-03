@@ -936,7 +936,6 @@ export default function FileReviewPage() {
                 : "bg-muted text-muted-foreground"
             )}>
               {currentVersionNumber === 1 ? "初稿" : `第${currentVersionNumber}稿`}
-              {totalVersions > 1 && ` / 全${totalVersions}稿`}
             </span>
 
             {siblingFiles.length > 1 && (
