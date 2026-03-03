@@ -33,7 +33,9 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, ArrowDown, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight, Lock, Unlock, Trash2, Pencil, CalendarDays, User } from "lucide-react";
+import { ArrowLeft, ArrowDown, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight, Lock, Unlock, Trash2, Pencil, CalendarDays, User, MoreHorizontal } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
 
 import { cn } from "@/lib/utils";
