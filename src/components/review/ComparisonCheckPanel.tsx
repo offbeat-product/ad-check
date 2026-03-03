@@ -94,21 +94,36 @@ export default function ComparisonCheckPanel({
   const [activeFilters, setActiveFilters] = useState<Set<string>>(new Set(["NG", "WARNING"]));
   const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const displayDataRef = useRef<{ items: CheckItem[]; overallStatus: string | null }>({ items: [], overallStatus: null });
+  // Track original overall_status before any resolved-based overrides
+  const originalStatusRef = useRef<string | null>(null);
 
-  // Persist resolved_items to DB (both comparison result AND parent for badge sync)
+  // Persist resolved_items to DB and sync effective GO/NG to parent's overall_status
   const persistResolved = useCallback(async (newSet: Set<string>, crId?: string | null) => {
     const targetId = crId || checkResultId;
     if (!targetId) return;
     const arr = [...newSet];
-    const { items: currentCheckItems, overallStatus: currentOverallStatus } = displayDataRef.current;
+    const { items: currentCheckItems } = displayDataRef.current;
+    // Use the original NG status (C/D) for revert, not the possibly-overridden "B"
+    const originalStatus = originalStatusRef.current || displayDataRef.current.overallStatus;
+
+    // Update the target (comparison or parent) record
     await supabase.from("check_results").update({ resolved_items: arr }).eq("id", targetId);
-    // Also update parent check result: sync resolved_items, check_items and overall_status
-    // so the project page badge uses matching data for getEffectiveSubmitLabel
+
+    // Compute effective status: if all NG items are resolved → GO (B), else keep original
+    const ngItems = currentCheckItems.filter(i => i.status === "NG");
+    const allNgResolved = ngItems.length > 0 && ngItems.every(i => {
+      const id = getCheckItemId(i);
+      return id ? newSet.has(id) : false;
+    });
+    const effectiveStatus = allNgResolved ? "B" : originalStatus;
+
+    // Always sync to parent so project page badges reflect the effective state
     if (checkResultId) {
-      const parentUpdate: Record<string, unknown> = { resolved_items: arr };
-      if (currentCheckItems.length > 0) parentUpdate.check_items = currentCheckItems;
-      if (currentOverallStatus) parentUpdate.overall_status = currentOverallStatus;
-      await supabase.from("check_results").update(parentUpdate).eq("id", checkResultId);
+      await supabase.from("check_results").update({
+        resolved_items: arr,
+        overall_status: effectiveStatus,
+        check_items: currentCheckItems.length > 0 ? (currentCheckItems as unknown as Json) : undefined,
+      }).eq("id", checkResultId);
     }
   }, [checkResultId]);
 
@@ -350,6 +365,10 @@ export default function ComparisonCheckPanel({
 
   // Keep ref in sync so persistResolved always has latest display data
   displayDataRef.current = { items: displayItems, overallStatus: displayResult?.overall_status ?? null };
+  // Capture original NG status before any resolved-based override to "B"
+  if (displayResult?.overall_status && (displayResult.overall_status === "C" || displayResult.overall_status === "D")) {
+    originalStatusRef.current = displayResult.overall_status;
+  }
 
   // Filter logic
   const toggleFilter = (key: string) => {
