@@ -418,7 +418,32 @@ export default function ProjectPage() {
         }
       )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+
+    // Also subscribe to check_results changes (resolved_items updates from review page)
+    const crChannel = supabase
+      .channel(`project-check-results:${id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "check_results",
+        },
+        (payload) => {
+          const updated = payload.new as any;
+          if (!updated?.id) return;
+          setCheckResults(prev => {
+            if (!prev[updated.id]) return prev;
+            return { ...prev, [updated.id]: { ...prev[updated.id], ...updated } };
+          });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+      supabase.removeChannel(crChannel);
+    };
   }, [id]);
 
   // Watch for check_results updates (n8n completing async checks) and auto-update file status
