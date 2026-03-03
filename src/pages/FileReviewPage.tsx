@@ -1152,7 +1152,7 @@ export default function FileReviewPage() {
                   setComparisonActivePairIndex(0);
                 }
                 setComparisonMode(true);
-                setRightTab("comparison");
+                setRightTab("ai-check");
               }}>
                 <GitCompare className="h-3 w-3" />
                 <span className="hidden sm:inline ml-1">比較</span>
@@ -1465,7 +1465,7 @@ export default function FileReviewPage() {
         comparisonAfterData={comparisonDrafts[comparisonActivePairIndex + 1]?.data ?? null}
         comparisonAfterText={comparisonDrafts[comparisonActivePairIndex + 1]?.text ?? ""}
         comparisonRoundLabel={comparisonDrafts[comparisonActivePairIndex + 1]?.label ?? ""}
-        onOpenComparisonMode={() => { setComparisonMode(true); setRightTab("comparison"); }}
+        onOpenComparisonMode={() => { setComparisonMode(true); setRightTab("ai-check"); }}
         onComparisonCheckComplete={(res) => {
           // Update record with comparison result — no-op here, handled in onComparisonSaved
         }}
@@ -1549,7 +1549,7 @@ export default function FileReviewPage() {
             ]);
             setComparisonActivePairIndex(0);
             setComparisonMode(true);
-            setRightTab("comparison");
+            setRightTab("ai-check");
             autoComparisonPendingRef.current = true;
             toast({ title: "🤖 比較チェックを自動実行します", description: "修正版と初稿の比較チェック中..." });
           } catch (err) {

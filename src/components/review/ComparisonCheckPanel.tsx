@@ -49,31 +49,24 @@ interface ComparisonCheckPanelProps {
   onOpenComparisonMode: () => void;
   onCheckComplete?: (result: CheckResult) => void;
   onComparisonSaved?: (savedRecord: ComparisonHistoryEntry) => void;
-  /** Clear after-data after comparison check completes (force user to upload new draft) */
   onClearAfterData?: () => void;
-  /** Comment counts per pattern_id */
   commentCounts?: Record<string, number>;
-  /** Currently highlighted card */
   highlightCard?: string | null;
-  /** Handle comment click on a check item */
   onCommentClick?: (patternId: string) => void;
-  /** Switch to comments tab */
   onTabChange?: (tab: string) => void;
-  /** Seek media */
   onSeekMedia?: (seconds: number) => void;
-  /** Marker click */
   onMarkerClick?: (patternId: string) => void;
-  /** Lock state */
   lockedByUser?: string | null;
   onAcquireLock?: () => Promise<boolean>;
   onReleaseLock?: () => Promise<void>;
-  /** Client submission */
   submissionType?: string;
   onSubmitToClient?: () => void;
-  /** Internal revision */
   onInternalRevision?: () => void;
-  /** Auto-run comparison check on mount */
   autoRun?: boolean;
+  /** Initial AI check items (shown when no comparison result selected) */
+  initialItems?: CheckItem[];
+  initialOverallStatus?: string | null;
+  initialCheckedAt?: string | null;
 }
 
 export default function ComparisonCheckPanel({
@@ -83,6 +76,7 @@ export default function ComparisonCheckPanel({
   commentCounts = {}, highlightCard, onCommentClick, onTabChange, onSeekMedia, onMarkerClick,
   lockedByUser, onAcquireLock, onReleaseLock,
   submissionType, onSubmitToClient, onInternalRevision, autoRun,
+  initialItems, initialOverallStatus, initialCheckedAt,
 }: ComparisonCheckPanelProps) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -90,6 +84,7 @@ export default function ComparisonCheckPanel({
   const [result, setResult] = useState<CheckResult | null>(null);
   const [history, setHistory] = useState<ComparisonHistoryEntry[]>([]);
   const [selectedHistoryId, setSelectedHistoryId] = useState<string | null>(null);
+  const [historyResolvedMap, setHistoryResolvedMap] = useState<Record<string, string[]>>({});
 
   // For the interactive result view
   const [resolvedItems, setResolvedItems] = useState<Set<string>>(new Set());
@@ -110,9 +105,12 @@ export default function ComparisonCheckPanel({
     setResolvedItems((s) => {
       const next = new Set(s);
       next.has(patternId) ? next.delete(patternId) : next.add(patternId);
-      // For comparison, persist to the selected history entry or parent check result
       const targetId = selectedHistoryId || checkResultId;
       persistResolved(next, targetId);
+      // Also update the history resolved map for badge consistency
+      if (selectedHistoryId) {
+        setHistoryResolvedMap(prev => ({ ...prev, [selectedHistoryId]: [...next] }));
+      }
       return next;
     });
   }, [persistResolved, selectedHistoryId, checkResultId]);
@@ -148,26 +146,32 @@ export default function ComparisonCheckPanel({
 
   const hasNewContent = isImage ? !!comparisonAfterData : !!(comparisonAfterText || comparisonAfterData);
 
-  // Fetch comparison history
+  // Fetch comparison history + their resolved_items
   useEffect(() => {
     if (!checkResultId) return;
     const fetchHistory = async () => {
       const { data, error } = await (supabase as any)
         .from("check_results")
-        .select("id, created_at, overall_status, ng_count, warning_count, ok_count, total_checks, check_items")
+        .select("id, created_at, overall_status, ng_count, warning_count, ok_count, total_checks, check_items, resolved_items")
         .eq("parent_check_result_id", checkResultId)
         .eq("check_type", "comparison")
         .order("created_at", { ascending: true });
       if (!error && data) {
-        setHistory(data.map((d: any) => ({
-          ...d,
-          ng_count: d.ng_count ?? 0,
-          warning_count: d.warning_count ?? 0,
-          ok_count: d.ok_count ?? 0,
-          total_checks: d.total_checks ?? 0,
-          comparison_round: (d as any).comparison_round ?? 0,
-          check_items: (d.check_items as unknown as CheckItem[]) || [],
-        })));
+        const resolvedMap: Record<string, string[]> = {};
+        setHistory(data.map((d: any) => {
+          const resolved = Array.isArray(d.resolved_items) ? d.resolved_items as string[] : [];
+          if (resolved.length > 0) resolvedMap[d.id] = resolved;
+          return {
+            ...d,
+            ng_count: d.ng_count ?? 0,
+            warning_count: d.warning_count ?? 0,
+            ok_count: d.ok_count ?? 0,
+            total_checks: d.total_checks ?? 0,
+            comparison_round: (d as any).comparison_round ?? 0,
+            check_items: (d.check_items as unknown as CheckItem[]) || [],
+          };
+        }));
+        setHistoryResolvedMap(resolvedMap);
       }
     };
     fetchHistory();
@@ -315,14 +319,22 @@ export default function ComparisonCheckPanel({
     }
   };
 
-  // Determine which result to show: selected history or latest
+  // Determine which result to show: selected history, latest comparison, or initial AI check
   const displayResult: CheckResult | null = selectedHistoryId
     ? (() => {
         const h = history.find(h => h.id === selectedHistoryId);
         return h ? { overall_status: h.overall_status as any, ng_count: h.ng_count, warning_count: h.warning_count, ok_count: h.ok_count, total_checks: h.total_checks, check_items: h.check_items } : result;
       })()
-    : result;
+    : result || (initialItems && initialItems.length > 0 ? {
+        overall_status: (initialOverallStatus || "C") as any,
+        ng_count: initialItems.filter(i => i.status === "NG").length,
+        warning_count: initialItems.filter(i => i.status === "WARNING").length,
+        ok_count: initialItems.filter(i => i.status === "OK").length,
+        total_checks: initialItems.length,
+        check_items: initialItems,
+      } : null);
 
+  const isShowingInitialCheck = !selectedHistoryId && !result && !!initialItems && initialItems.length > 0;
   const displayItems = displayResult?.check_items || [];
 
   // Filter logic
@@ -474,7 +486,9 @@ export default function ComparisonCheckPanel({
           </div>
           <div className="space-y-0.5">
             {history.map((h, i) => {
-              const isGo = h.overall_status === "A" || h.overall_status === "B";
+              // Use effective label considering resolved_items
+              const hResolved = h.id === selectedHistoryId ? [...resolvedItems] : (historyResolvedMap[h.id] || []);
+              const effectiveLabel = getEffectiveSubmitLabel(h.overall_status, h.check_items, hResolved);
               const isSelected = selectedHistoryId === h.id;
               return (
                 <button
@@ -489,8 +503,6 @@ export default function ComparisonCheckPanel({
                         ok_count: h.ok_count, total_checks: h.total_checks,
                         check_items: h.check_items,
                       });
-                      // Reset selection state
-                      setResolvedItems(new Set());
                       setSelectedItems(new Set());
                       setAppliedItems(new Set());
                     }
@@ -502,16 +514,16 @@ export default function ComparisonCheckPanel({
                 >
                   <span className={cn(
                     "inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-bold text-white shrink-0",
-                    isGo ? "bg-[hsl(var(--status-ok))]" : "bg-[hsl(var(--status-ng))]"
+                    effectiveLabel.isOk ? "bg-[hsl(var(--status-ok))]" : "bg-[hsl(var(--status-ng))]"
                   )}>
                     {i + 1}
                   </span>
                   <span className="truncate flex-1">第{i + 2}稿チェック</span>
                   <span className={cn(
                     "text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0",
-                    isGo ? "text-status-ok bg-status-ok/10" : "text-status-ng bg-status-ng/10"
+                    effectiveLabel.isOk ? "text-status-ok bg-status-ok/10" : "text-status-ng bg-status-ng/10"
                   )}>
-                    {isGo ? "GO" : "NG"}
+                    {effectiveLabel.label}
                   </span>
                   <span className="text-[10px] text-muted-foreground shrink-0">
                     {format(new Date(h.created_at), "MM/dd HH:mm")}
@@ -526,6 +538,13 @@ export default function ComparisonCheckPanel({
       {/* Result summary bar (when result exists) */}
       {displayResult && (
         <div className="shrink-0 border-b border-border px-3 py-2 space-y-2">
+          {isShowingInitialCheck && (
+            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <Bot className="h-3 w-3" />
+              <span>初稿AIチェック結果</span>
+              {initialCheckedAt && <span className="ml-auto">{format(new Date(initialCheckedAt), "MM/dd HH:mm")}</span>}
+            </div>
+          )}
           <div className="flex items-center gap-2 flex-wrap">
             <Badge className={cn("text-xs font-bold px-2.5 py-1", submit.isOk ? "bg-status-ok text-white border-status-ok" : "bg-status-ng text-white border-status-ng")}>
               {submit.label}
@@ -624,6 +643,29 @@ export default function ComparisonCheckPanel({
         {/* Apply corrections bar (when result exists) */}
         {displayResult && (
           <>
+            {/* Bulk resolve all NG items */}
+            {(() => {
+              const unresolvedNg = displayItems.filter(i => i.status === "NG" && !resolvedItems.has(getCheckItemId(i)));
+              return unresolvedNg.length > 0 ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full text-xs gap-1 border-status-ng/30 text-status-ng hover:bg-status-ng/10"
+                  onClick={() => {
+                    const next = new Set(resolvedItems);
+                    unresolvedNg.forEach(i => next.add(getCheckItemId(i)));
+                    setResolvedItems(next);
+                    const targetId = selectedHistoryId || checkResultId;
+                    persistResolved(next, targetId);
+                    if (selectedHistoryId) {
+                      setHistoryResolvedMap(prev => ({ ...prev, [selectedHistoryId]: [...next] }));
+                    }
+                  }}
+                >
+                  NG項目を一括で修正済みにする ({unresolvedNg.length})
+                </Button>
+              ) : null;
+            })()}
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">{selectedItems.size}件選択済み</span>
               <div className="flex gap-2">

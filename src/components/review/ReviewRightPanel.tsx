@@ -73,25 +73,16 @@ export default function ReviewRightPanel({
 }: ReviewRightPanelProps) {
   const [totalCommentCount, setTotalCommentCount] = useState(0);
 
-  // In comparison mode, force tab to "comparison" or "comments"
-  const effectiveTab = comparisonMode
-    ? (rightTab === "comments" ? "comments" : "comparison")
-    : (rightTab === "comparison" ? "ai-check" : rightTab);
+  // Always use ai-check or comments - no separate comparison tab
+  const effectiveTab = rightTab === "comments" ? "comments" : "ai-check";
 
   return (
     <div className="w-[380px] shrink-0 h-screen border-l border-border flex flex-col bg-card overflow-hidden">
       <Tabs value={effectiveTab} onValueChange={onTabChange} className="relative flex-1 flex flex-col min-h-0">
         <TabsList className="w-full shrink-0 rounded-none border-b border-border bg-transparent h-10 p-0">
-          {comparisonMode ? (
-            <TabsTrigger value="comparison" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs h-10 gap-1">
-              <GitCompare className="h-3 w-3" />
-              比較チェック
-            </TabsTrigger>
-          ) : (
-            <TabsTrigger value="ai-check" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs h-10">
-              AIチェック結果
-            </TabsTrigger>
-          )}
+          <TabsTrigger value="ai-check" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs h-10">
+            AIチェック結果
+          </TabsTrigger>
           <TabsTrigger value="comments" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs h-10 gap-1">
             コメント
             {totalCommentCount > 0 && (
@@ -102,10 +93,10 @@ export default function ReviewRightPanel({
           </TabsTrigger>
         </TabsList>
 
-        {/* Comparison check tab */}
-        {comparisonMode && (
-          <TabsContent value="comparison" forceMount className={cn("absolute inset-0 top-10 flex flex-col overflow-hidden mt-0 ring-0 focus-visible:ring-0", effectiveTab !== "comparison" && "hidden")}>
-            {file && productId && projectId ? (
+        {/* Unified AI check tab - shows comparison panel when in comparison mode */}
+        <TabsContent value="ai-check" forceMount className={cn("absolute inset-0 top-10 flex flex-col overflow-hidden mt-0 ring-0 focus-visible:ring-0", effectiveTab !== "ai-check" && "hidden")}>
+          {comparisonMode ? (
+            file && productId && projectId ? (
               <ComparisonCheckPanel
                 file={file}
                 productId={productId}
@@ -136,47 +127,43 @@ export default function ReviewRightPanel({
                 onSubmitToClient={onSubmitToClient}
                 onInternalRevision={onInternalRevision}
                 autoRun={autoRunComparison}
+                initialItems={items}
+                initialOverallStatus={overallStatus}
+                initialCheckedAt={checkedAt}
               />
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
                 <GitCompare className="h-10 w-10 mb-3 opacity-30" />
                 <p className="text-sm">比較チェック準備中...</p>
               </div>
-            )}
-          </TabsContent>
-        )}
-
-        {/* AI check tab (only when not in comparison mode) */}
-        {!comparisonMode && (
-          <TabsContent value="ai-check" forceMount className={cn("absolute inset-0 top-10 flex flex-col overflow-hidden mt-0 ring-0 focus-visible:ring-0", effectiveTab !== "ai-check" && "hidden")}>
-            {hasCheckResult ? (
-              <AICheckPanel
-                items={items}
-                markers={markers}
-                productCode={productCode}
-                commentCounts={commentCounts}
-                highlightCard={highlightCard}
-                onCommentClick={onCommentClick}
-                checkResultId={checkResultId}
-                onTabChange={onTabChange}
-                overallStatus={overallStatus}
-                checkedAt={checkedAt}
-                productId={productId}
-                projectId={projectId}
-                processKey={file?.process_type}
-                onSeekMedia={onSeekMedia}
-                onMarkerClick={onMarkerClick}
-              />
-            ) : (
-              emptyCheckMessage || (
-                <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
-                  <Bot className="h-10 w-10 mb-3 opacity-30" />
-                  <p className="text-sm font-medium">AIチェック未実行</p>
-                </div>
-              )
-            )}
-          </TabsContent>
-        )}
+            )
+          ) : hasCheckResult ? (
+            <AICheckPanel
+              items={items}
+              markers={markers}
+              productCode={productCode}
+              commentCounts={commentCounts}
+              highlightCard={highlightCard}
+              onCommentClick={onCommentClick}
+              checkResultId={checkResultId}
+              onTabChange={onTabChange}
+              overallStatus={overallStatus}
+              checkedAt={checkedAt}
+              productId={productId}
+              projectId={projectId}
+              processKey={file?.process_type}
+              onSeekMedia={onSeekMedia}
+              onMarkerClick={onMarkerClick}
+            />
+          ) : (
+            emptyCheckMessage || (
+              <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
+                <Bot className="h-10 w-10 mb-3 opacity-30" />
+                <p className="text-sm font-medium">AIチェック未実行</p>
+              </div>
+            )
+          )}
+        </TabsContent>
 
         <TabsContent value="comments" forceMount className={cn("absolute inset-0 top-10 overflow-hidden mt-0 ring-0 focus-visible:ring-0", effectiveTab !== "comments" && "hidden")}>
           {checkResultId ? (
