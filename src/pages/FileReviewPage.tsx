@@ -10,6 +10,7 @@ import { tusUploadBlob } from "@/lib/tus-upload";
 import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import type { CheckItem } from "@/lib/types";
+import { getEffectiveSubmitLabel } from "@/lib/check-display";
 import type { MentionMember } from "@/components/comments/MentionInput";
 import type { Json } from "@/integrations/supabase/types";
 import type { ProjectFile, Product, Project, Client, CheckResultRow } from "@/lib/db-types";
@@ -1324,6 +1325,11 @@ export default function FileReviewPage() {
                   toast({ title: "AIチェックを先に実行してください", description: "クライアント提出前にAIチェックが必要です。", variant: "destructive" });
                   return;
                 }
+                const effective = getEffectiveSubmitLabel(record.overall_status, record.check_items as unknown as CheckItem[], (record.resolved_items as unknown as string[]) ?? []);
+                if (!effective.isOk) {
+                  toast({ title: "NG項目が未解消です", description: "全てのNG項目を修正済みにしてからクライアントに提出してください。", variant: "destructive" });
+                  return;
+                }
                 setSubmitToClientOpen(true);
               }}
               onInternalRevision={() => setInternalRevisionOpen(true)}
@@ -1409,6 +1415,11 @@ export default function FileReviewPage() {
                   onClick={() => {
                     if (!record?.check_items) {
                       toast({ title: "AIチェックを先に実行してください", description: "クライアント提出前にAIチェックが必要です。", variant: "destructive" });
+                      return;
+                    }
+                    const effective = getEffectiveSubmitLabel(record.overall_status, record.check_items as unknown as CheckItem[], (record.resolved_items as unknown as string[]) ?? []);
+                    if (!effective.isOk) {
+                      toast({ title: "NG項目が未解消です", description: "全てのNG項目を修正済みにしてからクライアントに提出してください。", variant: "destructive" });
                       return;
                     }
                     setSubmitToClientOpen(true);
@@ -1505,6 +1516,11 @@ export default function FileReviewPage() {
         onSubmitToClient={() => {
           if (!record?.check_items) {
             toast({ title: "AIチェックを先に実行してください", description: "クライアント提出前にAIチェックが必要です。", variant: "destructive" });
+            return;
+          }
+          const effective = getEffectiveSubmitLabel(record.overall_status, record.check_items as unknown as CheckItem[], (record.resolved_items as unknown as string[]) ?? []);
+          if (!effective.isOk) {
+            toast({ title: "NG項目が未解消です", description: "全てのNG項目を修正済みにしてからクライアントに提出してください。", variant: "destructive" });
             return;
           }
           setSubmitToClientOpen(true);
