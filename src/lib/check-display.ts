@@ -27,13 +27,18 @@ export function getSubmitBadgeClassFromCounts(ngCount: number | null | undefined
     : "bg-status-ng text-white border-status-ng";
 }
 
+/** Get the effective ID for a check item, falling back to item text if pattern_id is missing */
+export function getCheckItemId(item: { pattern_id?: string; item?: string }): string {
+  return item.pattern_id || item.item || "";
+}
+
 /**
  * Compute effective GO/NG considering resolved items.
  * If the original status is NG (C/D) but ALL NG check items have been resolved, return GO.
  */
 export function getEffectiveSubmitLabel(
   overallStatus: string | null | undefined,
-  checkItems: Array<{ status: string; pattern_id: string }> | null | undefined,
+  checkItems: Array<{ status: string; pattern_id: string; item?: string }> | null | undefined,
   resolvedItems: string[] | null | undefined,
 ): { label: string; isOk: boolean } {
   const base = getSubmitLabel(overallStatus);
@@ -42,7 +47,10 @@ export function getEffectiveSubmitLabel(
 
   const resolvedSet = new Set(resolvedItems);
   const ngItems = checkItems.filter(i => i.status === "NG");
-  if (ngItems.length > 0 && ngItems.every(i => resolvedSet.has(i.pattern_id))) {
+  if (ngItems.length > 0 && ngItems.every(i => {
+    const id = getCheckItemId(i);
+    return id ? resolvedSet.has(id) : false;
+  })) {
     return { label: "GO", isOk: true };
   }
   return base;

@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
-import { getSubmitLabel, getSubmitBadgeClass, STATUS_LABEL, STATUS_FILTER_OPTIONS, getEffectiveSubmitLabel } from "@/lib/check-display";
+import { getSubmitLabel, getSubmitBadgeClass, STATUS_LABEL, STATUS_FILTER_OPTIONS, getEffectiveSubmitLabel, getCheckItemId } from "@/lib/check-display";
 import { cn } from "@/lib/utils";
 import CheckItemCard from "./CheckItemCard";
 import ReferenceStatusIndicator from "@/components/reference/ReferenceStatusIndicator";
@@ -109,7 +109,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
   };
 
   const selectAll = () => {
-    setSelectedItems(new Set(filteredItems.filter((i) => i.status !== "OK" && !appliedItems.has(i.pattern_id)).map((i) => i.pattern_id)));
+    setSelectedItems(new Set(filteredItems.filter((i) => i.status !== "OK" && !appliedItems.has(getCheckItemId(i))).map((i) => getCheckItemId(i))));
   };
 
   const handleApplyCorrections = async () => {
@@ -249,22 +249,23 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
       <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
         {/* Non-OK items */}
         {filteredItems.filter((item) => item.status !== "OK").map((item, i) => {
+          const itemId = getCheckItemId(item);
           const marker = markers.find((m) => m.item.pattern_id === item.pattern_id);
           return (
             <CheckItemCard
-              key={item.pattern_id}
+              key={itemId}
               ref={(el) => { cardRefs.current[item.pattern_id] = el; }}
               item={item}
               index={i}
               marker={marker}
-              isResolved={resolvedItems.has(item.pattern_id)}
-              isSelected={selectedItems.has(item.pattern_id)}
+              isResolved={resolvedItems.has(itemId)}
+              isSelected={selectedItems.has(itemId)}
               isHighlighted={highlightCard === item.pattern_id}
-              isApplied={appliedItems.has(item.pattern_id)}
+              isApplied={appliedItems.has(itemId)}
               commentCount={commentCounts[item.pattern_id] || 0}
               productCode={productCode}
-              onToggleSelect={() => toggleSelectItem(item.pattern_id)}
-              onToggleResolved={() => toggleResolved(item.pattern_id)}
+              onToggleSelect={() => toggleSelectItem(itemId)}
+              onToggleResolved={() => toggleResolved(itemId)}
               onCommentClick={() => onCommentClick(item.pattern_id)}
               onSeekMedia={onSeekMedia}
               onMarkerClick={onMarkerClick}
@@ -305,7 +306,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
       <div className="shrink-0 border-t border-border p-3 space-y-2 bg-card">
         {/* Bulk resolve all NG items */}
         {(() => {
-          const unresolvedNg = items.filter(i => i.status === "NG" && !resolvedItems.has(i.pattern_id));
+          const unresolvedNg = items.filter(i => i.status === "NG" && !resolvedItems.has(getCheckItemId(i)));
           return unresolvedNg.length > 0 ? (
             <Button
               size="sm"
@@ -313,7 +314,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
               className="w-full text-xs gap-1 border-status-ng/30 text-status-ng hover:bg-status-ng/10"
               onClick={() => {
                 const next = new Set(resolvedItems);
-                unresolvedNg.forEach(i => next.add(i.pattern_id));
+                unresolvedNg.forEach(i => next.add(getCheckItemId(i)));
                 setResolvedItems(next);
                 persistResolved(next);
               }}
@@ -371,22 +372,23 @@ function OkItemsSection({ okItems, markers, resolvedItems, selectedItems, highli
         <span>問題なし ({okItems.length}件)</span>
       </button>
       {open && okItems.map((item, i) => {
+        const itemId = getCheckItemId(item);
         const marker = markers.find((m) => m.item.pattern_id === item.pattern_id);
         return (
           <CheckItemCard
-            key={item.pattern_id}
+            key={itemId}
             ref={(el) => { cardRefs.current[item.pattern_id] = el; }}
             item={item}
             index={i}
             marker={marker}
-            isResolved={resolvedItems.has(item.pattern_id)}
-            isSelected={selectedItems.has(item.pattern_id)}
+            isResolved={resolvedItems.has(itemId)}
+            isSelected={selectedItems.has(itemId)}
             isHighlighted={highlightCard === item.pattern_id}
-            isApplied={appliedItems.has(item.pattern_id)}
+            isApplied={appliedItems.has(itemId)}
             commentCount={commentCounts[item.pattern_id] || 0}
             productCode={productCode}
-            onToggleSelect={() => onToggleSelect(item.pattern_id)}
-            onToggleResolved={() => onToggleResolved(item.pattern_id)}
+            onToggleSelect={() => onToggleSelect(itemId)}
+            onToggleResolved={() => onToggleResolved(itemId)}
               onCommentClick={() => onCommentClick(item.pattern_id)}
               onSeekMedia={onSeekMedia}
               onMarkerClick={onMarkerClick}
