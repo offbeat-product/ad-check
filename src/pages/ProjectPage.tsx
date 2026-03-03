@@ -298,7 +298,6 @@ export default function ProjectPage() {
         for (const child of childFiles) {
           if (child.check_result_id) {
             await supabase.from("comments").delete().eq("check_result_id", child.check_result_id);
-            await supabase.from("file_versions").delete().eq("check_result_id", child.check_result_id);
             await supabase.from("check_results").delete().eq("id", child.check_result_id);
           }
           await supabase.from("project_files").delete().eq("id", child.id);
