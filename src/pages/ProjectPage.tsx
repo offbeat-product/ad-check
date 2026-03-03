@@ -1431,6 +1431,11 @@ export default function ProjectPage() {
                                           <div className="flex items-center gap-1 mt-1 flex-wrap">
                                             <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
                                             <span className="text-[10px] text-muted-foreground">{draftLabel}</span>
+                                            {cr && file.status !== "fixed" && (
+                                              <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-sm", getEffectiveSubmitBadgeClass(cr.overall_status, cr.check_items as any, cr.resolved_items as any))}>
+                                                {getEffectiveSubmitLabel(cr.overall_status, cr.check_items as any, cr.resolved_items as any).label}
+                                              </span>
+                                            )}
                                             {cc > 0 && (
                                               <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 ml-auto">
                                                 <MessageCircle className="h-2.5 w-2.5" />{cc}
