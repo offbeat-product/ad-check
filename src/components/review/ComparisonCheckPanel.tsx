@@ -11,7 +11,7 @@ import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import { supabase } from "@/integrations/supabase/client";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
-import { getSubmitLabel, getSubmitBadgeClass, STATUS_FILTER_OPTIONS, getEffectiveSubmitLabel } from "@/lib/check-display";
+import { getSubmitLabel, getSubmitBadgeClass, STATUS_FILTER_OPTIONS, getEffectiveSubmitLabel, getCheckItemId } from "@/lib/check-display";
 import type { CheckItem, CheckResult } from "@/lib/types";
 import type { CheckMarker } from "@/lib/marker-positions";
 import type { Json } from "@/integrations/supabase/types";
