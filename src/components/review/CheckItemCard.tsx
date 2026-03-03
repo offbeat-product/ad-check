@@ -186,14 +186,14 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
           </div>
 
           <div className="flex flex-col items-end gap-1 shrink-0">
-            <button onClick={onCommentClick} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary">
+            <button onClick={onCommentClick} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-primary press-feedback">
               <MessageCircle className="h-3 w-3" />{commentCount}
             </button>
             <button
               onClick={onToggleResolved}
               className={cn(
-                "flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border",
-                isResolved ? "border-status-ok/30 text-status-ok bg-status-ok/10" : "border-border text-muted-foreground hover:border-status-ok/30"
+                "flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded border press-feedback transition-all duration-150",
+                isResolved ? "border-status-ok/30 text-status-ok bg-status-ok/10 badge-pop" : "border-border text-muted-foreground hover:border-status-ok/30 hover:text-status-ok"
               )}
             >
               <Check className="h-3 w-3" />修正済
