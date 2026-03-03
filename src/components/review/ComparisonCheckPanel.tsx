@@ -49,31 +49,24 @@ interface ComparisonCheckPanelProps {
   onOpenComparisonMode: () => void;
   onCheckComplete?: (result: CheckResult) => void;
   onComparisonSaved?: (savedRecord: ComparisonHistoryEntry) => void;
-  /** Clear after-data after comparison check completes (force user to upload new draft) */
   onClearAfterData?: () => void;
-  /** Comment counts per pattern_id */
   commentCounts?: Record<string, number>;
-  /** Currently highlighted card */
   highlightCard?: string | null;
-  /** Handle comment click on a check item */
   onCommentClick?: (patternId: string) => void;
-  /** Switch to comments tab */
   onTabChange?: (tab: string) => void;
-  /** Seek media */
   onSeekMedia?: (seconds: number) => void;
-  /** Marker click */
   onMarkerClick?: (patternId: string) => void;
-  /** Lock state */
   lockedByUser?: string | null;
   onAcquireLock?: () => Promise<boolean>;
   onReleaseLock?: () => Promise<void>;
-  /** Client submission */
   submissionType?: string;
   onSubmitToClient?: () => void;
-  /** Internal revision */
   onInternalRevision?: () => void;
-  /** Auto-run comparison check on mount */
   autoRun?: boolean;
+  /** Initial AI check items (shown when no comparison result selected) */
+  initialItems?: CheckItem[];
+  initialOverallStatus?: string | null;
+  initialCheckedAt?: string | null;
 }
 
 export default function ComparisonCheckPanel({
