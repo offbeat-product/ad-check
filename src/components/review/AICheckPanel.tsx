@@ -271,6 +271,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
         {filteredItems.filter((item) => item.status !== "OK").map((item, i) => {
           const itemId = getCheckItemId(item);
           const marker = markers.find((m) => m.item.pattern_id === item.pattern_id);
+          const dupeCount = dupeCounts[itemId] || 1;
           return (
             <CheckItemCard
               key={itemId}
@@ -284,6 +285,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
               isApplied={appliedItems.has(itemId)}
               commentCount={commentCounts[item.pattern_id] || 0}
               productCode={productCode}
+              dupeCount={dupeCount}
               onToggleSelect={() => toggleSelectItem(itemId)}
               onToggleResolved={() => toggleResolved(itemId)}
               onCommentClick={() => onCommentClick(item.pattern_id)}
