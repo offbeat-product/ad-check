@@ -66,6 +66,7 @@ export default {
           ng: "hsl(var(--status-ng))",
           info: "hsl(var(--status-info))",
           manual: "hsl(var(--status-manual))",
+          "client-review": "hsl(var(--status-client-review))",
         },
         grade: {
           a: "hsl(var(--grade-a))",
