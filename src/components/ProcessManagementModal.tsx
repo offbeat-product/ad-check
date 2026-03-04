@@ -136,9 +136,8 @@ export default function ProcessManagementModal({ open, onOpenChange, processes, 
                 </span>
               )}
               <div className="flex flex-col gap-0.5 shrink-0 text-[10px] text-muted-foreground text-right">
-                {p.internal_deadline && <span>社内: {new Date(p.internal_deadline).toLocaleDateString("ja-JP", { month: "2-digit", day: "2-digit" })}</span>}
-                {p.client_deadline && <span>Client: {new Date(p.client_deadline).toLocaleDateString("ja-JP", { month: "2-digit", day: "2-digit" })}</span>}
-                {!p.internal_deadline && !p.client_deadline && !p.is_active && <span>(無効)</span>}
+                {p.client_deadline && <span>期限: {new Date(p.client_deadline).toLocaleDateString("ja-JP", { month: "2-digit", day: "2-digit" })}</span>}
+                {!p.client_deadline && !p.is_active && <span>(無効)</span>}
               </div>
               <Button size="icon" variant="ghost" className="h-6 w-6 shrink-0" onClick={() => handleDelete(p.id)}>
                 <Trash2 className="h-3 w-3" />

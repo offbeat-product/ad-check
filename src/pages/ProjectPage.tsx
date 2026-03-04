@@ -511,9 +511,9 @@ export default function ProjectPage() {
     }
   };
 
-  const handleProcessDeadlineChange = async (processId: string, field: "internal_deadline" | "client_deadline", value: string | null) => {
+  const handleProcessDeadlineChange = async (processId: string, field: "client_deadline", value: string | null) => {
     await updateProcess(processId, { [field]: value } as Partial<ProjectProcess>);
-    toast({ title: field === "internal_deadline" ? "社内期限を更新しました" : "クライアント期限を更新しました" });
+    toast({ title: "クライアント期限を更新しました" });
   };
 
   const handleProcessStatusChange = async (processId: string, status: string) => {
@@ -578,7 +578,6 @@ export default function ProjectPage() {
     if (!overallDeadline) return "案件の納期が設定されていません。先に納期を設定してください。";
     const proc = processes.find(p => p.process_key === processKey);
     if (!proc) return "工程が見つかりません。";
-    if (!proc.internal_deadline) return `「${proc.process_label}」の社内期限が設定されていません。先に期限を設定してください。`;
     if (!proc.client_deadline) return `「${proc.process_label}」のクライアント期限が設定されていません。先に期限を設定してください。`;
     return null;
   };

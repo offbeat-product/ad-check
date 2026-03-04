@@ -796,7 +796,6 @@ export type Database = {
           created_at: string
           deadline: string | null
           id: string
-          internal_deadline: string | null
           is_active: boolean
           is_common: boolean
           process_key: string
@@ -811,7 +810,6 @@ export type Database = {
           created_at?: string
           deadline?: string | null
           id?: string
-          internal_deadline?: string | null
           is_active?: boolean
           is_common?: boolean
           process_key: string
@@ -826,7 +824,6 @@ export type Database = {
           created_at?: string
           deadline?: string | null
           id?: string
-          internal_deadline?: string | null
           is_active?: boolean
           is_common?: boolean
           process_key?: string

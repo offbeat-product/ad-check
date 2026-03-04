@@ -12,7 +12,6 @@ export interface ProjectProcess {
   is_active: boolean;
   is_common: boolean;
   deadline: string | null;
-  internal_deadline: string | null;
   client_deadline: string | null;
   status: string;
   created_at: string;
