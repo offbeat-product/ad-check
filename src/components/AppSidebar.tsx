@@ -449,6 +449,7 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
                             {!isSearching && <GripVertical className="h-3 w-3 text-muted-foreground/30 ml-10 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab shrink-0" />}
                             <button
                               onClick={() => navigate(`/project/${project.id}`)}
+                              onMouseEnter={() => prefetchProject(project.id)}
                               className={cn("flex-1 flex items-center gap-2 px-1 py-1.5 text-xs transition-all truncate press-feedback",
                                 isSearching ? "ml-9" : "",
                                 activeProjectId === project.id
