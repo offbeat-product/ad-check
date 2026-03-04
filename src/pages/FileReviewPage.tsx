@@ -1012,7 +1012,6 @@ export default function FileReviewPage() {
   const canCheck = product && aiCfg?.enabled;
   const checkDisabled = product && aiCfg && !aiCfg.enabled;
 
-  const [mobilePanel, setMobilePanel] = useState<"preview" | "check">("preview");
 
   return (
     <div className="flex flex-col md:flex-row h-screen overflow-hidden">
