@@ -1563,7 +1563,8 @@ export default function ProjectPage() {
           <DialogHeader><DialogTitle>ファイルアップロード</DialogTitle></DialogHeader>
           <div className="space-y-4">
 
-            const fileSt = FILE_STATUS_CONFIG[f.status ?? "uploaded"] ?? FILE_STATUS_CONFIG.uploaded;
+
+
 
             {/* Pattern selection (only when patterns exist) */}
             {patterns.length > 0 && (
