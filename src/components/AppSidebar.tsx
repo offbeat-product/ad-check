@@ -248,7 +248,7 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
         </h1>
         {!collapsed && (
           <div className="flex items-center justify-between mt-0.5">
-            <p className="text-[11px] text-muted-foreground">制作現場に、最速の「GO」を。</p>
+            <p className="text-[10px] text-muted-foreground whitespace-nowrap">制作現場に、最速・最高品質の「GO」を。</p>
             <button
               onClick={onToggleCollapse}
               className="p-1 rounded hover:bg-muted/50 text-muted-foreground transition-colors"
