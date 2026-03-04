@@ -290,6 +290,72 @@ export default function RuleCandidatesPage() {
     await loadData();
   };
 
+  // Direct promote correction log to check_rule
+  const handleDirectPromote = async (log: CorrectionLog) => {
+    if (!user) return;
+    setActionLoading(log.id);
+    try {
+      const prefix = PREFIX_MAP[log.process_type] || "X";
+      const { data: existingRules } = await supabase
+        .from("check_rules").select("rule_id")
+        .eq("product_id", log.product_id).eq("process_type", log.process_type)
+        .like("rule_id", `COR-${prefix}-%`).order("rule_id", { ascending: false }).limit(1);
+
+      let nextNum = 1;
+      if (existingRules?.length) {
+        const match = existingRules[0].rule_id.match(/(\d+)$/);
+        if (match) nextNum = parseInt(match[1]) + 1;
+      }
+      const ruleId = `COR-${prefix}-${String(nextNum).padStart(2, "0")}`;
+
+      const { data: newRule, error: ruleError } = await supabase.from("check_rules").insert({
+        product_id: log.product_id,
+        process_type: log.process_type,
+        rule_id: ruleId,
+        title: ruleId,
+        category: log.correction_category || "その他",
+        description: log.correction_text,
+        severity: log.ai_severity || "medium",
+        sort_order: 999,
+        is_active: true,
+        source_type: "correction",
+        source_correction_count: 1,
+        source_correction_id: log.id,
+      }).select().single();
+
+      if (ruleError) throw ruleError;
+
+      await supabase.from("correction_logs").update({
+        rule_status: "active",
+        approved_rule_id: newRule.id,
+        approved_at: new Date().toISOString(),
+        approved_by: user.id,
+      }).eq("id", log.id);
+
+      toast({ title: `✅ ルール ${ruleId} を追加しました` });
+      await loadData();
+    } catch (e: any) {
+      toast({ title: "ルール追加に失敗しました", description: e.message, variant: "destructive" });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Direct reject correction log
+  const handleDirectReject = async (log: CorrectionLog) => {
+    if (!user) return;
+    setActionLoading(log.id);
+    try {
+      await supabase.from("correction_logs").update({ rule_status: "rejected" }).eq("id", log.id);
+      toast({ title: "❌ 却下しました" });
+      await loadData();
+    } catch {
+      toast({ title: "却下に失敗しました", variant: "destructive" });
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   const getProductName = (id: string) => products.find((p) => p.id === id)?.name || "不明";
 
   return (
