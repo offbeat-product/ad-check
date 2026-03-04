@@ -175,7 +175,6 @@ export default function MaterialDetailModal({
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{mt.label}</DialogTitle>
-          </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5">
