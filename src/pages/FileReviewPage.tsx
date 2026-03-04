@@ -1436,6 +1436,27 @@ export default function FileReviewPage() {
         </div>
       </div>
 
+      {/* Mobile panel toggle */}
+      <div className="md:hidden sticky bottom-0 z-30 flex border-t border-border bg-card">
+        <button
+          onClick={() => setMobilePanel("preview")}
+          className={cn("flex-1 py-3 text-xs font-medium text-center transition-colors",
+            mobilePanel === "preview" ? "text-primary border-b-2 border-primary bg-primary/5" : "text-muted-foreground"
+          )}
+        >
+          プレビュー
+        </button>
+        <button
+          onClick={() => setMobilePanel("check")}
+          className={cn("flex-1 py-3 text-xs font-medium text-center transition-colors",
+            mobilePanel === "check" ? "text-primary border-b-2 border-primary bg-primary/5" : "text-muted-foreground"
+          )}
+        >
+          AIチェック・コメント
+        </button>
+      </div>
+
+      <div className={cn(mobilePanel === "preview" && "hidden md:block")}>
       <ReviewRightPanel
         rightTab={rightTab}
         onTabChange={setRightTab}
