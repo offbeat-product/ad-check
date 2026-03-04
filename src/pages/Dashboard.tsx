@@ -71,6 +71,7 @@ export default function Dashboard() {
   // KPI stats
   const [kpiDeadlineRate, setKpiDeadlineRate] = useState<number | null>(null);
   const [kpiFirstDraftRate, setKpiFirstDraftRate] = useState<number | null>(null);
+  const [kpiCompletedCount, setKpiCompletedCount] = useState<number>(0);
   const [kpiLoaded, setKpiLoaded] = useState(false);
 
   const [fetchError, setFetchError] = useState(false);
