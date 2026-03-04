@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GitCompare, Loader2, Bot, History, CheckCircle2 } from "lucide-react";
-import { runComparisonCheck } from "@/lib/webhook";
+import { runComparisonCheck, runVideoCheck, runAudioCheck, VIDEO_ASYNC_ACCEPTED } from "@/lib/webhook";
+import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
