@@ -24,7 +24,7 @@ interface ComparisonLeftPanelProps {
   onClose: () => void;
   checkResultId?: string | null;
   /** Called when a new draft file is uploaded so it can be persisted as a project_file */
-  onRevisionUploaded?: (fileData: string, fileType: string, versionNumber: number, originalFile: File) => Promise<string | undefined> | void;
+  onRevisionUploaded?: (fileData: string, fileType: string, versionNumber: number, originalFile: File) => Promise<string | void> | void;
   /** Paint mode support */
   paintMode?: boolean;
   onPaintModeToggle?: () => void;
