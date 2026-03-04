@@ -220,6 +220,60 @@ export default function ComparisonCheckPanel({
     autoRunTriggeredRef.current = false;
   }, [fileId]);
 
+  // Poll a pending record until n8n completes it
+  const pollPendingRecord = useCallback(async (recordId: string) => {
+    const POLL_INTERVAL = 5_000;
+    const MAX_POLL_MS = 600_000;
+    const start = Date.now();
+    const poll = async () => {
+      if (Date.now() - start > MAX_POLL_MS) {
+        toast({ title: "タイムアウト", description: "結果の取得に時間がかかっています。後で確認してください。", variant: "destructive" });
+        setChecking(false);
+        if (onReleaseLock) await onReleaseLock();
+        return;
+      }
+      const { data } = await supabase.from("check_results").select("*").eq("id", recordId).maybeSingle();
+      if (data && data.status === "completed" && data.check_items) {
+        const items = (data.check_items as unknown as CheckItem[]) || [];
+        const completedResult: CheckResult = {
+          overall_status: (data.overall_status || "D") as "A" | "B" | "C" | "D",
+          ng_count: data.ng_count ?? 0,
+          warning_count: data.warning_count ?? 0,
+          ok_count: data.ok_count ?? 0,
+          total_checks: data.total_checks ?? 0,
+          check_items: items,
+        };
+        setResult(completedResult);
+        onCheckComplete?.(completedResult);
+        const entry: ComparisonHistoryEntry = {
+          id: data.id,
+          created_at: data.created_at ?? new Date().toISOString(),
+          overall_status: completedResult.overall_status,
+          ng_count: completedResult.ng_count,
+          warning_count: completedResult.warning_count,
+          ok_count: completedResult.ok_count,
+          total_checks: completedResult.total_checks,
+          comparison_round: (data as any).comparison_round ?? history.length + 1,
+          check_items: items,
+        };
+        setHistory(prev => [...prev, entry]);
+        setSelectedHistoryId(data.id);
+        onComparisonSaved?.(entry);
+        onClearAfterData?.();
+        setResolvedItems(new Set());
+        setSelectedItems(new Set());
+        setAppliedItems(new Set());
+        setActiveFilters(new Set(["NG", "WARNING"]));
+        toast({ title: "比較チェック完了", description: `Grade: ${completedResult.overall_status}` });
+        setChecking(false);
+        if (onReleaseLock) await onReleaseLock();
+        return;
+      }
+      setTimeout(poll, POLL_INTERVAL);
+    };
+    setTimeout(poll, POLL_INTERVAL);
+  }, [checkResultId, history, onCheckComplete, onComparisonSaved, onClearAfterData, onReleaseLock, toast]);
+
   const handleRunComparison = async () => {
     if (!enabled || !user) return;
     // Acquire lock before comparison check
@@ -253,6 +307,28 @@ export default function ComparisonCheckPanel({
 
       let res: CheckResult;
 
+      // For video/audio async checks, create a pending record first so n8n can UPDATE it
+      let pendingRecordId: string | null = null;
+      const isAsyncProcess = isVideo || isAudio;
+      if (isAsyncProcess && user) {
+        const { data: pendingCr, error: pendingErr } = await supabase.from("check_results").insert([{
+          user_id: user.id,
+          client_name: clientName || "",
+          product_code: productCode || "",
+          product_name: productName || "",
+          process_type: file.process_type,
+          input_type: isVideo ? "video" : "audio",
+          status: "pending",
+          check_type: "comparison",
+          comparison_round: history.length + 1,
+          parent_check_result_id: checkResultId || null,
+        } as any]).select("id").single();
+        if (!pendingErr && pendingCr) {
+          pendingRecordId = pendingCr.id;
+          console.log("[ComparisonCheck] Created pending record:", pendingRecordId);
+        }
+      }
+
       if (isVideo) {
         // Route video comparison through the video webhook
         const videoUrl = comparisonAfterData || "";
@@ -265,14 +341,23 @@ export default function ComparisonCheckPanel({
           referenceContext,
           projectId,
           null, // patternId
-          null, // recordId
+          pendingRecordId, // recordId — pending record for n8n to update
           correctionComments,
         );
         if (videoRes === VIDEO_ASYNC_ACCEPTED) {
           toast({ title: "動画チェック開始", description: "AIが動画を分析中です。結果は自動的に表示されます。" });
-          setChecking(false);
-          if (onReleaseLock) await onReleaseLock();
+          // Poll for the pending record to be completed by n8n
+          if (pendingRecordId) {
+            pollPendingRecord(pendingRecordId);
+          } else {
+            setChecking(false);
+            if (onReleaseLock) await onReleaseLock();
+          }
           return;
+        }
+        // If we got a sync response, clean up the pending record (n8n didn't use it)
+        if (pendingRecordId) {
+          await supabase.from("check_results").delete().eq("id", pendingRecordId).eq("status", "pending");
         }
         res = videoRes as CheckResult;
       } else if (isAudio) {
@@ -287,7 +372,21 @@ export default function ComparisonCheckPanel({
           { file_name: file.file_type, duration: null, format: audioMimeType },
           { audioUrl, audioMimeType },
           referenceContext,
+          pendingRecordId,
         );
+        // Audio also uses async flow via VIDEO_ASYNC_ACCEPTED
+        if ((audioRes as any) === VIDEO_ASYNC_ACCEPTED) {
+          if (pendingRecordId) {
+            pollPendingRecord(pendingRecordId);
+          } else {
+            setChecking(false);
+            if (onReleaseLock) await onReleaseLock();
+          }
+          return;
+        }
+        if (pendingRecordId) {
+          await supabase.from("check_results").delete().eq("id", pendingRecordId).eq("status", "pending");
+        }
         res = audioRes;
       } else if (isImage) {
         const newBase64 = comparisonAfterData?.replace(/^data:[^;]+;base64,/, "") || "";
