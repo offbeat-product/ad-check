@@ -1517,7 +1517,19 @@ export default function ProjectPage() {
                       }
                     } catch {}
                   }
-                  // cascade_delete_project_file trigger handles: child files, check_results → comments, share_links, correction_logs
+                  // Manual cascade: unlink check_result, delete children, then delete file
+                  const checkResultId = f.check_result_id;
+                  if (checkResultId) {
+                    // Unlink check_result from file first to avoid trigger conflict
+                    await supabase.from("project_files").update({ check_result_id: null }).eq("id", f.id);
+                  }
+                  // Delete child files (versions)
+                  await supabase.from("project_files").delete().eq("parent_file_id", f.id);
+                  // Delete check_result (cascade trigger handles comments, share_links, etc.)
+                  if (checkResultId) {
+                    await supabase.from("check_results").delete().eq("id", checkResultId);
+                  }
+                  // Finally delete the file itself
                   const { error } = await supabase.from("project_files").delete().eq("id", f.id);
                   if (error) throw error;
                   toast({ title: "ファイルを削除しました" });

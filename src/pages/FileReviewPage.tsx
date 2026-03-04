@@ -1264,6 +1264,15 @@ export default function FileReviewPage() {
                         if (pathMatch) { await supabase.storage.from(pathMatch[1]).remove([pathMatch[2]]); }
                       } catch {}
                     }
+                    // Manual cascade: unlink check_result, delete children, then delete file
+                    const checkResultId = file.check_result_id;
+                    if (checkResultId) {
+                      await supabase.from("project_files").update({ check_result_id: null }).eq("id", file.id);
+                    }
+                    await supabase.from("project_files").delete().eq("parent_file_id", file.id);
+                    if (checkResultId) {
+                      await supabase.from("check_results").delete().eq("id", checkResultId);
+                    }
                     const { error } = await supabase.from("project_files").delete().eq("id", file.id);
                     if (error) { toast({ title: "削除に失敗しました", description: error.message, variant: "destructive" }); }
                     else { toast({ title: "ファイルを削除しました" }); navigate(`/project/${projectId}`); }
