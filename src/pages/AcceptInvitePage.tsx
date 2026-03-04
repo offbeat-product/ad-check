@@ -161,7 +161,7 @@ export default function AcceptInvitePage() {
             <Rocket className="h-8 w-8 mr-2 inline-block" fill="currentColor" />
             <span className="gradient-text">CheckGo AI</span>
           </h1>
-          <p className="text-sm text-muted-foreground whitespace-nowrap">最速・最高品質の「GO」を。</p>
+          <p className="text-sm text-muted-foreground whitespace-nowrap">制作現場に、最速・最良の「GO」を。</p>
         </div>
 
         <div className="glass-card p-8 space-y-6">
