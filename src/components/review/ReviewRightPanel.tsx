@@ -77,7 +77,7 @@ export default function ReviewRightPanel({
   const effectiveTab = rightTab === "comments" ? "comments" : "ai-check";
 
   return (
-    <div className="w-[380px] shrink-0 h-screen border-l border-border flex flex-col bg-card overflow-hidden">
+    <div className="w-full md:w-[380px] shrink-0 h-[calc(100vh-44px)] md:h-screen border-l-0 md:border-l border-border flex flex-col bg-card overflow-hidden">
       <Tabs value={effectiveTab} onValueChange={onTabChange} className="relative flex-1 flex flex-col min-h-0">
         <TabsList className="w-full shrink-0 rounded-none border-b border-border bg-transparent h-10 p-0">
           <TabsTrigger value="ai-check" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs h-10">
