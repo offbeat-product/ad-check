@@ -92,6 +92,7 @@ export default function FileReviewPage() {
   const [comparisonDrafts, setComparisonDrafts] = useState<DraftEntry[]>([]);
   const [comparisonActivePairIndex, setComparisonActivePairIndex] = useState(0);
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
+  const [mobilePanel, setMobilePanel] = useState<"preview" | "check">("preview");
   const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
   const { items, markers, commentCounts, paintMode, setPaintMode, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
     useReviewState(record?.id, checkItems);
