@@ -97,6 +97,28 @@ export default function FileReviewPage() {
   const { items, markers, commentCounts, paintMode, setPaintMode, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
     useReviewState(record?.id, checkItems);
 
+  // Re-fetch the latest check_result from DB before validating submission
+  const validateAndOpenSubmit = useCallback(async () => {
+    if (!record?.id || !record?.check_items) {
+      toast({ title: "AIチェックを先に実行してください", description: "クライアント提出前にAIチェックが必要です。", variant: "destructive" });
+      return;
+    }
+    // Fetch fresh record to get latest resolved_items & overall_status
+    const { data: fresh } = await supabase.from("check_results").select("overall_status, resolved_items, check_items").eq("id", record.id).maybeSingle();
+    if (!fresh) {
+      toast({ title: "チェック結果の取得に失敗しました", variant: "destructive" });
+      return;
+    }
+    // Also update local record state so it stays in sync
+    setRecord(prev => prev ? { ...prev, overall_status: fresh.overall_status, resolved_items: fresh.resolved_items } : prev);
+    const effective = getEffectiveSubmitLabel(fresh.overall_status, fresh.check_items as unknown as CheckItem[], (fresh.resolved_items as unknown as string[]) ?? []);
+    if (!effective.isOk) {
+      toast({ title: "NG項目が未解消です", description: "全てのNG項目を修正済みにしてからクライアントに提出してください。", variant: "destructive" });
+      return;
+    }
+    setSubmitToClientOpen(true);
+  }, [record?.id, record?.check_items, toast]);
+
   // Poll media current time when comments tab is active
   useEffect(() => {
     const aiCfgLocal = file ? AI_CHECK_CONFIG[file.process_type] : null;
@@ -1353,18 +1375,7 @@ export default function FileReviewPage() {
               highlightAnnotation={highlightAnnotation}
               members={mentionMembers}
               submissionType={file.submission_type}
-              onSubmitToClient={() => {
-                if (!record?.check_items) {
-                  toast({ title: "AIチェックを先に実行してください", description: "クライアント提出前にAIチェックが必要です。", variant: "destructive" });
-                  return;
-                }
-                const effective = getEffectiveSubmitLabel(record.overall_status, record.check_items as unknown as CheckItem[], (record.resolved_items as unknown as string[]) ?? []);
-                if (!effective.isOk) {
-                  toast({ title: "NG項目が未解消です", description: "全てのNG項目を修正済みにしてからクライアントに提出してください。", variant: "destructive" });
-                  return;
-                }
-                setSubmitToClientOpen(true);
-              }}
+              onSubmitToClient={validateAndOpenSubmit}
               onInternalRevision={() => setInternalRevisionOpen(true)}
             />
           ) : (
@@ -1445,18 +1456,7 @@ export default function FileReviewPage() {
                 <Button
                   size="lg"
                   className="w-full gap-2 text-sm font-bold h-12"
-                  onClick={() => {
-                    if (!record?.check_items) {
-                      toast({ title: "AIチェックを先に実行してください", description: "クライアント提出前にAIチェックが必要です。", variant: "destructive" });
-                      return;
-                    }
-                    const effective = getEffectiveSubmitLabel(record.overall_status, record.check_items as unknown as CheckItem[], (record.resolved_items as unknown as string[]) ?? []);
-                    if (!effective.isOk) {
-                      toast({ title: "NG項目が未解消です", description: "全てのNG項目を修正済みにしてからクライアントに提出してください。", variant: "destructive" });
-                      return;
-                    }
-                    setSubmitToClientOpen(true);
-                  }}
+                  onClick={validateAndOpenSubmit}
                 >
                   <CheckCircle2 className="h-5 w-5" />
                   クライアントに提出する
@@ -1548,18 +1548,7 @@ export default function FileReviewPage() {
         onAcquireLock={acquireLock}
         onReleaseLock={releaseLock}
         submissionType={file.submission_type}
-        onSubmitToClient={() => {
-          if (!record?.check_items) {
-            toast({ title: "AIチェックを先に実行してください", description: "クライアント提出前にAIチェックが必要です。", variant: "destructive" });
-            return;
-          }
-          const effective = getEffectiveSubmitLabel(record.overall_status, record.check_items as unknown as CheckItem[], (record.resolved_items as unknown as string[]) ?? []);
-          if (!effective.isOk) {
-            toast({ title: "NG項目が未解消です", description: "全てのNG項目を修正済みにしてからクライアントに提出してください。", variant: "destructive" });
-            return;
-          }
-          setSubmitToClientOpen(true);
-        }}
+        onSubmitToClient={validateAndOpenSubmit}
         onInternalRevision={() => setInternalRevisionOpen(true)}
         autoRunComparison={autoComparisonPendingRef.current}
         emptyCheckMessage={
