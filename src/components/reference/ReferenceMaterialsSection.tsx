@@ -3,7 +3,7 @@ import { MATERIAL_TYPES, fetchMaterials, type ReferenceMaterial } from "@/lib/re
 import { getWCheckParsedJson, getWCheckTotalCount } from "@/lib/wcheck-parser";
 import { Skeleton } from "@/components/ui/skeleton";
 import MaterialDetailModal from "./MaterialDetailModal";
-import { ClipboardList, ListChecks, Palette, Scale, Smartphone, FileEdit } from "lucide-react";
+import { ClipboardList, ListChecks, Palette, Scale, Smartphone, FileEdit, ChevronDown, ChevronRight } from "lucide-react";
 
 const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
   ClipboardList,
