@@ -236,7 +236,7 @@ export default function ComparisonCheckPanel({
       if (data && data.status === "completed" && data.check_items) {
         const items = (data.check_items as unknown as CheckItem[]) || [];
         const completedResult: CheckResult = {
-          overall_status: data.overall_status || "D",
+          overall_status: (data.overall_status || "D") as "A" | "B" | "C" | "D",
           ng_count: data.ng_count ?? 0,
           warning_count: data.warning_count ?? 0,
           ok_count: data.ok_count ?? 0,
