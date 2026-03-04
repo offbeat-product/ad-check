@@ -511,9 +511,9 @@ export default function ProjectPage() {
     }
   };
 
-  const handleProcessDeadlineChange = async (processId: string, field: "internal_deadline" | "client_deadline", value: string | null) => {
+  const handleProcessDeadlineChange = async (processId: string, field: "client_deadline", value: string | null) => {
     await updateProcess(processId, { [field]: value } as Partial<ProjectProcess>);
-    toast({ title: field === "internal_deadline" ? "社内期限を更新しました" : "クライアント期限を更新しました" });
+    toast({ title: "クライアント期限を更新しました" });
   };
 
   const handleProcessStatusChange = async (processId: string, status: string) => {
