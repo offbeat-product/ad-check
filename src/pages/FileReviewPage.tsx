@@ -912,19 +912,23 @@ export default function FileReviewPage() {
       // Send mention notifications
       if (mentionedUserIds && mentionedUserIds.length > 0) {
         const authorName = user.email?.split("@")[0] || "User";
+        const projectName = project?.name || "";
+        const fileName = file?.file_name || "";
         for (const uid of mentionedUserIds) {
           if (uid === user.id) continue;
           await supabase.from("notifications").insert({
             user_id: uid, type: "mention",
-            title: "コメントでメンションされました",
-            message: `${authorName}さんからメンション: ${comment.slice(0, 80)}`,
-            data: { check_result_id: record.id },
+            title: `${authorName}さんからメンションされました`,
+            message: `[${projectName}] ${fileName}\n${comment.slice(0, 100)}`,
+            data: { check_result_id: record.id, project_id: projectId, project_name: projectName, file_name: fileName, author_name: authorName },
           });
         }
       }
 
       // Send general comment notifications
       const authorName = user.email?.split("@")[0] || "User";
+      const projectName = project?.name || "";
+      const fileName = file?.file_name || "";
       const excludeSet = new Set([user.id, ...(mentionedUserIds || [])]);
       const { data: wsMembers } = await supabase.from("workspace_members").select("user_id").eq("status", "accepted").not("user_id", "is", null);
       const targetIds = (wsMembers || []).map((m) => m.user_id!).filter((uid) => !excludeSet.has(uid));
@@ -933,9 +937,9 @@ export default function FileReviewPage() {
         if (profiles && profiles.length > 0) {
           await supabase.from("notifications").insert(profiles.map((p) => ({
             user_id: p.id, type: "comment",
-            title: "新しいコメントが投稿されました",
-            message: `${authorName}: ${comment.slice(0, 80)}`,
-            data: { check_result_id: record.id },
+            title: `${authorName}さんがコメントしました`,
+            message: `[${projectName}] ${fileName}\n${comment.slice(0, 100)}`,
+            data: { check_result_id: record.id, project_id: projectId, project_name: projectName, file_name: fileName, author_name: authorName },
           })));
         }
       }
