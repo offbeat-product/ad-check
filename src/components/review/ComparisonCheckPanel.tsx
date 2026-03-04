@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GitCompare, Loader2, Bot, History, CheckCircle2 } from "lucide-react";
-import { runComparisonCheck } from "@/lib/webhook";
+import { runComparisonCheck, runVideoCheck, runAudioCheck, VIDEO_ASYNC_ACCEPTED } from "@/lib/webhook";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -168,6 +168,8 @@ export default function ComparisonCheckPanel({
 
   const aiCfg = AI_CHECK_CONFIG[file.process_type];
   const isImage = aiCfg?.inputMode === "image";
+  const isVideo = aiCfg?.inputMode === "video";
+  const isAudio = aiCfg?.inputMode === "audio";
   const enabled = aiCfg?.enabled ?? false;
 
   const hasNewContent = isImage ? !!comparisonAfterData : !!(comparisonAfterText || comparisonAfterData);
@@ -249,24 +251,60 @@ export default function ComparisonCheckPanel({
         }
       }
 
-      let data: Parameters<typeof runComparisonCheck>[2];
-      if (isImage) {
+      let res: CheckResult;
+
+      if (isVideo) {
+        // Route video comparison through the video webhook
+        const videoUrl = comparisonAfterData || "";
+        const mimeType = videoUrl.endsWith(".webm") ? "video/webm" : videoUrl.endsWith(".mov") ? "video/quicktime" : "video/mp4";
+        const videoRes = await runVideoCheck(
+          productId,
+          file.process_type,
+          "", // script_text not used for video
+          { videoUrl, videoMimeType: mimeType },
+          referenceContext,
+          projectId,
+          null, // patternId
+          null, // recordId
+          correctionComments,
+        );
+        if (videoRes === VIDEO_ASYNC_ACCEPTED) {
+          toast({ title: "動画チェック開始", description: "AIが動画を分析中です。結果は自動的に表示されます。" });
+          setChecking(false);
+          if (onReleaseLock) await onReleaseLock();
+          return;
+        }
+        res = videoRes as CheckResult;
+      } else if (isAudio) {
+        // Route audio comparison through the audio webhook
+        const audioUrl = comparisonAfterData || "";
+        const urlExt = audioUrl.split('.').pop()?.split('?')[0]?.toLowerCase() || "mp3";
+        const audioMimeType = urlExt === "wav" ? "audio/wav" : urlExt === "m4a" ? "audio/mp4" : urlExt === "ogg" ? "audio/ogg" : "audio/mpeg";
+        const audioRes = await runAudioCheck(
+          productId,
+          file.process_type,
+          "", // script_text
+          { file_name: file.file_type, duration: null, format: audioMimeType },
+          { audioUrl, audioMimeType },
+          referenceContext,
+        );
+        res = audioRes;
+      } else if (isImage) {
         const newBase64 = comparisonAfterData?.replace(/^data:[^;]+;base64,/, "") || "";
         const origBase64 = comparisonBeforeData?.replace(/^data:[^;]+;base64,/, "") || "";
         const mediaType = comparisonAfterData?.match(/^data:([^;]+);/)?.[1] || "image/jpeg";
-        data = {
+        res = await runComparisonCheck(productId, file.process_type, {
           image_base64: newBase64,
           media_type: mediaType,
           original_image_base64: origBase64,
-        };
+        }, referenceContext, correctionComments);
       } else {
-        data = {
+        res = await runComparisonCheck(productId, file.process_type, {
           script_text: comparisonAfterText || comparisonAfterData || "",
           original_text: comparisonBeforeData || "",
-        };
+        }, referenceContext, correctionComments);
       }
 
-      const res = await runComparisonCheck(productId, file.process_type, data, referenceContext, correctionComments);
       setResult(res);
       onCheckComplete?.(res);
 
@@ -274,7 +312,10 @@ export default function ComparisonCheckPanel({
       const nextRound = history.length + 1;
       // Persist the after-data so it can be restored when revisiting
       const savedInputData: Record<string, unknown> = {};
-      if (isImage) {
+      if (isVideo || isAudio) {
+        savedInputData.after_url = comparisonAfterData;
+        savedInputData.before_url = comparisonBeforeData;
+      } else if (isImage) {
         savedInputData.after_image = comparisonAfterData;
         savedInputData.before_image = comparisonBeforeData;
       } else {
@@ -288,8 +329,8 @@ export default function ComparisonCheckPanel({
         product_code: productCode || "",
         product_name: productName || "",
         process_type: file.process_type,
-        input_type: isImage ? "image" : "text",
-        input_text: isImage ? null : (comparisonAfterText || comparisonAfterData),
+        input_type: isVideo ? "video" : isAudio ? "audio" : isImage ? "image" : "text",
+        input_text: (isImage || isVideo || isAudio) ? null : (comparisonAfterText || comparisonAfterData),
         overall_status: res.overall_status,
         detected_case: res.detected_case,
         ng_count: res.ng_count,
