@@ -253,6 +253,28 @@ export default function ComparisonCheckPanel({
 
       let res: CheckResult;
 
+      // For video/audio async checks, create a pending record first so n8n can UPDATE it
+      let pendingRecordId: string | null = null;
+      const isAsyncProcess = isVideo || isAudio;
+      if (isAsyncProcess && user) {
+        const { data: pendingCr, error: pendingErr } = await supabase.from("check_results").insert([{
+          user_id: user.id,
+          client_name: clientName || "",
+          product_code: productCode || "",
+          product_name: productName || "",
+          process_type: file.process_type,
+          input_type: isVideo ? "video" : "audio",
+          status: "pending",
+          check_type: "comparison",
+          comparison_round: history.length + 1,
+          parent_check_result_id: checkResultId || null,
+        } as any]).select("id").single();
+        if (!pendingErr && pendingCr) {
+          pendingRecordId = pendingCr.id;
+          console.log("[ComparisonCheck] Created pending record:", pendingRecordId);
+        }
+      }
+
       if (isVideo) {
         // Route video comparison through the video webhook
         const videoUrl = comparisonAfterData || "";
@@ -265,14 +287,23 @@ export default function ComparisonCheckPanel({
           referenceContext,
           projectId,
           null, // patternId
-          null, // recordId
+          pendingRecordId, // recordId — pending record for n8n to update
           correctionComments,
         );
         if (videoRes === VIDEO_ASYNC_ACCEPTED) {
           toast({ title: "動画チェック開始", description: "AIが動画を分析中です。結果は自動的に表示されます。" });
-          setChecking(false);
-          if (onReleaseLock) await onReleaseLock();
+          // Poll for the pending record to be completed by n8n
+          if (pendingRecordId) {
+            pollPendingRecord(pendingRecordId);
+          } else {
+            setChecking(false);
+            if (onReleaseLock) await onReleaseLock();
+          }
           return;
+        }
+        // If we got a sync response, clean up the pending record (n8n didn't use it)
+        if (pendingRecordId) {
+          await supabase.from("check_results").delete().eq("id", pendingRecordId).eq("status", "pending");
         }
         res = videoRes as CheckResult;
       } else if (isAudio) {
