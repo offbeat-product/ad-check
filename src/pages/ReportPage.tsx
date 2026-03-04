@@ -303,7 +303,12 @@ export default function ReportPage() {
     [files, scopeProjectIds, periodFrom, periodTo]
   );
 
-  const summary = useMemo(() => computeMetrics(periodProcesses, periodFiles), [periodProcesses, periodFiles]);
+  const scopeProjects = useMemo(() =>
+    filteredProjects.filter(p => scopeProjectIds.has(p.id)),
+    [filteredProjects, scopeProjectIds]
+  );
+
+  const summary = useMemo(() => computeMetrics(periodProcesses, periodFiles, scopeProjects), [periodProcesses, periodFiles, scopeProjects]);
 
   const processBreakdown = useMemo(() => computeProcessBreakdown(periodProcesses, periodFiles), [periodProcesses, periodFiles]);
 
@@ -315,14 +320,14 @@ export default function ReportPage() {
     periodFiles.filter(f => f.created_at).forEach(f => ensure(toMonthKey(f.created_at!)).files.push(f));
 
     return [...monthMap.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, data]) => {
-      const m = computeMetrics(data.procs, data.files);
+      const m = computeMetrics(data.procs, data.files, scopeProjects);
       return {
         month, monthLabel: monthLabel(month),
         deadlineRate: m.deadlineRate, firstDraftRate: m.firstDraftRate, avgRevisions: m.avgRevisions,
         deadlineTotal: m.deadlineTotal, firstDraftTotal: m.firstDraftTotal,
       };
     });
-  }, [periodProcesses, periodFiles]);
+  }, [periodProcesses, periodFiles, scopeProjects]);
 
   if (loading) {
     return (
