@@ -155,13 +155,20 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   const sendMentionNotifications = async (content: string, userIds: string[]) => {
     if (!user || userIds.length === 0) return;
     const authorName = user.email?.split("@")[0] || "User";
+    // Resolve project name for richer notification
+    let projectName = "";
+    let resolvedFileName = fileName || "";
+    if (projectId) {
+      const { data: proj } = await supabase.from("projects").select("name").eq("id", projectId).maybeSingle();
+      projectName = proj?.name || "";
+    }
     for (const uid of userIds) {
       await supabase.from("notifications").insert({
         user_id: uid,
         type: "mention",
-        title: "コメントでメンションされました",
-        message: `${authorName}さんからメンション: ${content.slice(0, 80)}`,
-        data: { check_result_id: checkResultId },
+        title: `${authorName}さんからメンションされました`,
+        message: `[${projectName}] ${resolvedFileName}\n${content.slice(0, 100)}`,
+        data: { check_result_id: checkResultId, project_id: projectId, project_name: projectName, file_name: resolvedFileName, author_name: authorName },
       });
     }
   };
