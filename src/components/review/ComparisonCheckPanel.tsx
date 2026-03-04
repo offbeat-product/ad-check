@@ -318,10 +318,8 @@ export default function ComparisonCheckPanel({
           product_name: productName || "",
           process_type: file.process_type,
           input_type: isVideo ? "video" : "audio",
+          input_text: null,
           status: "pending",
-          check_type: "comparison",
-          comparison_round: history.length + 1,
-          parent_check_result_id: checkResultId || null,
         } as any]).select("id").single();
         if (!pendingErr && pendingCr) {
           pendingRecordId = pendingCr.id;
