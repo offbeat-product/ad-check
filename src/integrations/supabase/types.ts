@@ -1202,6 +1202,10 @@ export type Database = {
         Args: { p_token: string; p_user_id: string }
         Returns: boolean
       }
+      delete_project_cascade: {
+        Args: { p_project_id: string }
+        Returns: undefined
+      }
       ensure_profile:
         | { Args: { p_email: string; p_user_id: string }; Returns: undefined }
         | { Args: { p_email: string; p_user_id: string }; Returns: undefined }
