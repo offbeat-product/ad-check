@@ -473,7 +473,7 @@ export default function ReportPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <KpiCard icon={Target} label="納期遵守率" value={summary.deadlineRate !== null ? `${summary.deadlineRate}%` : "—"} rate={summary.deadlineRate} target={deadlineTarget} detail={`${summary.deadlineOnTime}/${summary.deadlineTotal}件`} color="text-primary" />
           <KpiCard icon={CheckCircle} label="初稿合格率" value={summary.firstDraftRate !== null ? `${summary.firstDraftRate}%` : "—"} rate={summary.firstDraftRate} target={firstDraftTarget} detail={`${summary.firstDraftPassed}/${summary.firstDraftTotal}件`} color="text-status-ok" />
-          <KpiCard icon={RotateCcw} label="平均修正回数" value={summary.avgRevisions !== null ? `${summary.avgRevisions}回` : "—"} rate={null} target={null} detail={`${summary.revisionSequences}シーケンス`} color="text-status-warning" isRevision />
+          <KpiCard icon={RotateCcw} label="平均修正回数" value={summary.avgRevisions !== null ? `${summary.avgRevisions}回` : "—"} rate={null} target={null} detail={`${summary.revisionSequences}件から算出`} color="text-status-warning" isRevision />
         </div>
 
         {/* Chart */}
