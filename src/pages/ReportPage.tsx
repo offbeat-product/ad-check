@@ -511,42 +511,17 @@ export default function ReportPage() {
           </CardContent>
         </Card>
 
-        {/* Process Breakdown Table */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2"><Calendar className="h-4 w-4" />工程別内訳</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border text-muted-foreground text-left">
-                  <th className="px-4 py-2 font-medium">工程</th>
-                  <th className="px-4 py-2 font-medium text-right">納期遵守率</th>
-                  <th className="px-4 py-2 font-medium text-right">初稿合格率</th>
-                  <th className="px-4 py-2 font-medium text-right">平均修正回数</th>
-                </tr>
-              </thead>
-              <tbody>
-                {processBreakdown.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center py-8 text-muted-foreground">データなし</td></tr>
-                ) : processBreakdown.map(pb => (
-                  <tr key={pb.processKey} className="border-b border-border/50">
-                    <td className="px-4 py-2 font-medium">{pb.processLabel}</td>
-                    <td className="px-4 py-2 text-right">
-                      <RateCell rate={pb.deadlineRate} target={deadlineTarget} total={pb.deadlineTotal} />
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      <RateCell rate={pb.firstDraftRate} target={firstDraftTarget} total={pb.firstDraftTotal} />
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      {pb.avgRevisions !== null ? <span className="font-bold">{pb.avgRevisions}回</span> : <span className="text-muted-foreground">—</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
+        {/* Client Breakdown */}
+        <BreakdownTable title="クライアント別内訳" columnLabel="クライアント" rows={clientBreakdown} deadlineTarget={deadlineTarget} firstDraftTarget={firstDraftTarget} />
+
+        {/* Product Breakdown */}
+        <BreakdownTable title="商材別内訳" columnLabel="商材" rows={productBreakdown} deadlineTarget={deadlineTarget} firstDraftTarget={firstDraftTarget} />
+
+        {/* Project Breakdown */}
+        <BreakdownTable title="案件別内訳" columnLabel="案件" rows={projectBreakdown} deadlineTarget={deadlineTarget} firstDraftTarget={firstDraftTarget} />
+
+        {/* Process Breakdown */}
+        <BreakdownTable title="工程別内訳" columnLabel="工程" rows={processBreakdown} deadlineTarget={deadlineTarget} firstDraftTarget={firstDraftTarget} />
 
         {/* Monthly Table */}
         <Card>
