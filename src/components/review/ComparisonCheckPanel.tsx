@@ -168,6 +168,8 @@ export default function ComparisonCheckPanel({
 
   const aiCfg = AI_CHECK_CONFIG[file.process_type];
   const isImage = aiCfg?.inputMode === "image";
+  const isVideo = aiCfg?.inputMode === "video";
+  const isAudio = aiCfg?.inputMode === "audio";
   const enabled = aiCfg?.enabled ?? false;
 
   const hasNewContent = isImage ? !!comparisonAfterData : !!(comparisonAfterText || comparisonAfterData);
