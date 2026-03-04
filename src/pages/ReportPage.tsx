@@ -196,7 +196,7 @@ export default function ReportPage() {
         const [procRes, fileRes, projRes, prodRes, clientRes, targetRes] = await Promise.all([
           supabase.from("project_processes").select("id, project_id, process_key, process_label, status, client_deadline, updated_at"),
           supabase.from("project_files").select("id, project_id, process_type, status, version_number, parent_file_id, fixed_at, created_at, submission_type"),
-          supabase.from("projects").select("id, name, product_id"),
+          supabase.from("projects").select("id, name, product_id, overall_deadline"),
           supabase.from("products").select("id, name, client_id"),
           supabase.from("clients").select("id, name"),
           supabase.from("kpi_targets").select("*"),
