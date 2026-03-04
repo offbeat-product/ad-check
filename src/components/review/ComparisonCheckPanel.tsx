@@ -372,7 +372,21 @@ export default function ComparisonCheckPanel({
           { file_name: file.file_type, duration: null, format: audioMimeType },
           { audioUrl, audioMimeType },
           referenceContext,
+          pendingRecordId,
         );
+        // Audio also uses async flow via VIDEO_ASYNC_ACCEPTED
+        if ((audioRes as any) === VIDEO_ASYNC_ACCEPTED) {
+          if (pendingRecordId) {
+            pollPendingRecord(pendingRecordId);
+          } else {
+            setChecking(false);
+            if (onReleaseLock) await onReleaseLock();
+          }
+          return;
+        }
+        if (pendingRecordId) {
+          await supabase.from("check_results").delete().eq("id", pendingRecordId).eq("status", "pending");
+        }
         res = audioRes;
       } else if (isImage) {
         const newBase64 = comparisonAfterData?.replace(/^data:[^;]+;base64,/, "") || "";
