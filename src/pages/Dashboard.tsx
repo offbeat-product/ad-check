@@ -250,7 +250,7 @@ export default function Dashboard() {
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
         const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
 
-        const [procRes, fileRes] = await Promise.all([
+        const [procRes, fileRes, completedRes] = await Promise.all([
           // クライアント納期遵守率: クライアント期限までにFIX済みか
           supabase.from("project_processes").select("status, client_deadline, updated_at")
             .not("client_deadline", "is", null)
@@ -259,6 +259,9 @@ export default function Dashboard() {
           supabase.from("project_files").select("status, version_number, submission_type, created_at")
             .eq("version_number", 1).eq("submission_type", "client")
             .gte("created_at", monthStart).lte("created_at", monthEnd),
+          // 案件完了数: status=completed
+          supabase.from("projects").select("id", { count: "exact", head: true })
+            .eq("status", "completed"),
         ]);
         if (cancelled) return;
 
