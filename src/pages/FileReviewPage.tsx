@@ -1289,6 +1289,28 @@ export default function FileReviewPage() {
               checkResultId={record?.id}
               onRevisionUploaded={async (fileData, fileType, versionNumber, originalFile) => {
                 if (!file || !projectId || !user) return;
+
+                let actualFileData = fileData;
+
+                // For media files with blob URLs, upload to Storage first
+                const isMediaBlob = (fileType === "video" || fileType === "audio") && fileData.startsWith("blob:");
+                if (isMediaBlob) {
+                  try {
+                    const ext = originalFile.name.split(".").pop() || (fileType === "audio" ? "mp3" : "mp4");
+                    const bucket = fileType === "audio" ? "audios" : "videos";
+                    const safeName = originalFile.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+                    const storagePath = `${projectId}/${file.id}_rev_${Date.now()}_${safeName}`;
+                    const { error: uploadErr } = await supabase.storage.from(bucket).upload(storagePath, originalFile, { upsert: true });
+                    if (uploadErr) throw uploadErr;
+                    const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(storagePath);
+                    actualFileData = urlData.publicUrl;
+                  } catch (err) {
+                    console.error("[ComparisonRevision] Storage upload failed:", err);
+                    toast({ title: "ストレージへのアップロードに失敗しました", variant: "destructive" });
+                    return;
+                  }
+                }
+
                 // Count actual existing versions (not max version_number) to avoid gaps from deleted files
                 const { count: existingCount } = await supabase.from("project_files").select("*", { count: "exact", head: true })
                   .or(`id.eq.${file.id},parent_file_id.eq.${file.id}`);
@@ -1299,7 +1321,7 @@ export default function FileReviewPage() {
                   process_type: file.process_type,
                   file_name: `${file.file_name}_v${actualVersion}`,
                   file_type: fileType,
-                  file_data: fileData,
+                  file_data: actualFileData,
                   file_size_bytes: originalFile.size,
                   version_number: actualVersion,
                   parent_file_id: file.id,
@@ -1311,6 +1333,9 @@ export default function FileReviewPage() {
                   toast({ title: `v${actualVersion} を保存しました` });
                   fetchVersions();
                 }
+
+                // Return the storage URL so ComparisonLeftPanel can update the draft
+                return isMediaBlob ? actualFileData : undefined;
               }}
               paintMode={paintMode}
               onPaintModeToggle={() => setPaintMode(!paintMode)}
