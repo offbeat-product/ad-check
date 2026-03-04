@@ -25,6 +25,7 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
   const navigate = useNavigate();
   const location = useLocation();
   const { clients, products, projects, updateProjectOrder, updateClientOrder, updateProductOrder } = useProjectTree() as ReturnType<typeof useProjectTree>;
+  const { prefetchProject } = usePrefetch();
 
   const [openClients, setOpenClients] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem("sb_open_clients") || "[]")); }
