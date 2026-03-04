@@ -41,7 +41,7 @@ interface FileRow {
   submission_type: string;
 }
 
-interface ProjectRow { id: string; name: string; product_id: string | null; }
+interface ProjectRow { id: string; name: string; product_id: string | null; overall_deadline: string | null; }
 interface ProductRow { id: string; name: string; client_id: string | null; }
 interface ClientRow { id: string; name: string; }
 interface KpiTarget { id: string; key: string; label: string; target_value: number; }
