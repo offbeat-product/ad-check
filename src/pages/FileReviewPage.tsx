@@ -1011,9 +1011,11 @@ export default function FileReviewPage() {
   const canCheck = product && aiCfg?.enabled;
   const checkDisabled = product && aiCfg && !aiCfg.enabled;
 
+  const [mobilePanel, setMobilePanel] = useState<"preview" | "check">("preview");
+
   return (
-    <div className="flex h-screen overflow-hidden">
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+    <div className="flex flex-col md:flex-row h-screen overflow-hidden">
+      <div className={cn("flex-1 flex flex-col overflow-hidden min-w-0", mobilePanel === "check" && "hidden md:flex")}>
         <TooltipProvider delayDuration={300}>
         <header className="border-b border-border bg-card shrink-0">
           <div className="flex items-center gap-1.5 px-3 h-11">
