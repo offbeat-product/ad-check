@@ -361,7 +361,7 @@ export default function Dashboard() {
               <StatCard icon={FolderCheck} label="案件完了数" value={kpiLoaded ? `${kpiCompletedCount}件` : "..."} color="text-primary" />
             </>
           ) : (
-            Array.from({ length: 3 }).map((_, i) => (
+            Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="glass-card p-4 flex items-center gap-4">
                 <div className="p-2.5 rounded-lg bg-muted w-10 h-10 animate-pulse" />
                 <div>
