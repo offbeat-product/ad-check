@@ -11,6 +11,7 @@ import NotificationBell from "@/components/NotificationBell";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { usePrefetch } from "@/hooks/usePrefetch";
 
 interface AppSidebarProps {
   onCreateProject?: () => void;
