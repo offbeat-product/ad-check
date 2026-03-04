@@ -174,11 +174,11 @@ function computeMetrics(procs: ProcessRow[], allFiles: FileRow[], projectList?: 
   };
 }
 
-/* ─── Process breakdown (uses process-level deadline) ─ */
+/* ─── Breakdown types ─────────────────────────────── */
 
-interface ProcessBreakdown {
-  processKey: string;
-  processLabel: string;
+interface BreakdownRow {
+  key: string;
+  label: string;
   deadlineRate: number | null;
   deadlineTotal: number;
   firstDraftRate: number | null;
@@ -186,7 +186,9 @@ interface ProcessBreakdown {
   avgRevisions: number | null;
 }
 
-function computeProcessBreakdown(procs: ProcessRow[], allFiles: FileRow[]): ProcessBreakdown[] {
+/* ─── Process breakdown (uses process-level deadline) ─ */
+
+function computeProcessBreakdown(procs: ProcessRow[], allFiles: FileRow[]): BreakdownRow[] {
   const grouped = new Map<string, { label: string; procs: ProcessRow[]; files: FileRow[] }>();
   for (const p of procs) {
     if (!grouped.has(p.process_key)) grouped.set(p.process_key, { label: p.process_label, procs: [], files: [] });
@@ -195,16 +197,52 @@ function computeProcessBreakdown(procs: ProcessRow[], allFiles: FileRow[]): Proc
   for (const f of allFiles) {
     if (grouped.has(f.process_type)) grouped.get(f.process_type)!.files.push(f);
   }
-
   return [...grouped.entries()].map(([key, data]) => {
     const m = computeMetrics(data.procs, data.files);
-    return {
-      processKey: key, processLabel: data.label,
-      deadlineRate: m.deadlineRate, deadlineTotal: m.deadlineTotal,
-      firstDraftRate: m.firstDraftRate, firstDraftTotal: m.firstDraftTotal,
-      avgRevisions: m.avgRevisions,
-    };
+    return { key, label: data.label, deadlineRate: m.deadlineRate, deadlineTotal: m.deadlineTotal, firstDraftRate: m.firstDraftRate, firstDraftTotal: m.firstDraftTotal, avgRevisions: m.avgRevisions };
   });
+}
+
+/* ─── Client / Product / Project breakdowns ──────── */
+
+function computeClientBreakdown(
+  clients: ClientRow[], products: ProductRow[], projectList: ProjectRow[],
+  procs: ProcessRow[], allFiles: FileRow[],
+): BreakdownRow[] {
+  return clients.map(c => {
+    const prodIds = new Set(products.filter(p => p.client_id === c.id).map(p => p.id));
+    const projs = projectList.filter(p => p.product_id && prodIds.has(p.product_id));
+    const projIds = new Set(projs.map(p => p.id));
+    const ps = procs.filter(p => projIds.has(p.project_id));
+    const fs = allFiles.filter(f => f.project_id && projIds.has(f.project_id));
+    const m = computeMetrics(ps, fs, projs);
+    return { key: c.id, label: c.name, deadlineRate: m.deadlineRate, deadlineTotal: m.deadlineTotal, firstDraftRate: m.firstDraftRate, firstDraftTotal: m.firstDraftTotal, avgRevisions: m.avgRevisions };
+  }).filter(r => r.deadlineTotal > 0 || r.firstDraftTotal > 0);
+}
+
+function computeProductBreakdown(
+  products: ProductRow[], projectList: ProjectRow[],
+  procs: ProcessRow[], allFiles: FileRow[],
+): BreakdownRow[] {
+  return products.map(prod => {
+    const projs = projectList.filter(p => p.product_id === prod.id);
+    const projIds = new Set(projs.map(p => p.id));
+    const ps = procs.filter(p => projIds.has(p.project_id));
+    const fs = allFiles.filter(f => f.project_id && projIds.has(f.project_id));
+    const m = computeMetrics(ps, fs, projs);
+    return { key: prod.id, label: prod.name, deadlineRate: m.deadlineRate, deadlineTotal: m.deadlineTotal, firstDraftRate: m.firstDraftRate, firstDraftTotal: m.firstDraftTotal, avgRevisions: m.avgRevisions };
+  }).filter(r => r.deadlineTotal > 0 || r.firstDraftTotal > 0);
+}
+
+function computeProjectBreakdown(
+  projectList: ProjectRow[], procs: ProcessRow[], allFiles: FileRow[],
+): BreakdownRow[] {
+  return projectList.map(proj => {
+    const ps = procs.filter(p => p.project_id === proj.id);
+    const fs = allFiles.filter(f => f.project_id === proj.id);
+    const m = computeMetrics(ps, fs, [proj]);
+    return { key: proj.id, label: proj.name, deadlineRate: m.deadlineRate, deadlineTotal: m.deadlineTotal, firstDraftRate: m.firstDraftRate, firstDraftTotal: m.firstDraftTotal, avgRevisions: m.avgRevisions };
+  }).filter(r => r.deadlineTotal > 0 || r.firstDraftTotal > 0);
 }
 
 /* ─── Main Component ───────────────────────────────── */
@@ -311,6 +349,9 @@ export default function ReportPage() {
   const summary = useMemo(() => computeMetrics(periodProcesses, periodFiles, scopeProjects), [periodProcesses, periodFiles, scopeProjects]);
 
   const processBreakdown = useMemo(() => computeProcessBreakdown(periodProcesses, periodFiles), [periodProcesses, periodFiles]);
+  const clientBreakdown = useMemo(() => computeClientBreakdown(clients, products, scopeProjects, periodProcesses, periodFiles), [clients, products, scopeProjects, periodProcesses, periodFiles]);
+  const productBreakdown = useMemo(() => computeProductBreakdown(filteredProducts, scopeProjects, periodProcesses, periodFiles), [filteredProducts, scopeProjects, periodProcesses, periodFiles]);
+  const projectBreakdown = useMemo(() => computeProjectBreakdown(scopeProjects, periodProcesses, periodFiles), [scopeProjects, periodProcesses, periodFiles]);
 
   // Monthly trend chart
   const monthlyChartData = useMemo(() => {
@@ -470,42 +511,17 @@ export default function ReportPage() {
           </CardContent>
         </Card>
 
-        {/* Process Breakdown Table */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex items-center gap-2"><Calendar className="h-4 w-4" />工程別内訳</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0 overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-border text-muted-foreground text-left">
-                  <th className="px-4 py-2 font-medium">工程</th>
-                  <th className="px-4 py-2 font-medium text-right">納期遵守率</th>
-                  <th className="px-4 py-2 font-medium text-right">初稿合格率</th>
-                  <th className="px-4 py-2 font-medium text-right">平均修正回数</th>
-                </tr>
-              </thead>
-              <tbody>
-                {processBreakdown.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center py-8 text-muted-foreground">データなし</td></tr>
-                ) : processBreakdown.map(pb => (
-                  <tr key={pb.processKey} className="border-b border-border/50">
-                    <td className="px-4 py-2 font-medium">{pb.processLabel}</td>
-                    <td className="px-4 py-2 text-right">
-                      <RateCell rate={pb.deadlineRate} target={deadlineTarget} total={pb.deadlineTotal} />
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      <RateCell rate={pb.firstDraftRate} target={firstDraftTarget} total={pb.firstDraftTotal} />
-                    </td>
-                    <td className="px-4 py-2 text-right">
-                      {pb.avgRevisions !== null ? <span className="font-bold">{pb.avgRevisions}回</span> : <span className="text-muted-foreground">—</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
+        {/* Client Breakdown */}
+        <BreakdownTable title="クライアント別内訳" columnLabel="クライアント" rows={clientBreakdown} deadlineTarget={deadlineTarget} firstDraftTarget={firstDraftTarget} />
+
+        {/* Product Breakdown */}
+        <BreakdownTable title="商材別内訳" columnLabel="商材" rows={productBreakdown} deadlineTarget={deadlineTarget} firstDraftTarget={firstDraftTarget} />
+
+        {/* Project Breakdown */}
+        <BreakdownTable title="案件別内訳" columnLabel="案件" rows={projectBreakdown} deadlineTarget={deadlineTarget} firstDraftTarget={firstDraftTarget} />
+
+        {/* Process Breakdown */}
+        <BreakdownTable title="工程別内訳" columnLabel="工程" rows={processBreakdown} deadlineTarget={deadlineTarget} firstDraftTarget={firstDraftTarget} />
 
         {/* Monthly Table */}
         <Card>
@@ -692,5 +708,47 @@ function TargetEditor({ targets, onSaved }: { targets: KpiTarget[]; onSaved: (up
         <Save className="h-4 w-4" />{saving ? "保存中..." : "保存"}
       </Button>
     </div>
+  );
+}
+
+function BreakdownTable({ title, columnLabel, rows, deadlineTarget, firstDraftTarget }: {
+  title: string; columnLabel: string; rows: BreakdownRow[]; deadlineTarget: number; firstDraftTarget: number;
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium flex items-center gap-2"><Calendar className="h-4 w-4" />{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="p-0 overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-border text-muted-foreground text-left">
+              <th className="px-4 py-2 font-medium">{columnLabel}</th>
+              <th className="px-4 py-2 font-medium text-right">納期遵守率</th>
+              <th className="px-4 py-2 font-medium text-right">初稿合格率</th>
+              <th className="px-4 py-2 font-medium text-right">平均修正回数</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={4} className="text-center py-8 text-muted-foreground">データなし</td></tr>
+            ) : rows.map(r => (
+              <tr key={r.key} className="border-b border-border/50">
+                <td className="px-4 py-2 font-medium">{r.label}</td>
+                <td className="px-4 py-2 text-right">
+                  <RateCell rate={r.deadlineRate} target={deadlineTarget} total={r.deadlineTotal} />
+                </td>
+                <td className="px-4 py-2 text-right">
+                  <RateCell rate={r.firstDraftRate} target={firstDraftTarget} total={r.firstDraftTotal} />
+                </td>
+                <td className="px-4 py-2 text-right">
+                  {r.avgRevisions !== null ? <span className="font-bold">{r.avgRevisions}回</span> : <span className="text-muted-foreground">—</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </CardContent>
+    </Card>
   );
 }
