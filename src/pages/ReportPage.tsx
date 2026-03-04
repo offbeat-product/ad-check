@@ -349,6 +349,9 @@ export default function ReportPage() {
   const summary = useMemo(() => computeMetrics(periodProcesses, periodFiles, scopeProjects), [periodProcesses, periodFiles, scopeProjects]);
 
   const processBreakdown = useMemo(() => computeProcessBreakdown(periodProcesses, periodFiles), [periodProcesses, periodFiles]);
+  const clientBreakdown = useMemo(() => computeClientBreakdown(clients, products, scopeProjects, periodProcesses, periodFiles), [clients, products, scopeProjects, periodProcesses, periodFiles]);
+  const productBreakdown = useMemo(() => computeProductBreakdown(filteredProducts, scopeProjects, periodProcesses, periodFiles), [filteredProducts, scopeProjects, periodProcesses, periodFiles]);
+  const projectBreakdown = useMemo(() => computeProjectBreakdown(scopeProjects, periodProcesses, periodFiles), [scopeProjects, periodProcesses, periodFiles]);
 
   // Monthly trend chart
   const monthlyChartData = useMemo(() => {
