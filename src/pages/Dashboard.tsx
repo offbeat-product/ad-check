@@ -351,8 +351,8 @@ export default function Dashboard() {
           {checksLoaded ? (
             <>
               <StatCard icon={ClipboardCheck} label="今月のチェック数" value={stats.monthChecks} color="text-primary" />
-              <StatCard icon={Target} label="納期遵守率（クライアント提出）" value={kpiLoaded ? (kpiDeadlineRate !== null ? `${kpiDeadlineRate}%` : "—") : "..."} color="text-primary" />
-              <StatCard icon={CheckCircle} label="初稿合格率（クライアント提出）" value={kpiLoaded ? (kpiFirstDraftRate !== null ? `${kpiFirstDraftRate}%` : "—") : "..."} color="text-status-ok" />
+              <StatCard icon={Target} label="納期遵守率" value={kpiLoaded ? (kpiDeadlineRate !== null ? `${kpiDeadlineRate}%` : "—") : "..."} color="text-primary" />
+              <StatCard icon={CheckCircle} label="初稿合格率" value={kpiLoaded ? (kpiFirstDraftRate !== null ? `${kpiFirstDraftRate}%` : "—") : "..."} color="text-status-ok" />
             </>
           ) : (
             Array.from({ length: 3 }).map((_, i) => (
