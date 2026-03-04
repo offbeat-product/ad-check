@@ -1015,7 +1015,27 @@ export default function FileReviewPage() {
 
   return (
     <div className="flex flex-col md:flex-row h-screen overflow-hidden">
-      <div className={cn("flex-1 flex flex-col overflow-hidden min-w-0", mobilePanel === "check" && "hidden md:flex")}>
+      {/* Mobile bottom toggle bar */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex border-t border-border bg-card safe-area-bottom">
+        <button
+          onClick={() => setMobilePanel("preview")}
+          className={cn("flex-1 py-3 text-xs font-medium text-center transition-colors",
+            mobilePanel === "preview" ? "text-primary border-t-2 border-primary bg-primary/5" : "text-muted-foreground"
+          )}
+        >
+          プレビュー
+        </button>
+        <button
+          onClick={() => setMobilePanel("check")}
+          className={cn("flex-1 py-3 text-xs font-medium text-center transition-colors",
+            mobilePanel === "check" ? "text-primary border-t-2 border-primary bg-primary/5" : "text-muted-foreground"
+          )}
+        >
+          AIチェック・コメント
+        </button>
+      </div>
+
+      <div className={cn("flex-1 flex flex-col overflow-hidden min-w-0 pb-11 md:pb-0", mobilePanel === "check" && "hidden md:flex")}>
         <TooltipProvider delayDuration={300}>
         <header className="border-b border-border bg-card shrink-0">
           <div className="flex items-center gap-1.5 px-3 h-11">
