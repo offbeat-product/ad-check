@@ -174,11 +174,11 @@ function computeMetrics(procs: ProcessRow[], allFiles: FileRow[], projectList?: 
   };
 }
 
-/* ─── Process breakdown (uses process-level deadline) ─ */
+/* ─── Breakdown types ─────────────────────────────── */
 
-interface ProcessBreakdown {
-  processKey: string;
-  processLabel: string;
+interface BreakdownRow {
+  key: string;
+  label: string;
   deadlineRate: number | null;
   deadlineTotal: number;
   firstDraftRate: number | null;
@@ -186,7 +186,9 @@ interface ProcessBreakdown {
   avgRevisions: number | null;
 }
 
-function computeProcessBreakdown(procs: ProcessRow[], allFiles: FileRow[]): ProcessBreakdown[] {
+/* ─── Process breakdown (uses process-level deadline) ─ */
+
+function computeProcessBreakdown(procs: ProcessRow[], allFiles: FileRow[]): BreakdownRow[] {
   const grouped = new Map<string, { label: string; procs: ProcessRow[]; files: FileRow[] }>();
   for (const p of procs) {
     if (!grouped.has(p.process_key)) grouped.set(p.process_key, { label: p.process_label, procs: [], files: [] });
@@ -195,16 +197,52 @@ function computeProcessBreakdown(procs: ProcessRow[], allFiles: FileRow[]): Proc
   for (const f of allFiles) {
     if (grouped.has(f.process_type)) grouped.get(f.process_type)!.files.push(f);
   }
-
   return [...grouped.entries()].map(([key, data]) => {
     const m = computeMetrics(data.procs, data.files);
-    return {
-      processKey: key, processLabel: data.label,
-      deadlineRate: m.deadlineRate, deadlineTotal: m.deadlineTotal,
-      firstDraftRate: m.firstDraftRate, firstDraftTotal: m.firstDraftTotal,
-      avgRevisions: m.avgRevisions,
-    };
+    return { key, label: data.label, deadlineRate: m.deadlineRate, deadlineTotal: m.deadlineTotal, firstDraftRate: m.firstDraftRate, firstDraftTotal: m.firstDraftTotal, avgRevisions: m.avgRevisions };
   });
+}
+
+/* ─── Client / Product / Project breakdowns ──────── */
+
+function computeClientBreakdown(
+  clients: ClientRow[], products: ProductRow[], projectList: ProjectRow[],
+  procs: ProcessRow[], allFiles: FileRow[],
+): BreakdownRow[] {
+  return clients.map(c => {
+    const prodIds = new Set(products.filter(p => p.client_id === c.id).map(p => p.id));
+    const projs = projectList.filter(p => p.product_id && prodIds.has(p.product_id));
+    const projIds = new Set(projs.map(p => p.id));
+    const ps = procs.filter(p => projIds.has(p.project_id));
+    const fs = allFiles.filter(f => f.project_id && projIds.has(f.project_id));
+    const m = computeMetrics(ps, fs, projs);
+    return { key: c.id, label: c.name, deadlineRate: m.deadlineRate, deadlineTotal: m.deadlineTotal, firstDraftRate: m.firstDraftRate, firstDraftTotal: m.firstDraftTotal, avgRevisions: m.avgRevisions };
+  }).filter(r => r.deadlineTotal > 0 || r.firstDraftTotal > 0);
+}
+
+function computeProductBreakdown(
+  products: ProductRow[], projectList: ProjectRow[],
+  procs: ProcessRow[], allFiles: FileRow[],
+): BreakdownRow[] {
+  return products.map(prod => {
+    const projs = projectList.filter(p => p.product_id === prod.id);
+    const projIds = new Set(projs.map(p => p.id));
+    const ps = procs.filter(p => projIds.has(p.project_id));
+    const fs = allFiles.filter(f => f.project_id && projIds.has(f.project_id));
+    const m = computeMetrics(ps, fs, projs);
+    return { key: prod.id, label: prod.name, deadlineRate: m.deadlineRate, deadlineTotal: m.deadlineTotal, firstDraftRate: m.firstDraftRate, firstDraftTotal: m.firstDraftTotal, avgRevisions: m.avgRevisions };
+  }).filter(r => r.deadlineTotal > 0 || r.firstDraftTotal > 0);
+}
+
+function computeProjectBreakdown(
+  projectList: ProjectRow[], procs: ProcessRow[], allFiles: FileRow[],
+): BreakdownRow[] {
+  return projectList.map(proj => {
+    const ps = procs.filter(p => p.project_id === proj.id);
+    const fs = allFiles.filter(f => f.project_id === proj.id);
+    const m = computeMetrics(ps, fs, [proj]);
+    return { key: proj.id, label: proj.name, deadlineRate: m.deadlineRate, deadlineTotal: m.deadlineTotal, firstDraftRate: m.firstDraftRate, firstDraftTotal: m.firstDraftTotal, avgRevisions: m.avgRevisions };
+  }).filter(r => r.deadlineTotal > 0 || r.firstDraftTotal > 0);
 }
 
 /* ─── Main Component ───────────────────────────────── */
