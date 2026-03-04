@@ -220,6 +220,60 @@ export default function ComparisonCheckPanel({
     autoRunTriggeredRef.current = false;
   }, [fileId]);
 
+  // Poll a pending record until n8n completes it
+  const pollPendingRecord = useCallback(async (recordId: string) => {
+    const POLL_INTERVAL = 5_000;
+    const MAX_POLL_MS = 600_000;
+    const start = Date.now();
+    const poll = async () => {
+      if (Date.now() - start > MAX_POLL_MS) {
+        toast({ title: "タイムアウト", description: "結果の取得に時間がかかっています。後で確認してください。", variant: "destructive" });
+        setChecking(false);
+        if (onReleaseLock) await onReleaseLock();
+        return;
+      }
+      const { data } = await supabase.from("check_results").select("*").eq("id", recordId).maybeSingle();
+      if (data && data.status === "completed" && data.check_items) {
+        const items = (data.check_items as unknown as CheckItem[]) || [];
+        const completedResult: CheckResult = {
+          overall_status: data.overall_status || "D",
+          ng_count: data.ng_count ?? 0,
+          warning_count: data.warning_count ?? 0,
+          ok_count: data.ok_count ?? 0,
+          total_checks: data.total_checks ?? 0,
+          check_items: items,
+        };
+        setResult(completedResult);
+        onCheckComplete?.(completedResult);
+        const entry: ComparisonHistoryEntry = {
+          id: data.id,
+          created_at: data.created_at ?? new Date().toISOString(),
+          overall_status: completedResult.overall_status,
+          ng_count: completedResult.ng_count,
+          warning_count: completedResult.warning_count,
+          ok_count: completedResult.ok_count,
+          total_checks: completedResult.total_checks,
+          comparison_round: (data as any).comparison_round ?? history.length + 1,
+          check_items: items,
+        };
+        setHistory(prev => [...prev, entry]);
+        setSelectedHistoryId(data.id);
+        onComparisonSaved?.(entry);
+        onClearAfterData?.();
+        setResolvedItems(new Set());
+        setSelectedItems(new Set());
+        setAppliedItems(new Set());
+        setActiveFilters(new Set(["NG", "WARNING"]));
+        toast({ title: "比較チェック完了", description: `Grade: ${completedResult.overall_status}` });
+        setChecking(false);
+        if (onReleaseLock) await onReleaseLock();
+        return;
+      }
+      setTimeout(poll, POLL_INTERVAL);
+    };
+    setTimeout(poll, POLL_INTERVAL);
+  }, [checkResultId, history, onCheckComplete, onComparisonSaved, onClearAfterData, onReleaseLock, toast]);
+
   const handleRunComparison = async () => {
     if (!enabled || !user) return;
     // Acquire lock before comparison check
