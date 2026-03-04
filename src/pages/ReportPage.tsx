@@ -559,10 +559,16 @@ export default function ReportPage() {
                 ① 納期遵守率（目標: {deadlineTarget}%）
               </h4>
               <div className="pl-4 border-l-[3px] border-primary/30 space-y-3">
-                <div className="bg-muted/50 rounded-lg p-3">
-                  <p className="text-muted-foreground">各工程に設定された<span className="font-medium text-foreground">「クライアント期限」</span>までに、各クリエイティブのチェック・クライアント提出が完了し、<span className="font-medium text-foreground">FIX済み</span>となっているかで判定します。</p>
+                <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                  <p className="text-muted-foreground font-medium text-foreground">■ 全体/クライアント/商材/案件レベル</p>
+                  <p className="text-muted-foreground">案件の<span className="font-medium text-foreground">「案件納期」</span>までに、その案件内の全工程の全クリエイティブが<span className="font-medium text-foreground">クライアント提出済み</span>になっているかで判定します。</p>
+                  <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">計算式: 納期内に納品完了した案件数 ÷ 納期設定済み案件数 × 100</p>
                 </div>
-                <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">計算式: 遵守工程数 ÷ 期限設定済み工程数 × 100</p>
+                <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                  <p className="text-muted-foreground font-medium text-foreground">■ 工程レベル</p>
+                  <p className="text-muted-foreground">各工程に設定された<span className="font-medium text-foreground">「クライアント期限」</span>までに、その工程内の全クリエイティブが<span className="font-medium text-foreground">クライアント提出済み</span>になっているかで判定します。</p>
+                  <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">計算式: 遵守工程数 ÷ 期限設定済み工程数 × 100</p>
+                </div>
               </div>
             </div>
             <div className="space-y-2">
