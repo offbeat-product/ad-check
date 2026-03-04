@@ -1517,7 +1517,9 @@ export default function ProjectPage() {
                       }
                     } catch {}
                   }
-                  // cascade_delete_project_file trigger handles: child files, check_results → comments, share_links, correction_logs
+                  // Delete child files (versions) first to avoid trigger conflict
+                  await supabase.from("project_files").delete().eq("parent_file_id", f.id);
+                  // Then delete parent — trigger handles check_results cascade
                   const { error } = await supabase.from("project_files").delete().eq("id", f.id);
                   if (error) throw error;
                   toast({ title: "ファイルを削除しました" });
