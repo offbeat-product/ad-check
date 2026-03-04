@@ -180,7 +180,8 @@ export async function runAudioCheck(
   scriptText: string,
   metadata?: { file_name?: string; duration?: number | null; format?: string | null },
   options?: { audioUrl?: string; audioMimeType?: string; audioBase64?: string },
-  referenceContext?: string
+  referenceContext?: string,
+  recordId?: string | null
 ): Promise<CheckResult> {
   const url = getWebhookUrl(processType);
   if (!url) throw new Error(`音声チェックのWebhookが見つかりません (${processType})`);
@@ -195,6 +196,7 @@ export async function runAudioCheck(
     audio_base64: options?.audioBase64 || "",
     audio_description: "",
     metadata: metadata || { file_name: "", duration: null, format: null },
+    record_id: recordId || null,
   };
   if (referenceContext) {
     try { body.reference_context = JSON.parse(referenceContext); } catch { body.reference_context = referenceContext; }
