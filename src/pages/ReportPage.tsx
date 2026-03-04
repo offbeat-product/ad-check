@@ -82,26 +82,72 @@ interface MetricSet {
   revisionSequences: number;
 }
 
-function computeMetrics(procs: ProcessRow[], allFiles: FileRow[]): MetricSet {
-  // ── 納期遵守率: クライアント期限ベース ──
-  let deadlineTotal = 0;
-  let deadlineOnTime = 0;
+/**
+ * Project-level deadline: 案件の overall_deadline までに全工程の全クリエイティブが
+ * クライアント提出済み（submission_type === "client"）になっているか
+ */
+function computeProjectDeadlineRate(
+  projectList: ProjectRow[],
+  allFiles: FileRow[],
+  procs: ProcessRow[],
+): { total: number; onTime: number; rate: number | null } {
+  let total = 0;
+  let onTime = 0;
+  for (const proj of projectList) {
+    if (!proj.overall_deadline) continue;
+    total++;
+    const deadlineDate = new Date(proj.overall_deadline + "T23:59:59");
+    const projectProcs = procs.filter(p => p.project_id === proj.id);
+    const activeProcessKeys = new Set(projectProcs.map(p => p.process_key));
+    const projectFiles = allFiles.filter(f => f.project_id === proj.id && activeProcessKeys.has(f.process_type));
+    if (projectFiles.length === 0) continue;
+    const allSubmitted = projectFiles.every(f => {
+      if (f.submission_type !== "client") return false;
+      const submittedAt = f.created_at;
+      return submittedAt && new Date(submittedAt) <= deadlineDate;
+    });
+    if (allSubmitted) onTime++;
+  }
+  return { total, onTime, rate: total > 0 ? Math.round((onTime / total) * 100) : null };
+}
 
+/**
+ * Process-level deadline: 各工程の client_deadline までに全クリエイティブが
+ * クライアント提出済み（submission_type === "client"）になっているか
+ */
+function computeProcessDeadlineRate(
+  procs: ProcessRow[],
+  allFiles: FileRow[],
+): { total: number; onTime: number; rate: number | null } {
+  let total = 0;
+  let onTime = 0;
   for (const p of procs) {
-    const dl = p.client_deadline;
-    if (!dl) continue;
+    if (!p.client_deadline) continue;
+    total++;
+    const deadlineDate = new Date(p.client_deadline + "T23:59:59");
     const processFiles = allFiles.filter(f => f.project_id === p.project_id && f.process_type === p.process_key);
-    const clientFiles = processFiles.filter(f => f.submission_type === "client");
-    deadlineTotal++;
-    if (clientFiles.length > 0) {
-      const deadlineDate = new Date(dl + "T23:59:59");
-      const allFixedOnTime = clientFiles.every(f => {
-        const isFixed = f.status === "fixed";
-        const completedAt = f.fixed_at || f.created_at;
-        return isFixed && completedAt && new Date(completedAt) <= deadlineDate;
-      });
-      if (allFixedOnTime) deadlineOnTime++;
-    }
+    if (processFiles.length === 0) continue;
+    const allSubmitted = processFiles.every(f => {
+      if (f.submission_type !== "client") return false;
+      const submittedAt = f.created_at;
+      return submittedAt && new Date(submittedAt) <= deadlineDate;
+    });
+    if (allSubmitted) onTime++;
+  }
+  return { total, onTime, rate: total > 0 ? Math.round((onTime / total) * 100) : null };
+}
+
+function computeMetrics(procs: ProcessRow[], allFiles: FileRow[], projectList?: ProjectRow[]): MetricSet {
+  // ── 納期遵守率 ──
+  let deadlineTotal: number, deadlineOnTime: number, deadlineRate: number | null;
+  if (projectList) {
+    // 全体/クライアント/商材/案件レベル → 案件納期ベース
+    const dr = computeProjectDeadlineRate(projectList, allFiles, procs);
+    deadlineTotal = dr.total; deadlineOnTime = dr.onTime; deadlineRate = dr.rate;
+  } else {
+    // 工程レベル → 工程期限ベース
+    const dr = computeProcessDeadlineRate(procs, allFiles);
+    deadlineTotal = dr.total; deadlineOnTime = dr.onTime; deadlineRate = dr.rate;
   }
 
   // ── 初稿合格率: クライアント提出v1がFIX済みか ──
@@ -120,8 +166,7 @@ function computeMetrics(procs: ProcessRow[], allFiles: FileRow[]): MetricSet {
   for (const [, maxVer] of chains) { revTotal += maxVer - 1; revCount++; }
 
   return {
-    deadlineRate: deadlineTotal > 0 ? Math.round((deadlineOnTime / deadlineTotal) * 100) : null,
-    deadlineTotal, deadlineOnTime,
+    deadlineRate, deadlineTotal, deadlineOnTime,
     firstDraftRate: firstDraftTotal > 0 ? Math.round((firstDraftPassed / firstDraftTotal) * 100) : null,
     firstDraftTotal, firstDraftPassed,
     avgRevisions: revCount > 0 ? Math.round((revTotal / revCount) * 10) / 10 : null,
@@ -129,7 +174,7 @@ function computeMetrics(procs: ProcessRow[], allFiles: FileRow[]): MetricSet {
   };
 }
 
-/* ─── Process breakdown ────────────────────────────── */
+/* ─── Process breakdown (uses process-level deadline) ─ */
 
 interface ProcessBreakdown {
   processKey: string;
