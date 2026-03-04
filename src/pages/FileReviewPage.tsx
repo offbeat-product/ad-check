@@ -1554,8 +1554,8 @@ export default function FileReviewPage() {
           </div>
         }
       />
+      </div>
 
-      {/* Upload revision */}
       <UploadRevisionModal open={uploadRevisionOpen} onOpenChange={setUploadRevisionOpen} file={file} projectId={projectId!}
         onUploaded={(fileData, fileType, versionNumber) => {
           try {
