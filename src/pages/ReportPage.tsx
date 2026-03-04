@@ -710,3 +710,45 @@ function TargetEditor({ targets, onSaved }: { targets: KpiTarget[]; onSaved: (up
     </div>
   );
 }
+
+function BreakdownTable({ title, columnLabel, rows, deadlineTarget, firstDraftTarget }: {
+  title: string; columnLabel: string; rows: BreakdownRow[]; deadlineTarget: number; firstDraftTarget: number;
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-medium flex items-center gap-2"><Calendar className="h-4 w-4" />{title}</CardTitle>
+      </CardHeader>
+      <CardContent className="p-0 overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-border text-muted-foreground text-left">
+              <th className="px-4 py-2 font-medium">{columnLabel}</th>
+              <th className="px-4 py-2 font-medium text-right">納期遵守率</th>
+              <th className="px-4 py-2 font-medium text-right">初稿合格率</th>
+              <th className="px-4 py-2 font-medium text-right">平均修正回数</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.length === 0 ? (
+              <tr><td colSpan={4} className="text-center py-8 text-muted-foreground">データなし</td></tr>
+            ) : rows.map(r => (
+              <tr key={r.key} className="border-b border-border/50">
+                <td className="px-4 py-2 font-medium">{r.label}</td>
+                <td className="px-4 py-2 text-right">
+                  <RateCell rate={r.deadlineRate} target={deadlineTarget} total={r.deadlineTotal} />
+                </td>
+                <td className="px-4 py-2 text-right">
+                  <RateCell rate={r.firstDraftRate} target={firstDraftTarget} total={r.firstDraftTotal} />
+                </td>
+                <td className="px-4 py-2 text-right">
+                  {r.avgRevisions !== null ? <span className="font-bold">{r.avgRevisions}回</span> : <span className="text-muted-foreground">—</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </CardContent>
+    </Card>
+  );
+}
