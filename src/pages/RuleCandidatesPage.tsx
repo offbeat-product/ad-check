@@ -434,7 +434,9 @@ export default function RuleCandidatesPage() {
             </div>
           ) : (
             <div className="space-y-3">
-              {allCorrectionLogs.map((log) => (
+              {allCorrectionLogs.map((log) => {
+                const isLoading = actionLoading === log.id;
+                return (
                 <Card key={log.id}>
                   <CardContent className="p-4 space-y-2">
                     <div className="flex items-start justify-between gap-2">
@@ -455,9 +457,21 @@ export default function RuleCandidatesPage() {
                       </Badge>
                     </div>
                     <p className="text-sm whitespace-pre-wrap">{log.correction_text}</p>
+                    {log.rule_status === "pending" && (
+                      <div className="flex gap-2 pt-1">
+                        <Button size="sm" variant="outline" onClick={() => handleDirectPromote(log)} disabled={isLoading}>
+                          {isLoading ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : <ShieldCheck className="h-3 w-3 mr-1" />}
+                          ルール化する
+                        </Button>
+                        <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => handleDirectReject(log)} disabled={isLoading}>
+                          <X className="h-3 w-3 mr-1" /> 却下
+                        </Button>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           )
         ) : loading ? (
