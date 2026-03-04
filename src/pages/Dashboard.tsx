@@ -281,6 +281,7 @@ export default function Dashboard() {
         const fixed = fFiles.filter((f: any) => f.status === "fixed").length;
         setKpiFirstDraftRate(fFiles.length > 0 ? Math.round((fixed / fFiles.length) * 100) : null);
 
+        setKpiCompletedCount(completedRes.count ?? 0);
         setKpiLoaded(true);
       } catch (e) {
         console.warn("[Dashboard] KPI fetch failed:", e);
