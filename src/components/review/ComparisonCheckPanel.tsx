@@ -312,7 +312,10 @@ export default function ComparisonCheckPanel({
       const nextRound = history.length + 1;
       // Persist the after-data so it can be restored when revisiting
       const savedInputData: Record<string, unknown> = {};
-      if (isImage) {
+      if (isVideo || isAudio) {
+        savedInputData.after_url = comparisonAfterData;
+        savedInputData.before_url = comparisonBeforeData;
+      } else if (isImage) {
         savedInputData.after_image = comparisonAfterData;
         savedInputData.before_image = comparisonBeforeData;
       } else {
