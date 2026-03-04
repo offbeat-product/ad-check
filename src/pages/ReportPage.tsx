@@ -41,7 +41,7 @@ interface FileRow {
   submission_type: string;
 }
 
-interface ProjectRow { id: string; name: string; product_id: string | null; }
+interface ProjectRow { id: string; name: string; product_id: string | null; overall_deadline: string | null; }
 interface ProductRow { id: string; name: string; client_id: string | null; }
 interface ClientRow { id: string; name: string; }
 interface KpiTarget { id: string; key: string; label: string; target_value: number; }
@@ -82,26 +82,72 @@ interface MetricSet {
   revisionSequences: number;
 }
 
-function computeMetrics(procs: ProcessRow[], allFiles: FileRow[]): MetricSet {
-  // ── 納期遵守率: クライアント期限ベース ──
-  let deadlineTotal = 0;
-  let deadlineOnTime = 0;
+/**
+ * Project-level deadline: 案件の overall_deadline までに全工程の全クリエイティブが
+ * クライアント提出済み（submission_type === "client"）になっているか
+ */
+function computeProjectDeadlineRate(
+  projectList: ProjectRow[],
+  allFiles: FileRow[],
+  procs: ProcessRow[],
+): { total: number; onTime: number; rate: number | null } {
+  let total = 0;
+  let onTime = 0;
+  for (const proj of projectList) {
+    if (!proj.overall_deadline) continue;
+    total++;
+    const deadlineDate = new Date(proj.overall_deadline + "T23:59:59");
+    const projectProcs = procs.filter(p => p.project_id === proj.id);
+    const activeProcessKeys = new Set(projectProcs.map(p => p.process_key));
+    const projectFiles = allFiles.filter(f => f.project_id === proj.id && activeProcessKeys.has(f.process_type));
+    if (projectFiles.length === 0) continue;
+    const allSubmitted = projectFiles.every(f => {
+      if (f.submission_type !== "client") return false;
+      const submittedAt = f.created_at;
+      return submittedAt && new Date(submittedAt) <= deadlineDate;
+    });
+    if (allSubmitted) onTime++;
+  }
+  return { total, onTime, rate: total > 0 ? Math.round((onTime / total) * 100) : null };
+}
 
+/**
+ * Process-level deadline: 各工程の client_deadline までに全クリエイティブが
+ * クライアント提出済み（submission_type === "client"）になっているか
+ */
+function computeProcessDeadlineRate(
+  procs: ProcessRow[],
+  allFiles: FileRow[],
+): { total: number; onTime: number; rate: number | null } {
+  let total = 0;
+  let onTime = 0;
   for (const p of procs) {
-    const dl = p.client_deadline;
-    if (!dl) continue;
+    if (!p.client_deadline) continue;
+    total++;
+    const deadlineDate = new Date(p.client_deadline + "T23:59:59");
     const processFiles = allFiles.filter(f => f.project_id === p.project_id && f.process_type === p.process_key);
-    const clientFiles = processFiles.filter(f => f.submission_type === "client");
-    deadlineTotal++;
-    if (clientFiles.length > 0) {
-      const deadlineDate = new Date(dl + "T23:59:59");
-      const allFixedOnTime = clientFiles.every(f => {
-        const isFixed = f.status === "fixed";
-        const completedAt = f.fixed_at || f.created_at;
-        return isFixed && completedAt && new Date(completedAt) <= deadlineDate;
-      });
-      if (allFixedOnTime) deadlineOnTime++;
-    }
+    if (processFiles.length === 0) continue;
+    const allSubmitted = processFiles.every(f => {
+      if (f.submission_type !== "client") return false;
+      const submittedAt = f.created_at;
+      return submittedAt && new Date(submittedAt) <= deadlineDate;
+    });
+    if (allSubmitted) onTime++;
+  }
+  return { total, onTime, rate: total > 0 ? Math.round((onTime / total) * 100) : null };
+}
+
+function computeMetrics(procs: ProcessRow[], allFiles: FileRow[], projectList?: ProjectRow[]): MetricSet {
+  // ── 納期遵守率 ──
+  let deadlineTotal: number, deadlineOnTime: number, deadlineRate: number | null;
+  if (projectList) {
+    // 全体/クライアント/商材/案件レベル → 案件納期ベース
+    const dr = computeProjectDeadlineRate(projectList, allFiles, procs);
+    deadlineTotal = dr.total; deadlineOnTime = dr.onTime; deadlineRate = dr.rate;
+  } else {
+    // 工程レベル → 工程期限ベース
+    const dr = computeProcessDeadlineRate(procs, allFiles);
+    deadlineTotal = dr.total; deadlineOnTime = dr.onTime; deadlineRate = dr.rate;
   }
 
   // ── 初稿合格率: クライアント提出v1がFIX済みか ──
@@ -120,8 +166,7 @@ function computeMetrics(procs: ProcessRow[], allFiles: FileRow[]): MetricSet {
   for (const [, maxVer] of chains) { revTotal += maxVer - 1; revCount++; }
 
   return {
-    deadlineRate: deadlineTotal > 0 ? Math.round((deadlineOnTime / deadlineTotal) * 100) : null,
-    deadlineTotal, deadlineOnTime,
+    deadlineRate, deadlineTotal, deadlineOnTime,
     firstDraftRate: firstDraftTotal > 0 ? Math.round((firstDraftPassed / firstDraftTotal) * 100) : null,
     firstDraftTotal, firstDraftPassed,
     avgRevisions: revCount > 0 ? Math.round((revTotal / revCount) * 10) / 10 : null,
@@ -129,7 +174,7 @@ function computeMetrics(procs: ProcessRow[], allFiles: FileRow[]): MetricSet {
   };
 }
 
-/* ─── Process breakdown ────────────────────────────── */
+/* ─── Process breakdown (uses process-level deadline) ─ */
 
 interface ProcessBreakdown {
   processKey: string;
@@ -196,7 +241,7 @@ export default function ReportPage() {
         const [procRes, fileRes, projRes, prodRes, clientRes, targetRes] = await Promise.all([
           supabase.from("project_processes").select("id, project_id, process_key, process_label, status, client_deadline, updated_at"),
           supabase.from("project_files").select("id, project_id, process_type, status, version_number, parent_file_id, fixed_at, created_at, submission_type"),
-          supabase.from("projects").select("id, name, product_id"),
+          supabase.from("projects").select("id, name, product_id, overall_deadline"),
           supabase.from("products").select("id, name, client_id"),
           supabase.from("clients").select("id, name"),
           supabase.from("kpi_targets").select("*"),
@@ -258,7 +303,12 @@ export default function ReportPage() {
     [files, scopeProjectIds, periodFrom, periodTo]
   );
 
-  const summary = useMemo(() => computeMetrics(periodProcesses, periodFiles), [periodProcesses, periodFiles]);
+  const scopeProjects = useMemo(() =>
+    filteredProjects.filter(p => scopeProjectIds.has(p.id)),
+    [filteredProjects, scopeProjectIds]
+  );
+
+  const summary = useMemo(() => computeMetrics(periodProcesses, periodFiles, scopeProjects), [periodProcesses, periodFiles, scopeProjects]);
 
   const processBreakdown = useMemo(() => computeProcessBreakdown(periodProcesses, periodFiles), [periodProcesses, periodFiles]);
 
@@ -270,14 +320,14 @@ export default function ReportPage() {
     periodFiles.filter(f => f.created_at).forEach(f => ensure(toMonthKey(f.created_at!)).files.push(f));
 
     return [...monthMap.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([month, data]) => {
-      const m = computeMetrics(data.procs, data.files);
+      const m = computeMetrics(data.procs, data.files, scopeProjects);
       return {
         month, monthLabel: monthLabel(month),
         deadlineRate: m.deadlineRate, firstDraftRate: m.firstDraftRate, avgRevisions: m.avgRevisions,
         deadlineTotal: m.deadlineTotal, firstDraftTotal: m.firstDraftTotal,
       };
     });
-  }, [periodProcesses, periodFiles]);
+  }, [periodProcesses, periodFiles, scopeProjects]);
 
   if (loading) {
     return (
@@ -509,10 +559,16 @@ export default function ReportPage() {
                 ① 納期遵守率（目標: {deadlineTarget}%）
               </h4>
               <div className="pl-4 border-l-[3px] border-primary/30 space-y-3">
-                <div className="bg-muted/50 rounded-lg p-3">
-                  <p className="text-muted-foreground">各工程に設定された<span className="font-medium text-foreground">「クライアント期限」</span>までに、各クリエイティブのチェック・クライアント提出が完了し、<span className="font-medium text-foreground">FIX済み</span>となっているかで判定します。</p>
+                <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                  <p className="text-muted-foreground font-medium text-foreground">■ 全体/クライアント/商材/案件レベル</p>
+                  <p className="text-muted-foreground">案件の<span className="font-medium text-foreground">「案件納期」</span>までに、その案件内の全工程の全クリエイティブが<span className="font-medium text-foreground">クライアント提出済み</span>になっているかで判定します。</p>
+                  <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">計算式: 納期内に納品完了した案件数 ÷ 納期設定済み案件数 × 100</p>
                 </div>
-                <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">計算式: 遵守工程数 ÷ 期限設定済み工程数 × 100</p>
+                <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                  <p className="text-muted-foreground font-medium text-foreground">■ 工程レベル</p>
+                  <p className="text-muted-foreground">各工程に設定された<span className="font-medium text-foreground">「クライアント期限」</span>までに、その工程内の全クリエイティブが<span className="font-medium text-foreground">クライアント提出済み</span>になっているかで判定します。</p>
+                  <p className="text-xs text-muted-foreground bg-muted/30 rounded px-3 py-1.5 font-mono">計算式: 遵守工程数 ÷ 期限設定済み工程数 × 100</p>
+                </div>
               </div>
             </div>
             <div className="space-y-2">
