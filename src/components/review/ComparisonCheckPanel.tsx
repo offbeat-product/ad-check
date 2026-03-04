@@ -234,6 +234,14 @@ export default function ComparisonCheckPanel({
       }
       const { data } = await supabase.from("check_results").select("*").eq("id", recordId).maybeSingle();
       if (data && data.status === "completed" && data.check_items) {
+        // Update the record to mark it as a comparison result
+        const nextRound = history.length + 1;
+        await supabase.from("check_results").update({
+          check_type: "comparison",
+          comparison_round: nextRound,
+          parent_check_result_id: checkResultId || null,
+        }).eq("id", recordId);
+
         const items = (data.check_items as unknown as CheckItem[]) || [];
         const completedResult: CheckResult = {
           overall_status: (data.overall_status || "D") as "A" | "B" | "C" | "D",
@@ -318,10 +326,8 @@ export default function ComparisonCheckPanel({
           product_name: productName || "",
           process_type: file.process_type,
           input_type: isVideo ? "video" : "audio",
+          input_text: null,
           status: "pending",
-          check_type: "comparison",
-          comparison_round: history.length + 1,
-          parent_check_result_id: checkResultId || null,
         } as any]).select("id").single();
         if (!pendingErr && pendingCr) {
           pendingRecordId = pendingCr.id;
