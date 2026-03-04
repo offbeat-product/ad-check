@@ -999,46 +999,50 @@ export default function ProjectPage() {
                         }
                         return null;
                       })()}
-                      <div className="px-4 py-3 border-b border-border flex items-center gap-3 cursor-pointer select-none"
+                      <div className="px-4 py-3 border-b border-border cursor-pointer select-none"
                         onClick={(e) => {
                           if ((e.target as HTMLElement).closest("button, [role='combobox'], [data-radix-popper-content-wrapper]")) return;
                           toggleCollapse();
                         }}>
-                        <button className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground transition-colors" onClick={(e) => { e.stopPropagation(); toggleCollapse(); }}>
-                          {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                        </button>
-                        <span className="text-xs text-muted-foreground shrink-0">
-                          {String.fromCodePoint(0x2460 + index)}
-                        </span>
-                        <h2 className="text-sm font-semibold">{proc.process_label}</h2>
+                        {/* Row 1: collapse arrow + number + process name + deadline + FIX progress */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <button className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground transition-colors" onClick={(e) => { e.stopPropagation(); toggleCollapse(); }}>
+                            {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                          </button>
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            {String.fromCodePoint(0x2460 + index)}
+                          </span>
+                          <h2 className="text-sm font-semibold whitespace-nowrap">{proc.process_label}</h2>
 
-                        <DeadlinePicker
-                          deadline={proc.client_deadline}
-                          onChange={(d) => handleProcessDeadlineChange(proc.id, "client_deadline", d)}
-                          isCompleted={isProcessCompleted}
-                          label="期限"
-                        />
+                          <DeadlinePicker
+                            deadline={proc.client_deadline}
+                            onChange={(d) => handleProcessDeadlineChange(proc.id, "client_deadline", d)}
+                            isCompleted={isProcessCompleted}
+                            label="期限"
+                          />
 
-                        {/* FIX progress */}
-                        {fileCount > 0 && (() => {
-                          const fixedCount = sectionFiles.filter(f => !f.parent_file_id && f.status === "fixed").length;
-                          const allFixed = fixedCount === fileCount;
-                          return (
-                            <div className="flex items-center gap-1.5 ml-auto">
-                              <Progress value={(fixedCount / fileCount) * 100} className="w-16 h-1.5" />
-                              <span className={cn("text-[10px] font-medium tabular-nums", allFixed ? "text-status-ok" : "text-muted-foreground")}>
-                                {fixedCount}/{fileCount} FIX
-                              </span>
-                            </div>
-                          );
-                        })()}
+                          {/* FIX progress */}
+                          {fileCount > 0 && (() => {
+                            const fixedCount = sectionFiles.filter(f => !f.parent_file_id && f.status === "fixed").length;
+                            const allFixed = fixedCount === fileCount;
+                            return (
+                              <div className="flex items-center gap-1.5 ml-auto">
+                                <Progress value={(fixedCount / fileCount) * 100} className="w-16 h-1.5" />
+                                <span className={cn("text-[10px] font-medium tabular-nums", allFixed ? "text-status-ok" : "text-muted-foreground")}>
+                                  {fixedCount}/{fileCount} FIX
+                                </span>
+                              </div>
+                            );
+                          })()}
 
-                        {!webhookAvailable && (
-                          <Badge variant="outline" className="text-[9px] ml-1 text-muted-foreground">準備中</Badge>
-                        )}
+                          {!webhookAvailable && (
+                            <Badge variant="outline" className="text-[9px] ml-1 text-muted-foreground">準備中</Badge>
+                          )}
+                        </div>
 
+                        {/* Row 2: action buttons (only when expanded) */}
                         {!isCollapsed && (
-                          <div className="ml-auto flex items-center gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
+                          <div className="mt-2 flex items-center gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
                            {webhookAvailable && sectionFiles.filter(f => f.file_data && !f.parent_file_id).length > 0 && (() => {
                             const allTargets = sectionFiles.filter(f => f.file_data && !f.parent_file_id);
                             // Sort by pattern order (left to right), then by created_at within same pattern
@@ -1060,8 +1064,8 @@ export default function ProjectPage() {
                             const MAX_BATCH = videoLimit ? Math.min(5, videoLimit) : 5;
                             const overLimit = actualTargets.length > MAX_BATCH;
                             const label = hasSelection
-                              ? `選択分をAIチェック (${selectedInSection.length}${overLimit ? `/最大${MAX_BATCH}` : ""})`
-                              : `未チェック分を一括AIチェック (${Math.min(uncheckedTargets.length, MAX_BATCH)}/${uncheckedTargets.length})`;
+                              ? `選択分AIチェック (${selectedInSection.length}${overLimit ? `/最大${MAX_BATCH}` : ""})`
+                              : `一括AIチェック (${Math.min(uncheckedTargets.length, MAX_BATCH)}/${uncheckedTargets.length})`;
                             const limitedTargets = actualTargets.slice(0, MAX_BATCH);
                             return (
                               <Button
@@ -1130,7 +1134,7 @@ export default function ProjectPage() {
                                 }}
                               >
                                 <Send className="h-3 w-3" />
-                                一括クライアント提出 ({eligibleForSubmit.length})
+                                一括提出 ({eligibleForSubmit.length})
                               </Button>
                             ) : null;
                           })()}
@@ -1153,7 +1157,7 @@ export default function ProjectPage() {
                                   <Button size="sm" variant="outline" className="text-xs h-7 gap-1 border-primary/50 text-primary hover:bg-primary/10"
                                     onClick={handleBulkSubmitToClient}>
                                     <Send className="h-3 w-3" />
-                                    {eligibleCount}件クライアント提出
+                                    {eligibleCount}件提出
                                   </Button>
                                 ) : null;
                               })()}
@@ -1171,7 +1175,7 @@ export default function ProjectPage() {
                           </div>
                         )}
                         {isCollapsed && fileCount === 0 && (
-                          <div className="ml-auto" onClick={(e) => e.stopPropagation()}>
+                          <div className="mt-2" onClick={(e) => e.stopPropagation()}>
                             <Button size="sm" variant="outline" className="text-xs h-7"
                               onClick={() => openUploadModal(proc.process_key)}>
                               <Plus className="h-3 w-3 mr-1" />アップロード
