@@ -251,24 +251,60 @@ export default function ComparisonCheckPanel({
         }
       }
 
-      let data: Parameters<typeof runComparisonCheck>[2];
-      if (isImage) {
+      let res: CheckResult;
+
+      if (isVideo) {
+        // Route video comparison through the video webhook
+        const videoUrl = comparisonAfterData || "";
+        const mimeType = videoUrl.endsWith(".webm") ? "video/webm" : videoUrl.endsWith(".mov") ? "video/quicktime" : "video/mp4";
+        const videoRes = await runVideoCheck(
+          productId,
+          file.process_type,
+          "", // script_text not used for video
+          { videoUrl, videoMimeType: mimeType },
+          referenceContext,
+          projectId,
+          null, // patternId
+          null, // recordId
+          correctionComments,
+        );
+        if (videoRes === VIDEO_ASYNC_ACCEPTED) {
+          toast({ title: "動画チェック開始", description: "AIが動画を分析中です。結果は自動的に表示されます。" });
+          setChecking(false);
+          if (onReleaseLock) await onReleaseLock();
+          return;
+        }
+        res = videoRes as CheckResult;
+      } else if (isAudio) {
+        // Route audio comparison through the audio webhook
+        const audioUrl = comparisonAfterData || "";
+        const urlExt = audioUrl.split('.').pop()?.split('?')[0]?.toLowerCase() || "mp3";
+        const audioMimeType = urlExt === "wav" ? "audio/wav" : urlExt === "m4a" ? "audio/mp4" : urlExt === "ogg" ? "audio/ogg" : "audio/mpeg";
+        const audioRes = await runAudioCheck(
+          productId,
+          file.process_type,
+          "", // script_text
+          { file_name: file.file_type, duration: null, format: audioMimeType },
+          { audioUrl, audioMimeType },
+          referenceContext,
+        );
+        res = audioRes;
+      } else if (isImage) {
         const newBase64 = comparisonAfterData?.replace(/^data:[^;]+;base64,/, "") || "";
         const origBase64 = comparisonBeforeData?.replace(/^data:[^;]+;base64,/, "") || "";
         const mediaType = comparisonAfterData?.match(/^data:([^;]+);/)?.[1] || "image/jpeg";
-        data = {
+        res = await runComparisonCheck(productId, file.process_type, {
           image_base64: newBase64,
           media_type: mediaType,
           original_image_base64: origBase64,
-        };
+        }, referenceContext, correctionComments);
       } else {
-        data = {
+        res = await runComparisonCheck(productId, file.process_type, {
           script_text: comparisonAfterText || comparisonAfterData || "",
           original_text: comparisonBeforeData || "",
-        };
+        }, referenceContext, correctionComments);
       }
 
-      const res = await runComparisonCheck(productId, file.process_type, data, referenceContext, correctionComments);
       setResult(res);
       onCheckComplete?.(res);
 
