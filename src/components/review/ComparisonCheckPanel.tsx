@@ -234,6 +234,14 @@ export default function ComparisonCheckPanel({
       }
       const { data } = await supabase.from("check_results").select("*").eq("id", recordId).maybeSingle();
       if (data && data.status === "completed" && data.check_items) {
+        // Update the record to mark it as a comparison result
+        const nextRound = history.length + 1;
+        await supabase.from("check_results").update({
+          check_type: "comparison",
+          comparison_round: nextRound,
+          parent_check_result_id: checkResultId || null,
+        }).eq("id", recordId);
+
         const items = (data.check_items as unknown as CheckItem[]) || [];
         const completedResult: CheckResult = {
           overall_status: (data.overall_status || "D") as "A" | "B" | "C" | "D",
