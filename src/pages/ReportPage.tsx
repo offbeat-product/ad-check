@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Legend } from "recharts";
-import { Target, CheckCircle, TrendingUp, Calendar, Settings2, Save, Download, FileSpreadsheet, FileText, RotateCcw } from "lucide-react";
+import { Target, CheckCircle, TrendingUp, Calendar, Settings2, Save, Download, FileSpreadsheet, FileText, RotateCcw, FolderCheck } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -41,7 +41,7 @@ interface FileRow {
   submission_type: string;
 }
 
-interface ProjectRow { id: string; name: string; product_id: string | null; overall_deadline: string | null; }
+interface ProjectRow { id: string; name: string; product_id: string | null; overall_deadline: string | null; status: string | null; }
 interface ProductRow { id: string; name: string; client_id: string | null; }
 interface ClientRow { id: string; name: string; }
 interface KpiTarget { id: string; key: string; label: string; target_value: number; }
@@ -279,7 +279,7 @@ export default function ReportPage() {
         const [procRes, fileRes, projRes, prodRes, clientRes, targetRes] = await Promise.all([
           supabase.from("project_processes").select("id, project_id, process_key, process_label, status, client_deadline, updated_at"),
           supabase.from("project_files").select("id, project_id, process_type, status, version_number, parent_file_id, fixed_at, created_at, submission_type"),
-          supabase.from("projects").select("id, name, product_id, overall_deadline"),
+          supabase.from("projects").select("id, name, product_id, overall_deadline, status"),
           supabase.from("products").select("id, name, client_id"),
           supabase.from("clients").select("id, name"),
           supabase.from("kpi_targets").select("*"),
@@ -470,10 +470,11 @@ export default function ReportPage() {
         </div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard icon={Target} label="納期遵守率" value={summary.deadlineRate !== null ? `${summary.deadlineRate}%` : "—"} rate={summary.deadlineRate} target={deadlineTarget} detail={`${summary.deadlineOnTime}/${summary.deadlineTotal}件`} color="text-primary" />
           <KpiCard icon={CheckCircle} label="初稿合格率" value={summary.firstDraftRate !== null ? `${summary.firstDraftRate}%` : "—"} rate={summary.firstDraftRate} target={firstDraftTarget} detail={`${summary.firstDraftPassed}/${summary.firstDraftTotal}件`} color="text-status-ok" />
           <KpiCard icon={RotateCcw} label="平均修正回数" value={summary.avgRevisions !== null ? `${summary.avgRevisions}回` : "—"} rate={null} target={null} detail={`${summary.firstDraftTotal}件から算出`} color="text-status-warning" isRevision />
+          <KpiCard icon={FolderCheck} label="案件完了数" value={`${scopeProjects.filter(p => p.status === "completed").length}件`} rate={null} target={null} detail={`全${scopeProjects.length}件中`} color="text-primary" isRevision />
         </div>
 
         {/* Chart */}

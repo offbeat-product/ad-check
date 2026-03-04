@@ -7,7 +7,7 @@ import { FILE_STATUS_CONFIG } from "@/lib/db-types";
 import { PROJECT_STATUS_CONFIG, getProcessLabel } from "@/lib/process-config";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Badge } from "@/components/ui/badge";
-import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderOpen, ChevronLeft, ChevronRight, Plus, RefreshCw, WifiOff, User, Target, CheckCircle } from "lucide-react";
+import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderOpen, ChevronLeft, ChevronRight, Plus, RefreshCw, WifiOff, User, Target, CheckCircle, FolderCheck } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import { cn } from "@/lib/utils";
@@ -71,6 +71,7 @@ export default function Dashboard() {
   // KPI stats
   const [kpiDeadlineRate, setKpiDeadlineRate] = useState<number | null>(null);
   const [kpiFirstDraftRate, setKpiFirstDraftRate] = useState<number | null>(null);
+  const [kpiCompletedCount, setKpiCompletedCount] = useState<number>(0);
   const [kpiLoaded, setKpiLoaded] = useState(false);
 
   const [fetchError, setFetchError] = useState(false);
@@ -249,7 +250,7 @@ export default function Dashboard() {
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
         const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
 
-        const [procRes, fileRes] = await Promise.all([
+        const [procRes, fileRes, completedRes] = await Promise.all([
           // クライアント納期遵守率: クライアント期限までにFIX済みか
           supabase.from("project_processes").select("status, client_deadline, updated_at")
             .not("client_deadline", "is", null)
@@ -258,6 +259,9 @@ export default function Dashboard() {
           supabase.from("project_files").select("status, version_number, submission_type, created_at")
             .eq("version_number", 1).eq("submission_type", "client")
             .gte("created_at", monthStart).lte("created_at", monthEnd),
+          // 案件完了数: status=completed
+          supabase.from("projects").select("id", { count: "exact", head: true })
+            .eq("status", "completed"),
         ]);
         if (cancelled) return;
 
@@ -277,6 +281,7 @@ export default function Dashboard() {
         const fixed = fFiles.filter((f: any) => f.status === "fixed").length;
         setKpiFirstDraftRate(fFiles.length > 0 ? Math.round((fixed / fFiles.length) * 100) : null);
 
+        setKpiCompletedCount(completedRes.count ?? 0);
         setKpiLoaded(true);
       } catch (e) {
         console.warn("[Dashboard] KPI fetch failed:", e);
@@ -347,15 +352,16 @@ export default function Dashboard() {
 
       <div className="p-4 md:p-6 space-y-6 max-w-7xl mx-auto">
         {/* Stats - show skeleton while checks loading */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {checksLoaded ? (
             <>
               <StatCard icon={ClipboardCheck} label="今月のチェック数" value={stats.monthChecks} color="text-primary" />
               <StatCard icon={Target} label="納期遵守率" value={kpiLoaded ? (kpiDeadlineRate !== null ? `${kpiDeadlineRate}%` : "—") : "..."} color="text-primary" />
               <StatCard icon={CheckCircle} label="初稿合格率" value={kpiLoaded ? (kpiFirstDraftRate !== null ? `${kpiFirstDraftRate}%` : "—") : "..."} color="text-status-ok" />
+              <StatCard icon={FolderCheck} label="案件完了数" value={kpiLoaded ? `${kpiCompletedCount}件` : "..."} color="text-primary" />
             </>
           ) : (
-            Array.from({ length: 3 }).map((_, i) => (
+            Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="glass-card p-4 flex items-center gap-4">
                 <div className="p-2.5 rounded-lg bg-muted w-10 h-10 animate-pulse" />
                 <div>
