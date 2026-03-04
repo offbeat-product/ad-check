@@ -250,36 +250,47 @@ export default function Dashboard() {
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
         const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
 
-        const [procRes, fileRes, completedRes] = await Promise.all([
-          // クライアント納期遵守率: クライアント期限までにFIX済みか
-          supabase.from("project_processes").select("status, client_deadline, updated_at")
-            .not("client_deadline", "is", null)
-            .gte("updated_at", monthStart).lte("updated_at", monthEnd),
-          // クライアント初稿合格率: submission_type=client, v1がFIX済みか
-          supabase.from("project_files").select("status, version_number, submission_type, created_at")
-            .eq("version_number", 1).eq("submission_type", "client")
-            .gte("created_at", monthStart).lte("created_at", monthEnd),
-          // 案件完了数: status=completed
+        const [projRes, procRes, fileRes, completedRes] = await Promise.all([
+          // 案件一覧（納期遵守率計算用）
+          supabase.from("projects").select("id, overall_deadline")
+            .not("overall_deadline", "is", null),
+          // 工程一覧（どの工程がアクティブか判定用）
+          supabase.from("project_processes").select("project_id, process_key"),
+          // ファイル一覧（納期遵守率＋初稿合格率用）
+          supabase.from("project_files").select("project_id, process_type, submission_type, created_at, status, version_number"),
+          // 案件完了数
           supabase.from("projects").select("id", { count: "exact", head: true })
             .eq("status", "completed"),
         ]);
         if (cancelled) return;
 
-        // 納期遵守率: クライアント期限内にFIX済みの工程
+        // ── 納期遵守率（案件納期ベース：レポートと同じロジック） ──
+        const projects = projRes.data ?? [];
         const procs = procRes.data ?? [];
-        const onTime = procs.filter((p: any) => {
-          if (!p.client_deadline) return false;
-          const completed = new Date(p.updated_at);
-          const deadline = new Date(p.client_deadline + "T23:59:59");
-          return completed <= deadline;
-        }).length;
-        const procsWithDeadline = procs.filter((p: any) => p.client_deadline).length;
-        setKpiDeadlineRate(procsWithDeadline > 0 ? Math.round((onTime / procsWithDeadline) * 100) : null);
+        const allFiles = fileRes.data ?? [];
+        let deadlineTotal = 0, deadlineOnTime = 0;
+        for (const proj of projects) {
+          if (!proj.overall_deadline) continue;
+          deadlineTotal++;
+          const deadlineDate = new Date(proj.overall_deadline + "T23:59:59");
+          const projectProcKeys = new Set(procs.filter((p: any) => p.project_id === proj.id).map((p: any) => p.process_key));
+          const projectFiles = allFiles.filter((f: any) => f.project_id === proj.id && projectProcKeys.has(f.process_type));
+          if (projectFiles.length === 0) continue;
+          const allSubmitted = projectFiles.every((f: any) => {
+            if (f.submission_type !== "client") return false;
+            return f.created_at && new Date(f.created_at) <= deadlineDate;
+          });
+          if (allSubmitted) deadlineOnTime++;
+        }
+        setKpiDeadlineRate(deadlineTotal > 0 ? Math.round((deadlineOnTime / deadlineTotal) * 100) : null);
 
-        // 初稿合格率: クライアント提出v1でFIX済み
-        const fFiles = fileRes.data ?? [];
-        const fixed = fFiles.filter((f: any) => f.status === "fixed").length;
-        setKpiFirstDraftRate(fFiles.length > 0 ? Math.round((fixed / fFiles.length) * 100) : null);
+        // ── 初稿合格率（当月のクライアント提出v1） ──
+        const clientFirstDrafts = allFiles.filter((f: any) =>
+          f.submission_type === "client" && (f.version_number ?? 1) === 1
+          && f.created_at && new Date(f.created_at) >= new Date(monthStart) && new Date(f.created_at) <= new Date(monthEnd)
+        );
+        const fixed = clientFirstDrafts.filter((f: any) => f.status === "fixed").length;
+        setKpiFirstDraftRate(clientFirstDrafts.length > 0 ? Math.round((fixed / clientFirstDrafts.length) * 100) : null);
 
         setKpiCompletedCount(completedRes.count ?? 0);
         setKpiLoaded(true);
