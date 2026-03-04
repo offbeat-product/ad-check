@@ -92,6 +92,7 @@ export default function FileReviewPage() {
   const [comparisonDrafts, setComparisonDrafts] = useState<DraftEntry[]>([]);
   const [comparisonActivePairIndex, setComparisonActivePairIndex] = useState(0);
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
+  const [mobilePanel, setMobilePanel] = useState<"preview" | "check">("preview");
   const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
   const { items, markers, commentCounts, paintMode, setPaintMode, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
     useReviewState(record?.id, checkItems);
@@ -1011,9 +1012,30 @@ export default function FileReviewPage() {
   const canCheck = product && aiCfg?.enabled;
   const checkDisabled = product && aiCfg && !aiCfg.enabled;
 
+
   return (
-    <div className="flex h-screen overflow-hidden">
-      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+    <div className="flex flex-col md:flex-row h-screen overflow-hidden">
+      {/* Mobile bottom toggle bar */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex border-t border-border bg-card safe-area-bottom">
+        <button
+          onClick={() => setMobilePanel("preview")}
+          className={cn("flex-1 py-3 text-xs font-medium text-center transition-colors",
+            mobilePanel === "preview" ? "text-primary border-t-2 border-primary bg-primary/5" : "text-muted-foreground"
+          )}
+        >
+          プレビュー
+        </button>
+        <button
+          onClick={() => setMobilePanel("check")}
+          className={cn("flex-1 py-3 text-xs font-medium text-center transition-colors",
+            mobilePanel === "check" ? "text-primary border-t-2 border-primary bg-primary/5" : "text-muted-foreground"
+          )}
+        >
+          AIチェック・コメント
+        </button>
+      </div>
+
+      <div className={cn("flex-1 flex flex-col overflow-hidden min-w-0 pb-11 md:pb-0", mobilePanel === "check" && "hidden md:flex")}>
         <TooltipProvider delayDuration={300}>
         <header className="border-b border-border bg-card shrink-0">
           <div className="flex items-center gap-1.5 px-3 h-11">
@@ -1434,6 +1456,8 @@ export default function FileReviewPage() {
         </div>
       </div>
 
+
+      <div className={cn("pb-11 md:pb-0", mobilePanel === "preview" && "hidden md:block")}>
       <ReviewRightPanel
         rightTab={rightTab}
         onTabChange={setRightTab}
@@ -1531,8 +1555,8 @@ export default function FileReviewPage() {
           </div>
         }
       />
+      </div>
 
-      {/* Upload revision */}
       <UploadRevisionModal open={uploadRevisionOpen} onOpenChange={setUploadRevisionOpen} file={file} projectId={projectId!}
         onUploaded={(fileData, fileType, versionNumber) => {
           try {
