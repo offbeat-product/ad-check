@@ -544,20 +544,7 @@ export default function ProjectPage() {
 
   const handleDeleteProject = async () => {
     if (!id) return;
-    // 1. Unlink check_result_id from project_files to avoid trigger conflicts
-    //    (cascade_delete_project_file → cascade_delete_check_result → UPDATE project_files)
-    await supabase.from("project_files").update({ check_result_id: null }).eq("project_id", id);
-    // 2. Delete project_files (triggers will skip check_result deletion since we nulled the FK)
-    await supabase.from("project_files").delete().eq("project_id", id);
-    // 3. Delete other related data
-    await Promise.all([
-      supabase.from("project_processes").delete().eq("project_id", id),
-      supabase.from("project_members").delete().eq("project_id", id),
-      supabase.from("patterns").delete().eq("project_id", id),
-      supabase.from("correction_logs").delete().eq("project_id", id),
-      supabase.from("submission_logs").delete().eq("project_id", id),
-    ]);
-    const { error } = await supabase.from("projects").delete().eq("id", id);
+    const { error } = await supabase.rpc("delete_project_cascade", { p_project_id: id });
     if (error) {
       toast({ title: "削除エラー", description: error.message, variant: "destructive" });
     } else {
