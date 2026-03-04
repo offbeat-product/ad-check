@@ -471,10 +471,10 @@ export default function ReportPage() {
 
         {/* KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <KpiCard icon={FolderCheck} label="案件完了数" value={`${scopeProjects.filter(p => p.status === "completed").length}件`} rate={null} target={null} detail={`全${scopeProjects.length}件中`} color="text-primary" isRevision />
           <KpiCard icon={Target} label="納期遵守率" value={summary.deadlineRate !== null ? `${summary.deadlineRate}%` : "—"} rate={summary.deadlineRate} target={deadlineTarget} detail={`${summary.deadlineOnTime}/${summary.deadlineTotal}件`} color="text-primary" />
           <KpiCard icon={CheckCircle} label="初稿合格率" value={summary.firstDraftRate !== null ? `${summary.firstDraftRate}%` : "—"} rate={summary.firstDraftRate} target={firstDraftTarget} detail={`${summary.firstDraftPassed}/${summary.firstDraftTotal}件`} color="text-status-ok" />
           <KpiCard icon={RotateCcw} label="平均修正回数" value={summary.avgRevisions !== null ? `${summary.avgRevisions}回` : "—"} rate={null} target={null} detail={`${summary.firstDraftTotal}件から算出`} color="text-status-warning" isRevision />
-          <KpiCard icon={FolderCheck} label="案件完了数" value={`${scopeProjects.filter(p => p.status === "completed").length}件`} rate={null} target={null} detail={`全${scopeProjects.length}件中`} color="text-primary" isRevision />
         </div>
 
         {/* Chart */}
