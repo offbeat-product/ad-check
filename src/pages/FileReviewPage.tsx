@@ -1505,7 +1505,7 @@ export default function FileReviewPage() {
         commentCounts={commentCounts}
         highlightCard={highlightCard}
         commentFilter={commentFilter}
-        checkResultId={file.check_result_id || record?.id || null}
+        checkResultId={record?.id || null}
         hasCheckResult={!!record}
         onCommentClick={handleCommentClick}
         onCheckItemClick={scrollToCard}
