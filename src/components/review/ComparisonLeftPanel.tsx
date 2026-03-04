@@ -24,7 +24,7 @@ interface ComparisonLeftPanelProps {
   onClose: () => void;
   checkResultId?: string | null;
   /** Called when a new draft file is uploaded so it can be persisted as a project_file */
-  onRevisionUploaded?: (fileData: string, fileType: string, versionNumber: number, originalFile: File) => void;
+  onRevisionUploaded?: (fileData: string, fileType: string, versionNumber: number, originalFile: File) => Promise<string | void> | void;
   /** Paint mode support */
   paintMode?: boolean;
   onPaintModeToggle?: () => void;
@@ -101,8 +101,17 @@ export default function ComparisonLeftPanel({
     }
 
     // Save to project_files as a child version
+    // For media files, the callback returns the Storage URL to replace the blob URL
     if (targetIndex > 0 && newData && onRevisionUploaded) {
-      onRevisionUploaded(newData, fileType, targetIndex + 1, f);
+      const storageUrl = await onRevisionUploaded(newData, fileType, targetIndex + 1, f);
+      if (storageUrl && (isMedia)) {
+        // Replace blob URL with actual Storage URL in drafts
+        const updatedWithUrl = [...(updated)];
+        if (targetIndex < updatedWithUrl.length) {
+          updatedWithUrl[targetIndex] = { ...updatedWithUrl[targetIndex], data: storageUrl };
+        }
+        onDraftsChange(updatedWithUrl);
+      }
     }
 
     e.target.value = "";
