@@ -174,9 +174,7 @@ export default function MaterialDetailModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <span>{mt.icon}</span> {mt.label}
-          </DialogTitle>
+          <DialogTitle>{mt.label}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-5">

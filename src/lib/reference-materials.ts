@@ -1,13 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
 
 export const MATERIAL_TYPES = [
-  { id: "orientation", label: "オリエンシート", icon: "ClipboardList", color: "#3B82F6", description: "クライアントからの制作依頼・要件定義" },
+  { id: "orientation", label: "オリエンシート・会議議事録", icon: "ClipboardList", color: "#3B82F6", description: "クライアントからの制作依頼・要件定義・会議議事録" },
   { id: "wcheck", label: "Wチェックシート", icon: "ListChecks", color: "#3B82F6", description: "社内QMチェック用・CL確認用チェックリスト" },
   { id: "brand_guideline", label: "ブランドガイドライン", icon: "Palette", color: "#8B5CF6", description: "トンマナ・カラー・フォント・ロゴ使用規定" },
   { id: "legal_rule", label: "法令レギュレーション", icon: "Scale", color: "#EF4444", description: "薬機法・景表法・業界固有の広告規制" },
   { id: "media_regulation", label: "広告媒体別レギュレーション", icon: "Smartphone", color: "#06B6D4", description: "配信媒体の入稿規定・審査ポリシー" },
   { id: "correction_history", label: "修正履歴", icon: "FileEdit", color: "#F59E0B", description: "過去の修正指示・フィードバック・学び" },
-  { id: "meeting_minutes", label: "会議議事録", icon: "NotebookPen", color: "#64748B", description: "クライアントMTG・社内会議の議事録・決定事項" },
 ] as const;
 
 export type MaterialType = (typeof MATERIAL_TYPES)[number]["id"];
@@ -31,13 +30,12 @@ export interface ReferenceMaterial {
 }
 
 export const MATERIAL_TEMPLATES: Record<string, string> = {
-  orientation: `【ターゲット】\n\n【訴求軸・メッセージ】\n\n【競合・差別化ポイント】\n\n【NGワード・表現】\n\n【トンマナ・世界観】\n\n【KPI・目標】\n\n【その他注意事項】`,
+  orientation: `【ターゲット】\n\n【訴求軸・メッセージ】\n\n【競合・差別化ポイント】\n\n【NGワード・表現】\n\n【トンマナ・世界観】\n\n【KPI・目標】\n\n【その他注意事項】\n\n--- 会議議事録 ---\n【会議名】\n\n【日時】\n\n【参加者】\n\n【議題・アジェンダ】\n\n【決定事項】\n\n【TODO・アクションアイテム】\n\n【備考・補足】`,
   wcheck: `【チェック項目一覧】\n□ \n□ \n□ \n\n【特に注意すべきポイント】\n\n【クライアント固有のルール】`,
   brand_guideline: `【ブランドカラー】\nメイン: \nサブ: \nアクセント: \n\n【フォント】\n和文: \n欧文: \n\n【ロゴ使用規定】\n\n【トンマナ】\n\n【NG事項】\n\n【その他ビジュアルルール】`,
   legal_rule: `【適用法令】\n\n【広告表現の禁止事項】\n\n【必須記載事項】\n\n【注意が必要な表現】\n\n【参考条文・ガイドライン】`,
   media_regulation: `【配信媒体】\n\n【入稿規定】\n\n【審査ポリシー】\n\n【セーフゾーン】`,
   correction_history: `【日付】\n\n【修正依頼元】\n\n【修正内容】\n\n【修正理由】`,
-  meeting_minutes: `【会議名】\n\n【日時】\n\n【参加者】\n\n【議題・アジェンダ】\n\n【決定事項】\n\n【TODO・アクションアイテム】\n\n【備考・補足】`,
 };
 
 export async function fetchMaterials(scopeType: string, scopeId: string): Promise<ReferenceMaterial[]> {
