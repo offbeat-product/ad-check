@@ -1264,6 +1264,8 @@ export default function FileReviewPage() {
                         if (pathMatch) { await supabase.storage.from(pathMatch[1]).remove([pathMatch[2]]); }
                       } catch {}
                     }
+                    // Delete child files first to avoid trigger conflict
+                    await supabase.from("project_files").delete().eq("parent_file_id", file.id);
                     const { error } = await supabase.from("project_files").delete().eq("id", file.id);
                     if (error) { toast({ title: "削除に失敗しました", description: error.message, variant: "destructive" }); }
                     else { toast({ title: "ファイルを削除しました" }); navigate(`/project/${projectId}`); }
