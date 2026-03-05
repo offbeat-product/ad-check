@@ -160,12 +160,19 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
     setApplying(true);
 
     try {
-      const patternIds = [...selectedItems];
+      const selectedIds = [...selectedItems];
+      // Build a map from checkItemId -> item for lookup
+      const itemByCheckId = new Map<string, CheckItem>();
+      items.forEach(i => { itemByCheckId.set(getCheckItemId(i), i); });
+
+      const matchedItems = selectedIds.map(id => itemByCheckId.get(id)).filter(Boolean) as CheckItem[];
+      const rawPatternIds = matchedItems.map(i => i.pattern_id);
+
       const { data: existing, error: fetchErr } = await supabase
         .from("correction_patterns")
         .select("id, rule_id, frequency")
         .eq("product_code", productCode)
-        .in("rule_id", patternIds);
+        .in("rule_id", rawPatternIds);
 
       if (fetchErr) {
         toast({ title: "エラー", description: fetchErr.message, variant: "destructive" });
@@ -181,10 +188,8 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
         rule_title: string; original_content: string; corrected_content: string; category: string;
       }> = [];
 
-      for (const patternId of patternIds) {
-        const item = items.find((i) => i.pattern_id === patternId);
-        if (!item) continue;
-        const ex = existingMap.get(patternId);
+      for (const item of matchedItems) {
+        const ex = existingMap.get(item.pattern_id);
         if (ex) {
           toUpdate.push({ id: ex.id, frequency: (ex.frequency ?? 0) + 1 });
         } else {
@@ -212,16 +217,12 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
       }
 
       if (checkResultId) {
-        const commentInserts = patternIds.map((patternId) => {
-          const item = items.find((i) => i.pattern_id === patternId);
-          if (!item) return null;
-          return {
-            check_result_id: checkResultId, check_item_id: item.pattern_id,
-            author_name: "AIチェック", author_email: user.email || "",
-            content: `【${item.pattern_id}】${item.item}\n\n${item.detail}\n\n💡 修正案: ${item.suggestion || "なし"}`,
-            status: "open" as const,
-          };
-        }).filter(Boolean);
+        const commentInserts = matchedItems.map((item) => ({
+          check_result_id: checkResultId, check_item_id: item.pattern_id,
+          author_name: "AIチェック", author_email: user.email || "",
+          content: `【${item.pattern_id}】${item.item}\n\n${item.detail}\n\n💡 修正案: ${item.suggestion || "なし"}`,
+          status: "open" as const,
+        }));
         if (commentInserts.length > 0) {
           promises.push((async () => {
             const { error } = await supabase.from("comments").insert(commentInserts);
@@ -231,8 +232,8 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
       }
 
       await Promise.all(promises);
-      setAppliedItems((s) => { const next = new Set(s); patternIds.forEach((id) => next.add(id)); return next; });
-      setResolvedItems((s) => { const next = new Set(s); patternIds.forEach((id) => next.add(id)); persistResolved(next); return next; });
+      setAppliedItems((s) => { const next = new Set(s); selectedIds.forEach((id) => next.add(id)); return next; });
+      setResolvedItems((s) => { const next = new Set(s); selectedIds.forEach((id) => next.add(id)); persistResolved(next); return next; });
       toast({ title: `✅ ${selectedItems.size}件の修正パターンを保存しました` });
       setSelectedItems(new Set());
       if (onTabChange) onTabChange("comments");
