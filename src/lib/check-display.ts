@@ -74,7 +74,7 @@ export function getEffectiveSubmitLabel(
 
 export function getEffectiveSubmitBadgeClass(
   overallStatus: string | null | undefined,
-  checkItems: Array<{ status: string; pattern_id: string }> | null | undefined,
+  checkItems: Array<{ status: string; pattern_id: string; detail?: string }> | null | undefined,
   resolvedItems: string[] | null | undefined,
 ): string {
   const { isOk } = getEffectiveSubmitLabel(overallStatus, checkItems, resolvedItems);
