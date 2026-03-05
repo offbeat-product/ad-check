@@ -1279,6 +1279,32 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      get_shared_comments: {
+        Args: { p_check_result_id: string; p_share_token: string }
+        Returns: {
+          annotation_data: Json | null
+          attachment_name: string | null
+          attachment_type: string | null
+          attachment_url: string | null
+          author_email: string
+          author_name: string
+          check_item_id: string | null
+          check_result_id: string
+          content: string
+          created_at: string
+          id: string
+          media_timestamp: number | null
+          mentions: string[] | null
+          parent_id: string | null
+          status: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "comments"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       get_user_role: { Args: { _user_id: string }; Returns: string }
       get_workspace_role: { Args: { _user_id: string }; Returns: string }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
