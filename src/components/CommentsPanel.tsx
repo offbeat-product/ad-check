@@ -465,6 +465,10 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
   const mediaTimestamp = (comment as any).media_timestamp as number | null;
 
   const handleCardClick = () => {
+    // Auto-seek video to annotation timestamp
+    if (mediaTimestamp != null && mediaTimestamp > 0 && onSeekMedia) {
+      onSeekMedia(mediaTimestamp);
+    }
     if (hasAnnotation && onAnnotationClick) {
       onAnnotationClick(comment.annotation_data);
     } else if (hasCheckItem && onCheckItemClick) {
