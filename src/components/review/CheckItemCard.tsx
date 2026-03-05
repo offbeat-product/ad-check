@@ -110,6 +110,23 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
       }
     }, [isHighlighted]);
 
+    // Extract the first timestamp from item fields for card-level click-to-seek
+    const handleCardSeek = useCallback(() => {
+      if (!onSeekMedia) return;
+      const timestampRegex = /(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,3})?)/;
+      const fields = [item.location || "", item.item || "", item.detail || ""];
+      for (const field of fields) {
+        const match = field.match(timestampRegex);
+        if (match) {
+          const seconds = parseTimestamp(match[1]);
+          if (seconds >= 0) {
+            onSeekMedia(seconds);
+            return;
+          }
+        }
+      }
+    }, [item, onSeekMedia]);
+
     return (
       <div
         ref={(el) => {
@@ -117,6 +134,7 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
           if (typeof ref === "function") ref(el);
           else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = el;
         }}
+        onClick={handleCardSeek}
         className={cn(
           "border-l-4 rounded-lg border border-border p-3 space-y-2 bg-card interactive-card cursor-pointer",
           borderColors[item.status] || "",
