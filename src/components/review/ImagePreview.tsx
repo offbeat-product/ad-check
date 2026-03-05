@@ -93,18 +93,11 @@ export default function ImagePreview({
           </svg>
         )}
 
-        {/* Highlight overlay for clicked annotation */}
+        {/* Highlight overlay for clicked annotation — render same shape as paint mode */}
         {highlightAnnotation?.imagePosition && (
-          <div
-            className="absolute border-3 border-primary border-dashed rounded animate-pulse z-[25] pointer-events-none"
-            style={{
-              left: `${highlightAnnotation.imagePosition.x}%`,
-              top: `${highlightAnnotation.imagePosition.y}%`,
-              width: `${highlightAnnotation.imagePosition.width}%`,
-              height: `${highlightAnnotation.imagePosition.height}%`,
-              borderWidth: '3px',
-            }}
-          />
+          <svg className="absolute inset-0 w-full h-full pointer-events-none z-[25] animate-pulse" viewBox={`0 0 ${imageSize.width || 800} ${imageSize.height || 400}`} preserveAspectRatio="none">
+            <SavedAnnotationSvg ann={highlightAnnotation} containerWidth={imageSize.width || 800} containerHeight={imageSize.height || 400} highlight />
+          </svg>
         )}
 
         <AnnotationCanvas active={paintMode} width={imageSize.width || 800} height={imageSize.height || 400} onSaveAnnotations={onAnnotationSave} members={members} />
@@ -115,23 +108,25 @@ export default function ImagePreview({
   );
 }
 
-function SavedAnnotationSvg({ ann, containerWidth, containerHeight }: { ann: AnnotationData; containerWidth: number; containerHeight: number }) {
+function SavedAnnotationSvg({ ann, containerWidth, containerHeight, highlight }: { ann: AnnotationData; containerWidth: number; containerHeight: number; highlight?: boolean }) {
   if (!ann.imagePosition) return null;
   const { x, y, width, height } = ann.imagePosition;
   const px = (x / 100) * containerWidth;
   const py = (y / 100) * containerHeight;
   const pw = (width / 100) * containerWidth;
   const ph = (height / 100) * containerHeight;
+  const strokeColor = ann.color || (highlight ? "hsl(var(--primary))" : "#ef4444");
+  const sw = highlight ? Math.max(ann.strokeWidth, 3) : ann.strokeWidth;
+  const op = highlight ? 0.9 : 0.7;
 
   if (ann.type === "rect") {
-    return <rect x={px} y={py} width={pw} height={ph} fill="none" stroke={ann.color} strokeWidth={ann.strokeWidth} opacity={0.7} />;
+    return <rect x={px} y={py} width={pw} height={ph} fill={highlight ? `${strokeColor}20` : "none"} stroke={strokeColor} strokeWidth={sw} opacity={op} />;
   }
   if (ann.type === "ellipse") {
-    return <ellipse cx={px + pw / 2} cy={py + ph / 2} rx={pw / 2} ry={ph / 2} fill="none" stroke={ann.color} strokeWidth={ann.strokeWidth} opacity={0.7} />;
+    return <ellipse cx={px + pw / 2} cy={py + ph / 2} rx={pw / 2} ry={ph / 2} fill={highlight ? `${strokeColor}20` : "none"} stroke={strokeColor} strokeWidth={sw} opacity={op} />;
   }
   if (ann.type === "arrow" && ann.points.length >= 2) {
-    return <line x1={ann.points[0].x} y1={ann.points[0].y} x2={ann.points[1].x} y2={ann.points[1].y} stroke={ann.color} strokeWidth={ann.strokeWidth} opacity={0.7} />;
+    return <line x1={ann.points[0].x} y1={ann.points[0].y} x2={ann.points[1].x} y2={ann.points[1].y} stroke={strokeColor} strokeWidth={sw} opacity={op} />;
   }
-  // Fallback: draw a rect around imagePosition
-  return <rect x={px} y={py} width={Math.max(pw, 10)} height={Math.max(ph, 10)} fill="none" stroke={ann.color} strokeWidth={ann.strokeWidth} strokeDasharray="6 4" opacity={0.5} />;
+  return <rect x={px} y={py} width={Math.max(pw, 10)} height={Math.max(ph, 10)} fill={highlight ? `${strokeColor}20` : "none"} stroke={strokeColor} strokeWidth={sw} strokeDasharray="6 4" opacity={0.5} />;
 }

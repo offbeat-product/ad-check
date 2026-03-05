@@ -465,6 +465,10 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
   const mediaTimestamp = (comment as any).media_timestamp as number | null;
 
   const handleCardClick = () => {
+    // Auto-seek video to annotation timestamp
+    if (mediaTimestamp != null && mediaTimestamp > 0 && onSeekMedia) {
+      onSeekMedia(mediaTimestamp);
+    }
     if (hasAnnotation && onAnnotationClick) {
       onAnnotationClick(comment.annotation_data);
     } else if (hasCheckItem && onCheckItemClick) {
@@ -472,13 +476,13 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
     }
   };
 
-  const isClickable = (hasAnnotation && onAnnotationClick) || (hasCheckItem && onCheckItemClick);
+  const isClickable = (hasAnnotation && onAnnotationClick) || (hasCheckItem && onCheckItemClick) || (mediaTimestamp != null && mediaTimestamp > 0 && onSeekMedia);
 
   const renderContent = (text: string) => {
     const parts = text.split(/(@\S+)/g);
     return parts.map((part, i) =>
       part.startsWith("@") ? (
-        <span key={i} className="text-primary font-medium">{part}</span>
+        <span key={i} className="text-primary font-semibold underline decoration-primary/40 cursor-default">{part}</span>
       ) : (
         <span key={i}>{part}</span>
       )

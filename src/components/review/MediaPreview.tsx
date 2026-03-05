@@ -131,17 +131,10 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
           </svg>
         )}
 
-        {highlightAnnotation?.imagePosition && (
-          <div
-            className="absolute border-3 border-primary border-dashed rounded animate-pulse z-[25] pointer-events-none"
-            style={{
-              left: `${highlightAnnotation.imagePosition.x}%`,
-              top: `${highlightAnnotation.imagePosition.y}%`,
-              width: `${highlightAnnotation.imagePosition.width}%`,
-              height: `${highlightAnnotation.imagePosition.height}%`,
-              borderWidth: '3px',
-            }}
-          />
+        {highlightAnnotation?.imagePosition && containerSize.width > 0 && (
+          <svg className="absolute inset-0 w-full h-full pointer-events-none z-[25] animate-pulse" viewBox={`0 0 ${containerSize.width} ${containerSize.height}`} preserveAspectRatio="none">
+            <HighlightAnnotationSvg ann={highlightAnnotation} containerWidth={containerSize.width} containerHeight={containerSize.height} />
+          </svg>
         )}
 
         {hasPaintSupport && (
@@ -188,4 +181,26 @@ function SavedAnnotationSvg({ ann, containerWidth, containerHeight }: { ann: { t
     return <line x1={ann.points[0].x} y1={ann.points[0].y} x2={ann.points[1].x} y2={ann.points[1].y} stroke={ann.color} strokeWidth={ann.strokeWidth} opacity={0.7} />;
   }
   return <rect x={px} y={py} width={Math.max(pw, 10)} height={Math.max(ph, 10)} fill="none" stroke={ann.color} strokeWidth={ann.strokeWidth} strokeDasharray="6 4" opacity={0.5} />;
+}
+
+function HighlightAnnotationSvg({ ann, containerWidth, containerHeight }: { ann: AnnotationData; containerWidth: number; containerHeight: number }) {
+  if (!ann.imagePosition) return null;
+  const { x, y, width, height } = ann.imagePosition;
+  const px = (x / 100) * containerWidth;
+  const py = (y / 100) * containerHeight;
+  const pw = (width / 100) * containerWidth;
+  const ph = (height / 100) * containerHeight;
+  const strokeColor = ann.color || "hsl(var(--primary))";
+  const sw = Math.max(ann.strokeWidth || 2, 3);
+
+  if (ann.type === "rect") {
+    return <rect x={px} y={py} width={pw} height={ph} fill={`${strokeColor}20`} stroke={strokeColor} strokeWidth={sw} opacity={0.9} />;
+  }
+  if (ann.type === "ellipse") {
+    return <ellipse cx={px + pw / 2} cy={py + ph / 2} rx={pw / 2} ry={ph / 2} fill={`${strokeColor}20`} stroke={strokeColor} strokeWidth={sw} opacity={0.9} />;
+  }
+  if (ann.type === "arrow" && ann.points.length >= 2) {
+    return <line x1={ann.points[0].x} y1={ann.points[0].y} x2={ann.points[1].x} y2={ann.points[1].y} stroke={strokeColor} strokeWidth={sw} opacity={0.9} />;
+  }
+  return <rect x={px} y={py} width={Math.max(pw, 10)} height={Math.max(ph, 10)} fill={`${strokeColor}20`} stroke={strokeColor} strokeWidth={sw} strokeDasharray="6 4" opacity={0.7} />;
 }
