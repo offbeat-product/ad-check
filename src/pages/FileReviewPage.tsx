@@ -1283,9 +1283,6 @@ export default function FileReviewPage() {
                     <Unlock className="h-3 w-3" />FIX解除
                   </DropdownMenuItem>
                 )}
-                <DropdownMenuItem className="text-xs gap-2" onClick={() => setShareOpen(true)}>
-                  <Link2 className="h-3 w-3" />共有リンク
-                </DropdownMenuItem>
                 <DropdownMenuItem className="text-xs gap-2" onClick={handleDownload}>
                   <Download className="h-3 w-3" />ダウンロード
                 </DropdownMenuItem>
