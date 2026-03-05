@@ -183,7 +183,7 @@ function SavedAnnotationSvg({ ann, containerWidth, containerHeight }: { ann: { t
   return <rect x={px} y={py} width={Math.max(pw, 10)} height={Math.max(ph, 10)} fill="none" stroke={ann.color} strokeWidth={ann.strokeWidth} strokeDasharray="6 4" opacity={0.5} />;
 }
 
-function HighlightAnnotationSvg({ ann, containerWidth, containerHeight }: { ann: AnnotationData; containerWidth: number; containerHeight: number }) {
+function renderHighlightAnnotation(ann: AnnotationData, containerWidth: number, containerHeight: number) {
   if (!ann.imagePosition) return null;
   const { x, y, width, height } = ann.imagePosition;
   const px = (x / 100) * containerWidth;
