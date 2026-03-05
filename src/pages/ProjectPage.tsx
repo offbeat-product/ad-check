@@ -983,16 +983,7 @@ export default function ProjectPage() {
                       {(() => {
                         const rootFiles = sectionFiles.filter(f => !f.parent_file_id);
                         const allFixed = rootFiles.length > 0 && rootFiles.every(f => f.status === "fixed");
-                        if (isProcessCompleted && isCollapsed) {
-                          return (
-                            <div className="absolute inset-0 bg-foreground/40 z-10 pointer-events-none rounded-lg flex items-center justify-center">
-                              <span className="bg-muted/90 text-muted-foreground text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 pointer-events-none">
-                                <Lock className="h-3 w-3" /> 完了
-                              </span>
-                            </div>
-                          );
-                        }
-                        if (allFixed && !isProcessCompleted && isCollapsed) {
+                        if ((isProcessCompleted || allFixed) && isCollapsed) {
                           return (
                             <div className="absolute inset-0 bg-foreground/30 z-10 pointer-events-none rounded-lg flex items-center justify-center">
                               <span className="bg-muted-foreground/90 text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 pointer-events-none">
