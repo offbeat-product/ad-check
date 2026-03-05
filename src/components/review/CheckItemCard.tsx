@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { STATUS_LABEL } from "@/lib/check-display";
 import type { CheckItem } from "@/lib/types";
 import type { CheckMarker } from "@/lib/marker-positions";
-import { forwardRef, useEffect, useRef, type ReactNode } from "react";
+import { forwardRef, useCallback, useEffect, useRef, type ReactNode } from "react";
 
 const borderColors: Record<string, string> = {
   NG: "border-l-status-ng",
