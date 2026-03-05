@@ -123,7 +123,7 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
           </div>
         )}
 
-        {savedAnnotations && savedAnnotations.length > 0 && containerSize.width > 0 && (
+        {paintMode && savedAnnotations && savedAnnotations.length > 0 && containerSize.width > 0 && (
           <svg className="absolute inset-0 w-full h-full pointer-events-none z-[15]" viewBox={`0 0 ${containerSize.width} ${containerSize.height}`} preserveAspectRatio="none">
             {savedAnnotations.map((ann, i) => (
               <SavedAnnotationSvg key={i} ann={ann} containerWidth={containerSize.width} containerHeight={containerSize.height} />

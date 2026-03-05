@@ -617,7 +617,19 @@ export default function FileReviewPage() {
           }
         }
 
-        // For video/audio async checks, insert a pending record first so n8n can UPDATE it
+        // Include correction comments for the AI to verify fixes
+        if (file.check_result_id) {
+          const { data: corrComments } = await supabase
+            .from("comments")
+            .select("content, status, check_item_id")
+            .eq("check_result_id", file.check_result_id)
+            .is("parent_id", null);
+          if (corrComments && corrComments.length > 0) {
+            body.correction_comments = corrComments;
+            console.log("[CheckMate] Including correction_comments:", corrComments.length);
+          }
+        }
+
         const isAsyncProcess = ["vcon", "video_horizontal", "video_vertical", "narration", "bgm"].includes(processKey);
         // pendingRecordId is hoisted above try block
         if (isAsyncProcess) {
@@ -1026,7 +1038,10 @@ export default function FileReviewPage() {
     ? versions.reduce((latest, v) => (v.version_number ?? 1) > (latest.version_number ?? 1) ? v : latest, versions[0])
     : null;
   const displayFile = latestVersionFile && latestVersionFile.id !== file.id ? latestVersionFile : file;
-  const currentVersionNumber = displayFile.version_number ?? 1;
+  // Use comparison_round from active check result when available (more accurate than file version_number)
+  const currentVersionNumber = record?.check_type === "comparison" && record?.comparison_round
+    ? record.comparison_round + 1
+    : (displayFile.version_number ?? 1);
   const totalVersions = versions.length;
 
   const isSf = displayFile.file_type === "image" || AI_CHECK_CONFIG[displayFile.process_type]?.inputMode === "image";
