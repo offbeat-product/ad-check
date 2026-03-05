@@ -1028,7 +1028,7 @@ export default function ProjectPage() {
                           <DeadlinePicker
                             deadline={proc.client_deadline}
                             onChange={(d) => handleProcessDeadlineChange(proc.id, "client_deadline", d)}
-                            isCompleted={isProcessCompleted}
+                            isCompleted={isDeadlineMet}
                             label="期限"
                           />
 
