@@ -763,14 +763,11 @@ export default function ProjectPage() {
 
       // Auto-navigate to file review for automatic AI check (single file only)
       // Skip auto-navigate if copy-to-pattern dialog should be shown
-      if (lastInsertedFileId && !copyToPatternInfo) {
-        const shouldShowCopyDialog = resolvedPatternId && patterns.length > 1 && selectedFiles.length === 1;
-        if (!shouldShowCopyDialog) {
-          const aiCfg = AI_CHECK_CONFIG[uploadProcessType || ""];
-          if (aiCfg?.enabled) {
-            toast({ title: "🤖 AIチェックを自動実行します", description: "レビュー画面に移動中..." });
-            setTimeout(() => navigate(`/project/${id}/file/${lastInsertedFileId}`), 500);
-          }
+      if (lastInsertedFileId && !showedCopyDialog) {
+        const aiCfg = AI_CHECK_CONFIG[uploadProcessType || ""];
+        if (aiCfg?.enabled) {
+          toast({ title: "🤖 AIチェックを自動実行します", description: "レビュー画面に移動中..." });
+          setTimeout(() => navigate(`/project/${id}/file/${lastInsertedFileId}`), 500);
         }
       }
     }
