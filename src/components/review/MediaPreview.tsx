@@ -133,7 +133,7 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
 
         {highlightAnnotation?.imagePosition && containerSize.width > 0 && (
           <svg className="absolute inset-0 w-full h-full pointer-events-none z-[25] animate-pulse" viewBox={`0 0 ${containerSize.width} ${containerSize.height}`} preserveAspectRatio="none">
-            <HighlightAnnotationSvg ann={highlightAnnotation} containerWidth={containerSize.width} containerHeight={containerSize.height} />
+            {renderHighlightAnnotation(highlightAnnotation, containerSize.width, containerSize.height)}
           </svg>
         )}
 
@@ -183,7 +183,7 @@ function SavedAnnotationSvg({ ann, containerWidth, containerHeight }: { ann: { t
   return <rect x={px} y={py} width={Math.max(pw, 10)} height={Math.max(ph, 10)} fill="none" stroke={ann.color} strokeWidth={ann.strokeWidth} strokeDasharray="6 4" opacity={0.5} />;
 }
 
-function HighlightAnnotationSvg({ ann, containerWidth, containerHeight }: { ann: AnnotationData; containerWidth: number; containerHeight: number }) {
+function renderHighlightAnnotation(ann: AnnotationData, containerWidth: number, containerHeight: number) {
   if (!ann.imagePosition) return null;
   const { x, y, width, height } = ann.imagePosition;
   const px = (x / 100) * containerWidth;
