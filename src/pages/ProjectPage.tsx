@@ -984,6 +984,10 @@ export default function ProjectPage() {
                   const checkedCount = sectionFiles.filter(f => f.status === "checked" || f.status === "fixed").length;
 
                   const isProcessCompleted = proc.status === "completed";
+                  // Also treat as "completed" if all root files are client-submitted or fixed
+                  const rootFiles = sectionFiles.filter(f => !f.parent_file_id);
+                  const allSubmittedOrFixed = rootFiles.length > 0 && rootFiles.every(f => f.status === "fixed" || (f as any).submission_type === "client");
+                  const isDeadlineMet = isProcessCompleted || allSubmittedOrFixed;
 
                     return (
                     <div
@@ -1024,7 +1028,7 @@ export default function ProjectPage() {
                           <DeadlinePicker
                             deadline={proc.client_deadline}
                             onChange={(d) => handleProcessDeadlineChange(proc.id, "client_deadline", d)}
-                            isCompleted={isProcessCompleted}
+                            isCompleted={isDeadlineMet}
                             label="期限"
                           />
 
