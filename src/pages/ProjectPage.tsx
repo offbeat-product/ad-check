@@ -644,6 +644,7 @@ export default function ProjectPage() {
     const cfg = PROCESS_FILE_CONFIG[uploadModal];
     const resolvedPatternId = (patterns.length > 0 && uploadPatternMode === "specific") ? uploadPatternId : null;
     let lastInsertedFileId: string | null = null;
+    let showedCopyDialog = false;
     const uploadProcessType = uploadModal;
 
     try {
