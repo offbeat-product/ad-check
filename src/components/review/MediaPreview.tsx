@@ -131,17 +131,10 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
           </svg>
         )}
 
-        {highlightAnnotation?.imagePosition && (
-          <div
-            className="absolute border-3 border-primary border-dashed rounded animate-pulse z-[25] pointer-events-none"
-            style={{
-              left: `${highlightAnnotation.imagePosition.x}%`,
-              top: `${highlightAnnotation.imagePosition.y}%`,
-              width: `${highlightAnnotation.imagePosition.width}%`,
-              height: `${highlightAnnotation.imagePosition.height}%`,
-              borderWidth: '3px',
-            }}
-          />
+        {highlightAnnotation?.imagePosition && containerSize.width > 0 && (
+          <svg className="absolute inset-0 w-full h-full pointer-events-none z-[25] animate-pulse" viewBox={`0 0 ${containerSize.width} ${containerSize.height}`} preserveAspectRatio="none">
+            <HighlightAnnotationSvg ann={highlightAnnotation} containerWidth={containerSize.width} containerHeight={containerSize.height} />
+          </svg>
         )}
 
         {hasPaintSupport && (
