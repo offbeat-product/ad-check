@@ -644,6 +644,7 @@ export default function ProjectPage() {
     const cfg = PROCESS_FILE_CONFIG[uploadModal];
     const resolvedPatternId = (patterns.length > 0 && uploadPatternMode === "specific") ? uploadPatternId : null;
     let lastInsertedFileId: string | null = null;
+    let showedCopyDialog = false;
     const uploadProcessType = uploadModal;
 
     try {
@@ -729,6 +730,7 @@ export default function ProjectPage() {
 
         // Offer to copy to other patterns (uses last file info for single, skips for multi)
         if (resolvedPatternId && patterns.length > 1 && total === 1) {
+          showedCopyDialog = true;
           setCopyToPatternInfo({
             sourcePatternId: resolvedPatternId,
             processType: uploadModal,
@@ -760,7 +762,8 @@ export default function ProjectPage() {
       fetchData();
 
       // Auto-navigate to file review for automatic AI check (single file only)
-      if (lastInsertedFileId) {
+      // Skip auto-navigate if copy-to-pattern dialog should be shown
+      if (lastInsertedFileId && !showedCopyDialog) {
         const aiCfg = AI_CHECK_CONFIG[uploadProcessType || ""];
         if (aiCfg?.enabled) {
           toast({ title: "🤖 AIチェックを自動実行します", description: "レビュー画面に移動中..." });
