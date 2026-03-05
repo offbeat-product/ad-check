@@ -27,9 +27,25 @@ export function getSubmitBadgeClassFromCounts(ngCount: number | null | undefined
     : "bg-status-ng text-white border-status-ng";
 }
 
-/** Get the effective ID for a check item, falling back to item text if pattern_id is missing */
-export function getCheckItemId(item: { pattern_id?: string; item?: string }): string {
-  return item.pattern_id || item.item || "";
+/** Get the effective ID for a check item, falling back to item text if pattern_id is missing.
+ *  Includes item text hash to disambiguate items sharing the same pattern_id. */
+export function getCheckItemId(item: { pattern_id?: string; item?: string; detail?: string }): string {
+  const base = item.pattern_id || item.item || "";
+  // If pattern_id exists, append a short hash of item+detail to make it unique
+  if (item.pattern_id && item.item) {
+    const hash = simpleHash(`${item.item}||${item.detail || ""}`);
+    return `${base}_${hash}`;
+  }
+  return base;
+}
+
+/** Simple string hash for disambiguation */
+function simpleHash(str: string): string {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = ((h << 5) - h + str.charCodeAt(i)) | 0;
+  }
+  return (h >>> 0).toString(36);
 }
 
 /**
