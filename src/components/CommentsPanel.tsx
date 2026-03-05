@@ -476,7 +476,7 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
     }
   };
 
-  const isClickable = (hasAnnotation && onAnnotationClick) || (hasCheckItem && onCheckItemClick);
+  const isClickable = (hasAnnotation && onAnnotationClick) || (hasCheckItem && onCheckItemClick) || (mediaTimestamp != null && mediaTimestamp > 0 && onSeekMedia);
 
   const renderContent = (text: string) => {
     const parts = text.split(/(@\S+)/g);
