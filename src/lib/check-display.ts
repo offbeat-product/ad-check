@@ -54,7 +54,7 @@ function simpleHash(str: string): string {
  */
 export function getEffectiveSubmitLabel(
   overallStatus: string | null | undefined,
-  checkItems: Array<{ status: string; pattern_id: string; item?: string }> | null | undefined,
+  checkItems: Array<{ status: string; pattern_id: string; item?: string; detail?: string }> | null | undefined,
   resolvedItems: string[] | null | undefined,
 ): { label: string; isOk: boolean } {
   const base = getSubmitLabel(overallStatus);
