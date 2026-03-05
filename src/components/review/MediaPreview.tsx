@@ -133,7 +133,7 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
 
         {highlightAnnotation?.imagePosition && containerSize.width > 0 && (
           <svg className="absolute inset-0 w-full h-full pointer-events-none z-[25] animate-pulse" viewBox={`0 0 ${containerSize.width} ${containerSize.height}`} preserveAspectRatio="none">
-            <HighlightAnnotationSvg ann={highlightAnnotation} containerWidth={containerSize.width} containerHeight={containerSize.height} />
+            {renderHighlightAnnotation(highlightAnnotation, containerSize.width, containerSize.height)}
           </svg>
         )}
 
