@@ -730,6 +730,7 @@ export default function ProjectPage() {
 
         // Offer to copy to other patterns (uses last file info for single, skips for multi)
         if (resolvedPatternId && patterns.length > 1 && total === 1) {
+          showedCopyDialog = true;
           setCopyToPatternInfo({
             sourcePatternId: resolvedPatternId,
             processType: uploadModal,
