@@ -227,7 +227,7 @@ function SharedCommentCard({ comment, timeAgo, onAnnotationClick, onSeekMedia, o
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold">{comment.author_name}</span>
           {comment.media_timestamp != null && (
-            <TimestampBadge timestamp={comment.media_timestamp} onClick={() => onSeekMedia?.(comment.media_timestamp!)} />
+            <TimestampBadge seconds={comment.media_timestamp} onClick={() => onSeekMedia?.(comment.media_timestamp!)} />
           )}
         </div>
         <span className="text-[10px] text-muted-foreground">{timeAgo(comment.created_at)}</span>
