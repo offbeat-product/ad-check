@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import type { CheckItem } from "@/lib/types";
@@ -7,13 +7,17 @@ import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import ImagePreview from "@/components/review/ImagePreview";
 import ScriptDisplay from "@/components/review/ScriptDisplay";
-import MediaPreview from "@/components/review/MediaPreview";
-import ReviewRightPanel from "@/components/review/ReviewRightPanel";
+import MediaPreview, { type MediaPreviewHandle } from "@/components/review/MediaPreview";
+import AICheckPanel from "@/components/review/AICheckPanel";
+import SharedCommentsPanel from "@/components/SharedCommentsPanel";
 import { useReviewState } from "@/hooks/useReviewState";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
-import { Lock, AlertTriangle, Rocket } from "lucide-react";
+import { Lock, AlertTriangle, Rocket, MessageCircle, Bot } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { formatTimestamp } from "@/components/comments/TimestampBadge";
 
 export default function SharedViewPage() {
   const { token } = useParams<{ token: string }>();
@@ -24,11 +28,17 @@ export default function SharedViewPage() {
   const [passwordRequired, setPasswordRequired] = useState(false);
   const [passwordInput, setPasswordInput] = useState("");
   const [passwordError, setPasswordError] = useState(false);
+  const [paintMode, setPaintMode] = useState(false);
+  const [mediaCurrentTime, setMediaCurrentTime] = useState<number | null>(null);
+  const [commentRefreshKey, setCommentRefreshKey] = useState(0);
+  const [totalCommentCount, setTotalCommentCount] = useState(0);
+  const mediaRef = useRef<MediaPreviewHandle>(null);
 
   const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
   const { items, markers, commentCounts, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
     useReviewState(record?.id, checkItems);
 
+  // --- Data Loading ---
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
@@ -68,6 +78,7 @@ export default function SharedViewPage() {
   };
 
   const loadCheckResult = async (checkResultId: string, cancelled = false) => {
+    // get_shared_check_result now returns the latest in the comparison chain
     const { data: rows, error } = await supabase
       .rpc("get_shared_check_result", { p_check_result_id: checkResultId, p_share_token: token! });
     if (cancelled) return;
@@ -80,6 +91,7 @@ export default function SharedViewPage() {
     setLoading(false);
   };
 
+  // --- Password ---
   const handlePasswordSubmit = async () => {
     if (!shareLink) return;
     try {
@@ -98,8 +110,69 @@ export default function SharedViewPage() {
     }
   };
 
-  const handleSeekMedia = useCallback(() => {}, []);
+  // --- Media Seek ---
+  const handleSeekMedia = useCallback((seconds: number) => {
+    mediaRef.current?.seekTo(seconds);
+  }, []);
 
+  // Track media current time for timestamp badges
+  useEffect(() => {
+    if (!record) return;
+    const interval = setInterval(() => {
+      if (mediaRef.current) {
+        setMediaCurrentTime(mediaRef.current.getCurrentTime());
+      }
+    }, 500);
+    return () => clearInterval(interval);
+  }, [record]);
+
+  // --- Paint Mode Annotation Save ---
+  const handleAnnotationSave = useCallback(async (annotations: unknown[], comment: string) => {
+    if (!record || !token) return;
+    const guestName = localStorage.getItem("shared_guest_name");
+    if (!guestName) {
+      // Switch to comments tab to prompt guest name entry
+      setRightTab("comments");
+      return;
+    }
+
+    // Build timestamp prefix for video
+    let content = comment;
+    if (mediaRef.current) {
+      const time = mediaRef.current.getCurrentTime();
+      if (time > 0) {
+        const ts = formatTimestamp(time);
+        content = `[${ts}] ${comment}`;
+      }
+    }
+
+    try {
+      await supabase.functions.invoke("shared-comments", {
+        body: {
+          share_token: token,
+          check_result_id: record.id,
+          author_name: guestName,
+          author_email: localStorage.getItem("shared_guest_email") || "shared@guest",
+          content,
+          annotation_data: annotations.length > 0 ? annotations[0] : null,
+          media_timestamp: mediaRef.current?.getCurrentTime() ?? null,
+        },
+      });
+      setCommentRefreshKey((k) => k + 1);
+      setPaintMode(false);
+    } catch (err) {
+      console.error("[shared annotation save]", err);
+    }
+  }, [record, token, setRightTab]);
+
+  // --- Highlight annotation from comment click ---
+  const [highlightAnnotation, setHighlightAnnotation] = useState<any>(null);
+  const handleAnnotationClick = useCallback((data: unknown) => {
+    setHighlightAnnotation(data as any);
+    setTimeout(() => setHighlightAnnotation(null), 3000);
+  }, []);
+
+  // --- Render States ---
   if (loading) return <div className="flex items-center justify-center min-h-screen text-muted-foreground">読み込み中...</div>;
 
   if (error) {
@@ -130,49 +203,63 @@ export default function SharedViewPage() {
 
   if (!record) return null;
 
+  // --- Derived Data ---
   const aiCfg = AI_CHECK_CONFIG[record.process_type];
   const inputMode = aiCfg?.inputMode || "text";
   const inputData = record.input_data as Record<string, string> | null;
-  const canReadComments = shareLink?.allow_comment_read;
+  const canReadComments = shareLink?.allow_comment_read ?? false;
+  const canWriteComments = shareLink?.allow_comment_write ?? false;
 
-  // Resolve media source
   const imageSrc = inputData?.image_base64 || null;
   const videoSrc = inputData?.video_url || null;
   const audioSrc = inputData?.audio_url || null;
-  const scriptText = inputData?.script_text || record.input_text || "";
+  // Filter out raw URLs from script text display
+  const rawScriptText = inputData?.script_text || record.input_text || "";
+  const scriptText = rawScriptText.startsWith("http") ? "" : rawScriptText;
 
-  const processLabel = record.process_type;
+  const effectiveTab = rightTab === "comments" ? "comments" : "ai-check";
 
+  // --- Preview Renderer ---
   const renderPreview = () => {
+    const previewLabel = `${record.client_name} / ${record.product_name}`;
+
     switch (inputMode) {
       case "image":
         return (
           <ImagePreview
             imageSrc={imageSrc}
             markers={markers}
-            paintMode={false}
-            onPaintModeToggle={() => {}}
+            paintMode={paintMode}
+            onPaintModeToggle={() => setPaintMode(!paintMode)}
             onMarkerClick={scrollToCard}
-            label={`${record.client_name} / ${record.product_name}`}
+            label={previewLabel}
             noDataMessage="プレビュー不可"
+            onAnnotationSave={canWriteComments ? handleAnnotationSave : undefined}
+            highlightAnnotation={highlightAnnotation}
           />
         );
       case "video":
         return (
           <MediaPreview
+            ref={mediaRef}
             src={videoSrc}
             mediaType="video"
-            label={`${record.client_name} / ${record.product_name}`}
+            label={previewLabel}
             noDataMessage="動画プレビュー不可"
             scriptText={scriptText || undefined}
+            paintMode={paintMode}
+            onPaintModeToggle={canWriteComments ? () => setPaintMode(!paintMode) : undefined}
+            onAnnotationSave={canWriteComments ? handleAnnotationSave : undefined}
+            highlightAnnotation={highlightAnnotation}
           />
         );
       case "audio":
         return (
           <MediaPreview
+            ref={mediaRef}
             src={audioSrc}
             mediaType="audio"
-            label={`${record.client_name} / ${record.product_name}`}
+            label={previewLabel}
             noDataMessage="音声プレビュー不可"
             scriptText={scriptText || undefined}
           />
@@ -180,20 +267,27 @@ export default function SharedViewPage() {
       default:
         return (
           <div>
-            <span className="text-xs text-muted-foreground mb-2 block">{record.client_name} / {record.product_name}</span>
+            <span className="text-xs text-muted-foreground mb-2 block">{previewLabel}</span>
             <ScriptDisplay text={scriptText} items={items} markers={markers} onItemClick={scrollToCard} />
           </div>
         );
     }
   };
 
+  // --- Main Layout ---
   return (
     <div className="flex h-screen overflow-hidden">
+      {/* Left: Preview */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <header className="border-b border-border px-4 py-3 flex items-center gap-3 bg-card shrink-0">
-          <span className="text-sm font-bold flex items-center gap-1"><Rocket className="h-4 w-4" fill="currentColor" /> CheckGo AI</span>
+          <span className="text-sm font-bold flex items-center gap-1">
+            <Rocket className="h-4 w-4" fill="currentColor" /> CheckGo AI
+          </span>
           <Badge variant="outline" className="text-xs">共有ビュー</Badge>
           <span className="text-sm text-muted-foreground ml-2">{record.client_name} / {record.product_name}</span>
+          {record.comparison_round > 0 && (
+            <Badge variant="secondary" className="text-[10px]">第{record.comparison_round + 1}稿</Badge>
+          )}
         </header>
 
         <div className="flex-1 overflow-y-auto">
@@ -203,21 +297,70 @@ export default function SharedViewPage() {
         </div>
       </div>
 
-      {canReadComments && (
-        <ReviewRightPanel
-          rightTab={rightTab}
-          onTabChange={setRightTab}
-          items={items}
-          markers={markers}
-          productCode={record.product_code}
-          commentCounts={commentCounts}
-          highlightCard={highlightCard}
-          commentFilter={commentFilter}
-          checkResultId={record.id}
-          hasCheckResult={true}
-          onCommentClick={handleCommentClick}
-        />
-      )}
+      {/* Right: AI Check + Comments */}
+      <div className="w-full md:w-[380px] shrink-0 h-screen border-l border-border flex flex-col bg-card overflow-hidden">
+        <Tabs value={effectiveTab} onValueChange={setRightTab} className="relative flex-1 flex flex-col min-h-0">
+          <TabsList className="w-full shrink-0 rounded-none border-b border-border bg-transparent h-10 p-0">
+            <TabsTrigger value="ai-check" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs h-10">
+              AIチェック結果
+            </TabsTrigger>
+            {canReadComments && (
+              <TabsTrigger value="comments" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs h-10 gap-1">
+                コメント
+                {totalCommentCount > 0 && (
+                  <span className="min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+                    {totalCommentCount > 99 ? "99+" : totalCommentCount}
+                  </span>
+                )}
+              </TabsTrigger>
+            )}
+          </TabsList>
+
+          <TabsContent value="ai-check" forceMount className={cn(
+            "absolute inset-0 top-10 flex flex-col overflow-hidden mt-0 ring-0 focus-visible:ring-0",
+            effectiveTab !== "ai-check" && "hidden"
+          )}>
+            {items.length > 0 ? (
+              <AICheckPanel
+                items={items}
+                markers={markers}
+                productCode={record.product_code}
+                commentCounts={commentCounts}
+                highlightCard={highlightCard}
+                onCommentClick={handleCommentClick}
+                checkResultId={record.id}
+                onTabChange={setRightTab}
+                overallStatus={(record as any).overall_status}
+                checkedAt={record.created_at}
+                onSeekMedia={handleSeekMedia}
+              />
+            ) : (
+              <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
+                <Bot className="h-10 w-10 mb-3 opacity-30" />
+                <p className="text-sm font-medium">チェック結果がありません</p>
+              </div>
+            )}
+          </TabsContent>
+
+          {canReadComments && (
+            <TabsContent value="comments" forceMount className={cn(
+              "absolute inset-0 top-10 overflow-hidden mt-0 ring-0 focus-visible:ring-0",
+              effectiveTab !== "comments" && "hidden"
+            )}>
+              <SharedCommentsPanel
+                checkResultId={record.id}
+                shareToken={token!}
+                allowWrite={canWriteComments}
+                filterItemId={commentFilter}
+                onAnnotationClick={handleAnnotationClick}
+                mediaCurrentTime={mediaCurrentTime}
+                onSeekMedia={handleSeekMedia}
+                refreshKey={commentRefreshKey}
+              />
+            </TabsContent>
+          )}
+        </Tabs>
+      </div>
     </div>
   );
 }
