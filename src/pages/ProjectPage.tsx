@@ -162,21 +162,32 @@ export default function ProjectPage() {
   const [selectMode, setSelectMode] = useState(false);
   const [collapsedProcesses, setCollapsedProcesses] = useState<Set<string>>(new Set());
 
-  // Auto-collapse completed processes on load
+  // Auto-collapse completed processes AND processes where all root files are fixed
   useEffect(() => {
     if (processes.length > 0) {
-      const completedIds = new Set(
-        processes.filter(p => p.status === "completed").map(p => p.id)
-      );
-      if (completedIds.size > 0) {
+      const shouldCollapseIds = new Set<string>();
+      for (const proc of processes) {
+        // Collapse if process status is completed
+        if (proc.status === "completed") {
+          shouldCollapseIds.add(proc.id);
+          continue;
+        }
+        // Collapse if all root files in this process are fixed
+        const procFiles = files.filter(f => f.process_type === proc.process_key);
+        const rootFiles = procFiles.filter(f => !f.parent_file_id);
+        if (rootFiles.length > 0 && rootFiles.every(f => f.status === "fixed")) {
+          shouldCollapseIds.add(proc.id);
+        }
+      }
+      if (shouldCollapseIds.size > 0) {
         setCollapsedProcesses(prev => {
           const next = new Set(prev);
-          completedIds.forEach(id => next.add(id));
+          shouldCollapseIds.forEach(id => next.add(id));
           return next;
         });
       }
     }
-  }, [processes]);
+  }, [processes, files]);
   const handleBatchFix = async (processFiles: ProjectFile[], processKey: string) => {
     if (!id || !user) return;
     // All root files with check_result_id are targets for batch fix
