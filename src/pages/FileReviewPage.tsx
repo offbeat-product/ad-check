@@ -617,7 +617,19 @@ export default function FileReviewPage() {
           }
         }
 
-        // For video/audio async checks, insert a pending record first so n8n can UPDATE it
+        // Include correction comments for the AI to verify fixes
+        if (file.check_result_id) {
+          const { data: corrComments } = await supabase
+            .from("comments")
+            .select("content, status, check_item_id")
+            .eq("check_result_id", file.check_result_id)
+            .is("parent_id", null);
+          if (corrComments && corrComments.length > 0) {
+            body.correction_comments = corrComments;
+            console.log("[CheckMate] Including correction_comments:", corrComments.length);
+          }
+        }
+
         const isAsyncProcess = ["vcon", "video_horizontal", "video_vertical", "narration", "bgm"].includes(processKey);
         // pendingRecordId is hoisted above try block
         if (isAsyncProcess) {
