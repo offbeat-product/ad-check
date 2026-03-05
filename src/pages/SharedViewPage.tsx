@@ -1,14 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import type { CheckItem } from "@/lib/types";
 import type { CheckResultRow, ShareLinkRow } from "@/lib/db-types";
-import { getCheckMarkers } from "@/lib/marker-positions";
+import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import ImagePreview from "@/components/review/ImagePreview";
 import ScriptDisplay from "@/components/review/ScriptDisplay";
+import MediaPreview from "@/components/review/MediaPreview";
 import ReviewRightPanel from "@/components/review/ReviewRightPanel";
 import { useReviewState } from "@/hooks/useReviewState";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
@@ -97,6 +98,8 @@ export default function SharedViewPage() {
     }
   };
 
+  const handleSeekMedia = useCallback(() => {}, []);
+
   if (loading) return <div className="flex items-center justify-center min-h-screen text-muted-foreground">読み込み中...</div>;
 
   if (error) {
@@ -127,9 +130,62 @@ export default function SharedViewPage() {
 
   if (!record) return null;
 
-  const isSf = record.process_type === "sf" || record.process_type === "styleframe" || record.process_type === "storyboard";
-  const inputData = record.input_data as { image_base64?: string; script_text?: string } | null;
+  const aiCfg = AI_CHECK_CONFIG[record.process_type];
+  const inputMode = aiCfg?.inputMode || "text";
+  const inputData = record.input_data as Record<string, string> | null;
   const canReadComments = shareLink?.allow_comment_read;
+
+  // Resolve media source
+  const imageSrc = inputData?.image_base64 || null;
+  const videoSrc = inputData?.video_url || null;
+  const audioSrc = inputData?.audio_url || null;
+  const scriptText = inputData?.script_text || record.input_text || "";
+
+  const processLabel = record.process_type;
+
+  const renderPreview = () => {
+    switch (inputMode) {
+      case "image":
+        return (
+          <ImagePreview
+            imageSrc={imageSrc}
+            markers={markers}
+            paintMode={false}
+            onPaintModeToggle={() => {}}
+            onMarkerClick={scrollToCard}
+            label={`${record.client_name} / ${record.product_name}`}
+            noDataMessage="プレビュー不可"
+          />
+        );
+      case "video":
+        return (
+          <MediaPreview
+            src={videoSrc}
+            mediaType="video"
+            label={`${record.client_name} / ${record.product_name}`}
+            noDataMessage="動画プレビュー不可"
+            scriptText={scriptText || undefined}
+          />
+        );
+      case "audio":
+        return (
+          <MediaPreview
+            src={audioSrc}
+            mediaType="audio"
+            label={`${record.client_name} / ${record.product_name}`}
+            noDataMessage="音声プレビュー不可"
+            scriptText={scriptText || undefined}
+          />
+        );
+      default:
+        return (
+          <div>
+            <span className="text-xs text-muted-foreground mb-2 block">{record.client_name} / {record.product_name}</span>
+            <ScriptDisplay text={scriptText} items={items} markers={markers} onItemClick={scrollToCard} />
+          </div>
+        );
+    }
+  };
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -142,22 +198,7 @@ export default function SharedViewPage() {
 
         <div className="flex-1 overflow-y-auto">
           <div className="p-4">
-            {isSf ? (
-              <ImagePreview
-                imageSrc={inputData?.image_base64}
-                markers={markers}
-                paintMode={false}
-                onPaintModeToggle={() => {}}
-                onMarkerClick={scrollToCard}
-                label={`${record.client_name} / ${record.product_name} / スタイルフレーム`}
-                noDataMessage="プレビュー不可"
-              />
-            ) : (
-              <div>
-                <span className="text-xs text-muted-foreground mb-2 block">{record.client_name} / {record.product_name} / 字コンテ</span>
-                <ScriptDisplay text={inputData?.script_text || record.input_text || ""} items={items} markers={markers} onItemClick={scrollToCard} />
-              </div>
-            )}
+            {renderPreview()}
           </div>
         </div>
       </div>
