@@ -84,8 +84,8 @@ export default function ImagePreview({
           ))}
         </TooltipProvider>
 
-        {/* Saved annotation overlays (from comments) */}
-        {savedAnnotations && savedAnnotations.length > 0 && (
+        {/* Saved annotation overlays (from comments) - only visible in paint mode */}
+        {paintMode && savedAnnotations && savedAnnotations.length > 0 && (
           <svg className="absolute inset-0 w-full h-full pointer-events-none z-[15]" viewBox={`0 0 ${imageSize.width || 800} ${imageSize.height || 400}`} preserveAspectRatio="none">
             {savedAnnotations.map((ann, i) => (
               <SavedAnnotationSvg key={i} ann={ann} containerWidth={imageSize.width || 800} containerHeight={imageSize.height || 400} />
