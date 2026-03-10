@@ -1630,7 +1630,42 @@ export default function ProjectPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Submission type change confirmation */}
+      {/* Change pattern dialog */}
+      <Dialog open={!!changePatternTarget} onOpenChange={(o) => !o && setChangePatternTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>パターン変更</DialogTitle></DialogHeader>
+          {changePatternTarget && (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                「{changePatternTarget.file_name}」の所属パターンを変更します
+              </p>
+              <div className="space-y-1.5">
+                <Button
+                  variant={!changePatternTarget.pattern_id ? "default" : "outline"}
+                  size="sm"
+                  className="w-full justify-start text-xs"
+                  onClick={() => handleChangePattern(changePatternTarget.id, null)}
+                >
+                  全パターン共通
+                  {!changePatternTarget.pattern_id && <span className="ml-auto text-[10px] text-muted-foreground">（現在）</span>}
+                </Button>
+                {patterns.map(p => (
+                  <Button
+                    key={p.id}
+                    variant={changePatternTarget.pattern_id === p.id ? "default" : "outline"}
+                    size="sm"
+                    className="w-full justify-start text-xs"
+                    onClick={() => handleChangePattern(changePatternTarget.id, p.id)}
+                  >
+                    {p.name}{p.description ? ` — ${p.description}` : ""}
+                    {changePatternTarget.pattern_id === p.id && <span className="ml-auto text-[10px] text-muted-foreground">（現在）</span>}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       <AlertDialog open={!!submissionChangeTarget} onOpenChange={(o) => !o && setSubmissionChangeTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
