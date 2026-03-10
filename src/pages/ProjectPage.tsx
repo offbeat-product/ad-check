@@ -37,10 +37,10 @@ import ReferenceMaterialsSection from "@/components/reference/ReferenceMaterials
 import CheckRulesTab from "@/components/product/CheckRulesTab";
 import {
   Upload, FileText, Image, Film, MessageCircle, Plus, Settings, GripVertical,
-  ChevronDown, ChevronRight, CalendarIcon, AlertTriangle, Trash2, Grid3X3, List, Bot, Loader2, Pencil, Lock, CheckSquare, Send, MoreHorizontal, Layers,
+  ChevronDown, ChevronRight, CalendarIcon, AlertTriangle, Trash2, Grid3X3, List, Bot, Loader2, Pencil, Lock, CheckSquare, Send, MoreHorizontal, Layers, ArrowRightLeft,
 } from "lucide-react";
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Checkbox } from "@/components/ui/checkbox";
 import NotificationBell from "@/components/NotificationBell";
@@ -162,6 +162,7 @@ export default function ProjectPage() {
   const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
   const [collapsedProcesses, setCollapsedProcesses] = useState<Set<string>>(new Set());
+  const [changePatternTarget, setChangePatternTarget] = useState<ProjectFile | null>(null);
 
   // Auto-collapse completed processes AND processes where all root files are fixed
   useEffect(() => {
@@ -620,6 +621,17 @@ export default function ProjectPage() {
     return null; // images & text stay in DB
   };
 
+  const handleChangePattern = async (fileId: string, newPatternId: string | null) => {
+    const { error } = await supabase.from("project_files").update({ pattern_id: newPatternId } as any).eq("id", fileId);
+    if (error) {
+      toast({ title: "エラー", description: "パターンの変更に失敗しました", variant: "destructive" });
+    } else {
+      toast({ title: "パターンを変更しました" });
+      setFiles(prev => prev.map(f => f.id === fileId ? { ...f, pattern_id: newPatternId } : f));
+    }
+    setChangePatternTarget(null);
+  };
+
   const getFileFormatHint = (processType: string): string => {
     const hints: Record<string, string> = {
       script: "TXT / DOCX",
@@ -991,6 +1003,9 @@ export default function ProjectPage() {
                   const ok = await updateProcess(processId, { is_common: isCommon } as Partial<ProjectProcess>);
                   if (ok) toast({ title: isCommon ? "共通素材に移動しました" : "パターン別に移動しました" });
                   return !!ok;
+                }}
+                onChangeFilePattern={async (fileId, newPatternId) => {
+                  await handleChangePattern(fileId, newPatternId);
                 }}
               />
             ) : (
@@ -1367,16 +1382,28 @@ export default function ProjectPage() {
                                             </div>
                                           </button>
                                           {!selectMode && (
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setDeleteTarget({ file, hasCheck: !!cr });
-                                              }}
-                                              className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:scale-110 z-10"
-                                              title="削除"
-                                            >
-                                              <span className="text-xs font-bold leading-none">×</span>
-                                            </button>
+                                            <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity z-10" onClick={(e) => e.stopPropagation()}>
+                                              <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                  <button className="w-6 h-6 rounded-full bg-muted/90 backdrop-blur-sm flex items-center justify-center shadow-sm hover:bg-muted">
+                                                    <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+                                                  </button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-40">
+                                                  {patterns.length > 0 && (
+                                                    <>
+                                                      <DropdownMenuItem onClick={() => setChangePatternTarget(file)}>
+                                                        <ArrowRightLeft className="h-3.5 w-3.5 mr-2" />パターン変更
+                                                      </DropdownMenuItem>
+                                                      <DropdownMenuSeparator />
+                                                    </>
+                                                  )}
+                                                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget({ file, hasCheck: !!cr })}>
+                                                    <Trash2 className="h-3.5 w-3.5 mr-2" />削除
+                                                  </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                              </DropdownMenu>
+                                            </div>
                                           )}
                                         </div>
                                       );
@@ -1489,16 +1516,28 @@ export default function ProjectPage() {
                                           </div>
                                         </button>
                                         {!selectMode && (
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setDeleteTarget({ file, hasCheck: !!cr });
-                                            }}
-                                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:scale-110 z-10"
-                                            title="削除"
-                                          >
-                                            <span className="text-xs font-bold leading-none">×</span>
-                                          </button>
+                                          <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity z-10" onClick={(e) => e.stopPropagation()}>
+                                            <DropdownMenu>
+                                              <DropdownMenuTrigger asChild>
+                                                <button className="w-6 h-6 rounded-full bg-muted/90 backdrop-blur-sm flex items-center justify-center shadow-sm hover:bg-muted">
+                                                  <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+                                                </button>
+                                              </DropdownMenuTrigger>
+                                              <DropdownMenuContent align="end" className="w-40">
+                                                {patterns.length > 0 && (
+                                                  <>
+                                                    <DropdownMenuItem onClick={() => setChangePatternTarget(file)}>
+                                                      <ArrowRightLeft className="h-3.5 w-3.5 mr-2" />パターン変更
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                  </>
+                                                )}
+                                                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget({ file, hasCheck: !!cr })}>
+                                                  <Trash2 className="h-3.5 w-3.5 mr-2" />削除
+                                                </DropdownMenuItem>
+                                              </DropdownMenuContent>
+                                            </DropdownMenu>
+                                          </div>
                                         )}
                                       </div>
                                     );
@@ -1594,7 +1633,42 @@ export default function ProjectPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Submission type change confirmation */}
+      {/* Change pattern dialog */}
+      <Dialog open={!!changePatternTarget} onOpenChange={(o) => !o && setChangePatternTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>パターン変更</DialogTitle></DialogHeader>
+          {changePatternTarget && (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                「{changePatternTarget.file_name}」の所属パターンを変更します
+              </p>
+              <div className="space-y-1.5">
+                <Button
+                  variant={!changePatternTarget.pattern_id ? "default" : "outline"}
+                  size="sm"
+                  className="w-full justify-start text-xs"
+                  onClick={() => handleChangePattern(changePatternTarget.id, null)}
+                >
+                  全パターン共通
+                  {!changePatternTarget.pattern_id && <span className="ml-auto text-[10px] text-muted-foreground">（現在）</span>}
+                </Button>
+                {patterns.map(p => (
+                  <Button
+                    key={p.id}
+                    variant={changePatternTarget.pattern_id === p.id ? "default" : "outline"}
+                    size="sm"
+                    className="w-full justify-start text-xs"
+                    onClick={() => handleChangePattern(changePatternTarget.id, p.id)}
+                  >
+                    {p.name}{p.description ? ` — ${p.description}` : ""}
+                    {changePatternTarget.pattern_id === p.id && <span className="ml-auto text-[10px] text-muted-foreground">（現在）</span>}
+                  </Button>
+                ))}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       <AlertDialog open={!!submissionChangeTarget} onOpenChange={(o) => !o && setSubmissionChangeTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>

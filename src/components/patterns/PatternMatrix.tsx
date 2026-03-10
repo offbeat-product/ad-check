@@ -31,6 +31,7 @@ interface Props {
   onUpdatePattern?: (id: string, updates: Partial<Pick<Pattern, "name" | "description">>) => Promise<void>;
   onDeletePattern?: (id: string) => Promise<void>;
   onToggleProcessCommon?: (processId: string, isCommon: boolean) => Promise<boolean>;
+  onChangeFilePattern?: (fileId: string, newPatternId: string | null) => Promise<void>;
 }
 
 function getCellStatus(file: ProjectFile | undefined, checkResults: Props["checkResults"]): {
@@ -54,13 +55,14 @@ function getCellStatus(file: ProjectFile | undefined, checkResults: Props["check
   return { label: cfg?.label || status, colorClass: cfg?.class || "bg-muted" };
 }
 
-export default function PatternMatrix({ projectId, patterns, processes, files, checkResults, onUpload, onUpdatePattern, onDeletePattern, onToggleProcessCommon }: Props) {
+export default function PatternMatrix({ projectId, patterns, processes, files, checkResults, onUpload, onUpdatePattern, onDeletePattern, onToggleProcessCommon, onChangeFilePattern }: Props) {
   const navigate = useNavigate();
   const [editPattern, setEditPattern] = useState<Pattern | null>(null);
   const [editName, setEditName] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [editSaving, setEditSaving] = useState(false);
   const [deletePatternTarget, setDeletePatternTarget] = useState<Pattern | null>(null);
+  const [dragOverCell, setDragOverCell] = useState<string | null>(null);
 
   // Split processes into common and pattern-specific using DB flag
   const activeProcesses = processes.filter(p => p.is_active);
@@ -206,12 +208,32 @@ export default function PatternMatrix({ projectId, patterns, processes, files, c
                         const cell = getCellStatus(f, checkResults);
                         const count = fileCounts.get(pattern.id)?.get(proc.process_key) || 0;
                         return (
-                          <td key={proc.id} className="px-1 py-1 text-center">
+                          <td key={proc.id} className="px-1 py-1 text-center"
+                            onDragOver={(e) => { e.preventDefault(); setDragOverCell(`${pattern.id}-${proc.process_key}`); }}
+                            onDragLeave={() => setDragOverCell(null)}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              setDragOverCell(null);
+                              const fileId = e.dataTransfer.getData("text/file-id");
+                              if (fileId && onChangeFilePattern) {
+                                onChangeFilePattern(fileId, pattern.id);
+                              }
+                            }}
+                          >
                             <button
+                              draggable={!!f && !!onChangeFilePattern}
+                              onDragStart={(e) => {
+                                if (f) {
+                                  e.dataTransfer.setData("text/file-id", f.id);
+                                  e.dataTransfer.effectAllowed = "move";
+                                }
+                              }}
                               onClick={() => f ? navigate(`/project/${projectId}/file/${f.id}`) : onUpload(proc.process_key, pattern.id)}
                               className={cn(
                                 "w-full rounded-md px-2 py-1.5 transition-colors text-[10px] font-medium relative",
                                 f ? cell.colorClass : "bg-muted/30 text-muted-foreground/40 hover:bg-muted/60",
+                                dragOverCell === `${pattern.id}-${proc.process_key}` && "ring-2 ring-primary bg-primary/10",
+                                f && onChangeFilePattern && "cursor-grab active:cursor-grabbing",
                               )}
                             >
                               {f ? cell.label : (
