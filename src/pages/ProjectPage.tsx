@@ -781,6 +781,7 @@ export default function ProjectPage() {
     } finally {
       setUploadModal(null);
       setSelectedFiles([]);
+      setFilePatternAssignments({});
       setUploadTextInput("");
       setUseTextInput(false);
       setUploading(false);
