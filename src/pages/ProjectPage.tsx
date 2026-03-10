@@ -1004,6 +1004,9 @@ export default function ProjectPage() {
                   if (ok) toast({ title: isCommon ? "共通素材に移動しました" : "パターン別に移動しました" });
                   return !!ok;
                 }}
+                onChangeFilePattern={async (fileId, newPatternId) => {
+                  await handleChangePattern(fileId, newPatternId);
+                }}
               />
             ) : (
               /* Legacy list view (no patterns) */
