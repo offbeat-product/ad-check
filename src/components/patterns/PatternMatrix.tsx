@@ -208,12 +208,32 @@ export default function PatternMatrix({ projectId, patterns, processes, files, c
                         const cell = getCellStatus(f, checkResults);
                         const count = fileCounts.get(pattern.id)?.get(proc.process_key) || 0;
                         return (
-                          <td key={proc.id} className="px-1 py-1 text-center">
+                          <td key={proc.id} className="px-1 py-1 text-center"
+                            onDragOver={(e) => { e.preventDefault(); setDragOverCell(`${pattern.id}-${proc.process_key}`); }}
+                            onDragLeave={() => setDragOverCell(null)}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              setDragOverCell(null);
+                              const fileId = e.dataTransfer.getData("text/file-id");
+                              if (fileId && onChangeFilePattern) {
+                                onChangeFilePattern(fileId, pattern.id);
+                              }
+                            }}
+                          >
                             <button
+                              draggable={!!f && !!onChangeFilePattern}
+                              onDragStart={(e) => {
+                                if (f) {
+                                  e.dataTransfer.setData("text/file-id", f.id);
+                                  e.dataTransfer.effectAllowed = "move";
+                                }
+                              }}
                               onClick={() => f ? navigate(`/project/${projectId}/file/${f.id}`) : onUpload(proc.process_key, pattern.id)}
                               className={cn(
                                 "w-full rounded-md px-2 py-1.5 transition-colors text-[10px] font-medium relative",
                                 f ? cell.colorClass : "bg-muted/30 text-muted-foreground/40 hover:bg-muted/60",
+                                dragOverCell === `${pattern.id}-${proc.process_key}` && "ring-2 ring-primary bg-primary/10",
+                                f && onChangeFilePattern && "cursor-grab active:cursor-grabbing",
                               )}
                             >
                               {f ? cell.label : (
