@@ -1627,7 +1627,7 @@ export default function ProjectPage() {
 
 
             {/* Pattern selection (only when patterns exist) */}
-            {patterns.length > 0 && (
+            {patterns.length > 0 && selectedFiles.length <= 1 && (
               <div className="space-y-2">
                 <Label className="text-xs font-medium">対象</Label>
                 <RadioGroup value={uploadPatternMode} onValueChange={(v) => setUploadPatternMode(v as "common" | "specific")} className="flex gap-4">
@@ -1652,6 +1652,51 @@ export default function ProjectPage() {
                     </SelectContent>
                   </Select>
                 )}
+              </div>
+            )}
+
+            {/* Per-file pattern assignment (when patterns exist and multiple files selected) */}
+            {patterns.length > 0 && selectedFiles.length > 1 && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-medium">パターン割り当て</Label>
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2"
+                      onClick={() => {
+                        const assignments: Record<number, string | null> = {};
+                        selectedFiles.forEach((_, i) => { assignments[i] = null; });
+                        setFilePatternAssignments(assignments);
+                      }}>全て共通</Button>
+                    {patterns.map(p => (
+                      <Button key={p.id} size="sm" variant="ghost" className="h-6 text-[10px] px-2"
+                        onClick={() => {
+                          const assignments: Record<number, string | null> = {};
+                          selectedFiles.forEach((_, i) => { assignments[i] = p.id; });
+                          setFilePatternAssignments(assignments);
+                        }}>全て{p.name}</Button>
+                    ))}
+                  </div>
+                </div>
+                <div className="max-h-[200px] overflow-y-auto border border-border rounded-lg divide-y divide-border">
+                  {selectedFiles.map((file, i) => (
+                    <div key={i} className="flex items-center gap-2 px-3 py-2">
+                      <span className="text-xs truncate flex-1 min-w-0" title={file.name}>{file.name}</span>
+                      <Select value={filePatternAssignments[i] ?? "__common__"} onValueChange={(v) => {
+                        setFilePatternAssignments(prev => ({ ...prev, [i]: v === "__common__" ? null : v }));
+                      }}>
+                        <SelectTrigger className="h-7 text-xs w-[140px] shrink-0">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__common__" className="text-xs">共通</SelectItem>
+                          {patterns.map(p => (
+                            <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 
