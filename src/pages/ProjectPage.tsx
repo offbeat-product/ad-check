@@ -669,6 +669,7 @@ export default function ProjectPage() {
     setUploadProgress(0);
 
     const cfg = PROCESS_FILE_CONFIG[uploadModal];
+    const usePerFilePatterns = patterns.length > 0 && selectedFiles.length > 1 && Object.keys(filePatternAssignments).length > 0;
     const resolvedPatternId = (patterns.length > 0 && uploadPatternMode === "specific") ? uploadPatternId : null;
     let lastInsertedFileId: string | null = null;
     let showedCopyDialog = false;
