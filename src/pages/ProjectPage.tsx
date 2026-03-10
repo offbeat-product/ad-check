@@ -737,10 +737,11 @@ export default function ProjectPage() {
             fileData = await file.text();
           }
 
+          const filePatternId = usePerFilePatterns ? (filePatternAssignments[i] ?? null) : resolvedPatternId;
           const { data: inserted, error } = await supabase.from("project_files").insert({
             project_id: id, process_type: uploadModal, file_name: fileName,
             file_type: fileType, file_data: fileData, file_size_bytes: fileSize,
-            created_by: user.email || user.id, pattern_id: resolvedPatternId,
+            created_by: user.email || user.id, pattern_id: filePatternId,
             submission_type: uploadSubmissionType,
           } as any).select("id").single();
           if (error) throw error;
