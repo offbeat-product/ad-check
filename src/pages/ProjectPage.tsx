@@ -621,6 +621,17 @@ export default function ProjectPage() {
     return null; // images & text stay in DB
   };
 
+  const handleChangePattern = async (fileId: string, newPatternId: string | null) => {
+    const { error } = await supabase.from("project_files").update({ pattern_id: newPatternId } as any).eq("id", fileId);
+    if (error) {
+      toast({ title: "エラー", description: "パターンの変更に失敗しました", variant: "destructive" });
+    } else {
+      toast({ title: "パターンを変更しました" });
+      setFiles(prev => prev.map(f => f.id === fileId ? { ...f, pattern_id: newPatternId } : f));
+    }
+    setChangePatternTarget(null);
+  };
+
   const getFileFormatHint = (processType: string): string => {
     const hints: Record<string, string> = {
       script: "TXT / DOCX",
