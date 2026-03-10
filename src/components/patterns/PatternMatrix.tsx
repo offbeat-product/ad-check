@@ -55,13 +55,14 @@ function getCellStatus(file: ProjectFile | undefined, checkResults: Props["check
   return { label: cfg?.label || status, colorClass: cfg?.class || "bg-muted" };
 }
 
-export default function PatternMatrix({ projectId, patterns, processes, files, checkResults, onUpload, onUpdatePattern, onDeletePattern, onToggleProcessCommon }: Props) {
+export default function PatternMatrix({ projectId, patterns, processes, files, checkResults, onUpload, onUpdatePattern, onDeletePattern, onToggleProcessCommon, onChangeFilePattern }: Props) {
   const navigate = useNavigate();
   const [editPattern, setEditPattern] = useState<Pattern | null>(null);
   const [editName, setEditName] = useState("");
   const [editDesc, setEditDesc] = useState("");
   const [editSaving, setEditSaving] = useState(false);
   const [deletePatternTarget, setDeletePatternTarget] = useState<Pattern | null>(null);
+  const [dragOverCell, setDragOverCell] = useState<string | null>(null);
 
   // Split processes into common and pattern-specific using DB flag
   const activeProcesses = processes.filter(p => p.is_active);
