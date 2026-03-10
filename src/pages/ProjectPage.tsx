@@ -1619,7 +1619,7 @@ export default function ProjectPage() {
 
       {/* Upload modal */}
       <Dialog open={!!uploadModal} onOpenChange={(o) => !o && setUploadModal(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className={cn("max-w-md", patterns.length > 0 && selectedFiles.length > 1 && "max-w-lg")}>
           <DialogHeader><DialogTitle>ファイルアップロード</DialogTitle></DialogHeader>
           <div className="space-y-4">
 
