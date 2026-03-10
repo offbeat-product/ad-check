@@ -636,6 +636,32 @@ export default function ProjectPage() {
 
   const isImageProcess = (processType: string) => ["styleframe", "storyboard"].includes(processType);
 
+  // Drag & drop handlers for upload area
+  const [isDragOver, setIsDragOver] = useState(false);
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true); };
+  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(false); };
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault(); e.stopPropagation(); setIsDragOver(false);
+    if (uploading) return;
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const accept = PROCESS_FILE_CONFIG[uploadModal || ""]?.accept || "";
+      const exts = accept.split(",").map(x => x.trim().toLowerCase());
+      const valid = Array.from(files).filter(f => {
+        const ext = "." + f.name.split(".").pop()?.toLowerCase();
+        return exts.length === 0 || exts.includes(ext);
+      });
+      if (valid.length === 0) {
+        toast({ title: "エラー", description: "対応していないファイル形式です", variant: "destructive" });
+        return;
+      }
+      if (valid.length < files.length) {
+        toast({ title: "一部のファイルをスキップしました", description: `対応形式: ${accept}` });
+      }
+      setSelectedFiles(valid);
+    }
+  };
+
   const handleFileUpload = async () => {
     if (!uploadModal || !id || !user) return;
     setUploading(true);
@@ -1636,16 +1662,18 @@ export default function ProjectPage() {
                 placeholder="テキストを入力..." className="min-h-[150px] text-sm font-mono" />
             ) : (
               <div onClick={() => !uploading && fileInputRef.current?.click()}
-                className={cn("border-2 border-dashed border-border rounded-xl p-8 text-center transition-colors",
+                onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}
+                className={cn("border-2 border-dashed rounded-xl p-8 text-center transition-colors",
+                  isDragOver ? "border-primary bg-primary/5" : "border-border",
                   uploading ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:border-primary/50")}>
-                <Upload className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                <Upload className={cn("h-8 w-8 mx-auto mb-2", isDragOver ? "text-primary" : "text-muted-foreground")} />
                 <p className="text-sm text-muted-foreground">
                   {selectedFiles.length > 0 ? (
                     selectedFiles.length === 1
                       ? <span>{selectedFiles[0].name} <span className="text-muted-foreground/60">({formatFileSize(selectedFiles[0].size)})</span></span>
                       : <span>{selectedFiles.length}件のファイルを選択中</span>
                   ) : (
-                    isImageProcess(uploadModal || "") ? "クリックしてファイルを選択（複数可）" : "クリックしてファイルを選択"
+                    isDragOver ? "ドロップしてアップロード" : "クリックまたはドラッグ＆ドロップ（複数可）"
                   )}
                 </p>
                 {selectedFiles.length > 1 && (
@@ -1658,7 +1686,7 @@ export default function ProjectPage() {
                 <p className="text-xs text-muted-foreground/60 mt-1">{getFileFormatHint(uploadModal || "")}</p>
                 <input ref={fileInputRef} type="file" className="hidden"
                   accept={PROCESS_FILE_CONFIG[uploadModal || ""]?.accept}
-                  multiple={isImageProcess(uploadModal || "")}
+                  multiple
                   onChange={(e) => {
                     const files = e.target.files;
                     if (files && files.length > 0) setSelectedFiles(Array.from(files));
