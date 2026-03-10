@@ -31,6 +31,7 @@ interface Props {
   onUpdatePattern?: (id: string, updates: Partial<Pick<Pattern, "name" | "description">>) => Promise<void>;
   onDeletePattern?: (id: string) => Promise<void>;
   onToggleProcessCommon?: (processId: string, isCommon: boolean) => Promise<boolean>;
+  onChangeFilePattern?: (fileId: string, newPatternId: string | null) => Promise<void>;
 }
 
 function getCellStatus(file: ProjectFile | undefined, checkResults: Props["checkResults"]): {
