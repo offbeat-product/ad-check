@@ -162,6 +162,7 @@ export default function ProjectPage() {
   const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
   const [collapsedProcesses, setCollapsedProcesses] = useState<Set<string>>(new Set());
+  const [changePatternTarget, setChangePatternTarget] = useState<ProjectFile | null>(null);
 
   // Auto-collapse completed processes AND processes where all root files are fixed
   useEffect(() => {
