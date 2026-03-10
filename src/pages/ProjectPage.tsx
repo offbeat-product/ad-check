@@ -636,6 +636,32 @@ export default function ProjectPage() {
 
   const isImageProcess = (processType: string) => ["styleframe", "storyboard"].includes(processType);
 
+  // Drag & drop handlers for upload area
+  const [isDragOver, setIsDragOver] = useState(false);
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(true); };
+  const handleDragLeave = (e: React.DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragOver(false); };
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault(); e.stopPropagation(); setIsDragOver(false);
+    if (uploading) return;
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      const accept = PROCESS_FILE_CONFIG[uploadModal || ""]?.accept || "";
+      const exts = accept.split(",").map(x => x.trim().toLowerCase());
+      const valid = Array.from(files).filter(f => {
+        const ext = "." + f.name.split(".").pop()?.toLowerCase();
+        return exts.length === 0 || exts.includes(ext);
+      });
+      if (valid.length === 0) {
+        toast({ title: "エラー", description: "対応していないファイル形式です", variant: "destructive" });
+        return;
+      }
+      if (valid.length < files.length) {
+        toast({ title: "一部のファイルをスキップしました", description: `対応形式: ${accept}` });
+      }
+      setSelectedFiles(valid);
+    }
+  };
+
   const handleFileUpload = async () => {
     if (!uploadModal || !id || !user) return;
     setUploading(true);
