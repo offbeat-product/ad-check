@@ -135,6 +135,7 @@ export default function ProjectPage() {
   const [checkResults, setCheckResults] = useState<Record<string, Pick<CheckResultRow, "id" | "overall_status" | "ng_count" | "warning_count" | "created_at" | "user_id" | "check_type" | "comparison_round"> & { resolved_items?: unknown; check_items?: unknown }>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [filePatternAssignments, setFilePatternAssignments] = useState<Record<number, string | null>>({});
   const [processModalOpen, setProcessModalOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ file: ProjectFile; hasCheck: boolean } | null>(null);
   const [submissionChangeTarget, setSubmissionChangeTarget] = useState<string | null>(null);
