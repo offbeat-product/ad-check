@@ -1513,16 +1513,28 @@ export default function ProjectPage() {
                                           </div>
                                         </button>
                                         {!selectMode && (
-                                          <button
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setDeleteTarget({ file, hasCheck: !!cr });
-                                            }}
-                                            className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-sm hover:scale-110 z-10"
-                                            title="削除"
-                                          >
-                                            <span className="text-xs font-bold leading-none">×</span>
-                                          </button>
+                                          <div className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity z-10" onClick={(e) => e.stopPropagation()}>
+                                            <DropdownMenu>
+                                              <DropdownMenuTrigger asChild>
+                                                <button className="w-6 h-6 rounded-full bg-muted/90 backdrop-blur-sm flex items-center justify-center shadow-sm hover:bg-muted">
+                                                  <MoreHorizontal className="h-3.5 w-3.5 text-muted-foreground" />
+                                                </button>
+                                              </DropdownMenuTrigger>
+                                              <DropdownMenuContent align="end" className="w-40">
+                                                {patterns.length > 0 && (
+                                                  <>
+                                                    <DropdownMenuItem onClick={() => setChangePatternTarget(file)}>
+                                                      <ArrowRightLeft className="h-3.5 w-3.5 mr-2" />パターン変更
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                  </>
+                                                )}
+                                                <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeleteTarget({ file, hasCheck: !!cr })}>
+                                                  <Trash2 className="h-3.5 w-3.5 mr-2" />削除
+                                                </DropdownMenuItem>
+                                              </DropdownMenuContent>
+                                            </DropdownMenu>
+                                          </div>
                                         )}
                                       </div>
                                     );
