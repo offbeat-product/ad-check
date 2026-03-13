@@ -163,6 +163,31 @@ export default function ProjectPage() {
   const [selectMode, setSelectMode] = useState(false);
   const [collapsedProcesses, setCollapsedProcesses] = useState<Set<string>>(new Set());
   const [changePatternTarget, setChangePatternTarget] = useState<ProjectFile | null>(null);
+  const [editingProjectName, setEditingProjectName] = useState(false);
+  const [projectNameDraft, setProjectNameDraft] = useState("");
+  const [editingProcessId, setEditingProcessId] = useState<string | null>(null);
+  const [processLabelDraft, setProcessLabelDraft] = useState("");
+
+  const handleSaveProjectName = async () => {
+    setEditingProjectName(false);
+    if (!project || !projectNameDraft.trim() || projectNameDraft.trim() === project.name) return;
+    const newName = projectNameDraft.trim();
+    const { error } = await supabase.from("projects").update({ name: newName }).eq("id", project.id);
+    if (!handleSupabaseError(error, "rename project")) {
+      setProject(prev => prev ? { ...prev, name: newName } : prev);
+      queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
+      toast({ title: "案件名を変更しました" });
+    }
+  };
+
+  const handleSaveProcessLabel = async (procId: string) => {
+    setEditingProcessId(null);
+    const proc = processes.find(p => p.id === procId);
+    if (!proc || !processLabelDraft.trim() || processLabelDraft.trim() === proc.process_label) return;
+    const newLabel = processLabelDraft.trim();
+    await updateProcess(procId, { process_label: newLabel });
+    toast({ title: "工程名を変更しました" });
+  };
 
   // Auto-collapse completed processes AND processes where all root files are fixed
   useEffect(() => {
@@ -846,7 +871,33 @@ export default function ProjectPage() {
             <div className="text-xs text-muted-foreground truncate">
               {client?.name} &gt; {product.name} &gt; {project.name}
             </div>
-            <h1 className="text-base md:text-lg font-bold mt-0.5 truncate">{project.name}</h1>
+            {editingProjectName ? (
+              <form
+                className="flex items-center gap-1 mt-0.5"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSaveProjectName();
+                }}
+              >
+                <Input
+                  autoFocus
+                  value={projectNameDraft}
+                  onChange={(e) => setProjectNameDraft(e.target.value)}
+                  onBlur={handleSaveProjectName}
+                  onKeyDown={(e) => { if (e.key === "Escape") { setEditingProjectName(false); } }}
+                  className="text-base md:text-lg font-bold h-8 px-1"
+                />
+              </form>
+            ) : (
+              <h1
+                className="text-base md:text-lg font-bold mt-0.5 truncate cursor-pointer hover:bg-muted/50 rounded px-1 -mx-1 transition-colors group flex items-center gap-1"
+                onClick={() => { setProjectNameDraft(project.name); setEditingProjectName(true); }}
+                title="クリックして編集"
+              >
+                {project.name}
+                <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+              </h1>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-wrap shrink-0">
             {/* Deadline compliance badge */}
@@ -1068,7 +1119,31 @@ export default function ProjectPage() {
                           <span className="text-xs text-muted-foreground shrink-0">
                             {String.fromCodePoint(0x2460 + index)}
                           </span>
-                          <h2 className="text-sm font-semibold whitespace-nowrap">{proc.process_label}</h2>
+                          {editingProcessId === proc.id ? (
+                            <form
+                              className="flex items-center"
+                              onSubmit={(e) => { e.preventDefault(); handleSaveProcessLabel(proc.id); }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Input
+                                autoFocus
+                                value={processLabelDraft}
+                                onChange={(e) => setProcessLabelDraft(e.target.value)}
+                                onBlur={() => handleSaveProcessLabel(proc.id)}
+                                onKeyDown={(e) => { if (e.key === "Escape") setEditingProcessId(null); }}
+                                className="text-sm font-semibold h-7 w-32 px-1"
+                              />
+                            </form>
+                          ) : (
+                            <h2
+                              className="text-sm font-semibold whitespace-nowrap cursor-pointer hover:bg-muted/50 rounded px-1 -mx-1 transition-colors group/proc flex items-center gap-1"
+                              onClick={(e) => { e.stopPropagation(); setProcessLabelDraft(proc.process_label); setEditingProcessId(proc.id); }}
+                              title="クリックして編集"
+                            >
+                              {proc.process_label}
+                              <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover/proc:opacity-100 transition-opacity shrink-0" />
+                            </h2>
+                          )}
 
                           <DeadlinePicker
                             deadline={proc.client_deadline}
