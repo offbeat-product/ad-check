@@ -1119,7 +1119,31 @@ export default function ProjectPage() {
                           <span className="text-xs text-muted-foreground shrink-0">
                             {String.fromCodePoint(0x2460 + index)}
                           </span>
-                          <h2 className="text-sm font-semibold whitespace-nowrap">{proc.process_label}</h2>
+                          {editingProcessId === proc.id ? (
+                            <form
+                              className="flex items-center"
+                              onSubmit={(e) => { e.preventDefault(); handleSaveProcessLabel(proc.id); }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Input
+                                autoFocus
+                                value={processLabelDraft}
+                                onChange={(e) => setProcessLabelDraft(e.target.value)}
+                                onBlur={() => handleSaveProcessLabel(proc.id)}
+                                onKeyDown={(e) => { if (e.key === "Escape") setEditingProcessId(null); }}
+                                className="text-sm font-semibold h-7 w-32 px-1"
+                              />
+                            </form>
+                          ) : (
+                            <h2
+                              className="text-sm font-semibold whitespace-nowrap cursor-pointer hover:bg-muted/50 rounded px-1 -mx-1 transition-colors group/proc flex items-center gap-1"
+                              onClick={(e) => { e.stopPropagation(); setProcessLabelDraft(proc.process_label); setEditingProcessId(proc.id); }}
+                              title="クリックして編集"
+                            >
+                              {proc.process_label}
+                              <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover/proc:opacity-100 transition-opacity shrink-0" />
+                            </h2>
+                          )}
 
                           <DeadlinePicker
                             deadline={proc.client_deadline}
