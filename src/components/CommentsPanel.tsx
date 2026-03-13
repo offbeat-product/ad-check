@@ -181,7 +181,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
         type: "mention",
         title: `${authorName}さんからメンションされました`,
         message: `[${projectName}] ${resolvedFileName}\n${content.slice(0, 100)}`,
-        data: { check_result_id: checkResultId, project_id: projectId, project_name: projectName, file_name: resolvedFileName, author_name: authorName },
+        data: { check_result_id: checkResultId, project_id: projectId, file_id: fileId, project_name: projectName, file_name: resolvedFileName, author_name: authorName },
       });
     }
   };
