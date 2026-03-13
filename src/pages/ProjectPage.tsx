@@ -167,27 +167,41 @@ export default function ProjectPage() {
   const [projectNameDraft, setProjectNameDraft] = useState("");
   const [editingProcessId, setEditingProcessId] = useState<string | null>(null);
   const [processLabelDraft, setProcessLabelDraft] = useState("");
+  const savingProjectNameRef = useRef(false);
+  const savingProcessLabelRef = useRef(false);
 
-  const handleSaveProjectName = async () => {
+  const handleSaveProjectName = useCallback(async () => {
+    if (savingProjectNameRef.current) return;
+    savingProjectNameRef.current = true;
     setEditingProjectName(false);
-    if (!project || !projectNameDraft.trim() || projectNameDraft.trim() === project.name) return;
-    const newName = projectNameDraft.trim();
-    const { error } = await supabase.from("projects").update({ name: newName }).eq("id", project.id);
-    if (!handleSupabaseError(error, "rename project")) {
-      setProject(prev => prev ? { ...prev, name: newName } : prev);
-      queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
-      toast({ title: "案件名を変更しました" });
+    try {
+      if (!project || !projectNameDraft.trim() || projectNameDraft.trim() === project.name) return;
+      const newName = projectNameDraft.trim();
+      const { error } = await supabase.from("projects").update({ name: newName }).eq("id", project.id);
+      if (!handleSupabaseError(error, "rename project")) {
+        setProject(prev => prev ? { ...prev, name: newName } : prev);
+        queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
+        toast({ title: "案件名を変更しました" });
+      }
+    } finally {
+      savingProjectNameRef.current = false;
     }
-  };
+  }, [project, projectNameDraft, queryClient, toast]);
 
-  const handleSaveProcessLabel = async (procId: string) => {
+  const handleSaveProcessLabel = useCallback(async (procId: string) => {
+    if (savingProcessLabelRef.current) return;
+    savingProcessLabelRef.current = true;
     setEditingProcessId(null);
-    const proc = processes.find(p => p.id === procId);
-    if (!proc || !processLabelDraft.trim() || processLabelDraft.trim() === proc.process_label) return;
-    const newLabel = processLabelDraft.trim();
-    await updateProcess(procId, { process_label: newLabel });
-    toast({ title: "工程名を変更しました" });
-  };
+    try {
+      const proc = processes.find(p => p.id === procId);
+      if (!proc || !processLabelDraft.trim() || processLabelDraft.trim() === proc.process_label) return;
+      const newLabel = processLabelDraft.trim();
+      await updateProcess(procId, { process_label: newLabel });
+      toast({ title: "工程名を変更しました" });
+    } finally {
+      savingProcessLabelRef.current = false;
+    }
+  }, [processes, processLabelDraft, updateProcess, toast]);
 
   // Auto-collapse completed processes AND processes where all root files are fixed
   useEffect(() => {
