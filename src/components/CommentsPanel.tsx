@@ -121,6 +121,19 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
 
   useEffect(() => { fetchComments(); }, [checkResultId, refreshKey]);
 
+  // Realtime subscription — all members see new/updated/deleted comments instantly
+  useEffect(() => {
+    const channel = supabase
+      .channel(`comments-${checkResultId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "comments", filter: `check_result_id=eq.${checkResultId}` },
+        () => { fetchComments(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [checkResultId]);
+
   const filtered = comments.filter((c) => {
     if (filterItemId && c.check_item_id !== filterItemId) return false;
     if (tab === "open") return c.status === "open";
