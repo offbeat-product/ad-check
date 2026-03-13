@@ -1,0 +1,185 @@
+.cursorrules
+# CheckGo AI — Cursor AI 指示書
+
+## プロジェクト概要
+CheckGo AIは、広告クリエイティブ（台本・絵コンテ・音声・動画）をAIで自動検品するSaaSプロダクトです。
+Off Beat株式会社が開発・運用しています。
+
+## 技術スタック
+- **フロントエンド**: Vite + React 18 + TypeScript + Tailwind CSS + shadcn/ui
+- **バックエンド/DB**: Supabase（PostgreSQL + Auth + Storage + Edge Functions）
+- **AIチェック**: n8n Cloud → Gemini 2.5 Pro/Flash API + Claude API
+- **状態管理**: TanStack Query（React Query）
+- **ルーティング**: React Router v6
+- **ビルドツール**: Vite 5
+
+## ディレクトリ構成
+src/
+├── App.tsx              # ルーティング定義（全ページのルート）
+├── main.tsx             # エントリーポイント
+├── pages/               # ページコンポーネント（1ページ = 1ファイル）
+│   ├── Dashboard.tsx    # ダッシュボード（クライアント一覧 + 統計）
+│   ├── ClientPage.tsx   # クライアント詳細（商材一覧）
+│   ├── ProductPage.tsx  # 商材詳細（プロジェクト一覧 + チェックルール）
+│   ├── ProjectPage.tsx  # プロジェクト詳細（工程管理 + ファイルアップロード + AIチェック実行）
+│   ├── FileReviewPage.tsx # ファイルレビュー（チェック結果表示 + コメント + アノテーション）
+│   ├── ReportPage.tsx   # レポート（チェック実績集計）
+│   ├── RuleCandidatesPage.tsx # ルール候補管理（AI生成ルールの承認/却下）
+│   ├── SettingsPage.tsx # 設定（組織・メンバー・チェックルール管理）
+│   ├── SharedViewPage.tsx # 外部共有ビュー（パスワード保護付き）
+│   ├── NotificationsPage.tsx # 通知一覧
+│   ├── Login.tsx        # ログイン
+│   └── AcceptInvitePage.tsx # 招待受諾
+├── components/          # 共通UIコンポーネント
+│   ├── ui/              # shadcn/ui コンポーネント（編集しない）
+│   ├── AppLayout.tsx    # レイアウト（サイドバー + ヘッダー）
+│   ├── AppSidebar.tsx   # サイドバーナビゲーション
+│   ├── AnnotationCanvas.tsx # 画像/動画上のアノテーション
+│   ├── review/          # レビュー関連コンポーネント
+│   ├── product/         # 商材関連コンポーネント
+│   ├── reference/       # 参考資料関連コンポーネント
+│   ├── comments/        # コメント関連コンポーネント
+│   └── patterns/        # 修正パターン関連コンポーネント
+├── hooks/               # カスタムフック
+│   ├── useAuth.tsx      # 認証（Supabase Auth）
+│   ├── useProfile.ts    # ユーザープロフィール取得
+│   ├── useProjectTree.ts # クライアント→商材→プロジェクトの階層取得
+│   ├── useProjectProcesses.ts # プロジェクト内の工程管理
+│   ├── useReviewState.ts # レビュー状態管理
+│   ├── useBatchCheck.ts # 一括チェック実行
+│   ├── useCheckProgress.ts # チェック進捗のリアルタイム監視
+│   ├── useVideoCheckPolling.ts # 動画チェックのポーリング処理
+│   ├── useNotifications.ts # 通知
+│   └── usePatterns.ts   # 修正パターン
+├── lib/                 # ユーティリティ・ヘルパー
+│   ├── webhook.ts       # n8n Webhook呼び出し（★重要：AIチェックのトリガー）
+│   ├── supabase-helpers.ts # Supabase操作ヘルパー
+│   ├── tus-upload.ts    # TUSプロトコル大容量ファイルアップロード
+│   ├── file-validation.ts # ファイルバリデーション
+│   ├── file-extractors.ts # ファイルからのテキスト抽出
+│   ├── check-display.ts # チェック結果の表示ロジック
+│   ├── process-config.ts # 工程（台本/SF/音声/動画）の定義
+│   ├── reference-materials.ts # 参考資料管理
+│   ├── wcheck-parser.ts # チェック結果パーサー
+│   ├── image-compress.ts # 画像圧縮
+│   ├── fetch-with-retry.ts # リトライ付きfetch
+│   ├── marker-positions.ts # アノテーションマーカー位置
+│   └── types.ts         # 共通型定義
+├── integrations/
+│   ├── supabase/
+│   │   ├── client.ts    # Supabaseクライアント初期化
+│   │   └── types.ts     # Supabase自動生成型（★触らない）
+│   └── lovable/
+│       └── index.ts     # Lovable統合（将来的に除去予定）
+
+## コーディング規約
+
+### TypeScript
+- any の使用は禁止。必ず型を定義する
+- 型定義は src/lib/types.ts または src/integrations/supabase/types.ts に集約
+- コンポーネントのPropsは interface で定義
+
+### React
+- 関数コンポーネント + Hooks のみ使用（classコンポーネント禁止）
+- ページコンポーネントは default export
+- 共通コンポーネントは named export
+- 状態管理はTanStack Queryを優先。ローカル状態はuseState
+
+### スタイリング
+- Tailwind CSSのユーティリティクラスを使用
+- カスタムCSSは極力避ける（必要な場合は index.css）
+- shadcn/ui コンポーネントをベースに構築
+- components/ui/ 配下は直接編集しない（shadcn/uiの管理下）
+
+### ファイル命名
+- ページ: PascalCase.tsx（例: Dashboard.tsx）
+- コンポーネント: PascalCase.tsx（例: AppSidebar.tsx）
+- フック: camelCase.ts（例: useAuth.tsx）
+- ユーティリティ: kebab-case.ts（例: webhook.ts）
+
+### import パス
+- @/ エイリアスを使用（src/ にマップ）
+- 例: import { useAuth } from "@/hooks/useAuth"
+
+## Supabase接続
+
+### 環境変数（.env）
+VITE_SUPABASE_URL=https://itdwxycecvdamarubpww.supabase.co
+VITE_SUPABASE_PUBLISHABLE_KEY=（anon key）
+VITE_SUPABASE_PROJECT_ID=itdwxycecvdamarubpww
+
+### クライアント初期化
+src/integrations/supabase/client.ts で初期化済み。
+使用時: import { supabase } from "@/integrations/supabase/client"
+
+### RLS（Row Level Security）
+全テーブルにRLSが有効。ユーザーは自分の組織に属するデータのみアクセス可能。
+
+## n8n Webhook連携（★最重要）
+
+### チェック種別と対応Webhook
+| チェック種別 | Webhook名 | 説明 |
+|------------|-----------|------|
+| 台本チェック | check-script-v2 | テキストファイルの台本をAIチェック |
+| SF・絵コンテチェック | check-sf-v2 | 画像ファイルのSF/絵コンテをAIチェック |
+| 音声チェック | check-audio-v2 | 音声ファイルをAIチェック |
+| 動画チェック | check-video-v2 | 動画ファイルをGemini File APIにアップロード→AIチェック |
+| 参考資料解析 | parse-reference | アップロードされた参考資料からチェックルールを自動生成 |
+
+### Webhook呼び出し
+src/lib/webhook.ts を通じて実行。変更時はこのファイルを確認すること。
+
+### CORS設定
+n8nのWebhookノードとRespond to Webhookノードの両方に以下を設定:
+- Allowed Origins: *
+- Access-Control-Allow-Origin: *
+
+## Edge Functions（Supabase）
+| 関数名 | 用途 |
+|--------|------|
+| create-share-link | 外部共有リンクの生成 |
+| extract-text | アップロードファイルからテキスト抽出 |
+| fetch-external-rules | 外部ルール取得 |
+| shared-comments | 共有ビュー用コメント操作 |
+| verify-share-password | 共有リンクのパスワード検証 |
+
+## 工程（Process）の定義
+1. script — 台本（テキスト）
+2. storyboard — SF・絵コンテ（画像）
+3. audio — 音声（音声ファイル）
+4. video — 動画（動画ファイル）
+
+## 階層構造
+組織（Organization）
+  └── クライアント（Client）
+        └── 商材（Product）
+              └── プロジェクト（Project）
+                    └── 工程（Process: script/storyboard/audio/video）
+                          └── ファイル（File）→ AIチェック → チェック結果
+
+## Git運用ルール
+- main ブランチ: 本番環境（直接pushしない）
+- 作業ブランチ: feature/機能名 で作成
+- Pull Requestでレビュー後にマージ
+- コミットメッセージ: 日本語OK
+
+## よくある改修パターン
+
+### 新しいページを追加する場合
+1. src/pages/NewPage.tsx を作成
+2. src/App.tsx の Routes 内にルートを追加
+3. 必要に応じて src/components/AppSidebar.tsx にナビリンク追加
+
+### チェックルールの表示を変更する場合
+1. src/lib/check-display.ts — 表示ロジック
+2. src/pages/FileReviewPage.tsx — チェック結果画面
+3. src/pages/SettingsPage.tsx — ルール管理画面
+
+### n8n Webhookの接続先を変更する場合
+1. src/lib/webhook.ts のWebhook URLを変更
+2. n8n側のCORS設定を確認
+
+### Supabaseのテーブル構造を変更する場合
+1. Supabaseダッシュボードで変更
+2. src/integrations/supabase/types.ts を再生成
+3. 関連するフック・ページを更新
