@@ -13,7 +13,9 @@ export default function NotificationsPage() {
   const handleClick = async (n: (typeof notifications)[0]) => {
     markAsRead(n.id);
     const data = n.data as Record<string, string> | null;
-    if (data?.check_result_id) {
+    if (data?.file_id && data?.project_id) {
+      navigate(`/project/${data.project_id}/file/${data.file_id}`);
+    } else if (data?.check_result_id) {
       const { supabase } = await import("@/integrations/supabase/client");
       const { data: pf } = await supabase
         .from("project_files")
