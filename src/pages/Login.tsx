@@ -63,7 +63,19 @@ export default function Login() {
     }
   };
 
-  return (
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    try {
+      const { error } = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      toast({ title: "エラー", description: err.message, variant: "destructive" });
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
     <div className="flex min-h-screen items-center justify-center bg-muted p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-2">
