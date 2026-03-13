@@ -94,8 +94,10 @@ export default function FileReviewPage() {
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [mobilePanel, setMobilePanel] = useState<"preview" | "check">("preview");
   const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
+  // Comments should always be associated with the root (original) check result, not comparison results
+  const rootCheckResultId = record?.parent_check_result_id || record?.id || null;
   const { items, markers, commentCounts, paintMode, setPaintMode, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
-    useReviewState(record?.id, checkItems);
+    useReviewState(rootCheckResultId, checkItems);
 
   // Re-fetch the latest check_result from DB before validating submission
   const validateAndOpenSubmit = useCallback(async () => {
@@ -1525,7 +1527,7 @@ export default function FileReviewPage() {
         commentCounts={commentCounts}
         highlightCard={highlightCard}
         commentFilter={commentFilter}
-        checkResultId={record?.id || null}
+        checkResultId={rootCheckResultId}
         hasCheckResult={!!record}
         onCommentClick={handleCommentClick}
         onCheckItemClick={scrollToCard}
