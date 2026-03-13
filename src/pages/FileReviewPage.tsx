@@ -954,7 +954,7 @@ export default function FileReviewPage() {
             user_id: uid, type: "mention",
             title: `${authorName}さんからメンションされました`,
             message: `[${projectName}] ${fileName}\n${comment.slice(0, 100)}`,
-            data: { check_result_id: record.id, project_id: projectId, project_name: projectName, file_name: fileName, author_name: authorName },
+            data: { check_result_id: record.id, project_id: projectId, file_id: fileId, project_name: projectName, file_name: fileName, author_name: authorName },
           });
         }
       }
