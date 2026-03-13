@@ -846,7 +846,33 @@ export default function ProjectPage() {
             <div className="text-xs text-muted-foreground truncate">
               {client?.name} &gt; {product.name} &gt; {project.name}
             </div>
-            <h1 className="text-base md:text-lg font-bold mt-0.5 truncate">{project.name}</h1>
+            {editingProjectName ? (
+              <form
+                className="flex items-center gap-1 mt-0.5"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSaveProjectName();
+                }}
+              >
+                <Input
+                  autoFocus
+                  value={projectNameDraft}
+                  onChange={(e) => setProjectNameDraft(e.target.value)}
+                  onBlur={handleSaveProjectName}
+                  onKeyDown={(e) => { if (e.key === "Escape") { setEditingProjectName(false); } }}
+                  className="text-base md:text-lg font-bold h-8 px-1"
+                />
+              </form>
+            ) : (
+              <h1
+                className="text-base md:text-lg font-bold mt-0.5 truncate cursor-pointer hover:bg-muted/50 rounded px-1 -mx-1 transition-colors group flex items-center gap-1"
+                onClick={() => { setProjectNameDraft(project.name); setEditingProjectName(true); }}
+                title="クリックして編集"
+              >
+                {project.name}
+                <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+              </h1>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-wrap shrink-0">
             {/* Deadline compliance badge */}
