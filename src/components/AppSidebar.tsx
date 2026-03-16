@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useProjectTree } from "@/hooks/useProjectTree";
 import {
-  Home, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search, Rocket, PanelLeftClose, PanelLeftOpen, Sparkles, BarChart3, X, EyeOff, Eye,
+  Home, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search, PanelLeftClose, PanelLeftOpen, Sparkles, BarChart3, X, EyeOff, Eye,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import NotificationBell from "@/components/NotificationBell";
@@ -242,13 +242,21 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
       collapsed ? "w-[60px] min-w-[60px]" : "w-[260px] min-w-[260px]"
     )}>
       <div className={cn("px-5 py-5 border-b border-sidebar-border", collapsed && "px-3 py-4 flex flex-col items-center")}>
-        <h1 className={cn("text-lg font-bold flex items-center gap-2", collapsed && "justify-center")}>
-          <Rocket className="h-5 w-5 shrink-0" fill="currentColor" />
-          {!collapsed && <span className="gradient-text">CheckGo AI</span>}
+        <h1 className={cn("text-lg font-bold flex items-center gap-1", collapsed && "justify-center")}>
+          <span
+            style={{
+              background: "linear-gradient(135deg, #0EA5E9, #7C7AFF)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              backgroundClip: "text",
+            }}
+          >
+            ∞{!collapsed && " Ad Check"}
+          </span>
         </h1>
         {!collapsed && (
           <div className="flex items-center justify-between mt-0.5">
-            <p className="text-[10px] text-muted-foreground whitespace-nowrap">制作現場に、最速・最良の「GO」を。</p>
+            <p className="text-[10px] text-muted-foreground whitespace-nowrap">広告制作現場に最良・最速の「GO」を。</p>
             <button
               onClick={onToggleCollapse}
               className="p-1 rounded hover:bg-muted/50 text-muted-foreground transition-colors"

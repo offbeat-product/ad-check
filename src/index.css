@@ -6,72 +6,76 @@
 
 @layer base {
   :root {
+    /* Base: Background #FFFFFF, Surface #F8FAFC, Border #E2E8F0 */
     --background: 0 0% 100%;
-    --foreground: 215 25% 17%;
+    --foreground: 222 47% 11%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 215 25% 17%;
+    --card: 210 40% 98%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 215 25% 17%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 224 76% 53%;
+    /* Primary: #0EA5E9 Sky Blue */
+    --primary: 199 89% 48%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 215 25% 17%;
+    /* Secondary: #7C7AFF Periwinkle */
+    --secondary: 241 100% 74%;
+    --secondary-foreground: 222 47% 11%;
 
     --muted: 210 40% 96%;
     --muted-foreground: 215 16% 47%;
 
-    --accent: 210 40% 96%;
-    --accent-foreground: 215 25% 17%;
+    --accent: 199 93% 94%;
+    --accent-foreground: 222 47% 11%;
 
-    --destructive: 0 72% 51%;
+    /* Danger #EF4444 */
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 224 76% 53%;
+    --ring: 199 89% 48%;
 
     --radius: 0.75rem;
 
-    /* Status colors */
-    --status-ok: 224 76% 53%;
+    /* Status: Success #10B981, Warning #F59E0B, Danger #EF4444 */
+    --status-ok: 160 84% 39%;
     --status-ok-foreground: 0 0% 100%;
     --status-warning: 38 92% 50%;
     --status-warning-foreground: 0 0% 0%;
     --status-ng: 0 84% 60%;
     --status-ng-foreground: 0 0% 100%;
-    --status-info: 224 76% 53%;
-    --status-manual: 220 9% 46%;
-    --status-client-review: 264 80% 58%;
+    --status-info: 199 89% 48%;
+    --status-manual: 215 16% 47%;
+    --status-client-review: 241 100% 74%;
 
     /* Grade colors */
-    --grade-a: 224 76% 53%;
-    --grade-b: 210 60% 55%;
+    --grade-a: 199 89% 48%;
+    --grade-b: 241 100% 74%;
     --grade-c: 38 92% 50%;
     --grade-d: 0 84% 60%;
 
     /* Product colors */
     --product-ltr: 193 100% 50%;
-    --product-cta: 264 100% 58%;
+    --product-cta: 241 100% 74%;
     --product-tmd: 166 100% 39%;
 
     /* Context bar */
     --context-client: 28 100% 57%;
     --context-product: 193 100% 50%;
-    --context-process: 224 76% 48%;
+    --context-process: 199 89% 48%;
 
-    /* Sidebar */
-    --sidebar-background: 220 20% 97%;
-    --sidebar-foreground: 215 25% 17%;
-    --sidebar-primary: 224 76% 53%;
+    /* Sidebar: Surface #F8FAFC, Active #0EA5E9 */
+    --sidebar-background: 210 40% 98%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 199 89% 48%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 213 94% 97%;
-    --sidebar-accent-foreground: 224 76% 53%;
+    --sidebar-accent: 199 89% 48%;
+    --sidebar-accent-foreground: 0 0% 100%;
     --sidebar-border: 214 32% 91%;
-    --sidebar-ring: 224 76% 53%;
+    --sidebar-ring: 199 89% 48%;
   }
 
   .dark {
@@ -84,7 +88,7 @@
     --popover: 220 18% 13%;
     --popover-foreground: 210 20% 90%;
 
-    --primary: 224 76% 58%;
+    --primary: 199 89% 55%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 220 16% 20%;
@@ -96,49 +100,49 @@
     --accent: 220 16% 20%;
     --accent-foreground: 210 20% 90%;
 
-    --destructive: 0 72% 55%;
+    --destructive: 0 84% 62%;
     --destructive-foreground: 0 0% 100%;
 
     --border: 220 16% 22%;
     --input: 220 16% 22%;
-    --ring: 224 76% 58%;
+    --ring: 199 89% 55%;
 
     /* Status colors */
-    --status-ok: 224 76% 58%;
+    --status-ok: 160 84% 42%;
     --status-ok-foreground: 0 0% 100%;
     --status-warning: 38 92% 55%;
     --status-warning-foreground: 0 0% 0%;
     --status-ng: 0 84% 62%;
     --status-ng-foreground: 0 0% 100%;
-    --status-info: 224 76% 58%;
+    --status-info: 199 89% 55%;
     --status-manual: 220 9% 56%;
-    --status-client-review: 264 80% 65%;
+    --status-client-review: 241 100% 80%;
 
     /* Grade colors */
-    --grade-a: 224 76% 58%;
-    --grade-b: 210 60% 60%;
+    --grade-a: 199 89% 55%;
+    --grade-b: 241 100% 80%;
     --grade-c: 38 92% 55%;
     --grade-d: 0 84% 62%;
 
     /* Product colors */
     --product-ltr: 193 100% 50%;
-    --product-cta: 264 100% 62%;
+    --product-cta: 241 100% 62%;
     --product-tmd: 166 100% 42%;
 
     /* Context bar */
     --context-client: 28 100% 60%;
     --context-product: 193 100% 50%;
-    --context-process: 224 76% 55%;
+    --context-process: 199 89% 55%;
 
     /* Sidebar */
     --sidebar-background: 220 18% 11%;
     --sidebar-foreground: 210 20% 90%;
-    --sidebar-primary: 224 76% 58%;
+    --sidebar-primary: 199 89% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 220 16% 18%;
-    --sidebar-accent-foreground: 224 76% 65%;
+    --sidebar-accent-foreground: 199 89% 65%;
     --sidebar-border: 220 16% 20%;
-    --sidebar-ring: 224 76% 58%;
+    --sidebar-ring: 199 89% 55%;
   }
 }
 
@@ -155,7 +159,7 @@
 
 @layer utilities {
   .gradient-text {
-    background: linear-gradient(90deg, hsl(224, 76%, 53%), hsl(264, 100%, 58%));
+    background: linear-gradient(90deg, hsl(199, 89%, 48%), hsl(241, 100%, 74%));
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -205,7 +209,7 @@
     width: 3px;
     height: 60%;
     border-radius: 0 4px 4px 0;
-    background: hsl(var(--primary));
+    background: hsl(var(--sidebar-primary));
     transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
   .nav-item-interactive:hover::before {

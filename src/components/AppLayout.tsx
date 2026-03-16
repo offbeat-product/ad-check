@@ -4,7 +4,7 @@ import AppSidebar from "@/components/AppSidebar";
 import CreateProjectModal from "@/components/CreateProjectModal";
 import GlobalSearch from "@/components/GlobalSearch";
 import NotificationBell from "@/components/NotificationBell";
-import { Menu, X, Search, Rocket } from "lucide-react";
+import { Menu, X, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function AppLayout() {
@@ -56,8 +56,9 @@ export default function AppLayout() {
           <button onClick={() => setMobileOpen(true)} className="p-2 rounded-lg hover:bg-muted">
             <Menu className="h-5 w-5" />
           </button>
-          <h1 className="text-sm font-bold flex-1 flex items-center gap-1.5">
-            <Rocket className="h-4 w-4 shrink-0" fill="currentColor" /><span className="gradient-text whitespace-nowrap">CheckGo AI</span>
+          <h1 className="text-sm font-bold flex-1 flex items-center gap-1">
+            <span style={{ color: "#0EA5E9" }}>∞</span>
+            <span className="whitespace-nowrap" style={{ color: "#0EA5E9" }}>Ad Check</span>
           </h1>
           <NotificationBell />
           <button

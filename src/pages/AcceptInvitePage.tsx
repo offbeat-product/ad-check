@@ -6,7 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
-import { Rocket } from "lucide-react";
 
 const ROLE_LABELS: Record<string, string> = { admin: "管理者", member: "メンバー", viewer: "閲覧者" };
 
@@ -138,9 +137,9 @@ export default function AcceptInvitePage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-muted p-4">
         <div className="w-full max-w-md space-y-6 text-center">
-          <h1 className="text-4xl font-bold">
-            <Rocket className="h-8 w-8 mr-2 inline-block" fill="currentColor" />
-            <span className="gradient-text">CheckGo AI</span>
+          <h1 className="text-4xl font-bold flex items-center justify-center gap-1 flex-wrap">
+            <span className="text-4xl" style={{ color: "#0EA5E9" }}>∞</span>
+            <span className="text-4xl font-bold" style={{ color: "#0EA5E9" }}>Ad Check</span>
           </h1>
           <div className="glass-card p-8 space-y-4">
             <p className="text-destructive font-medium">{error}</p>
@@ -157,16 +156,16 @@ export default function AcceptInvitePage() {
     <div className="flex min-h-screen items-center justify-center bg-muted p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-2">
-          <h1 className="text-4xl font-bold">
-            <Rocket className="h-8 w-8 mr-2 inline-block" fill="currentColor" />
-            <span className="gradient-text">CheckGo AI</span>
+          <h1 className="text-4xl font-bold flex items-center justify-center gap-1 flex-wrap">
+            <span className="text-4xl" style={{ color: "#0EA5E9" }}>∞</span>
+            <span className="text-4xl font-bold" style={{ color: "#0EA5E9" }}>Ad Check</span>
           </h1>
-          <p className="text-sm text-muted-foreground whitespace-nowrap">制作現場に、最速・最良の「GO」を。</p>
+          <p className="text-sm text-muted-foreground whitespace-nowrap">広告制作現場に最良・最速の「GO」を。</p>
         </div>
 
         <div className="glass-card p-8 space-y-6">
           <div className="text-center space-y-2">
-            <h2 className="text-xl font-semibold">CheckGo AIへようこそ</h2>
+            <h2 className="text-xl font-semibold">Ad Checkへようこそ</h2>
             <p className="text-sm text-muted-foreground">
               {invitation?.inviter_name}さんから招待されました
             </p>
