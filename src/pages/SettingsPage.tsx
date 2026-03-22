@@ -20,13 +20,15 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
-import { Trash2, UserPlus, Users, Mail, Shield, ShieldCheck, Eye, Copy, Check, MoreHorizontal, Link2, XCircle, Ban, RotateCcw, Sun, Moon, Monitor } from "lucide-react";
+import { Trash2, UserPlus, Users, Mail, Shield, ShieldCheck, Eye, Copy, Check, MoreHorizontal, Link2, XCircle, Ban, RotateCcw, Sun, Moon, Monitor, KeyRound } from "lucide-react";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Profile = Tables<"profiles">;
 type Invitation = Tables<"invitations">;
+
+const PASSWORD_MIN_LENGTH = 8;
 
 const ROLE_CONFIG: Record<string, { label: string; description: string; badgeClass: string }> = {
   admin: { label: "管理者", description: "全操作+メンバー管理+削除", badgeClass: "bg-destructive/10 text-destructive" },
@@ -49,6 +51,11 @@ export default function SettingsPage() {
   // Profile state
   const [displayName, setDisplayName] = useState("");
   const [saving, setSaving] = useState(false);
+
+  // Password change
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
 
   // Notification settings
   const [notifyCheckComplete, setNotifyCheckComplete] = useState(true);
@@ -103,8 +110,33 @@ export default function SettingsPage() {
     setSaving(true);
     const { error } = await updateProfile({ display_name: displayName.trim() || null }) ?? {};
     if (!error) toast({ title: "プロフィールを保存しました" });
-    else toast({ title: "エラー", description: (error as any)?.message, variant: "destructive" });
+    else toast({ title: "エラー", description: (error as { message?: string })?.message, variant: "destructive" });
     setSaving(false);
+  };
+
+  const handleChangePassword = async () => {
+    if (newPassword.length < PASSWORD_MIN_LENGTH) {
+      toast({
+        title: "エラー",
+        description: `パスワードは${PASSWORD_MIN_LENGTH}文字以上で入力してください`,
+        variant: "destructive",
+      });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast({ title: "エラー", description: "パスワードが一致しません", variant: "destructive" });
+      return;
+    }
+    setPasswordSaving(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setPasswordSaving(false);
+    if (error) {
+      toast({ title: "エラー", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "パスワードを変更しました" });
+    setNewPassword("");
+    setConfirmPassword("");
   };
 
   const handleSaveNotifications = async () => {
@@ -275,6 +307,9 @@ export default function SettingsPage() {
         <Tabs defaultValue="profile">
           <TabsList className="mb-6 flex-wrap h-auto gap-1">
             <TabsTrigger value="profile">プロフィール</TabsTrigger>
+            <TabsTrigger value="password" className="flex items-center gap-1">
+              <KeyRound className="h-3.5 w-3.5" />パスワード
+            </TabsTrigger>
             <TabsTrigger value="notifications">通知設定</TabsTrigger>
               <TabsTrigger value="members" className="flex items-center gap-1">
                 <Users className="h-3.5 w-3.5" />メンバー
@@ -305,6 +340,45 @@ export default function SettingsPage() {
               </div>
               <Button size="sm" onClick={handleSaveProfile} disabled={saving}>
                 {saving ? "保存中..." : "保存"}
+              </Button>
+            </div>
+          </TabsContent>
+
+          {/* Password Tab */}
+          <TabsContent value="password">
+            <div className="glass-card p-6 space-y-6">
+              <h2 className="text-sm font-semibold">パスワード変更</h2>
+              <p className="text-xs text-muted-foreground">
+                新しいパスワードを{PASSWORD_MIN_LENGTH}文字以上で設定してください。
+              </p>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">新しいパスワード</label>
+                <Input
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="新しいパスワード"
+                  autoComplete="new-password"
+                  className="h-9 text-sm max-w-md"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">新しいパスワード（確認）</label>
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="もう一度入力"
+                  autoComplete="new-password"
+                  className="h-9 text-sm max-w-md"
+                />
+              </div>
+              <Button
+                size="sm"
+                onClick={handleChangePassword}
+                disabled={passwordSaving || !newPassword || !confirmPassword}
+              >
+                {passwordSaving ? "変更中..." : "パスワードを変更"}
               </Button>
             </div>
           </TabsContent>
