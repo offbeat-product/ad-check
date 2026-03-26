@@ -36,7 +36,7 @@ export default function CopyMaterialToProductDialog({ open, onOpenChange, materi
   useEffect(() => {
     if (!open) return;
     (async () => {
-      const { data } = await supabase.from("products").select("*").order("name");
+      const { data } = await supabase.from("products_with_check_settings").select("*").order("name");
       setProducts((data ?? []).filter(p => p.id !== currentProductId));
       setSelectedIds([]);
     })();

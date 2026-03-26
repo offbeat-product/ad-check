@@ -4,6 +4,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import type { Client, Product } from "@/lib/db-types";
+import { AD_BRAIN_URL } from "@/lib/constants";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +17,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ArrowLeft, Pencil, Trash2, Check, X, Plus } from "lucide-react";
+import { ArrowLeft, Trash2, Plus, ExternalLink } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { PROJECT_TREE_QUERY_KEY } from "@/hooks/useProjectTree";
 
@@ -39,8 +40,6 @@ export default function ClientPage() {
   const [client, setClient] = useState<Client | null>(null);
   const [products, setProducts] = useState<ProductWithStats[]>([]);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
-  const [editName, setEditName] = useState("");
 
   // New product modal
   const [newProductOpen, setNewProductOpen] = useState(false);
@@ -56,7 +55,7 @@ export default function ClientPage() {
     (async () => {
       const [clientRes, productsRes] = await Promise.all([
         supabase.from("clients").select("*").eq("id", id).maybeSingle(),
-        supabase.from("products").select("*").eq("client_id", id).order("name"),
+        supabase.from("products_with_check_settings").select("*").eq("client_id", id).order("name"),
       ]);
 
       if (cancelled) return;
@@ -94,36 +93,6 @@ export default function ClientPage() {
 
     return () => { cancelled = true; };
   }, [id]);
-
-  const handleRenameClient = async () => {
-    if (!client || !editName.trim()) return;
-    const { error } = await supabase.from("clients").update({ name: editName.trim() }).eq("id", client.id);
-    if (error) {
-      toast({ title: "エラー", description: error.message, variant: "destructive" });
-    } else {
-      setClient({ ...client, name: editName.trim() });
-      toast({ title: "クライアント名を更新しました" });
-      queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
-    }
-    setEditing(false);
-  };
-
-  const handleDeleteClient = async () => {
-    if (!client) return;
-    // Check if there are products under this client
-    if (products.length > 0) {
-      toast({ title: "削除できません", description: "先に配下の商材を全て削除してください。", variant: "destructive" });
-      return;
-    }
-    const { error } = await supabase.from("clients").delete().eq("id", client.id);
-    if (error) {
-      toast({ title: "削除エラー", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: "クライアントを削除しました" });
-      queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
-      navigate("/dashboard");
-    }
-  };
 
   const handleDeleteProduct = async (product: ProductWithStats) => {
     if (product.projectCount > 0) {
@@ -163,7 +132,7 @@ export default function ClientPage() {
       setNewProductCode("");
       setNewProductLabel("");
       // Refresh products
-      const { data: prods } = await supabase.from("products").select("*").eq("client_id", client.id).order("name");
+      const { data: prods } = await supabase.from("products_with_check_settings").select("*").eq("client_id", client.id).order("name");
       const enriched: ProductWithStats[] = await Promise.all(
         (prods ?? []).map(async (p) => {
           const { count } = await supabase.from("projects").select("*", { count: "exact", head: true }).eq("product_id", p.id);
@@ -185,55 +154,18 @@ export default function ClientPage() {
         <button onClick={() => navigate("/dashboard")} className="text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="h-4 w-4" />
         </button>
-        {editing ? (
-          <div className="flex items-center gap-2">
-            <Input
-              value={editName}
-              onChange={(e) => setEditName(e.target.value)}
-              className="h-8 text-lg font-bold w-64"
-              autoFocus
-              onKeyDown={(e) => { if (e.key === "Enter") handleRenameClient(); if (e.key === "Escape") setEditing(false); }}
-            />
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={handleRenameClient}>
-              <Check className="h-4 w-4 text-status-ok" />
-            </Button>
-            <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditing(false)}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold">{client.name}</h1>
-            <Button size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground" onClick={() => { setEditName(client.name); setEditing(true); }}>
-              <Pencil className="h-3.5 w-3.5" />
-            </Button>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>クライアントを削除</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    「{client.name}」を削除します。{products.length > 0 ? "配下に商材があるため、先に商材を削除してください。" : "この操作は元に戻せません。"}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>キャンセル</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDeleteClient}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    disabled={products.length > 0}
-                  >
-                    削除する
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-        )}
+        <div className="flex items-center justify-between flex-1">
+          <h1 className="text-xl font-bold">{client.name}</h1>
+          <a
+            href={`${AD_BRAIN_URL}/clients/${client.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs font-medium text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            Ad Brain で編集
+          </a>
+        </div>
       </div>
 
       <div className="flex items-center justify-between mb-4">

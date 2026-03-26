@@ -14,6 +14,7 @@ import { useProjectProcesses, type ProjectProcess } from "@/hooks/useProjectProc
 import { PROJECT_STATUS_CONFIG, PROCESS_STATUS_CONFIG, PROCESS_FILE_CONFIG, getProcessWebhookPath, AI_CHECK_CONFIG } from "@/lib/process-config";
 import { PROJECT_TREE_QUERY_KEY } from "@/hooks/useProjectTree";
 import { usePatterns } from "@/hooks/usePatterns";
+import { AD_BRAIN_URL } from "@/lib/constants";
 import ProcessManagementModal from "@/components/ProcessManagementModal";
 import ProcessTimeline from "@/components/ProcessTimeline";
 import PatternMatrix from "@/components/patterns/PatternMatrix";
@@ -33,11 +34,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
-import ReferenceMaterialsSection from "@/components/reference/ReferenceMaterialsSection";
 import CheckRulesTab from "@/components/product/CheckRulesTab";
 import {
   Upload, FileText, Image, Film, MessageCircle, Plus, Settings, GripVertical,
   ChevronDown, ChevronRight, CalendarIcon, AlertTriangle, Trash2, Grid3X3, List, Bot, Loader2, Pencil, Lock, CheckSquare, Send, MoreHorizontal, Layers, ArrowRightLeft,
+  ExternalLink,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -381,7 +382,7 @@ export default function ProjectPage() {
     setProject(proj);
 
     const [prodRes, fileRes] = await Promise.all([
-      supabase.from("products").select("*").eq("id", proj.product_id!).maybeSingle(),
+      supabase.from("products_with_check_settings").select("*").eq("id", proj.product_id!).maybeSingle(),
       supabase.from("project_files").select("*").eq("project_id", id).order("created_at", { ascending: true }),
     ]);
     if (cancelled) return;
@@ -999,13 +1000,29 @@ export default function ProjectPage() {
 
           <TabsContent value="files" className="space-y-6">
 
-            {product && (
-              <ReferenceMaterialsSection
-                projectId={id!}
-                productId={product.id}
-                productName={product.name}
-                projectName={project.name}
-              />
+            {project && (
+              <div className="glass-card p-6 text-center space-y-3">
+                <div className="mx-auto w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-950/30 flex items-center justify-center">
+                  <ExternalLink className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-medium mb-1">参考資料・ナレッジの管理</p>
+                  <p className="text-xs text-muted-foreground">
+                    参考資料の追加・編集は Ad Brain で行います。
+                    <br />
+                    Ad Brain で登録した資料は自動的にこの案件のAIチェックに反映されます。
+                  </p>
+                </div>
+                <a
+                  href={`${AD_BRAIN_URL}/projects/${project.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+                >
+                  Ad Brain でナレッジを確認
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              </div>
             )}
 
             {/* Pattern management header – compact */}

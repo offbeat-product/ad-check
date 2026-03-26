@@ -96,7 +96,7 @@ export default function Dashboard() {
         setProjects(pr.data ?? []);
 
         const prod = await fetchWithRetry(() =>
-          supabase.from("products").select("*").limit(100)
+          supabase.from("products_with_check_settings").select("*").limit(100)
         );
         if (cancelled) return;
         handleSupabaseError(prod.error, "products");

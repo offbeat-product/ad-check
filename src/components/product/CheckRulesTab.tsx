@@ -134,9 +134,10 @@ const emptyForm: RuleFormData = {
 // ── Component ──
 interface Props {
   productId: string;
+  readOnly?: boolean;
 }
 
-export default function CheckRulesTab({ productId }: Props) {
+export default function CheckRulesTab({ productId, readOnly = false }: Props) {
   const { toast } = useToast();
   const [rules, setRules] = useState<CheckRule[]>([]);
   const [loading, setLoading] = useState(false);
@@ -379,14 +380,18 @@ export default function CheckRulesTab({ productId }: Props) {
             className="pl-9"
           />
         </div>
-        <Button size="sm" variant="outline" onClick={openCopyDialog} disabled={rules.length === 0}>
-          <Copy className="h-4 w-4 mr-1" />
-          他の商材にコピー
-        </Button>
-        <Button size="sm" onClick={() => { setAddForm({ ...emptyForm, process_type: processFilter !== "all" ? processFilter : "script" }); setAddOpen(true); }}>
-          <Plus className="h-4 w-4 mr-1" />
-          新規追加
-        </Button>
+        {!readOnly && (
+          <>
+            <Button size="sm" variant="outline" onClick={openCopyDialog} disabled={rules.length === 0}>
+              <Copy className="h-4 w-4 mr-1" />
+              他の商材にコピー
+            </Button>
+            <Button size="sm" onClick={() => { setAddForm({ ...emptyForm, process_type: processFilter !== "all" ? processFilter : "script" }); setAddOpen(true); }}>
+              <Plus className="h-4 w-4 mr-1" />
+              新規追加
+            </Button>
+          </>
+        )}
       </div>
 
       {/* Count */}
@@ -428,13 +433,13 @@ export default function CheckRulesTab({ productId }: Props) {
                 <TableHead>説明</TableHead>
                 <TableHead className="w-[70px]">重要度</TableHead>
                 <TableHead className="w-[140px]">工程</TableHead>
-                <TableHead className="w-[90px] text-right">操作</TableHead>
+                {!readOnly && <TableHead className="w-[90px] text-right">操作</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={readOnly ? 5 : 6} className="text-center text-muted-foreground py-8">
                     該当するルールがありません
                   </TableCell>
                 </TableRow>
@@ -479,36 +484,38 @@ export default function CheckRulesTab({ productId }: Props) {
                           );
                         })()}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditForm({
-                                category: r.category,
-                                description: r.description,
-                                severity: r.severity,
-                                process_type: r.process_type,
-                                title: r.title ?? "",
-                              });
-                              setEditRule(r);
-                            }}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-7 w-7 text-destructive hover:text-destructive"
-                            onClick={(e) => { e.stopPropagation(); setDeleteRule(r); }}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </TableCell>
+                      {!readOnly && (
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditForm({
+                                  category: r.category,
+                                  description: r.description,
+                                  severity: r.severity,
+                                  process_type: r.process_type,
+                                  title: r.title ?? "",
+                                });
+                                setEditRule(r);
+                              }}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-destructive hover:text-destructive"
+                              onClick={(e) => { e.stopPropagation(); setDeleteRule(r); }}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })
@@ -563,96 +570,100 @@ export default function CheckRulesTab({ productId }: Props) {
         </DialogContent>
       </Dialog>
 
-      {/* ── Edit dialog ── */}
-      <Dialog open={!!editRule} onOpenChange={(o) => !o && setEditRule(null)}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>ルール編集 — <span className="font-mono">{editRule?.rule_id}</span></DialogTitle>
-          </DialogHeader>
-          <RuleForm form={editForm} onChange={setEditForm} />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEditRule(null)}>キャンセル</Button>
-            <Button onClick={handleUpdate} disabled={saving || !editForm.description.trim()}>
-              {saving ? "保存中..." : "保存"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {!readOnly && (
+        <>
+          {/* ── Edit dialog ── */}
+          <Dialog open={!!editRule} onOpenChange={(o) => !o && setEditRule(null)}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>ルール編集 — <span className="font-mono">{editRule?.rule_id}</span></DialogTitle>
+              </DialogHeader>
+              <RuleForm form={editForm} onChange={setEditForm} />
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEditRule(null)}>キャンセル</Button>
+                <Button onClick={handleUpdate} disabled={saving || !editForm.description.trim()}>
+                  {saving ? "保存中..." : "保存"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
-      {/* ── Add dialog ── */}
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>新規ルール追加</DialogTitle>
-          </DialogHeader>
-          <RuleForm form={addForm} onChange={setAddForm} />
-          <p className="text-xs text-muted-foreground">
-            ルールID: <span className="font-mono">{generateRuleId(addForm.process_type, rules)}</span>（自動採番）
-          </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)}>キャンセル</Button>
-            <Button onClick={handleAdd} disabled={saving || !addForm.description.trim()}>
-              {saving ? "追加中..." : "追加"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          {/* ── Add dialog ── */}
+          <Dialog open={addOpen} onOpenChange={setAddOpen}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle>新規ルール追加</DialogTitle>
+              </DialogHeader>
+              <RuleForm form={addForm} onChange={setAddForm} />
+              <p className="text-xs text-muted-foreground">
+                ルールID: <span className="font-mono">{generateRuleId(addForm.process_type, rules)}</span>（自動採番）
+              </p>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setAddOpen(false)}>キャンセル</Button>
+                <Button onClick={handleAdd} disabled={saving || !addForm.description.trim()}>
+                  {saving ? "追加中..." : "追加"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
-      {/* ── Delete confirmation ── */}
-      <AlertDialog open={!!deleteRule} onOpenChange={(o) => !o && setDeleteRule(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>ルールを削除</AlertDialogTitle>
-            <AlertDialogDescription>
-              「{deleteRule?.rule_id}」を削除します。この操作は元に戻せません。
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>キャンセル</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              disabled={saving}
-            >
-              {saving ? "削除中..." : "削除する"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+          {/* ── Delete confirmation ── */}
+          <AlertDialog open={!!deleteRule} onOpenChange={(o) => !o && setDeleteRule(null)}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>ルールを削除</AlertDialogTitle>
+                <AlertDialogDescription>
+                  「{deleteRule?.rule_id}」を削除します。この操作は元に戻せません。
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>キャンセル</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDelete}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  disabled={saving}
+                >
+                  {saving ? "削除中..." : "削除する"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
 
-      {/* ── Copy to another product dialog ── */}
-      <Dialog open={copyOpen} onOpenChange={setCopyOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>チェックルールを他の商材にコピー</DialogTitle>
-          </DialogHeader>
-          <p className="text-xs text-muted-foreground">
-            現在の{rules.length}件のルールをコピー先の商材に追加します。重複するルール（同じルールID・工程）は上書きされます。
-          </p>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground mb-1 block">コピー先の商材</label>
-            <Select value={copyTargetId} onValueChange={setCopyTargetId}>
-              <SelectTrigger><SelectValue placeholder="商材を選択..." /></SelectTrigger>
-              <SelectContent>
-                {allProducts.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.client_name ? `${p.client_name} / ` : ""}{p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {allProducts.length === 0 && (
-              <p className="text-xs text-muted-foreground mt-2">コピー先の商材がありません</p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCopyOpen(false)}>キャンセル</Button>
-            <Button onClick={handleCopyRules} disabled={copying || !copyTargetId}>
-              {copying ? "コピー中..." : "コピーする"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          {/* ── Copy to another product dialog ── */}
+          <Dialog open={copyOpen} onOpenChange={setCopyOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>チェックルールを他の商材にコピー</DialogTitle>
+              </DialogHeader>
+              <p className="text-xs text-muted-foreground">
+                現在の{rules.length}件のルールをコピー先の商材に追加します。重複するルール（同じルールID・工程）は上書きされます。
+              </p>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground mb-1 block">コピー先の商材</label>
+                <Select value={copyTargetId} onValueChange={setCopyTargetId}>
+                  <SelectTrigger><SelectValue placeholder="商材を選択..." /></SelectTrigger>
+                  <SelectContent>
+                    {allProducts.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.client_name ? `${p.client_name} / ` : ""}{p.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {allProducts.length === 0 && (
+                  <p className="text-xs text-muted-foreground mt-2">コピー先の商材がありません</p>
+                )}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setCopyOpen(false)}>キャンセル</Button>
+                <Button onClick={handleCopyRules} disabled={copying || !copyTargetId}>
+                  {copying ? "コピー中..." : "コピーする"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </>
+      )}
     </div>
   );
 }

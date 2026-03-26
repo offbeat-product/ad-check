@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { CorrectionPatternRow } from "@/lib/db-types";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
+import { AD_BRAIN_URL } from "@/lib/constants";
 import { Lightbulb, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -88,6 +89,16 @@ export function TopCorrectionPatterns({ limit = 5, productCode }: TopPatternsPro
           <Lightbulb className="h-10 w-10 mx-auto mb-3 opacity-30" />
           <p className="text-sm">チェック結果が蓄積されると、よくある修正パターンが表示されます</p>
         </div>
+        <div className="px-4 py-2 border-t border-border">
+          <a
+            href={AD_BRAIN_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-primary hover:underline flex items-center gap-1"
+          >
+            Ad Brain で全パターンを確認 →
+          </a>
+        </div>
       </div>
     );
   }
@@ -110,6 +121,16 @@ export function TopCorrectionPatterns({ limit = 5, productCode }: TopPatternsPro
             </div>
           </div>
         ))}
+      </div>
+      <div className="px-4 py-2 border-t border-border">
+        <a
+          href={AD_BRAIN_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs text-primary hover:underline flex items-center gap-1"
+        >
+          Ad Brain で全パターンを確認 →
+        </a>
       </div>
     </div>
   );

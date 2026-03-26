@@ -5,6 +5,7 @@ import { useProfile } from "@/hooks/useProfile";
 import { useProjectTree } from "@/hooks/useProjectTree";
 import {
   Home, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search, PanelLeftClose, PanelLeftOpen, Sparkles, BarChart3, X, EyeOff, Eye,
+  ExternalLink,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import NotificationBell from "@/components/NotificationBell";
@@ -528,6 +529,78 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
           <Settings className="h-4 w-4 shrink-0" />
           {!collapsed && "設定"}
         </button>
+
+        {!collapsed && (
+          <div className="mt-2 pt-2 border-t border-sidebar-border">
+            <p className="px-5 py-1.5 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">
+              プロダクト
+            </p>
+            {[
+              {
+                label: "AdLoop",
+                href: "https://adloop-portal.lovable.app",
+                icon: "∞",
+                iconStyle: {
+                  background: "linear-gradient(135deg, #0EA5E9, #7C7AFF)",
+                  WebkitBackgroundClip: "text",
+                  WebkitTextFillColor: "transparent",
+                  backgroundClip: "text",
+                } as const,
+                comingSoon: false,
+              },
+              {
+                label: "Ad Brain",
+                href: "https://ad-brain.lovable.app",
+                icon: "🧠",
+                iconStyle: {} as const,
+                comingSoon: false,
+              },
+              {
+                label: "Ad Gen",
+                href: "#",
+                icon: "✨",
+                iconStyle: {} as const,
+                comingSoon: true,
+              },
+              {
+                label: "Ad Ops",
+                href: "#",
+                icon: "⚙️",
+                iconStyle: {} as const,
+                comingSoon: true,
+              },
+            ].map((item) =>
+              item.comingSoon ? (
+                <div
+                  key={item.label}
+                  className="w-full flex items-center gap-3 px-5 py-2 text-sm border-l-[3px] border-transparent text-muted-foreground/40 cursor-default"
+                >
+                  <span className="text-sm w-4 text-center" style={item.iconStyle}>
+                    {item.icon}
+                  </span>
+                  <span className="flex-1">{item.label}</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground/50 font-medium">
+                    Coming Soon
+                  </span>
+                </div>
+              ) : (
+                <a
+                  key={item.label}
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full flex items-center gap-3 px-5 py-2 text-sm border-l-[3px] border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+                >
+                  <span className="text-sm w-4 text-center" style={item.iconStyle}>
+                    {item.icon}
+                  </span>
+                  <span className="flex-1">{item.label}</span>
+                  <ExternalLink className="h-3 w-3 text-muted-foreground/40" />
+                </a>
+              )
+            )}
+          </div>
+        )}
       </nav>
 
       <div className={cn("border-t border-sidebar-border p-3 flex items-center", collapsed ? "justify-center flex-col gap-2" : "gap-2")}>

@@ -19,7 +19,7 @@ async function fetchTreeData() {
   const c = await supabase.from("clients").select("*").order("sort_order").order("name");
   handleSupabaseError(c.error, "clients");
 
-  const p = await supabase.from("products").select("*").order("sort_order").order("name");
+  const p = await supabase.from("products_with_check_settings").select("*").order("sort_order").order("name");
   handleSupabaseError(p.error, "products");
 
   const pr = await supabase.from("projects").select("*").order("sort_order").order("created_at", { ascending: false });

@@ -3,7 +3,18 @@ import type { Tables, TablesInsert, TablesUpdate } from "@/integrations/supabase
 
 // Row types (read)
 export type Client = Tables<"clients">;
-export type Product = Tables<"products">;
+type ProductBase = Tables<"products">;
+type ProductCheckSettingsFields = {
+  webhook_paths: Record<string, string> | null;
+  sf_enabled: boolean | null;
+  sample_text: string | null;
+  info_lines: string[] | null;
+  warning: string | null;
+  rules_desc: string | null;
+  meta: string | null;
+};
+// `products_with_check_settings` VIEW compatibility type.
+export type Product = ProductBase & ProductCheckSettingsFields;
 export type Project = Tables<"projects">;
 export type ProjectFile = Tables<"project_files">;
 export type CheckResultRow = Tables<"check_results">;
@@ -26,7 +37,7 @@ export type CheckResultUpdate = TablesUpdate<"check_results">;
 // Helper to safely cast webhook_paths from Json
 export function getWebhookPaths(product: Product): Record<string, string> {
   if (!product.webhook_paths || typeof product.webhook_paths !== "object") return {};
-  return product.webhook_paths as Record<string, string>;
+  return product.webhook_paths;
 }
 
 export type ProjectFileStatus = "uploaded" | "checking" | "checked" | "internal_revision" | "client_review" | "fixed";

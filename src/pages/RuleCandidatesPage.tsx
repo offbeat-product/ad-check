@@ -68,7 +68,7 @@ export default function RuleCandidatesPage() {
 
   // Load products
   useEffect(() => {
-    supabase.from("products").select("*").order("sort_order").then(({ data }) => {
+    supabase.from("products_with_check_settings").select("*").order("sort_order").then(({ data }) => {
       if (data) setProducts(data);
     });
   }, []);

@@ -188,7 +188,7 @@ export default function FileReviewPage() {
 
       let loadedProduct: Product | null = null;
       if (proj?.product_id) {
-        const { data: prod, error: prodErr } = await supabase.from("products").select("*").eq("id", proj.product_id).maybeSingle();
+        const { data: prod, error: prodErr } = await supabase.from("products_with_check_settings").select("*").eq("id", proj.product_id).maybeSingle();
         if (cancelled) return;
         handleSupabaseError(prodErr, "product");
         setProduct(prod);

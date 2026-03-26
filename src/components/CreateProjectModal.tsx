@@ -51,7 +51,7 @@ export default function CreateProjectModal({ open, onOpenChange, onCreated, defa
     let cancelled = false;
     Promise.all([
       supabase.from("clients").select("*").order("name"),
-      supabase.from("products").select("*").order("name"),
+      supabase.from("products_with_check_settings").select("*").order("name"),
     ]).then(([cRes, pRes]) => {
       if (cancelled) return;
       handleSupabaseError(cRes.error, "clients");
