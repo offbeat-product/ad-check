@@ -31,12 +31,15 @@ interface MediaPreviewProps {
   savedAnnotations?: AnnotationData[];
   highlightAnnotation?: AnnotationData | null;
   members?: MentionMember[];
+  boundingBox?: [number, number, number, number] | null;
+  boundingBoxLabel?: string;
 }
 
 const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function MediaPreview({
   src, mediaType, label, noDataMessage, scriptText,
   paintMode, onPaintModeToggle, onAnnotationSave,
   savedAnnotations, highlightAnnotation, members,
+  boundingBox, boundingBoxLabel,
 }, ref) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
@@ -137,6 +140,15 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
           </svg>
         )}
 
+        {boundingBox && mediaType === "video" && containerSize.width > 0 && containerSize.height > 0 && (
+          <BoundingBoxOverlay
+            boundingBox={boundingBox}
+            containerWidth={containerSize.width}
+            containerHeight={containerSize.height}
+            label={boundingBoxLabel}
+          />
+        )}
+
         {hasPaintSupport && (
           <AnnotationCanvas
             active={!!paintMode}
@@ -162,6 +174,50 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
 });
 
 export default MediaPreview;
+
+function BoundingBoxOverlay({
+  boundingBox,
+  containerWidth,
+  containerHeight,
+  label,
+}: {
+  boundingBox: [number, number, number, number];
+  containerWidth: number;
+  containerHeight: number;
+  label?: string;
+}) {
+  const [yMin, xMin, yMax, xMax] = boundingBox;
+  const left = (xMin / 1000) * containerWidth;
+  const top = (yMin / 1000) * containerHeight;
+  const width = ((xMax - xMin) / 1000) * containerWidth;
+  const height = ((yMax - yMin) / 1000) * containerHeight;
+
+  return (
+    <div
+      className="absolute pointer-events-none"
+      style={{
+        left: `${left}px`,
+        top: `${top}px`,
+        width: `${width}px`,
+        height: `${height}px`,
+        border: "2.5px solid #EF4444",
+        borderRadius: "4px",
+        backgroundColor: "rgba(239, 68, 68, 0.08)",
+        zIndex: 20,
+        transition: "all 0.3s ease",
+      }}
+    >
+      {label && (
+        <span
+          className="absolute -top-5 left-0 text-[10px] font-medium px-1.5 py-0.5 rounded"
+          style={{ backgroundColor: "#EF4444", color: "white" }}
+        >
+          {label}
+        </span>
+      )}
+    </div>
+  );
+}
 
 function SavedAnnotationSvg({ ann, containerWidth, containerHeight }: { ann: { type: string; points: { x: number; y: number }[]; color: string; strokeWidth: number; imagePosition?: { x: number; y: number; width: number; height: number } }; containerWidth: number; containerHeight: number }) {
   if (!ann.imagePosition) return null;

@@ -94,12 +94,14 @@ interface CheckItemCardProps {
   onCommentClick: () => void;
   onSeekMedia?: (seconds: number) => void;
   onMarkerClick?: (patternId: string) => void;
+  onMouseEnter?: () => void;
+  onMouseLeave?: () => void;
   /** Label tag e.g. "AIチェック" or "比較チェック" */
   sourceLabel?: string;
 }
 
 const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
-  ({ item, index, marker, isResolved, isSelected, isHighlighted, isApplied, commentCount, productCode, dupeCount = 1, onToggleSelect, onToggleResolved, onCommentClick, onSeekMedia, onMarkerClick, sourceLabel = "AIチェック" }, ref) => {
+  ({ item, index, marker, isResolved, isSelected, isHighlighted, isApplied, commentCount, productCode, dupeCount = 1, onToggleSelect, onToggleResolved, onCommentClick, onSeekMedia, onMarkerClick, onMouseEnter, onMouseLeave, sourceLabel = "AIチェック" }, ref) => {
     const innerRef = useRef<HTMLDivElement>(null);
 
     // Auto-scroll into view when highlighted
@@ -113,6 +115,13 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
     // Extract the first timestamp from item fields for card-level click-to-seek
     const handleCardSeek = useCallback(() => {
       if (!onSeekMedia) return;
+      if (item.timestamp_start) {
+        const startSeconds = parseTimestamp(item.timestamp_start);
+        if (startSeconds >= 0) {
+          onSeekMedia(Math.max(0, startSeconds - 2));
+          return;
+        }
+      }
       const timestampRegex = /(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,3})?)/;
       const fields = [item.location || "", item.item || "", item.detail || ""];
       for (const field of fields) {
@@ -135,6 +144,8 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
           else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = el;
         }}
         onClick={handleCardSeek}
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
         className={cn(
           "border-l-4 rounded-lg border border-border p-3 space-y-2 bg-card interactive-card cursor-pointer",
           borderColors[item.status] || "",
@@ -186,6 +197,14 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
             </div>
 
             <p className="text-sm font-medium">{renderWithTimestamps(item.item, onSeekMedia)}</p>
+            {item.timestamp_start && (
+              <button
+                onClick={(e) => { e.stopPropagation(); handleCardSeek(); }}
+                className="text-xs text-primary cursor-pointer hover:underline"
+              >
+                🕐 {item.timestamp_end ? `${item.timestamp_start} 〜 ${item.timestamp_end}` : item.timestamp_start}
+              </button>
+            )}
             {item.location && <p className="text-xs text-muted-foreground">📍 {renderWithTimestamps(item.location, onSeekMedia)}</p>}
             <p className="text-xs text-foreground/80 mt-1">{renderWithTimestamps(item.detail, onSeekMedia)}</p>
 

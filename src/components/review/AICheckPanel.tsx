@@ -30,9 +30,10 @@ interface AICheckPanelProps {
   processKey?: string;
   onSeekMedia?: (seconds: number) => void;
   onMarkerClick?: (patternId: string) => void;
+  onActiveCheckItemChange?: (item: CheckItem | null) => void;
 }
 
-export default function AICheckPanel({ items, markers, productCode, commentCounts, highlightCard, onCommentClick, checkResultId, onTabChange, overallStatus, checkedAt, productId, projectId, processKey, onSeekMedia, onMarkerClick }: AICheckPanelProps) {
+export default function AICheckPanel({ items, markers, productCode, commentCounts, highlightCard, onCommentClick, checkResultId, onTabChange, overallStatus, checkedAt, productId, projectId, processKey, onSeekMedia, onMarkerClick, onActiveCheckItemChange }: AICheckPanelProps) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [resolvedItems, setResolvedItems] = useState<Set<string>>(new Set());
@@ -306,6 +307,8 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
               onCommentClick={() => onCommentClick(item.pattern_id)}
               onSeekMedia={onSeekMedia}
               onMarkerClick={onMarkerClick}
+              onMouseEnter={() => onActiveCheckItemChange?.(item)}
+              onMouseLeave={() => onActiveCheckItemChange?.(null)}
             />
           );
         })}

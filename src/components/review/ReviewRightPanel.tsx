@@ -34,6 +34,7 @@ interface ReviewRightPanelProps {
   mediaCurrentTime?: number | null;
   /** Callback to seek media to a specific time */
   onSeekMedia?: (seconds: number) => void;
+  onActiveCheckItemChange?: (item: CheckItem | null) => void;
   /** Correction log context */
   patternId?: string | null;
   fileId?: string;
@@ -66,6 +67,7 @@ export default function ReviewRightPanel({
   commentFilter, checkResultId, hasCheckResult, onCommentClick, onCheckItemClick, onMarkerClick, emptyCheckMessage, onAnnotationClick,
   overallStatus, checkedAt, file, productId, projectId,
   mediaCurrentTime, onSeekMedia, patternId, fileId, onCommentDeleted,
+  onActiveCheckItemChange,
   comparisonMode, comparisonBeforeData, comparisonAfterData, comparisonAfterText, comparisonRoundLabel,
   onOpenComparisonMode, onComparisonCheckComplete, onComparisonSaved, onClearAfterData,
   clientName, productName, lockedByUser, onAcquireLock, onReleaseLock,
@@ -154,6 +156,7 @@ export default function ReviewRightPanel({
               processKey={file?.process_type}
               onSeekMedia={onSeekMedia}
               onMarkerClick={onMarkerClick}
+              onActiveCheckItemChange={onActiveCheckItemChange}
             />
           ) : (
             emptyCheckMessage || (

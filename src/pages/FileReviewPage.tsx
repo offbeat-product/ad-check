@@ -93,6 +93,7 @@ export default function FileReviewPage() {
   const [comparisonActivePairIndex, setComparisonActivePairIndex] = useState(0);
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [mobilePanel, setMobilePanel] = useState<"preview" | "check">("preview");
+  const [activeCheckItem, setActiveCheckItem] = useState<CheckItem | null>(null);
   const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
   // Comments should always be associated with the root (original) check result, not comparison results
   const rootCheckResultId = record?.parent_check_result_id || record?.id || null;
@@ -136,6 +137,36 @@ export default function FileReviewPage() {
   const handleSeekMedia = useCallback((seconds: number) => {
     mediaPreviewRef.current?.seekTo(seconds);
   }, []);
+
+  const parseTimestamp = useCallback((ts: string): number => {
+    const match = ts.match(/^(\d+):(\d+)\.(\d+)$/);
+    if (match) {
+      return Number(match[1]) * 60 + Number(match[2]) + Number(match[3]) / 1000;
+    }
+    const match2 = ts.match(/^(\d+):(\d+)$/);
+    if (match2) {
+      return Number(match2[1]) * 60 + Number(match2[2]);
+    }
+    return 0;
+  }, []);
+
+  const seekToCheckItem = useCallback((item: CheckItem) => {
+    if (item.timestamp_start) {
+      const targetTime = Math.max(0, parseTimestamp(item.timestamp_start) - 2);
+      mediaPreviewRef.current?.seekTo(targetTime);
+      return;
+    }
+    const text = `${item.location || ""} ${item.detail || ""}`;
+    const tsMatch = text.match(/(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,3})?)/);
+    if (!tsMatch) return;
+    const parts = tsMatch[1].split(".")[0].split(":").map(Number);
+    let seconds = 0;
+    if (parts.length === 2) seconds = parts[0] * 60 + parts[1];
+    else if (parts.length === 3) seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+    const msPart = tsMatch[1].split(".")[1];
+    if (msPart) seconds += Number(msPart) / (msPart.length === 1 ? 10 : msPart.length === 2 ? 100 : 1000);
+    mediaPreviewRef.current?.seekTo(seconds);
+  }, [parseTimestamp]);
 
   // Fetch correction stats
   useEffect(() => {
@@ -1006,19 +1037,7 @@ export default function FileReviewPage() {
     const inputMode = aiCfg?.inputMode || "text";
 
     if (inputMode === "audio" || inputMode === "video") {
-      // Parse timestamp from location and seek
-      if (item.location) {
-        const tsMatch = item.location.match(/(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,3})?)/);
-        if (tsMatch) {
-          const parts = tsMatch[1].split(".")[0].split(":").map(Number);
-          let seconds = 0;
-          if (parts.length === 2) seconds = parts[0] * 60 + parts[1];
-          else if (parts.length === 3) seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
-          const msPart = tsMatch[1].split(".")[1];
-          if (msPart) seconds += Number(msPart) / (msPart.length === 1 ? 10 : msPart.length === 2 ? 100 : 1000);
-          mediaPreviewRef.current?.seekTo(seconds);
-        }
-      }
+      seekToCheckItem(item);
     } else if (inputMode === "text") {
       // Scroll to the matching line in ScriptDisplay
       const el = document.querySelector(`[data-pattern-id="${patternId}"]`);
@@ -1030,7 +1049,7 @@ export default function FileReviewPage() {
     }
     // For image: markers are already visible, flash them
     // No special handling needed since they're always on screen
-  }, [items, file]);
+  }, [items, file, seekToCheckItem]);
 
   if (loading) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">読み込み中...</div>;
   if (!file) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">ファイルが見つかりません</div>;
@@ -1435,6 +1454,8 @@ export default function FileReviewPage() {
                   savedAnnotations={savedAnnotations}
                   highlightAnnotation={highlightAnnotation}
                   members={mentionMembers}
+                  boundingBox={activeCheckItem?.bounding_box ?? null}
+                  boundingBoxLabel={activeCheckItem?.item}
                 />
               </div>
             ) : (
@@ -1542,6 +1563,12 @@ export default function FileReviewPage() {
         fileId={fileId}
         mediaCurrentTime={mediaCurrentTime}
         onSeekMedia={handleSeekMedia}
+        onActiveCheckItemChange={(item) => {
+          setActiveCheckItem(item);
+          if (item && (item.status === "NG" || item.status === "WARNING")) {
+            seekToCheckItem(item);
+          }
+        }}
         onCommentDeleted={fetchSavedAnnotations}
         commentRefreshKey={commentRefreshKey}
         comparisonMode={comparisonMode}

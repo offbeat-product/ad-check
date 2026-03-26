@@ -1,12 +1,15 @@
 export interface CheckItem {
   item: string;
   pattern_id: string;
-  status: "NG" | "WARNING" | "OK";
+  status: "NG" | "WARNING" | "OK" | "MANUAL";
   severity: "high" | "medium" | "low";
   location?: string;
   detail: string;
   suggestion?: string;
   confidence?: number;
+  timestamp_start?: string;
+  timestamp_end?: string;
+  bounding_box?: [number, number, number, number] | null;
 }
 
 export interface CheckResult {
