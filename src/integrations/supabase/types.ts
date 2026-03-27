@@ -103,6 +103,63 @@ export type Database = {
           },
         ]
       }
+      check_feedback: {
+        Row: {
+          ai_judgment: string
+          check_result_id: string | null
+          created_at: string
+          created_by: string | null
+          feedback_type: string
+          human_judgment: string
+          id: string
+          is_active: boolean
+          item_description: string
+          process_type: string
+          product_id: string
+          project_id: string | null
+          reason: string | null
+          rule_pattern_id: string | null
+          scope: string
+          updated_at: string
+        }
+        Insert: {
+          ai_judgment: string
+          check_result_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          feedback_type?: string
+          human_judgment: string
+          id?: string
+          is_active?: boolean
+          item_description: string
+          process_type: string
+          product_id: string
+          project_id?: string | null
+          reason?: string | null
+          rule_pattern_id?: string | null
+          scope?: string
+          updated_at?: string
+        }
+        Update: {
+          ai_judgment?: string
+          check_result_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          feedback_type?: string
+          human_judgment?: string
+          id?: string
+          is_active?: boolean
+          item_description?: string
+          process_type?: string
+          product_id?: string
+          project_id?: string | null
+          reason?: string | null
+          rule_pattern_id?: string | null
+          scope?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       check_rules: {
         Row: {
           category: string

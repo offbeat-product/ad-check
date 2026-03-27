@@ -7,6 +7,7 @@ import type { CheckMarker } from "@/lib/marker-positions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useCheckFeedback } from "@/hooks/useCheckFeedback";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { getSubmitLabel, getSubmitBadgeClass, STATUS_LABEL, STATUS_FILTER_OPTIONS, getEffectiveSubmitLabel, getCheckItemId } from "@/lib/check-display";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,12 @@ interface AICheckPanelProps {
 export default function AICheckPanel({ items, markers, productCode, commentCounts, highlightCard, onCommentClick, checkResultId, onTabChange, overallStatus, checkedAt, productId, projectId, processKey, onSeekMedia, onMarkerClick, onActiveCheckItemChange }: AICheckPanelProps) {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { itemHasFeedback, submitFalsePositive, feedbackEligible } = useCheckFeedback({
+    checkResultId: checkResultId ?? null,
+    productId,
+    projectId,
+    processType: processKey,
+  });
   const [resolvedItems, setResolvedItems] = useState<Set<string>>(new Set());
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [appliedItems, setAppliedItems] = useState<Set<string>>(new Set());
@@ -288,6 +295,18 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
           const itemId = getCheckItemId(item);
           const marker = markers.find((m) => m.item.pattern_id === item.pattern_id);
           const dupeCount = dupeCounts[itemId] || 1;
+          const showFpSection =
+            (item.status === "NG" || item.status === "WARNING") &&
+            (feedbackEligible || itemHasFeedback(item));
+          const fpProps =
+            showFpSection
+              ? {
+                  alreadyReported: itemHasFeedback(item),
+                  onSubmit: async (payload: { reason: string | null; scope: "product" | "project" }) => {
+                    await submitFalsePositive(item, payload.reason, payload.scope);
+                  },
+                }
+              : null;
           return (
             <CheckItemCard
               key={itemId}
@@ -309,6 +328,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
               onMarkerClick={onMarkerClick}
               onMouseEnter={() => onActiveCheckItemChange?.(item)}
               onMouseLeave={() => onActiveCheckItemChange?.(null)}
+              falsePositiveFeedback={fpProps}
             />
           );
         })}

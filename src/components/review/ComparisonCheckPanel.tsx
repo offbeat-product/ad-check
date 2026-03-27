@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import { useCheckFeedback } from "@/hooks/useCheckFeedback";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { GitCompare, Loader2, Bot, History, CheckCircle2 } from "lucide-react";
@@ -507,6 +508,23 @@ export default function ComparisonCheckPanel({
       } : null);
 
   const isShowingInitialCheck = !selectedHistoryId && !result && !!initialItems && initialItems.length > 0;
+
+  const activeCheckResultIdForFeedback = useMemo(() => {
+    if (selectedHistoryId) return selectedHistoryId;
+    if (isShowingInitialCheck) return checkResultId ?? null;
+    if (result && history.length > 0) {
+      return history[history.length - 1].id;
+    }
+    return checkResultId ?? null;
+  }, [selectedHistoryId, isShowingInitialCheck, checkResultId, result, history]);
+
+  const { itemHasFeedback, submitFalsePositive, feedbackEligible } = useCheckFeedback({
+    checkResultId: activeCheckResultIdForFeedback,
+    productId,
+    projectId,
+    processType: file.process_type,
+  });
+
   const displayItems = displayResult?.check_items || [];
 
   // Keep ref in sync so persistResolved always has latest display data
@@ -780,6 +798,18 @@ export default function ComparisonCheckPanel({
             {filteredItems.filter((item) => item.status !== "OK").map((item, i) => {
               const itemId = getCheckItemId(item);
               const marker = markers.find((m) => m.item.pattern_id === item.pattern_id);
+              const showFpSection =
+                (item.status === "NG" || item.status === "WARNING") &&
+                (feedbackEligible || itemHasFeedback(item));
+              const fpProps =
+                showFpSection
+                  ? {
+                      alreadyReported: itemHasFeedback(item),
+                      onSubmit: async (payload: { reason: string | null; scope: "product" | "project" }) => {
+                        await submitFalsePositive(item, payload.reason, payload.scope);
+                      },
+                    }
+                  : null;
               return (
                 <CheckItemCard
                   key={itemId}
@@ -799,6 +829,7 @@ export default function ComparisonCheckPanel({
                   onSeekMedia={onSeekMedia}
                   onMarkerClick={onMarkerClick}
                   sourceLabel="比較チェック"
+                  falsePositiveFeedback={fpProps}
                 />
               );
             })}

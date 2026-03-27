@@ -1,12 +1,16 @@
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Textarea } from "@/components/ui/textarea";
 import { Lightbulb, MessageCircle, Check, CheckCheck } from "lucide-react";
 import { CorrectionPatternCard } from "@/components/CorrectionPatterns";
 import { cn } from "@/lib/utils";
 import { STATUS_LABEL } from "@/lib/check-display";
 import type { CheckItem } from "@/lib/types";
 import type { CheckMarker } from "@/lib/marker-positions";
-import { forwardRef, useCallback, useEffect, useRef, type ReactNode } from "react";
+import { forwardRef, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 const borderColors: Record<string, string> = {
   NG: "border-l-status-ng",
@@ -98,11 +102,20 @@ interface CheckItemCardProps {
   onMouseLeave?: () => void;
   /** Label tag e.g. "AIチェック" or "比較チェック" */
   sourceLabel?: string;
+  /** 誤検知報告（NG/WARNING のみ親で制御） */
+  falsePositiveFeedback?: {
+    alreadyReported: boolean;
+    onSubmit: (payload: { reason: string | null; scope: "product" | "project" }) => Promise<void>;
+  } | null;
 }
 
 const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
-  ({ item, index, marker, isResolved, isSelected, isHighlighted, isApplied, commentCount, productCode, dupeCount = 1, onToggleSelect, onToggleResolved, onCommentClick, onSeekMedia, onMarkerClick, onMouseEnter, onMouseLeave, sourceLabel = "AIチェック" }, ref) => {
+  ({ item, index, marker, isResolved, isSelected, isHighlighted, isApplied, commentCount, productCode, dupeCount = 1, onToggleSelect, onToggleResolved, onCommentClick, onSeekMedia, onMarkerClick, onMouseEnter, onMouseLeave, sourceLabel = "AIチェック", falsePositiveFeedback }, ref) => {
     const innerRef = useRef<HTMLDivElement>(null);
+    const [fpExpanded, setFpExpanded] = useState(false);
+    const [fpReason, setFpReason] = useState("");
+    const [fpScope, setFpScope] = useState<"product" | "project">("product");
+    const [fpSubmitting, setFpSubmitting] = useState(false);
 
     // Auto-scroll into view when highlighted
     useEffect(() => {
@@ -111,6 +124,14 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
         if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
       }
     }, [isHighlighted]);
+
+    useEffect(() => {
+      if (falsePositiveFeedback?.alreadyReported) {
+        setFpExpanded(false);
+        setFpReason("");
+        setFpScope("product");
+      }
+    }, [falsePositiveFeedback?.alreadyReported]);
 
     // Extract the first timestamp from item fields for card-level click-to-seek
     const handleCardSeek = useCallback(() => {
@@ -212,6 +233,105 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
               <div className="text-xs text-primary bg-primary/5 rounded-md p-2 mt-2 flex items-start gap-1.5">
                 <Lightbulb className="h-3 w-3 shrink-0 mt-0.5" />
                 <span>修正案: {renderWithTimestamps(item.suggestion, onSeekMedia)}</span>
+              </div>
+            )}
+
+            {falsePositiveFeedback && (item.status === "NG" || item.status === "WARNING") && (
+              <div
+                className="mt-2 space-y-2"
+                onClick={(e) => e.stopPropagation()}
+                onKeyDown={(e) => e.stopPropagation()}
+              >
+                {falsePositiveFeedback.alreadyReported ? (
+                  <p className="text-[11px] text-muted-foreground">🚫 誤検知報告済</p>
+                ) : (
+                  <>
+                    {!fpExpanded ? (
+                      <button
+                        type="button"
+                        className="text-[11px] text-muted-foreground hover:text-primary underline-offset-2 hover:underline"
+                        onClick={() => setFpExpanded(true)}
+                      >
+                        🚫 誤検知を報告
+                      </button>
+                    ) : (
+                      <div className="rounded-md border border-border bg-muted/30 p-2 space-y-2">
+                        <div className="space-y-1">
+                          <Label htmlFor={`fp-reason-${index}`} className="text-[10px] text-muted-foreground">
+                            理由（任意）
+                          </Label>
+                          <Textarea
+                            id={`fp-reason-${index}`}
+                            rows={3}
+                            placeholder="例: この商材ではBGMのフェードアウトは不要です"
+                            value={fpReason}
+                            onChange={(e) => setFpReason(e.target.value)}
+                            className="text-xs min-h-[4.5rem] resize-y"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <span className="text-[10px] text-muted-foreground">適用範囲</span>
+                          <RadioGroup
+                            value={fpScope}
+                            onValueChange={(v) => setFpScope(v as "product" | "project")}
+                            className="gap-2"
+                          >
+                            <div className="flex items-center gap-2">
+                              <RadioGroupItem value="product" id={`fp-scope-product-${index}`} />
+                              <Label htmlFor={`fp-scope-product-${index}`} className="text-xs font-normal cursor-pointer">
+                                この商材全体に適用
+                              </Label>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <RadioGroupItem value="project" id={`fp-scope-project-${index}`} />
+                              <Label htmlFor={`fp-scope-project-${index}`} className="text-xs font-normal cursor-pointer">
+                                この案件のみ
+                              </Label>
+                            </div>
+                          </RadioGroup>
+                        </div>
+                        <div className="flex gap-2 pt-1">
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="text-xs h-7"
+                            disabled={fpSubmitting}
+                            onClick={async () => {
+                              setFpSubmitting(true);
+                              try {
+                                await falsePositiveFeedback.onSubmit({
+                                  reason: fpReason.trim() ? fpReason : null,
+                                  scope: fpScope,
+                                });
+                                setFpExpanded(false);
+                                setFpReason("");
+                                setFpScope("product");
+                              } finally {
+                                setFpSubmitting(false);
+                              }
+                            }}
+                          >
+                            {fpSubmitting ? "送信中..." : "送信"}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="secondary"
+                            className="text-xs h-7"
+                            disabled={fpSubmitting}
+                            onClick={() => {
+                              setFpExpanded(false);
+                              setFpReason("");
+                              setFpScope("product");
+                            }}
+                          >
+                            キャンセル
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
             )}
 
