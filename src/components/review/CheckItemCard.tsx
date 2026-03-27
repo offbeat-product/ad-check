@@ -4,7 +4,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Textarea } from "@/components/ui/textarea";
-import { Lightbulb, MessageCircle, Check, CheckCheck } from "lucide-react";
+import { Lightbulb, MessageCircle, Check, CheckCheck, AlertTriangle } from "lucide-react";
 import { CorrectionPatternCard } from "@/components/CorrectionPatterns";
 import { cn } from "@/lib/utils";
 import { STATUS_LABEL } from "@/lib/check-display";
@@ -238,26 +238,30 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
 
             {falsePositiveFeedback && (item.status === "NG" || item.status === "WARNING") && (
               <div
-                className="mt-2 space-y-2"
+                className="mt-3 space-y-2"
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
               >
                 {falsePositiveFeedback.alreadyReported ? (
-                  <p className="text-[11px] text-muted-foreground">🚫 誤検知報告済</p>
+                  <p className="w-full mt-3 px-3 py-1.5 text-sm text-gray-500 bg-gray-100 border border-gray-200 rounded-md text-center flex items-center justify-center gap-1.5">
+                    <AlertTriangle className="h-4 w-4" />
+                    誤検知報告済
+                  </p>
                 ) : (
                   <>
                     {!fpExpanded ? (
                       <button
                         type="button"
-                        className="text-[11px] text-muted-foreground hover:text-primary underline-offset-2 hover:underline"
+                        className="w-full mt-3 px-3 py-1.5 text-sm font-medium text-orange-600 bg-orange-50 border border-orange-300 rounded-md hover:bg-orange-100 transition-colors flex items-center justify-center gap-1.5"
                         onClick={() => setFpExpanded(true)}
                       >
-                        🚫 誤検知を報告
+                        <AlertTriangle className="h-4 w-4" />
+                        誤検知を報告
                       </button>
                     ) : (
-                      <div className="rounded-md border border-border bg-muted/30 p-2 space-y-2">
+                      <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-md space-y-2">
                         <div className="space-y-1">
-                          <Label htmlFor={`fp-reason-${index}`} className="text-[10px] text-muted-foreground">
+                          <Label htmlFor={`fp-reason-${index}`} className="text-sm font-medium text-gray-700 mb-1">
                             理由（任意）
                           </Label>
                           <Textarea
@@ -266,11 +270,11 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
                             placeholder="例: この商材ではBGMのフェードアウトは不要です"
                             value={fpReason}
                             onChange={(e) => setFpReason(e.target.value)}
-                            className="text-xs min-h-[4.5rem] resize-y"
+                            className="w-full text-sm min-h-[4.5rem] resize-y border-orange-200 focus:border-orange-400 focus:ring-orange-400"
                           />
                         </div>
                         <div className="space-y-1.5">
-                          <span className="text-[10px] text-muted-foreground">適用範囲</span>
+                          <span className="text-sm font-medium text-gray-700">適用範囲</span>
                           <RadioGroup
                             value={fpScope}
                             onValueChange={(v) => setFpScope(v as "product" | "project")}
@@ -278,13 +282,13 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
                           >
                             <div className="flex items-center gap-2">
                               <RadioGroupItem value="product" id={`fp-scope-product-${index}`} />
-                              <Label htmlFor={`fp-scope-product-${index}`} className="text-xs font-normal cursor-pointer">
+                              <Label htmlFor={`fp-scope-product-${index}`} className="text-sm text-gray-700 font-normal cursor-pointer">
                                 この商材全体に適用
                               </Label>
                             </div>
                             <div className="flex items-center gap-2">
                               <RadioGroupItem value="project" id={`fp-scope-project-${index}`} />
-                              <Label htmlFor={`fp-scope-project-${index}`} className="text-xs font-normal cursor-pointer">
+                              <Label htmlFor={`fp-scope-project-${index}`} className="text-sm text-gray-700 font-normal cursor-pointer">
                                 この案件のみ
                               </Label>
                             </div>
@@ -294,7 +298,7 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
                           <Button
                             type="button"
                             size="sm"
-                            className="text-xs h-7"
+                            className="h-8 px-4 py-1.5 rounded-md text-sm font-medium bg-orange-500 hover:bg-orange-600 text-white"
                             disabled={fpSubmitting}
                             onClick={async () => {
                               setFpSubmitting(true);
@@ -317,7 +321,7 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
                             type="button"
                             size="sm"
                             variant="secondary"
-                            className="text-xs h-7"
+                            className="h-8 px-4 py-1.5 rounded-md text-sm bg-white border border-gray-300 text-gray-700 hover:bg-gray-50"
                             disabled={fpSubmitting}
                             onClick={() => {
                               setFpExpanded(false);
