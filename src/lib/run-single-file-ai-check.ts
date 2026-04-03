@@ -81,7 +81,7 @@ export async function runSingleFileAiCheck(
     let inputData: Record<string, unknown> = {};
 
     if (inputMode === "text") {
-      res = await runScriptCheck(product.id, file.file_data || "", processKey, referenceContext);
+      res = await runScriptCheck(product.id, file.file_data || "", processKey, referenceContext, projectId);
       inputData = { script_text: file.file_data };
     } else {
       const webhookUrl = getWebhookUrl(processKey);
@@ -93,6 +93,7 @@ export async function runSingleFileAiCheck(
       const body: Record<string, unknown> = {
         product_id: webhookProductId,
         process_type: processKey,
+        project_id: projectId,
         script_text: "",
         reference_context: refMaterials,
       };

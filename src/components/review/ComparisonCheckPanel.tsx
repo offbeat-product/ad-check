@@ -380,6 +380,7 @@ export default function ComparisonCheckPanel({
           { audioUrl, audioMimeType },
           referenceContext,
           pendingRecordId,
+          projectId,
         );
         // Audio also uses async flow via VIDEO_ASYNC_ACCEPTED
         if ((audioRes as any) === VIDEO_ASYNC_ACCEPTED) {
@@ -403,12 +404,12 @@ export default function ComparisonCheckPanel({
           image_base64: newBase64,
           media_type: mediaType,
           original_image_base64: origBase64,
-        }, referenceContext, correctionComments);
+        }, referenceContext, correctionComments, projectId);
       } else {
         res = await runComparisonCheck(productId, file.process_type, {
           script_text: comparisonAfterText || comparisonAfterData || "",
           original_text: comparisonBeforeData || "",
-        }, referenceContext, correctionComments);
+        }, referenceContext, correctionComments, projectId);
       }
 
       setResult(res);

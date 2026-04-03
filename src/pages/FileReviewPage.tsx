@@ -564,7 +564,7 @@ export default function FileReviewPage() {
 
       if (inputMode === "text") {
         // Text processes: send directly (small payload)
-        res = await runScriptCheck(product.id, file.file_data || "", processKey, referenceContext);
+        res = await runScriptCheck(product.id, file.file_data || "", processKey, referenceContext, projectId);
         inputData = { script_text: file.file_data };
       } else {
         // Media processes: upload to Storage and send public URL instead of base64
@@ -575,6 +575,7 @@ export default function FileReviewPage() {
         const body: Record<string, any> = {
           product_id: webhookProductId,
           process_type: processKey,
+          project_id: projectId,
           script_text: "",
           reference_context: refMaterials,
         };
