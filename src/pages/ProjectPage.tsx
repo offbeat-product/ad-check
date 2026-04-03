@@ -14,7 +14,13 @@ import { useProjectProcesses, type ProjectProcess } from "@/hooks/useProjectProc
 import { PROJECT_STATUS_CONFIG, PROCESS_STATUS_CONFIG, getProcessFileUploadConfig, getProcessWebhookPath, AI_CHECK_CONFIG } from "@/lib/process-config";
 import { PROJECT_TREE_QUERY_KEY } from "@/hooks/useProjectTree";
 import { useProcessTypes } from "@/hooks/useProcessTypes";
-import { buildProcessLabelLookup } from "@/lib/process-types";
+import {
+  buildProcessLabelLookup,
+  buildMixedBannerProcessKeys,
+  buildMixedVideoLaneProcessKeys,
+  projectProcessMatchesMixedTab,
+  mergeMixedProcessesAfterLaneReorder,
+} from "@/lib/process-types";
 import { usePatterns } from "@/hooks/usePatterns";
 import { AD_BRAIN_URL } from "@/lib/constants";
 import ProcessManagementModal from "@/components/ProcessManagementModal";
@@ -119,19 +125,6 @@ function DeadlinePicker({ deadline, onChange, isCompleted, label }: { deadline: 
   );
 }
 
-/** Mixed案件タブ: マスタの creative_type で工程を分ける（common は両タブに表示）。 */
-function projectProcessMatchesMixedTab(
-  proc: Pick<ProjectProcess, "process_key">,
-  tab: "banner" | "video",
-  creativeByCode: Map<string, string>
-): boolean {
-  if (proc.process_key.startsWith("custom_")) return true;
-  const ct = creativeByCode.get(proc.process_key);
-  if (!ct) return true;
-  if (tab === "banner") return ct === "banner" || ct === "common";
-  return ct === "video" || ct === "common";
-}
-
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -205,21 +198,61 @@ export default function ProjectPage() {
     return m;
   }, [processTypeRows]);
 
+  const mixedBannerProcessKeys = useMemo(
+    () => buildMixedBannerProcessKeys(processTypeRows),
+    [processTypeRows]
+  );
+
+  const mixedVideoLaneProcessKeys = useMemo(
+    () => buildMixedVideoLaneProcessKeys(processTypeRows),
+    [processTypeRows]
+  );
+
   const uploadProcessOptions = useMemo(() => {
     let base = [...processes].filter((p) => p.is_active).sort((a, b) => a.sort_order - b.sort_order);
     const ct = project?.creative_type ?? "video";
     if (ct === "mixed") {
-      base = base.filter((p) => projectProcessMatchesMixedTab(p, mixedProcessTab, processCreativeByCode));
+      base = base.filter((p) =>
+        projectProcessMatchesMixedTab(
+          p,
+          mixedProcessTab,
+          processCreativeByCode,
+          mixedBannerProcessKeys,
+          mixedVideoLaneProcessKeys
+        )
+      );
     }
     return base;
-  }, [processes, project?.creative_type, mixedProcessTab, processCreativeByCode]);
+  }, [
+    processes,
+    project?.creative_type,
+    mixedProcessTab,
+    processCreativeByCode,
+    mixedBannerProcessKeys,
+    mixedVideoLaneProcessKeys,
+  ]);
 
   const displayActiveProcesses = useMemo(() => {
     const act = processes.filter((p) => p.is_active);
     const ct = project?.creative_type ?? "video";
     if (ct !== "mixed") return act;
-    return act.filter((p) => projectProcessMatchesMixedTab(p, mixedProcessTab, processCreativeByCode));
-  }, [processes, project?.creative_type, mixedProcessTab, processCreativeByCode]);
+    return act.filter((p) =>
+      projectProcessMatchesMixedTab(
+        p,
+        mixedProcessTab,
+        processCreativeByCode,
+        mixedBannerProcessKeys,
+        mixedVideoLaneProcessKeys
+      )
+    );
+  }, [
+    processes,
+    project?.creative_type,
+    mixedProcessTab,
+    processCreativeByCode,
+    mixedBannerProcessKeys,
+    mixedVideoLaneProcessKeys,
+  ]);
 
   const processesForPatternMatrix = useMemo(() => {
     const ct = project?.creative_type ?? "video";
@@ -227,9 +260,84 @@ export default function ProjectPage() {
     return processes.filter(
       (p) =>
         !p.is_active ||
-        projectProcessMatchesMixedTab(p, mixedProcessTab, processCreativeByCode)
+        projectProcessMatchesMixedTab(
+          p,
+          mixedProcessTab,
+          processCreativeByCode,
+          mixedBannerProcessKeys,
+          mixedVideoLaneProcessKeys
+        )
     );
-  }, [processes, project?.creative_type, mixedProcessTab, processCreativeByCode]);
+  }, [
+    processes,
+    project?.creative_type,
+    mixedProcessTab,
+    processCreativeByCode,
+    mixedBannerProcessKeys,
+    mixedVideoLaneProcessKeys,
+  ]);
+
+  const processesForManagementModal = useMemo(() => {
+    if (project?.creative_type !== "mixed") {
+      return [...processes].sort((a, b) => a.sort_order - b.sort_order);
+    }
+    return [...processes]
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .filter((p) =>
+        projectProcessMatchesMixedTab(
+          p,
+          mixedProcessTab,
+          processCreativeByCode,
+          mixedBannerProcessKeys,
+          mixedVideoLaneProcessKeys
+        )
+      );
+  }, [
+    processes,
+    project?.creative_type,
+    mixedProcessTab,
+    processCreativeByCode,
+    mixedBannerProcessKeys,
+    mixedVideoLaneProcessKeys,
+  ]);
+
+  const handleProcessManagementReorder = useCallback(
+    (reordered: ProjectProcess[]) => {
+      if (project?.creative_type !== "mixed") {
+        void reorderProcesses(reordered);
+        return;
+      }
+      const merged = mergeMixedProcessesAfterLaneReorder(
+        processes,
+        reordered,
+        mixedProcessTab,
+        processCreativeByCode,
+        mixedBannerProcessKeys,
+        mixedVideoLaneProcessKeys
+      );
+      void reorderProcesses(merged);
+    },
+    [
+      project?.creative_type,
+      processes,
+      mixedProcessTab,
+      processCreativeByCode,
+      mixedBannerProcessKeys,
+      mixedVideoLaneProcessKeys,
+      reorderProcesses,
+    ]
+  );
+
+  const handleProcessManagementAdd = useCallback(
+    (label: string) => {
+      if (project?.creative_type === "mixed") {
+        void addProcess(label, { mixedLane: mixedProcessTab });
+      } else {
+        void addProcess(label);
+      }
+    },
+    [project?.creative_type, mixedProcessTab, addProcess]
+  );
 
   const { progress: batchProgress, runBatchCheck, resetProgress: resetBatchProgress } = useBatchCheck();
   const { scheduleDrain, markAutoCheckSession, badgeFlashProjectId } = useAutoCheck();
@@ -2128,10 +2236,10 @@ export default function ProjectPage() {
       <ProcessManagementModal
         open={processModalOpen}
         onOpenChange={setProcessModalOpen}
-        processes={processes}
+        processes={processesForManagementModal}
         onUpdate={updateProcess}
-        onReorder={reorderProcesses}
-        onAdd={addProcess}
+        onReorder={handleProcessManagementReorder}
+        onAdd={handleProcessManagementAdd}
         onDelete={deleteProcess}
         onReset={resetToDefaults}
       />

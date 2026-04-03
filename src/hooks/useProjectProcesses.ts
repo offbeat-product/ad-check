@@ -107,15 +107,21 @@ export function useProjectProcesses(projectId: string | undefined) {
     }
   }, []);
 
-  const addProcess = useCallback(async (label: string) => {
+  const addProcess = useCallback(async (label: string, options?: { mixedLane?: "banner" | "video" }) => {
     if (!projectId) return;
-    const key = `custom_${Date.now()}`;
+    const key =
+      options?.mixedLane === "banner"
+        ? `custom_banner_${Date.now()}`
+        : options?.mixedLane === "video"
+          ? `custom_video_${Date.now()}`
+          : `custom_${Date.now()}`;
     const maxOrder = processes.reduce((m, p) => Math.max(m, p.sort_order), 0);
     const { data, error } = await supabase.from("project_processes").insert({
       project_id: projectId,
       process_key: key,
       process_label: label,
       sort_order: maxOrder + 1,
+      is_common: false,
     }).select("*").single();
     if (!handleSupabaseError(error, "add process") && data) {
       setProcesses((prev) => [...prev, data as ProjectProcess]);
