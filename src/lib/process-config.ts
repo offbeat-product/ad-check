@@ -23,6 +23,7 @@ export const PROCESS_FILE_CONFIG: Record<string, { accept: string; allowTextInpu
   'video_horizontal': { accept: '.mp4,.mov,.webm', allowTextInput: false, label: '横動画' },
   'video_vertical':   { accept: '.mp4,.mov,.webm', allowTextInput: false, label: '縦動画' },
   'banner_design':    { accept: '.jpg,.jpeg,.png,.pdf,.psd,.webp,.ai', allowTextInput: false, label: 'バナーデザイン' },
+  'banner_draft':     { accept: '.jpg,.jpeg,.png,.pdf,.psd,.webp,.ai', allowTextInput: false, label: 'バナー案' },
 };
 
 // AI check capability per process type
@@ -40,6 +41,7 @@ export const AI_CHECK_CONFIG: Record<string, { inputMode: InputMode; enabled: bo
   'video_horizontal': { inputMode: 'video', enabled: true },
   'video_vertical':   { inputMode: 'video', enabled: true },
   'banner_design':    { inputMode: 'image', enabled: true },
+  'banner_draft':     { inputMode: 'image', enabled: true },
 };
 
 // Webhook mapping per product × process
@@ -85,6 +87,7 @@ export const PROCESS_STATUS_CONFIG: Record<string, { label: string; dotClass: st
 const PROCESS_LABEL_MAP: Record<string, string> = {
   ...Object.fromEntries(DEFAULT_PROCESSES.map((p) => [p.process_key, p.process_label])),
   banner_design: "バナーデザイン",
+  banner_draft: "バナー案",
 };
 
 export function getProcessLabel(processKey: string, labelByKey?: Record<string, string>): string {

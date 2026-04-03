@@ -31,6 +31,9 @@ export function getWebhookUrl(processType: string): string | null {
     case "styleframe":
     case "storyboard":
       return `${BASE_URL}/check-sf-v2`;
+    case "banner_design":
+    case "banner_draft":
+      return `${BASE_URL}/check-banner`;
     case "narration":
     case "bgm":
       return `${BASE_URL}/check-audio-v2`;
