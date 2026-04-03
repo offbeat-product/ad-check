@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Client, Product, Project } from "@/lib/db-types";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
+import { useRealtimeSubscription } from "@/hooks/useRealtimeSubscription";
 
 export const PROJECT_TREE_QUERY_KEY = ["project-tree"];
 
@@ -45,6 +46,20 @@ export function useProjectTree(): TreeData & {
     staleTime: 30_000,
     retry: 3,
     retryDelay: (attempt) => Math.min(1000 * Math.pow(2, attempt), 10000),
+  });
+
+  // Ad Brain 等が同一DBへ書き込んだ clients / products / projects を反映（queryKey は上記 useQuery と一致）
+  useRealtimeSubscription({
+    table: "clients",
+    queryKeys: [PROJECT_TREE_QUERY_KEY],
+  });
+  useRealtimeSubscription({
+    table: "products",
+    queryKeys: [PROJECT_TREE_QUERY_KEY],
+  });
+  useRealtimeSubscription({
+    table: "projects",
+    queryKeys: [PROJECT_TREE_QUERY_KEY],
   });
 
   const clients = data?.clients ?? [];
