@@ -17,6 +17,7 @@ import { useReviewState } from "@/hooks/useReviewState";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Lock, AlertTriangle, MessageCircle, Bot } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { AdCheckLogoMark } from "@/components/AdCheckLogoMark";
 import { formatTimestamp } from "@/components/comments/TimestampBadge";
 
 export default function SharedViewPage() {
@@ -280,9 +281,11 @@ export default function SharedViewPage() {
       {/* Left: Preview */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         <header className="border-b border-border px-4 py-3 flex items-center gap-3 bg-card shrink-0">
-          <span className="text-sm font-bold flex items-center gap-1.5">
-            <span style={{ color: "#0EA5E9" }}>∞</span>
-            <span className="whitespace-nowrap" style={{ color: "#0EA5E9", fontWeight: "bold" }}>Ad Check</span>
+          <span className="text-sm font-bold flex items-center gap-2">
+            <AdCheckLogoMark size="sm" />
+            <span className="whitespace-nowrap bg-gradient-to-r from-sky-500 to-violet-600 bg-clip-text text-transparent">
+              Ad Check
+            </span>
           </span>
           <Badge variant="outline" className="text-xs">共有ビュー</Badge>
           <span className="text-sm text-muted-foreground ml-2">{record.client_name} / {record.product_name}</span>

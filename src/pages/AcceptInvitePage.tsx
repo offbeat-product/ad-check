@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { AdCheckLogoMark } from "@/components/AdCheckLogoMark";
 
 const ROLE_LABELS: Record<string, string> = { admin: "管理者", member: "メンバー", viewer: "閲覧者" };
 
@@ -137,9 +138,11 @@ export default function AcceptInvitePage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-muted p-4">
         <div className="w-full max-w-md space-y-6 text-center">
-          <h1 className="text-4xl font-bold flex items-center justify-center gap-1 flex-wrap">
-            <span className="text-4xl" style={{ color: "#0EA5E9" }}>∞</span>
-            <span className="text-4xl font-bold" style={{ color: "#0EA5E9" }}>Ad Check</span>
+          <h1 className="text-4xl font-bold flex items-center justify-center gap-3 flex-wrap">
+            <AdCheckLogoMark size="lg" />
+            <span className="bg-gradient-to-r from-sky-500 to-violet-600 bg-clip-text text-transparent">
+              Ad Check
+            </span>
           </h1>
           <div className="glass-card p-8 space-y-4">
             <p className="text-destructive font-medium">{error}</p>
@@ -156,9 +159,11 @@ export default function AcceptInvitePage() {
     <div className="flex min-h-screen items-center justify-center bg-muted p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-2">
-          <h1 className="text-4xl font-bold flex items-center justify-center gap-1 flex-wrap">
-            <span className="text-4xl" style={{ color: "#0EA5E9" }}>∞</span>
-            <span className="text-4xl font-bold" style={{ color: "#0EA5E9" }}>Ad Check</span>
+          <h1 className="text-4xl font-bold flex items-center justify-center gap-3 flex-wrap">
+            <AdCheckLogoMark size="lg" />
+            <span className="bg-gradient-to-r from-sky-500 to-violet-600 bg-clip-text text-transparent">
+              Ad Check
+            </span>
           </h1>
           <p className="text-sm text-muted-foreground whitespace-nowrap">広告制作現場に最良・最速の「GO」を。</p>
         </div>

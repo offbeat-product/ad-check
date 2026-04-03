@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
+import { AdCheckLogoMark } from "@/components/AdCheckLogoMark";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -80,17 +81,10 @@ export default function Login() {
     <div className="flex min-h-screen items-center justify-center bg-muted p-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-2">
-          <h1 className="text-4xl font-bold flex items-center justify-center">
-            <span
-              className="text-4xl"
-              style={{
-                background: "linear-gradient(135deg, #0EA5E9, #7C7AFF)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
-              }}
-            >
-              ∞ Ad Check
+          <h1 className="text-4xl font-bold flex items-center justify-center gap-3 flex-wrap">
+            <AdCheckLogoMark size="lg" />
+            <span className="bg-gradient-to-r from-sky-500 to-violet-600 bg-clip-text text-transparent">
+              Ad Check
             </span>
           </h1>
           <p className="text-sm text-muted-foreground whitespace-nowrap">広告制作現場に最良・最速の「GO」を。</p>
