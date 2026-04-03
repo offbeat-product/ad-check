@@ -603,6 +603,33 @@ export type Database = {
           },
         ]
       }
+      process_types: {
+        Row: {
+          code: string
+          creative_type: string
+          is_active: boolean
+          name: string
+          sort_order: number
+          used_by_check: boolean
+        }
+        Insert: {
+          code: string
+          creative_type: string
+          is_active?: boolean
+          name: string
+          sort_order?: number
+          used_by_check?: boolean
+        }
+        Update: {
+          code?: string
+          creative_type?: string
+          is_active?: boolean
+          name?: string
+          sort_order?: number
+          used_by_check?: boolean
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           client_id: string | null
@@ -904,6 +931,7 @@ export type Database = {
         Row: {
           created_at: string | null
           created_by: string | null
+          creative_type: string
           deadline: string | null
           description: string | null
           id: string
@@ -918,6 +946,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           created_by?: string | null
+          creative_type?: string
           deadline?: string | null
           description?: string | null
           id?: string
@@ -932,6 +961,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           created_by?: string | null
+          creative_type?: string
           deadline?: string | null
           description?: string | null
           id?: string

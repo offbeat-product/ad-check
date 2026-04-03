@@ -91,7 +91,7 @@ HANDOVER.md
 | バケット名 | 用途 | 備考 |
 |-----------|------|------|
 | check-files | チェック対象ファイル | |
-| videos | 動画ファイル | 上限500MB |
+| videos | 動画ファイル | 上限5GB |
 | reference-materials | 参考資料 | |
 
 ### Edge Functions（5つ）

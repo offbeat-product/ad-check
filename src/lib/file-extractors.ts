@@ -5,13 +5,13 @@
 
 import { supabase } from "@/integrations/supabase/client";
 import { tusUpload } from "@/lib/tus-upload";
-
-const MAX_FILE_SIZE_MB = 500;
-const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+import { MAX_UPLOAD_SIZE, MAX_UPLOAD_LABEL } from "@/lib/file-validation";
 
 function validateFileSize(file: File): void {
-  if (file.size > MAX_FILE_SIZE_BYTES) {
-    throw new Error(`ファイルサイズが${MAX_FILE_SIZE_MB}MBを超えています（${(file.size / 1024 / 1024).toFixed(1)}MB）`);
+  if (file.size > MAX_UPLOAD_SIZE) {
+    throw new Error(
+      `ファイルサイズが最大の${MAX_UPLOAD_LABEL}を超えています（${(file.size / (1024 * 1024 * 1024)).toFixed(2)}GB）`,
+    );
   }
 }
 

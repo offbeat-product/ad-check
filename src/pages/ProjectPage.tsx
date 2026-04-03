@@ -1,18 +1,20 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { compressImage } from "@/lib/image-compress";
 import { useToast } from "@/hooks/use-toast";
-import { validateFileSize, formatFileSize } from "@/lib/file-validation";
+import { validateFileSize, formatFileSize, MAX_UPLOAD_LABEL, getFileCategory } from "@/lib/file-validation";
 import { tusUpload } from "@/lib/tus-upload";
 import type { Project, Product, Client, ProjectFile, CheckResultRow } from "@/lib/db-types";
 import { FILE_STATUS_CONFIG } from "@/lib/db-types";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { useProjectProcesses, type ProjectProcess } from "@/hooks/useProjectProcesses";
-import { PROJECT_STATUS_CONFIG, PROCESS_STATUS_CONFIG, PROCESS_FILE_CONFIG, getProcessWebhookPath, AI_CHECK_CONFIG } from "@/lib/process-config";
+import { PROJECT_STATUS_CONFIG, PROCESS_STATUS_CONFIG, getProcessFileUploadConfig, getProcessWebhookPath, AI_CHECK_CONFIG } from "@/lib/process-config";
 import { PROJECT_TREE_QUERY_KEY } from "@/hooks/useProjectTree";
+import { useProcessTypes } from "@/hooks/useProcessTypes";
+import { buildProcessLabelLookup } from "@/lib/process-types";
 import { usePatterns } from "@/hooks/usePatterns";
 import { AD_BRAIN_URL } from "@/lib/constants";
 import ProcessManagementModal from "@/components/ProcessManagementModal";
@@ -36,9 +38,11 @@ import { Label } from "@/components/ui/label";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import CheckRulesTab from "@/components/product/CheckRulesTab";
 import {
-  Upload, FileText, Image, Film, MessageCircle, Plus, Settings, GripVertical,
+  Upload, FileText, Image, ImageIcon, Film, MessageCircle, Plus, Settings, GripVertical,
   ChevronDown, ChevronRight, CalendarIcon, AlertTriangle, Trash2, Grid3X3, List, Bot, Loader2, Pencil, Lock, CheckSquare, Send, MoreHorizontal, Layers, ArrowRightLeft,
   ExternalLink,
+  Video,
+  LayoutGrid,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -52,6 +56,8 @@ import {
 import { cn } from "@/lib/utils";
 import { format, differenceInDays, isPast } from "date-fns";
 import { useBatchCheck } from "@/hooks/useBatchCheck";
+import { useAutoCheck } from "@/providers/AutoCheckProvider";
+import { ProcessAiAutoCheckBadge } from "@/components/project/ProcessAiAutoCheckBadge";
 import BatchCheckFloatingBar from "@/components/BatchCheckFloatingBar";
 
 import { getSubmitBadgeClass, getSubmitLabel } from "@/lib/check-display";
@@ -113,6 +119,19 @@ function DeadlinePicker({ deadline, onChange, isCompleted, label }: { deadline: 
   );
 }
 
+/** Mixed案件タブ: マスタの creative_type で工程を分ける（common は両タブに表示）。 */
+function projectProcessMatchesMixedTab(
+  proc: Pick<ProjectProcess, "process_key">,
+  tab: "banner" | "video",
+  creativeByCode: Map<string, string>
+): boolean {
+  if (proc.process_key.startsWith("custom_")) return true;
+  const ct = creativeByCode.get(proc.process_key);
+  if (!ct) return true;
+  if (tab === "banner") return ct === "banner" || ct === "common";
+  return ct === "video" || ct === "common";
+}
+
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -145,6 +164,7 @@ export default function ProjectPage() {
   const [addPatternOpen, setAddPatternOpen] = useState(false);
   const [bulkPatternOpen, setBulkPatternOpen] = useState(false);
   const [viewMode, setViewMode] = useState<"matrix" | "list">("list");
+  const [mixedProcessTab, setMixedProcessTab] = useState<"banner" | "video">("banner");
   const [copyToPatternInfo, setCopyToPatternInfo] = useState<{
     sourcePatternId: string;
     processType: string;
@@ -158,7 +178,77 @@ export default function ProjectPage() {
 
   const { processes, updateProcess, reorderProcesses, addProcess, deleteProcess, resetToDefaults } = useProjectProcesses(id);
 
+  useEffect(() => {
+    setMixedProcessTab("banner");
+  }, [id]);
+
+  const { data: processTypeRows = [] } = useProcessTypes();
+  const processLabelByKey = useMemo(() => {
+    const fromDb = buildProcessLabelLookup(processTypeRows);
+    return {
+      script: "構成/字コンテ",
+      na_script: "NA原稿",
+      narration: "ナレーション",
+      bgm: "BGM",
+      vcon: "Vコン",
+      styleframe: "スタイルフレーム",
+      storyboard: "絵コンテ",
+      video_horizontal: "横動画",
+      video_vertical: "縦動画",
+      ...fromDb,
+    };
+  }, [processTypeRows]);
+
+  const processCreativeByCode = useMemo(() => {
+    const m = new Map<string, string>();
+    processTypeRows.forEach((r) => m.set(r.code, r.creative_type));
+    return m;
+  }, [processTypeRows]);
+
+  const uploadProcessOptions = useMemo(() => {
+    let base = [...processes].filter((p) => p.is_active).sort((a, b) => a.sort_order - b.sort_order);
+    const ct = project?.creative_type ?? "video";
+    if (ct === "mixed") {
+      base = base.filter((p) => projectProcessMatchesMixedTab(p, mixedProcessTab, processCreativeByCode));
+    }
+    return base;
+  }, [processes, project?.creative_type, mixedProcessTab, processCreativeByCode]);
+
+  const displayActiveProcesses = useMemo(() => {
+    const act = processes.filter((p) => p.is_active);
+    const ct = project?.creative_type ?? "video";
+    if (ct !== "mixed") return act;
+    return act.filter((p) => projectProcessMatchesMixedTab(p, mixedProcessTab, processCreativeByCode));
+  }, [processes, project?.creative_type, mixedProcessTab, processCreativeByCode]);
+
+  const processesForPatternMatrix = useMemo(() => {
+    const ct = project?.creative_type ?? "video";
+    if (ct !== "mixed") return processes;
+    return processes.filter(
+      (p) =>
+        !p.is_active ||
+        projectProcessMatchesMixedTab(p, mixedProcessTab, processCreativeByCode)
+    );
+  }, [processes, project?.creative_type, mixedProcessTab, processCreativeByCode]);
+
   const { progress: batchProgress, runBatchCheck, resetProgress: resetBatchProgress } = useBatchCheck();
+  const { scheduleDrain, markAutoCheckSession, badgeFlashProjectId } = useAutoCheck();
+  const scheduleDrainRef = useRef<() => void>(() => {});
+  scheduleDrainRef.current = () => {
+    if (id) scheduleDrain(id);
+  };
+
+  const renderProcessAiExtra = useCallback(
+    (processKey: string) => (
+      <ProcessAiAutoCheckBadge
+        processKey={processKey}
+        files={files}
+        showAllComplete={Boolean(id && badgeFlashProjectId === id)}
+      />
+    ),
+    [files, badgeFlashProjectId, id]
+  );
+
   const [batchFixing, setBatchFixing] = useState(false);
   const [selectedFileIds, setSelectedFileIds] = useState<Set<string>>(new Set());
   const [selectMode, setSelectMode] = useState(false);
@@ -438,7 +528,7 @@ export default function ProjectPage() {
         async (payload) => {
           console.log("[ProjectPage] Realtime project_files change:", payload.eventType);
           const newFile = payload.new as ProjectFile | undefined;
-          const oldFile = payload.old as { id?: string } | undefined;
+          const oldFile = payload.old as { id?: string; status?: string } | undefined;
 
           if (payload.eventType === "DELETE" && oldFile?.id) {
             setFiles(prev => prev.filter(f => f.id !== oldFile.id));
@@ -446,6 +536,13 @@ export default function ProjectPage() {
           }
 
           if (newFile) {
+            const oldStatus = oldFile?.status;
+            const newStatus = newFile.status;
+            const becameChecked = newStatus === "checked" && oldStatus !== "checked";
+            const becameTerminalOrReverted =
+              (newStatus === "error" && oldStatus !== "error") ||
+              (newStatus === "uploaded" && oldStatus === "checking");
+
             setFiles(prev => {
               const idx = prev.findIndex(f => f.id === newFile.id);
               if (idx >= 0) {
@@ -466,6 +563,10 @@ export default function ProjectPage() {
               if (cr) {
                 setCheckResults(prev => ({ ...prev, [cr.id]: cr }));
               }
+            }
+
+            if (payload.eventType === "UPDATE" && (becameChecked || becameTerminalOrReverted)) {
+              scheduleDrainRef.current();
             }
           }
         }
@@ -498,30 +599,6 @@ export default function ProjectPage() {
       supabase.removeChannel(crChannel);
     };
   }, [id]);
-
-  // Watch for check_results updates (n8n completing async checks) and auto-update file status
-  useEffect(() => {
-    if (!id) return;
-    const checkingFiles = files.filter(f => f.status === "checking" && f.check_result_id);
-    if (checkingFiles.length === 0) return;
-
-    const interval = setInterval(async () => {
-      for (const f of checkingFiles) {
-        const { data: cr } = await supabase
-          .from("check_results")
-          .select("id, overall_status, ng_count, warning_count, check_items, created_at, user_id, check_type, comparison_round")
-          .eq("id", f.check_result_id!)
-          .maybeSingle();
-        if (cr && cr.check_items && Array.isArray(cr.check_items) && (cr.check_items as unknown[]).length > 0) {
-          // Check result is complete — update file status
-          await supabase.from("project_files").update({ status: "checked" }).eq("id", f.id);
-          setFiles(prev => prev.map(pf => pf.id === f.id ? { ...pf, status: "checked" } : pf));
-          setCheckResults(prev => ({ ...prev, [cr.id]: cr as any }));
-        }
-      }
-    }, 5000);
-    return () => clearInterval(interval);
-  }, [id, files.filter(f => f.status === "checking").map(f => f.id).join(",")]);
 
   const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   useEffect(() => {
@@ -676,18 +753,32 @@ export default function ProjectPage() {
     const hints: Record<string, string> = {
       script: "TXT / DOCX",
       na_script: "TXT / DOCX",
-      narration: "MP3 / WAV / M4A（最大500MB）",
-      bgm: "MP3 / WAV / M4A（最大500MB）",
-      vcon: "MP4 / MOV / WebM（最大500MB）",
+      narration: `MP3 / WAV / M4A（最大${MAX_UPLOAD_LABEL}）`,
+      bgm: `MP3 / WAV / M4A（最大${MAX_UPLOAD_LABEL}）`,
+      vcon: `MP4 / MOV / WebM（最大${MAX_UPLOAD_LABEL}）`,
       styleframe: "JPG / PNG / PSD / AI",
       storyboard: "JPG / PNG / PDF / PSD",
-      video_horizontal: "MP4 / MOV / WebM（最大500MB）",
-      video_vertical: "MP4 / MOV / WebM（最大500MB）",
+      video_horizontal: `MP4 / MOV / WebM（最大${MAX_UPLOAD_LABEL}）`,
+      video_vertical: `MP4 / MOV / WebM（最大${MAX_UPLOAD_LABEL}）`,
+      banner_design: "JPG / PNG / PDF / PSD / AI",
     };
-    return hints[processType] || "";
+    if (hints[processType]) return hints[processType];
+    if (getFileCategory(processType) === "image") {
+      return `JPG / PNG / PDF / PSD など（最大${MAX_UPLOAD_LABEL}）`;
+    }
+    if (getFileCategory(processType) === "video") {
+      return `MP4 / MOV / WebM（最大${MAX_UPLOAD_LABEL}）`;
+    }
+    if (getFileCategory(processType) === "audio") {
+      return `MP3 / WAV / M4A（最大${MAX_UPLOAD_LABEL}）`;
+    }
+    return "TXT / DOCX など";
   };
 
-  const isImageProcess = (processType: string) => ["styleframe", "storyboard"].includes(processType);
+  const isImageProcess = (processType: string) => {
+    if (["styleframe", "storyboard", "banner_design"].includes(processType)) return true;
+    return getFileCategory(processType) === "image";
+  };
 
   // Drag & drop handlers for upload area
   const [isDragOver, setIsDragOver] = useState(false);
@@ -698,7 +789,7 @@ export default function ProjectPage() {
     if (uploading) return;
     const files = e.dataTransfer.files;
     if (files && files.length > 0) {
-      const accept = PROCESS_FILE_CONFIG[uploadModal || ""]?.accept || "";
+      const accept = getProcessFileUploadConfig(uploadModal || "").accept;
       const exts = accept.split(",").map(x => x.trim().toLowerCase());
       const valid = Array.from(files).filter(f => {
         const ext = "." + f.name.split(".").pop()?.toLowerCase();
@@ -720,12 +811,13 @@ export default function ProjectPage() {
     setUploading(true);
     setUploadProgress(0);
 
-    const cfg = PROCESS_FILE_CONFIG[uploadModal];
+    const cfg = getProcessFileUploadConfig(uploadModal);
     const usePerFilePatterns = patterns.length > 0 && selectedFiles.length > 1 && Object.keys(filePatternAssignments).length > 0;
     const resolvedPatternId = (patterns.length > 0 && uploadPatternMode === "specific") ? uploadPatternId : null;
     let lastInsertedFileId: string | null = null;
     let showedCopyDialog = false;
     const uploadProcessType = uploadModal;
+    let uploadedInBatch = 0;
 
     try {
       if (useTextInput && cfg?.allowTextInput) {
@@ -742,6 +834,7 @@ export default function ProjectPage() {
         } as any).select("id").single();
         if (error) throw error;
         lastInsertedFileId = inserted?.id || null;
+        uploadedInBatch = 1;
         setUploadProgress(100);
         toast({ title: "アップロード完了" });
       } else if (selectedFiles.length > 0) {
@@ -798,6 +891,7 @@ export default function ProjectPage() {
           } as any).select("id").single();
           if (error) throw error;
 
+          uploadedInBatch += 1;
           lastInsertedFileId = inserted?.id || null;
           lastFileData = fileData;
           lastFileName = fileName;
@@ -830,6 +924,7 @@ export default function ProjectPage() {
       const message = err instanceof Error ? err.message : "アップロードに失敗しました";
       toast({ title: "アップロードエラー", description: message, variant: "destructive" });
       lastInsertedFileId = null;
+      uploadedInBatch = 0;
     } finally {
       setUploadModal(null);
       setSelectedFiles([]);
@@ -841,11 +936,17 @@ export default function ProjectPage() {
       setUploadPatternId(null);
       setUploadPatternMode("common");
       setUploadSubmissionType("internal");
-      fetchData();
+      void fetchData().then(() => {
+        const aiCfg = AI_CHECK_CONFIG[uploadProcessType || ""];
+        if (uploadedInBatch > 1 && aiCfg?.enabled && user && id) {
+          markAutoCheckSession({ projectId: id, projectName: project?.name ?? "案件" });
+          window.setTimeout(() => scheduleDrain(id), 500);
+        }
+      });
 
       // Auto-navigate to file review for automatic AI check (single file only)
       // Skip auto-navigate if copy-to-pattern dialog should be shown
-      if (lastInsertedFileId && !showedCopyDialog) {
+      if (lastInsertedFileId && !showedCopyDialog && uploadedInBatch <= 1) {
         const aiCfg = AI_CHECK_CONFIG[uploadProcessType || ""];
         if (aiCfg?.enabled) {
           toast({ title: "🤖 AIチェックを自動実行します", description: "レビュー画面に移動中..." });
@@ -876,7 +977,7 @@ export default function ProjectPage() {
   if (!project || !product) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">プロジェクトが見つかりません</div>;
 
   const statusCfg = PROJECT_STATUS_CONFIG[project.status || "in_progress"] || PROJECT_STATUS_CONFIG.in_progress;
-  const activeProcesses = processes.filter(p => p.is_active);
+  const creativeType = project.creative_type ?? "video";
 
   return (
     <div className="min-h-screen">
@@ -886,33 +987,60 @@ export default function ProjectPage() {
             <div className="text-xs text-muted-foreground truncate">
               {client?.name} &gt; {product.name} &gt; {project.name}
             </div>
-            {editingProjectName ? (
-              <form
-                className="flex items-center gap-1 mt-0.5"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleSaveProjectName();
-                }}
-              >
-                <Input
-                  autoFocus
-                  value={projectNameDraft}
-                  onChange={(e) => setProjectNameDraft(e.target.value)}
-                  onBlur={handleSaveProjectName}
-                  onKeyDown={(e) => { if (e.key === "Escape") { setEditingProjectName(false); } }}
-                  className="text-base md:text-lg font-bold h-8 px-1"
-                />
-              </form>
-            ) : (
-              <h1
-                className="text-base md:text-lg font-bold mt-0.5 truncate cursor-pointer hover:bg-muted/50 rounded px-1 -mx-1 transition-colors group flex items-center gap-1"
-                onClick={() => { setProjectNameDraft(project.name); setEditingProjectName(true); }}
-                title="クリックして編集"
-              >
-                {project.name}
-                <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-              </h1>
-            )}
+            <div className="flex items-center gap-2 flex-wrap mt-0.5">
+              {editingProjectName ? (
+                <form
+                  className="flex items-center gap-1 min-w-0 flex-1"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleSaveProjectName();
+                  }}
+                >
+                  <Input
+                    autoFocus
+                    value={projectNameDraft}
+                    onChange={(e) => setProjectNameDraft(e.target.value)}
+                    onBlur={handleSaveProjectName}
+                    onKeyDown={(e) => { if (e.key === "Escape") { setEditingProjectName(false); } }}
+                    className="text-base md:text-lg font-bold h-8 px-1"
+                  />
+                </form>
+              ) : (
+                <h1
+                  className="text-base md:text-lg font-bold truncate cursor-pointer hover:bg-muted/50 rounded px-1 -mx-1 transition-colors group flex items-center gap-1 min-w-0"
+                  onClick={() => { setProjectNameDraft(project.name); setEditingProjectName(true); }}
+                  title="クリックして編集"
+                >
+                  {project.name}
+                  <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                </h1>
+              )}
+              {creativeType === "banner" ? (
+                <Badge
+                  variant="outline"
+                  className="text-xs font-medium gap-1 shrink-0 border-0 bg-[#7C7AFF]/10 text-[#7C7AFF]"
+                >
+                  <ImageIcon className="h-3 w-3" aria-hidden />
+                  静止画バナー
+                </Badge>
+              ) : creativeType === "mixed" ? (
+                <Badge
+                  variant="outline"
+                  className="text-xs font-medium gap-1 shrink-0 border-0 bg-amber-500/10 text-amber-600 dark:text-amber-500"
+                >
+                  <LayoutGrid className="h-3 w-3" aria-hidden />
+                  混合
+                </Badge>
+              ) : (
+                <Badge
+                  variant="outline"
+                  className="text-xs font-medium gap-1 shrink-0 border-0 bg-primary/10 text-primary"
+                >
+                  <Video className="h-3 w-3" aria-hidden />
+                  動画
+                </Badge>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap shrink-0">
             {/* Deadline compliance badge */}
@@ -1006,11 +1134,13 @@ export default function ProjectPage() {
                   <ExternalLink className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
-                  <p className="text-sm font-medium mb-1">参考資料・ナレッジの管理</p>
-                  <p className="text-xs text-muted-foreground">
-                    参考資料の追加・編集は Ad Brain で行います。
+                  <p className="text-sm font-medium mb-1">ナレッジ・チェックルール管理</p>
+                  <p className="text-xs text-muted-foreground leading-tight">
+                    ナレッジの追加・編集は Ad Brain で行います。
                     <br />
-                    Ad Brain で登録した資料は自動的にこの案件のAIチェックに反映されます。
+                    Ad Brain で登録したナレッジを元にチェックルールが生成され
+                    <br />
+                    自動的に本案件のAIチェックに反映されます。
                   </p>
                 </div>
                 <a
@@ -1023,6 +1153,31 @@ export default function ProjectPage() {
                   <ExternalLink className="h-3.5 w-3.5" />
                 </a>
               </div>
+            )}
+
+            {creativeType === "mixed" && (
+              <Tabs
+                value={mixedProcessTab}
+                onValueChange={(v) => setMixedProcessTab(v as "banner" | "video")}
+                className="w-full"
+              >
+                <TabsList className="w-full sm:w-auto h-auto p-0 bg-transparent rounded-none border-b border-border justify-start gap-0 mb-1">
+                  <TabsTrigger
+                    value="banner"
+                    className="rounded-none border-b-2 border-transparent bg-transparent shadow-none px-4 py-2 gap-1.5 text-muted-foreground data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                  >
+                    <ImageIcon className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    静止画バナー
+                  </TabsTrigger>
+                  <TabsTrigger
+                    value="video"
+                    className="rounded-none border-b-2 border-transparent bg-transparent shadow-none px-4 py-2 gap-1.5 text-muted-foreground data-[state=active]:border-primary data-[state=active]:text-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none"
+                  >
+                    <Video className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    動画
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
             )}
 
             {/* Pattern management header – compact */}
@@ -1073,9 +1228,10 @@ export default function ProjectPage() {
               <PatternMatrix
                 projectId={id!}
                 patterns={patterns}
-                processes={processes}
+                processes={processesForPatternMatrix}
                 files={files}
                 checkResults={checkResults}
+                renderProcessHeaderExtra={renderProcessAiExtra}
                 onUpload={(processKey, patternId) => {
                   openUploadModal(processKey, patternId, patternId ? "specific" : "common");
                 }}
@@ -1093,10 +1249,9 @@ export default function ProjectPage() {
             ) : (
               /* Legacy list view (no patterns) */
               <>
-                {activeProcesses.map((proc, index) => {
+                {displayActiveProcesses.map((proc, index) => {
                   const sectionFiles = getFilesForProcess(proc.process_key);
                   const psCfg = PROCESS_STATUS_CONFIG[proc.status] || PROCESS_STATUS_CONFIG.preparing;
-                  const cfg = PROCESS_FILE_CONFIG[proc.process_key];
                   const webhookAvailable = !!AI_CHECK_CONFIG[proc.process_key]?.enabled;
 
                   const isCollapsed = collapsedProcesses.has(proc.id);
@@ -1197,6 +1352,8 @@ export default function ProjectPage() {
                             );
                           })()}
 
+                          {renderProcessAiExtra(proc.process_key)}
+
                           {!webhookAvailable && (
                             <Badge variant="outline" className="text-[9px] ml-1 text-muted-foreground">準備中</Badge>
                           )}
@@ -1241,7 +1398,9 @@ export default function ProjectPage() {
                                     toast({ title: `最大${MAX_BATCH}件まで一括チェック可能です`, description: `先頭${MAX_BATCH}件をチェックします。`, variant: "default" });
                                   }
                                   runBatchCheck(limitedTargets, product, client, id, () => {
-                                    fetchData();
+                                    void fetchData().then(() => {
+                                      if (id) scheduleDrain(id);
+                                    });
                                     setSelectedFileIds(new Set());
                                     setSelectMode(false);
                                   });
@@ -1663,7 +1822,7 @@ export default function ProjectPage() {
           </TabsContent>
 
           <TabsContent value="history">
-            <CheckHistory projectId={id!} files={files} checkResults={checkResults} onRenameFile={handleRenameFile} patterns={patterns} />
+            <CheckHistory projectId={id!} files={files} checkResults={checkResults} onRenameFile={handleRenameFile} patterns={patterns} processLabelByKey={processLabelByKey} />
           </TabsContent>
 
           <TabsContent value="patterns">
@@ -1803,6 +1962,29 @@ export default function ProjectPage() {
           <DialogHeader><DialogTitle>ファイルアップロード</DialogTitle></DialogHeader>
           <div className="space-y-4">
 
+            <div className="space-y-2">
+              <Label className="text-xs font-medium">工程</Label>
+              <Select
+                value={uploadModal || ""}
+                onValueChange={(v) => {
+                  setUploadModal(v);
+                  setSelectedFiles([]);
+                  setUploadTextInput("");
+                  setFilePatternAssignments({});
+                }}
+              >
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue placeholder="工程を選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  {uploadProcessOptions.map((p) => (
+                    <SelectItem key={p.id} value={p.process_key} className="text-xs">
+                      {p.process_label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
 
 
@@ -1880,13 +2062,13 @@ export default function ProjectPage() {
               </div>
             )}
 
-            {PROCESS_FILE_CONFIG[uploadModal || ""]?.allowTextInput && (
+            {getProcessFileUploadConfig(uploadModal || "").allowTextInput && (
               <div className="flex gap-2">
                 <Button size="sm" variant={useTextInput ? "outline" : "default"} onClick={() => setUseTextInput(false)} className="text-xs">ファイル選択</Button>
                 <Button size="sm" variant={useTextInput ? "default" : "outline"} onClick={() => setUseTextInput(true)} className="text-xs">テキスト直接入力</Button>
               </div>
             )}
-            {useTextInput && PROCESS_FILE_CONFIG[uploadModal || ""]?.allowTextInput ? (
+            {useTextInput && getProcessFileUploadConfig(uploadModal || "").allowTextInput ? (
               <Textarea value={uploadTextInput} onChange={(e) => setUploadTextInput(e.target.value)}
                 placeholder="テキストを入力..." className="min-h-[150px] text-sm font-mono" />
             ) : (
@@ -1914,7 +2096,7 @@ export default function ProjectPage() {
                 )}
                 <p className="text-xs text-muted-foreground/60 mt-1">{getFileFormatHint(uploadModal || "")}</p>
                 <input ref={fileInputRef} type="file" className="hidden"
-                  accept={PROCESS_FILE_CONFIG[uploadModal || ""]?.accept}
+                  accept={getProcessFileUploadConfig(uploadModal || "").accept}
                   multiple
                   onChange={(e) => {
                     const files = e.target.files;
@@ -1999,12 +2181,13 @@ export default function ProjectPage() {
   );
 }
 
-function CheckHistory({ projectId, files, checkResults, onRenameFile, patterns }: {
+function CheckHistory({ projectId, files, checkResults, onRenameFile, patterns, processLabelByKey }: {
   projectId: string;
   files: ProjectFile[];
   checkResults: Record<string, Pick<CheckResultRow, "id" | "overall_status" | "ng_count" | "warning_count" | "created_at" | "user_id" | "check_type" | "comparison_round"> & { resolved_items?: unknown; check_items?: unknown }>;
   onRenameFile: (fileId: string, newName: string) => Promise<void>;
   patterns: { id: string; name: string }[];
+  processLabelByKey: Record<string, string>;
 }) {
   const navigate = useNavigate();
   const [editingFileId, setEditingFileId] = useState<string | null>(null);
@@ -2037,12 +2220,6 @@ function CheckHistory({ projectId, files, checkResults, onRenameFile, patterns }
     return bDate.localeCompare(aDate);
   });
 
-  const processLabelMap: Record<string, string> = {
-    script: "構成/字コンテ", na_script: "NA原稿", narration: "ナレーション", bgm: "BGM",
-    vcon: "Vコン", styleframe: "スタイルフレーム", storyboard: "絵コンテ",
-    video_horizontal: "横動画", video_vertical: "縦動画",
-  };
-
   const patternMap = new Map(patterns.map(p => [p.id, p.name]));
 
   return (
@@ -2066,7 +2243,7 @@ function CheckHistory({ projectId, files, checkResults, onRenameFile, patterns }
             const cr = checkResults[f.check_result_id!];
             const userName = cr?.user_id ? (profileMap[cr.user_id] || "...") : "—";
             const checkDate = cr?.created_at ? format(new Date(cr.created_at), "MM/dd HH:mm") : "—";
-            const processLabel = processLabelMap[f.process_type] || f.process_type;
+            const processLabel = processLabelByKey[f.process_type] || f.process_type;
             const isComparison = cr?.check_type === "comparison";
             const draftLabel = isComparison ? `第${(cr?.comparison_round ?? 0) + 1}稿` : "初稿";
             const patternName = f.pattern_id ? patternMap.get(f.pattern_id) || "—" : "共通";

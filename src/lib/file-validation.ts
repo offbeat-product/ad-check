@@ -1,8 +1,8 @@
 /** File upload validation and size limits */
 
-/** Maximum file size: 500MB for all types */
-export const MAX_UPLOAD_SIZE = 500 * 1024 * 1024; // 500MB
-export const MAX_UPLOAD_LABEL = "500MB";
+/** Maximum file size: 5GB for all types */
+export const MAX_UPLOAD_SIZE = 5 * 1024 * 1024 * 1024; // 5GB
+export const MAX_UPLOAD_LABEL = "5GB";
 
 export const FILE_SIZE_LIMITS: Record<string, number> = {
   text: MAX_UPLOAD_SIZE,
@@ -21,10 +21,12 @@ export const FILE_SIZE_LABELS: Record<string, string> = {
 export function getFileCategory(processType: string): keyof typeof FILE_SIZE_LIMITS {
   const audioProcesses = ["narration", "bgm"];
   const videoProcesses = ["vcon", "video_horizontal", "video_vertical"];
-  const imageProcesses = ["sf", "styleframe", "storyboard"];
+  const imageProcesses = ["sf", "styleframe", "storyboard", "banner_design"];
+  const kl = processType.toLowerCase();
   if (audioProcesses.includes(processType)) return "audio";
   if (videoProcesses.includes(processType)) return "video";
   if (imageProcesses.includes(processType)) return "image";
+  if (kl.includes("banner") || kl.includes("design") || kl.includes("layout")) return "image";
   return "text";
 }
 

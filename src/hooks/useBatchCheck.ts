@@ -1,15 +1,7 @@
 import { useState, useCallback } from "react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { getWebhookUrl, webhookFetch, runScriptCheck, getRelatedProcessData, VIDEO_ASYNC_ACCEPTED } from "@/lib/webhook";
-import { resolveWebhookProductId } from "@/lib/resolve-product-id";
-import { gatherReferenceMaterials } from "@/lib/reference-materials";
-import { AI_CHECK_CONFIG } from "@/lib/process-config";
-import { handleSupabaseError } from "@/lib/supabase-helpers";
-import { tusUploadBlob } from "@/lib/tus-upload";
-import type { CheckItem } from "@/lib/types";
-import type { Json } from "@/integrations/supabase/types";
+import { runSingleFileAiCheck } from "@/lib/run-single-file-ai-check";
 import type { ProjectFile, Product, Client } from "@/lib/db-types";
 
 export interface BatchCheckProgress {
@@ -24,249 +16,115 @@ export function useBatchCheck() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [progress, setProgress] = useState<BatchCheckProgress>({
-    total: 0, current: 0, currentFileName: "", status: "idle", results: [],
+    total: 0,
+    current: 0,
+    currentFileName: "",
+    status: "idle",
+    results: [],
   });
 
-  const runBatchCheck = useCallback(async (
-    files: ProjectFile[],
-    product: Product,
-    client: Client | null,
-    projectId: string,
-    onComplete?: () => void,
-  ) => {
-    if (!user || files.length === 0) return;
+  const runBatchCheck = useCallback(
+    async (
+      files: ProjectFile[],
+      product: Product,
+      client: Client | null,
+      projectId: string,
+      onComplete?: () => void
+    ) => {
+      if (!user || files.length === 0) return;
 
-    // Use files as-is — caller already filters for selection/unchecked
-    const targetFiles = files.filter(f => f.file_data && !f.parent_file_id);
-    if (targetFiles.length === 0) {
-      toast({ title: "チェック対象のファイルがありません" });
-      return;
-    }
-
-    // Enforce per-process-type limits for video
-    const VIDEO_LIMITS: Record<string, number> = {
-      vcon: 3,
-      video_horizontal: 1,
-      video_vertical: 1,
-    };
-    const processGroups = new Map<string, typeof targetFiles>();
-    for (const f of targetFiles) {
-      const key = f.process_type || "script";
-      if (!processGroups.has(key)) processGroups.set(key, []);
-      processGroups.get(key)!.push(f);
-    }
-    let limited = false;
-    const limitedFiles: typeof targetFiles = [];
-    for (const [key, group] of processGroups) {
-      const limit = VIDEO_LIMITS[key];
-      if (limit && group.length > limit) {
-        limited = true;
-        limitedFiles.push(...group.slice(0, limit));
-      } else {
-        limitedFiles.push(...group);
+      const targetFiles = files.filter((f) => f.file_data && !f.parent_file_id);
+      if (targetFiles.length === 0) {
+        toast({ title: "チェック対象のファイルがありません" });
+        return;
       }
-    }
-    // Preserve original order
-    const finalFiles = targetFiles.filter(f => limitedFiles.includes(f));
 
-    if (limited) {
-      toast({ title: "動画チェック件数制限", description: "Vコンは最大3件、横動画/縦動画は最大1件までです。制限内のファイルのみチェックします。" });
-    }
-
-    // Enforce max 5 files per batch
-    const MAX_BATCH = 5;
-    if (finalFiles.length > MAX_BATCH) {
-      toast({ title: `一括チェックは最大${MAX_BATCH}件までです`, description: `先頭${MAX_BATCH}件をチェックします。`, variant: "destructive" });
-    }
-    const batchFiles = finalFiles.slice(0, MAX_BATCH);
-
-    setProgress({ total: batchFiles.length, current: 0, currentFileName: "", status: "running", results: [] });
-
-    const results: BatchCheckProgress["results"] = [];
-
-    // Mark all batch files as "checking" immediately so UI reflects status
-    const batchFileIds = batchFiles.map(f => f.id);
-    await supabase.from("project_files").update({ status: "checking" }).in("id", batchFileIds);
-
-    for (let i = 0; i < batchFiles.length; i++) {
-      const file = batchFiles[i];
-      setProgress(p => ({ ...p, current: i + 1, currentFileName: file.file_name }));
-
-      try {
-        const processKey = file.process_type || "script";
-        const aiCfg = AI_CHECK_CONFIG[processKey];
-        const inputMode = aiCfg?.inputMode || "text";
-
-        const refMaterials = await gatherReferenceMaterials(projectId, product.id, processKey);
-        const referenceContext = JSON.stringify(refMaterials);
-
-        let res: { overall_status: string; detected_case?: string; check_items: CheckItem[]; ng_count: number; warning_count: number; ok_count: number; total_checks: number };
-        let inputData: Record<string, any> = {};
-
-        if (inputMode === "text") {
-          res = await runScriptCheck(product.id, file.file_data || "", processKey, referenceContext);
-          inputData = { script_text: file.file_data };
+      const VIDEO_LIMITS: Record<string, number> = {
+        vcon: 3,
+        video_horizontal: 1,
+        video_vertical: 1,
+      };
+      const processGroups = new Map<string, typeof targetFiles>();
+      for (const f of targetFiles) {
+        const key = f.process_type || "script";
+        if (!processGroups.has(key)) processGroups.set(key, []);
+        processGroups.get(key)!.push(f);
+      }
+      let limited = false;
+      const limitedFiles: typeof targetFiles = [];
+      for (const [key, group] of processGroups) {
+        const limit = VIDEO_LIMITS[key];
+        if (limit && group.length > limit) {
+          limited = true;
+          limitedFiles.push(...group.slice(0, limit));
         } else {
-          const webhookUrl = getWebhookUrl(processKey);
-          if (!webhookUrl) throw new Error(`この工程(${processKey})のWebhookが見つかりません`);
-
-          const webhookProductId = await resolveWebhookProductId(product.id);
-          const body: Record<string, any> = {
-            product_id: webhookProductId,
-            process_type: processKey,
-            script_text: "",
-            reference_context: refMaterials,
-          };
-
-          if (inputMode === "image") {
-            const fileData = file.file_data || "";
-            if (fileData.startsWith("data:")) {
-              const mediaType = fileData.match(/^data:([^;]+);/)?.[1] || "image/jpeg";
-              if (fileData.length < 20 * 1024 * 1024) {
-                body.image_base64 = fileData;
-              } else {
-                const ext = mediaType.includes("png") ? "png" : "jpg";
-                const storagePath = `${projectId}/${file.id}.${ext}`;
-                const publicUrl = await tusUploadBlob("deliverables", storagePath, fileData, mediaType);
-                body.image_url = publicUrl;
-              }
-              body.image_mime_type = mediaType;
-            }
-            inputData = { image_base64: file.file_data };
-          } else if (inputMode === "audio") {
-            const fileData = file.file_data || "";
-            if (fileData.startsWith("data:")) {
-              const mediaType = fileData.match(/^data:([^;]+);/)?.[1] || "audio/mpeg";
-              if (fileData.length < 20 * 1024 * 1024) {
-                body.audio_base64 = fileData;
-              } else {
-                const ext = mediaType.includes("wav") ? "wav" : mediaType.includes("m4a") ? "m4a" : "mp3";
-                const storagePath = `${projectId}/${file.id}.${ext}`;
-                const publicUrl = await tusUploadBlob("audios", storagePath, fileData, mediaType);
-                body.audio_url = publicUrl;
-              }
-              body.audio_mime_type = mediaType;
-            } else if (fileData.startsWith("http")) {
-              body.audio_url = fileData;
-              const urlExt = fileData.split('.').pop()?.split('?')[0]?.toLowerCase() || "mp3";
-              body.audio_mime_type = urlExt === "wav" ? "audio/wav" : urlExt === "m4a" ? "audio/mp4" : urlExt === "ogg" ? "audio/ogg" : "audio/mpeg";
-            }
-            // Ensure all audio fields are present for n8n (matching runAudioCheck format)
-            body.audio_url = body.audio_url || "";
-            body.audio_mime_type = body.audio_mime_type || "";
-            body.audio_base64 = body.audio_base64 || "";
-            body.audio_description = "";
-            body.metadata = { file_name: file.file_name, duration: null, format: body.audio_mime_type || null };
-            body.script_text = file.file_data?.startsWith("data:") || file.file_data?.startsWith("http") ? "" : (file.file_data || "");
-            inputData = { script_text: body.script_text, audio_url: body.audio_url, audio_base64: body.audio_base64 };
-          } else if (inputMode === "video") {
-            const fileData = file.file_data || "";
-            if (fileData.startsWith("data:")) {
-              const mediaType = fileData.match(/^data:([^;]+);/)?.[1] || "video/mp4";
-              const ext = mediaType.includes("webm") ? "webm" : mediaType.includes("mov") ? "mov" : "mp4";
-              const storagePath = `${projectId}/${file.id}.${ext}`;
-              const publicUrl = await tusUploadBlob("videos", storagePath, fileData, mediaType);
-              body.video_url = publicUrl;
-              body.video_mime_type = mediaType;
-            } else if (fileData.startsWith("http")) {
-              body.video_url = fileData;
-            }
-          }
-
-          // Include related files (all prior process FIX data) for cross-reference
-          const isFirstProcess = processKey === "script";
-          if (!isFirstProcess) {
-            const relatedFiles = await getRelatedProcessData(projectId, processKey, file.pattern_id);
-            if (Object.keys(relatedFiles).length > 0) {
-              body.related_files = relatedFiles;
-            }
-          }
-
-          // For video/audio async, insert pending record first so n8n can UPDATE it
-          const isAsyncProcess = ["vcon", "video_horizontal", "video_vertical", "narration", "bgm"].includes(processKey);
-          if (isAsyncProcess) {
-            const { data: pendingCr } = await supabase.from("check_results").insert([{
-              user_id: user.id,
-              client_name: client?.name || "",
-              product_code: product.code,
-              product_name: product.name,
-              process_type: file.process_type,
-              input_type: "text",
-              input_text: body.script_text || null,
-              status: "pending",
-              input_data: inputData as unknown as Json,
-            }]).select("id").single();
-            if (pendingCr) {
-              body.record_id = pendingCr.id;
-              console.log("[BatchCheck] Created pending record:", pendingCr.id);
-            }
-          }
-
-          const rawRes = await webhookFetch(webhookUrl, body);
-          if (rawRes === VIDEO_ASYNC_ACCEPTED) {
-            // Async check (video/audio) — n8n will update the pending record
-            console.log("[BatchCheck] Async check accepted, n8n will update pending record");
-            // Link pending record to the file
-            if (body.record_id) {
-              await supabase.from("project_files").update({
-                status: "checking",
-                check_result_id: body.record_id,
-              }).eq("id", file.id);
-            }
-            results.push({ fileId: file.id, fileName: file.file_name, success: true, grade: "pending" });
-            continue;
-          }
-          res = rawRes as { overall_status: string; detected_case?: string; check_items: CheckItem[]; ng_count: number; warning_count: number; ok_count: number; total_checks: number };
+          limitedFiles.push(...group);
         }
-
-        // Save check result
-        const { data: crData, error: insertErr } = await supabase.from("check_results").insert([{
-          user_id: user.id,
-          client_name: client?.name || "",
-          product_code: product.code,
-          product_name: product.name,
-          process_type: file.process_type,
-          input_type: inputMode === "image" ? "image" : "text",
-          input_text: inputMode === "image" ? null : file.file_data,
-          overall_status: res.overall_status,
-          detected_case: res.detected_case,
-          ng_count: res.ng_count,
-          warning_count: res.warning_count,
-          ok_count: res.ok_count,
-          total_checks: res.total_checks,
-          check_items: res.check_items as unknown as Json,
-          raw_response: res as unknown as Json,
-          input_data: inputData as unknown as Json,
-        }]).select("id").single();
-
-        if (insertErr || !crData) throw new Error("チェック結果の保存に失敗しました");
-
-        // Update file status
-        await supabase.from("project_files").update({
-          status: "checked",
-          check_result_id: crData.id,
-        }).eq("id", file.id);
-
-        results.push({ fileId: file.id, fileName: file.file_name, success: true, grade: res.overall_status });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "不明なエラー";
-        console.error(`[BatchCheck] ${file.file_name} failed:`, err);
-        results.push({ fileId: file.id, fileName: file.file_name, success: false, error: message });
       }
-    }
+      const finalFiles = targetFiles.filter((f) => limitedFiles.includes(f));
 
-    const successCount = results.filter(r => r.success).length;
-    const failCount = results.filter(r => !r.success).length;
-    setProgress(p => ({ ...p, status: "done", results }));
+      if (limited) {
+        toast({
+          title: "動画チェック件数制限",
+          description: "Vコンは最大3件、横動画/縦動画は最大1件までです。制限内のファイルのみチェックします。",
+        });
+      }
 
-    toast({
-      title: `一括チェック完了`,
-      description: `${successCount}件成功${failCount > 0 ? `、${failCount}件失敗` : ""}`,
-      variant: failCount > 0 ? "destructive" : "default",
-    });
+      const MAX_BATCH = 5;
+      if (finalFiles.length > MAX_BATCH) {
+        toast({
+          title: `一括チェックは最大${MAX_BATCH}件までです`,
+          description: `先頭${MAX_BATCH}件をチェックします。`,
+          variant: "destructive",
+        });
+      }
+      const batchFiles = finalFiles.slice(0, MAX_BATCH);
 
-    onComplete?.();
-  }, [user, toast]);
+      setProgress({ total: batchFiles.length, current: 0, currentFileName: "", status: "running", results: [] });
+
+      const results: BatchCheckProgress["results"] = [];
+
+      for (let i = 0; i < batchFiles.length; i++) {
+        const file = batchFiles[i];
+        setProgress((p) => ({ ...p, current: i + 1, currentFileName: file.file_name }));
+
+        const r = await runSingleFileAiCheck({
+          file,
+          product,
+          client,
+          projectId,
+          user: { id: user.id, email: user.email },
+          claimUploaded: true,
+        });
+
+        if (r.skipped) {
+          results.push({ fileId: file.id, fileName: file.file_name, success: false, error: "スキップ" });
+        } else if (r.success) {
+          results.push({
+            fileId: file.id,
+            fileName: file.file_name,
+            success: true,
+            grade: r.asyncAccepted ? "pending" : undefined,
+          });
+        } else {
+          results.push({ fileId: file.id, fileName: file.file_name, success: false, error: r.error });
+        }
+      }
+
+      const successCount = results.filter((r) => r.success).length;
+      const failCount = results.filter((r) => !r.success).length;
+      setProgress((p) => ({ ...p, status: "done", results }));
+
+      toast({
+        title: `一括チェック完了`,
+        description: `${successCount}件成功${failCount > 0 ? `、${failCount}件失敗` : ""}`,
+        variant: failCount > 0 ? "destructive" : "default",
+      });
+
+      onComplete?.();
+    },
+    [user, toast]
+  );
 
   const resetProgress = useCallback(() => {
     setProgress({ total: 0, current: 0, currentFileName: "", status: "idle", results: [] });

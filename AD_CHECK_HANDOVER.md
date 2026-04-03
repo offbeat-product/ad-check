@@ -44,7 +44,7 @@ Ad Check は Off Beat株式会社が開発する広告クリエイティブAI検
 - Project ID: `vhvgnslszruyztcoikqq`
 - URL: `https://vhvgnslszruyztcoikqq.supabase.co`
 - ダッシュボード: https://supabase.com/dashboard/project/vhvgnslszruyztcoikqq
-- Storage バケット: videos（Public, 500MB）, deliverables（Public）, reference-files, audios（Public）, comment-attachments
+- Storage バケット: videos（Public, 5GB）, deliverables（Public）, reference-files, audios（Public）, comment-attachments
 - Storage グローバル上限: 5GB（Proプラン）
 
 ### n8n Cloud

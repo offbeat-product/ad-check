@@ -108,7 +108,7 @@ export const PLATFORM_PRESETS: PlatformPresetDef[] = [
 - 推奨解像度: 1080×1920（9:16の場合）
 - 動画の長さ: 5-60秒（推奨21-34秒）
 - ファイル形式: MP4、MOV、AVI
-- 最大ファイルサイズ: 500MB
+- 最大ファイルサイズ: 5GB
 - ビットレート: 516kbps以上推奨
 
 ■ テキスト規定

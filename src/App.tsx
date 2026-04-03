@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { AutoCheckProvider } from "@/providers/AutoCheckProvider";
 import { Skeleton } from "@/components/ui/skeleton";
 
 // Eagerly load the login page (first thing users see)
@@ -79,7 +80,7 @@ const App = () => (
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
                 <Route path="/accept-invite" element={<AcceptInvitePage />} />
-                <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
+                <Route element={<ProtectedRoute><AutoCheckProvider><AppLayout /></AutoCheckProvider></ProtectedRoute>}>
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/client/:id" element={<ClientPage />} />
                   <Route path="/product/:id" element={<ProductPage />} />

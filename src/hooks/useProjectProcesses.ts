@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { DEFAULT_PROCESSES } from "@/lib/process-config";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
+import { buildDefaultProcessInsertsWithFallback, type ProcessTypeRow } from "@/lib/process-types";
+import { useProcessTypes, PROCESS_TYPES_QUERY_KEY } from "@/hooks/useProcessTypes";
 
 export interface ProjectProcess {
   id: string;
@@ -19,25 +21,50 @@ export interface ProjectProcess {
 }
 
 export function useProjectProcesses(projectId: string | undefined) {
+  const queryClient = useQueryClient();
+  const { data: processMaster = [], isFetched: typesFetched } = useProcessTypes();
   const [processes, setProcesses] = useState<ProjectProcess[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchProcesses = useCallback(async () => {
-    if (!projectId) return;
+    if (!projectId) {
+      setProcesses([]);
+      setLoading(false);
+      return;
+    }
+    if (!typesFetched) {
+      setLoading(true);
+      return;
+    }
+
+    const master =
+      queryClient.getQueryData<ProcessTypeRow[]>(PROCESS_TYPES_QUERY_KEY) ?? processMaster;
+
+    setLoading(true);
     const { data, error } = await supabase
       .from("project_processes")
       .select("*")
       .eq("project_id", projectId)
       .order("sort_order");
-    
+
     if (handleSupabaseError(error, "project_processes")) {
       setLoading(false);
       return;
     }
 
     if (!data || data.length === 0) {
-      // Auto-create defaults for existing projects
-      const inserts = DEFAULT_PROCESSES.map((p) => ({
+      const { data: proj, error: pErr } = await supabase
+        .from("projects")
+        .select("creative_type")
+        .eq("id", projectId)
+        .single();
+      if (handleSupabaseError(pErr, "project creative_type")) {
+        setLoading(false);
+        return;
+      }
+      const creativeType = proj?.creative_type ?? "video";
+      const templateRows = buildDefaultProcessInsertsWithFallback(master, creativeType);
+      const inserts = templateRows.map((p) => ({
         project_id: projectId,
         ...p,
       }));
@@ -52,11 +79,10 @@ export function useProjectProcesses(projectId: string | undefined) {
       setProcesses(data as ProjectProcess[]);
     }
     setLoading(false);
-  }, [projectId]);
+  }, [projectId, typesFetched, processMaster, queryClient]);
 
   useEffect(() => {
-    setLoading(true);
-    fetchProcesses();
+    void fetchProcesses();
   }, [fetchProcesses]);
 
   const updateProcess = useCallback(async (id: string, updates: Partial<ProjectProcess>) => {
@@ -65,7 +91,7 @@ export function useProjectProcesses(projectId: string | undefined) {
       .update({ ...updates, updated_at: new Date().toISOString() })
       .eq("id", id);
     if (!handleSupabaseError(error, "process update")) {
-      setProcesses((prev) => prev.map((p) => p.id === id ? { ...p, ...updates } : p));
+      setProcesses((prev) => prev.map((p) => (p.id === id ? { ...p, ...updates } : p)));
     }
     return !error;
   }, []);
@@ -105,15 +131,32 @@ export function useProjectProcesses(projectId: string | undefined) {
 
   const resetToDefaults = useCallback(async () => {
     if (!projectId) return;
-    // Delete all existing
+    const master =
+      queryClient.getQueryData<ProcessTypeRow[]>(PROCESS_TYPES_QUERY_KEY) ?? processMaster;
+    const { data: proj, error: pErr } = await supabase
+      .from("projects")
+      .select("creative_type")
+      .eq("id", projectId)
+      .single();
+    if (handleSupabaseError(pErr, "project creative_type")) return;
+    const creativeType = proj?.creative_type ?? "video";
+    const templateRows = buildDefaultProcessInsertsWithFallback(master, creativeType);
     await supabase.from("project_processes").delete().eq("project_id", projectId);
-    // Re-insert defaults
-    const inserts = DEFAULT_PROCESSES.map((p) => ({ project_id: projectId, ...p }));
+    const inserts = templateRows.map((p) => ({ project_id: projectId, ...p }));
     const { data, error } = await supabase.from("project_processes").insert(inserts).select("*");
     if (!handleSupabaseError(error, "reset processes")) {
       setProcesses((data ?? []) as ProjectProcess[]);
     }
-  }, [projectId]);
+  }, [projectId, processMaster, queryClient]);
 
-  return { processes, loading, updateProcess, reorderProcesses, addProcess, deleteProcess, resetToDefaults, refetch: fetchProcesses };
+  return {
+    processes,
+    loading,
+    updateProcess,
+    reorderProcesses,
+    addProcess,
+    deleteProcess,
+    resetToDefaults,
+    refetch: fetchProcesses,
+  };
 }

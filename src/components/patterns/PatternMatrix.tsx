@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import type { ProjectFile, CheckResultRow } from "@/lib/db-types";
 import { FILE_STATUS_CONFIG } from "@/lib/db-types";
@@ -32,6 +32,8 @@ interface Props {
   onDeletePattern?: (id: string) => Promise<void>;
   onToggleProcessCommon?: (processId: string, isCommon: boolean) => Promise<boolean>;
   onChangeFilePattern?: (fileId: string, newPatternId: string | null) => Promise<void>;
+  /** Extra badge / label next to process name (e.g. auto AI check queue progress) */
+  renderProcessHeaderExtra?: (processKey: string) => ReactNode;
 }
 
 function getCellStatus(file: ProjectFile | undefined, checkResults: Props["checkResults"]): {
@@ -55,7 +57,19 @@ function getCellStatus(file: ProjectFile | undefined, checkResults: Props["check
   return { label: cfg?.label || status, colorClass: cfg?.class || "bg-muted" };
 }
 
-export default function PatternMatrix({ projectId, patterns, processes, files, checkResults, onUpload, onUpdatePattern, onDeletePattern, onToggleProcessCommon, onChangeFilePattern }: Props) {
+export default function PatternMatrix({
+  projectId,
+  patterns,
+  processes,
+  files,
+  checkResults,
+  onUpload,
+  onUpdatePattern,
+  onDeletePattern,
+  onToggleProcessCommon,
+  onChangeFilePattern,
+  renderProcessHeaderExtra,
+}: Props) {
   const navigate = useNavigate();
   const [editPattern, setEditPattern] = useState<Pattern | null>(null);
   const [editName, setEditName] = useState("");
@@ -117,7 +131,10 @@ export default function PatternMatrix({ projectId, patterns, processes, files, c
                     onClick={() => f ? navigate(`/project/${projectId}/file/${f.id}`) : onUpload(proc.process_key, null)}
                     className="w-full text-left"
                   >
-                    <p className="text-xs font-medium mb-1">{proc.process_label}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                      <p className="text-xs font-medium">{proc.process_label}</p>
+                      {renderProcessHeaderExtra?.(proc.process_key)}
+                    </div>
                     <Badge variant="outline" className={cn("text-[10px]", cell.colorClass)}>{cell.label}</Badge>
                   </button>
                   {onToggleProcessCommon && (
@@ -147,9 +164,10 @@ export default function PatternMatrix({ projectId, patterns, processes, files, c
                   <th className="px-2 py-2 text-left font-medium text-muted-foreground w-28 sticky left-0 bg-background z-10">パターン</th>
                   {patternProcesses.map(proc => (
                     <th key={proc.id} className="px-2 py-2 text-center font-medium text-muted-foreground min-w-[80px] group/th">
-                      <div className="flex items-center justify-center gap-0.5">
-                        <span>{proc.process_label}</span>
-                        {onToggleProcessCommon && (
+                      <div className="flex flex-col items-center justify-center gap-1">
+                        <div className="flex items-center justify-center gap-0.5">
+                          <span>{proc.process_label}</span>
+                          {onToggleProcessCommon && (
                           <button
                             onClick={() => onToggleProcessCommon(proc.id, true)}
                             title="共通素材に移動"
@@ -158,6 +176,8 @@ export default function PatternMatrix({ projectId, patterns, processes, files, c
                             <ArrowRightLeft className="h-3 w-3" />
                           </button>
                         )}
+                        </div>
+                        {renderProcessHeaderExtra?.(proc.process_key)}
                       </div>
                     </th>
                   ))}

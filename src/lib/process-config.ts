@@ -22,6 +22,7 @@ export const PROCESS_FILE_CONFIG: Record<string, { accept: string; allowTextInpu
   'storyboard':       { accept: '.jpg,.jpeg,.png,.pdf,.psd', allowTextInput: false, label: '絵コンテ' },
   'video_horizontal': { accept: '.mp4,.mov,.webm', allowTextInput: false, label: '横動画' },
   'video_vertical':   { accept: '.mp4,.mov,.webm', allowTextInput: false, label: '縦動画' },
+  'banner_design':    { accept: '.jpg,.jpeg,.png,.pdf,.psd,.webp,.ai', allowTextInput: false, label: 'バナーデザイン' },
 };
 
 // AI check capability per process type
@@ -38,6 +39,7 @@ export const AI_CHECK_CONFIG: Record<string, { inputMode: InputMode; enabled: bo
   'bgm':              { inputMode: 'audio', enabled: true },
   'video_horizontal': { inputMode: 'video', enabled: true },
   'video_vertical':   { inputMode: 'video', enabled: true },
+  'banner_design':    { inputMode: 'image', enabled: true },
 };
 
 // Webhook mapping per product × process
@@ -80,10 +82,26 @@ export const PROCESS_STATUS_CONFIG: Record<string, { label: string; dotClass: st
 };
 
 // Helper to get Japanese label for a process key
-const PROCESS_LABEL_MAP: Record<string, string> = Object.fromEntries(
-  DEFAULT_PROCESSES.map(p => [p.process_key, p.process_label])
-);
+const PROCESS_LABEL_MAP: Record<string, string> = {
+  ...Object.fromEntries(DEFAULT_PROCESSES.map((p) => [p.process_key, p.process_label])),
+  banner_design: "バナーデザイン",
+};
 
-export function getProcessLabel(processKey: string): string {
+export function getProcessLabel(processKey: string, labelByKey?: Record<string, string>): string {
+  if (labelByKey?.[processKey]) return labelByKey[processKey];
   return PROCESS_LABEL_MAP[processKey] || processKey;
+}
+
+/** Upload UI: known keys use PROCESS_FILE_CONFIG; others use heuristics (banner / unknown). */
+export function getProcessFileUploadConfig(processKey: string): { accept: string; allowTextInput: boolean; label: string } {
+  const known = PROCESS_FILE_CONFIG[processKey];
+  if (known) return known;
+  const kl = processKey.toLowerCase();
+  if (kl.includes("video") || kl === "vcon") return PROCESS_FILE_CONFIG.video_horizontal;
+  if (kl.includes("narration") || kl.includes("bgm") || kl.endsWith("_audio")) return PROCESS_FILE_CONFIG.narration;
+  if (kl.includes("script")) return PROCESS_FILE_CONFIG.script;
+  if (kl.includes("banner") || kl.includes("design") || kl.includes("static") || kl.includes("layout")) {
+    return { accept: ".jpg,.jpeg,.png,.pdf,.psd,.webp,.ai", allowTextInput: false, label: processKey };
+  }
+  return { accept: ".jpg,.jpeg,.png,.pdf,.psd,.webp,.txt,.docx", allowTextInput: false, label: processKey };
 }

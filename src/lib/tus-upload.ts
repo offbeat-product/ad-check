@@ -1,6 +1,6 @@
 /**
  * TUS resumable upload utility for Supabase Storage
- * Supports files up to 500MB with 6MB chunk size, progress tracking, and auto-retry
+ * Supports files up to 5GB with 6MB chunk size, progress tracking, and auto-retry
  */
 
 import * as tus from "tus-js-client";
