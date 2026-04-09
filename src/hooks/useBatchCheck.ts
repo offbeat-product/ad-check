@@ -102,6 +102,7 @@ export function useBatchCheck() {
         status: "running",
         projectId,
         projectName: meta.projectName,
+        processType: meta.processType,
         processLabel: meta.processLabel,
         completed: 0,
         total: batchFiles.length,

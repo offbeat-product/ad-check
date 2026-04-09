@@ -337,8 +337,8 @@ export default function ProjectPage() {
     [project?.creative_type, mixedProcessTab, addProcess]
   );
 
-  const { progress: batchProgress, runBatchCheck } = useBatchCheck();
-  const { badgeFlashProjectId } = useAutoCheck();
+  const { runBatchCheck } = useBatchCheck();
+  const { badgeFlashProjectId, bulkSequentialProgress } = useAutoCheck();
 
   const renderProcessAiExtra = useCallback(
     (processKey: string) => (
@@ -1478,13 +1478,27 @@ export default function ProjectPage() {
                               ? `選択分AIチェック (${selectedUploaded.length}${overLimit ? `/最大${MAX_BATCH}` : ""})`
                               : `一括AIチェック (${Math.min(uncheckedTargets.length, MAX_BATCH)}/${uncheckedTargets.length})`;
                             const limitedTargets = actualTargets.slice(0, MAX_BATCH);
+                            const sectionRootFiles = sectionFiles.filter(f => !f.parent_file_id);
+                            const sectionIsChecking = sectionRootFiles.some((f) => f.status === "checking");
+                            const currentFileInThisSection =
+                              Boolean(bulkSequentialProgress?.currentFileId) &&
+                              sectionRootFiles.some((f) => f.id === bulkSequentialProgress?.currentFileId);
+                            const thisSectionBulkRunning =
+                              bulkSequentialProgress?.status === "running" &&
+                              bulkSequentialProgress.projectId === id &&
+                              bulkSequentialProgress.processType === proc.process_key;
+                            const isButtonLoading =
+                              sectionIsChecking || currentFileInThisSection || thisSectionBulkRunning;
+                            const isOtherBulkRunning =
+                              bulkSequentialProgress?.status === "running" && !thisSectionBulkRunning;
+
                             return (
                               <Button
                                 size="sm"
                                 variant="outline"
                                 className="text-xs h-7 gap-1"
                                 disabled={
-                                  batchProgress.status === "running" ||
+                                  isOtherBulkRunning ||
                                   actualTargets.length === 0 ||
                                   (hasSelection && selectedUploaded.length === 0)
                                 }
@@ -1516,7 +1530,7 @@ export default function ProjectPage() {
                                   );
                                 }}
                               >
-                                {batchProgress.status === "running" ? (
+                                {isButtonLoading ? (
                                   <Loader2 className="h-3 w-3 animate-spin" />
                                 ) : (
                                   <Bot className="h-3 w-3" />

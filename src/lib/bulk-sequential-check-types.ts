@@ -24,6 +24,7 @@ export interface BulkSequentialProgressState {
   status: "running" | "done" | "cancelled";
   projectId: string;
   projectName: string;
+  processType: string;
   processLabel: string;
   completed: number;
   total: number;
