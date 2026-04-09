@@ -73,9 +73,6 @@ export default function BatchCheckFloatingBar() {
           <p className="text-[11px] text-muted-foreground truncate" title={progress.currentFileName}>
             {progress.currentFileName || "…"}
           </p>
-          {progress.waitingN8n && (
-            <p className="text-[10px] text-muted-foreground">n8n の処理完了を待機しています…</p>
-          )}
         </div>
       )}
 
