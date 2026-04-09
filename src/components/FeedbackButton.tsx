@@ -1,46 +1,48 @@
-import { useState, useCallback } from "react";
-import { MessageCircle } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import { MessageCircle, X } from "lucide-react";
+import { useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import type { TablesInsert } from "@/integrations/supabase/types";
+import {
+  buildErrorReportContextData,
+  contextPayloadToJson,
+} from "@/lib/feedback-page-context";
 
 export type FeedbackProduct = "ad_check" | "ad_brain" | "ad_gen" | "other";
 
 type ErrorCategory = "bug" | "feature_request" | "question" | "other";
 type ErrorSeverity = "low" | "medium" | "high" | "critical";
 
-const CATEGORY_OPTIONS: { value: ErrorCategory; label: string }[] = [
-  { value: "bug", label: "不具合" },
-  { value: "feature_request", label: "機能改善の提案" },
-  { value: "question", label: "質問" },
-  { value: "other", label: "その他" },
+type ChatStep = "category" | "severity" | "details";
+
+const CATEGORY_CHOICES: { value: ErrorCategory; label: string }[] = [
+  { value: "bug", label: "🐛 バグ" },
+  { value: "feature_request", label: "💡 要望" },
+  { value: "question", label: "❓ 質問" },
+  { value: "other", label: "📝 その他" },
 ];
 
-const SEVERITY_OPTIONS: { value: ErrorSeverity; label: string }[] = [
+const SEVERITY_CHOICES: { value: ErrorSeverity; label: string }[] = [
   { value: "low", label: "低" },
   { value: "medium", label: "中" },
   { value: "high", label: "高" },
-  { value: "critical", label: "緊急" },
+  { value: "critical", label: "🚨 緊急" },
 ];
+
+function BotBubble({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="flex justify-start">
+      <div className="max-w-[90%] rounded-2xl rounded-bl-sm bg-muted px-3 py-2 text-sm leading-relaxed text-foreground">
+        {children}
+      </div>
+    </div>
+  );
+}
 
 interface FeedbackButtonProps {
   product: FeedbackProduct;
@@ -48,32 +50,70 @@ interface FeedbackButtonProps {
 }
 
 export function FeedbackButton({ product, className }: FeedbackButtonProps) {
+  const location = useLocation();
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
-  const [category, setCategory] = useState<ErrorCategory>("bug");
-  const [severity, setSeverity] = useState<ErrorSeverity>("medium");
+  const [contextLoading, setContextLoading] = useState(false);
+  const [contextPreview, setContextPreview] = useState<{
+    page_name: string;
+    pathname: string;
+    project_name: string | null;
+    product_name: string | null;
+    file_name: string | null;
+  } | null>(null);
+
+  const [step, setStep] = useState<ChatStep>("category");
+  const [category, setCategory] = useState<ErrorCategory | null>(null);
+  const [severity, setSeverity] = useState<ErrorSeverity | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [success, setSuccess] = useState(false);
 
-  const resetForm = useCallback(() => {
-    setCategory("bug");
-    setSeverity("medium");
+  const resetFlow = useCallback(() => {
+    setStep("category");
+    setCategory(null);
+    setSeverity(null);
     setTitle("");
     setDescription("");
     setSuccess(false);
+    setSubmitting(false);
   }, []);
 
-  const handleOpenChange = useCallback(
-    (next: boolean) => {
-      setOpen(next);
-      if (!next) {
-        resetForm();
-      }
-    },
-    [resetForm]
-  );
+  const handleClose = useCallback(() => {
+    setOpen(false);
+    resetFlow();
+    setContextPreview(null);
+  }, [resetFlow]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setContextLoading(true);
+    void buildErrorReportContextData(location.pathname).then((data) => {
+      if (cancelled) return;
+      setContextPreview({
+        page_name: data.page_name,
+        pathname: data.pathname,
+        project_name: data.project_name ?? null,
+        product_name: data.product_name ?? null,
+        file_name: data.file_name ?? null,
+      });
+      setContextLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, location.pathname]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") handleClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, handleClose]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,6 +121,7 @@ export function FeedbackButton({ product, className }: FeedbackButtonProps) {
       window.alert("フィードバックを送信するにはログインしてください。");
       return;
     }
+    if (!category || !severity) return;
     const t = title.trim();
     const d = description.trim();
     if (!t || !d) {
@@ -89,6 +130,7 @@ export function FeedbackButton({ product, className }: FeedbackButtonProps) {
     }
 
     setSubmitting(true);
+    const contextData = await buildErrorReportContextData(location.pathname);
     const row: TablesInsert<"error_reports"> = {
       product,
       category,
@@ -99,6 +141,7 @@ export function FeedbackButton({ product, className }: FeedbackButtonProps) {
       user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,
       reporter_id: user.id,
       reporter_email: user.email ?? null,
+      context_data: contextPayloadToJson(contextData),
       status: "open",
     };
 
@@ -112,108 +155,179 @@ export function FeedbackButton({ product, className }: FeedbackButtonProps) {
 
     setSuccess(true);
     window.setTimeout(() => {
-      handleOpenChange(false);
-    }, 1500);
+      handleClose();
+    }, 2000);
+  };
+
+  const pickCategory = (c: ErrorCategory) => {
+    setCategory(c);
+    setStep("severity");
+  };
+
+  const pickSeverity = (s: ErrorSeverity) => {
+    setSeverity(s);
+    setStep("details");
   };
 
   return (
     <>
       <button
         type="button"
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          if (open) {
+            handleClose();
+          } else {
+            setOpen(true);
+          }
+        }}
         className={cn(
-          "fixed bottom-6 right-6 z-[100] flex h-14 w-14 items-center justify-center rounded-full border border-border bg-primary text-primary-foreground shadow-lg transition-opacity hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+          "fixed bottom-6 right-6 z-[100] flex h-14 w-14 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg transition-opacity hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
           className
         )}
-        aria-label="フィードバックを送る"
+        aria-label="サポート・フィードバック"
+        aria-expanded={open}
       >
         <MessageCircle className="h-6 w-6" aria-hidden />
       </button>
 
-      <Dialog open={open} onOpenChange={handleOpenChange}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>フィードバック・不具合の報告</DialogTitle>
-          </DialogHeader>
+      <div
+        className={cn(
+          "fixed bottom-24 right-6 z-50 flex max-h-[600px] w-[380px] max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl transition-all duration-300 ease-out",
+          open
+            ? "pointer-events-auto translate-y-0 opacity-100"
+            : "pointer-events-none translate-y-4 opacity-0"
+        )}
+        role="dialog"
+        aria-label="Ad Check サポート"
+        aria-hidden={!open}
+      >
+        <div className="flex shrink-0 items-center justify-between rounded-t-2xl bg-blue-600 px-4 py-3 text-white">
+          <h2 className="text-sm font-semibold">🤖 Ad Check サポート</h2>
+          <button
+            type="button"
+            onClick={handleClose}
+            className="rounded-md p-1 transition-colors hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/50"
+            aria-label="閉じる"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
 
-          {success ? (
-            <p className="py-8 text-center text-sm font-medium">✅ 送信しました</p>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="feedback-category">カテゴリ</Label>
-                <Select
-                  value={category}
-                  onValueChange={(v) => setCategory(v as ErrorCategory)}
-                >
-                  <SelectTrigger id="feedback-category">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORY_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+        {success ? (
+          <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 py-12 text-center">
+            <p className="text-lg font-semibold text-foreground">✅ 送信しました！</p>
+            <p className="text-sm text-muted-foreground">ありがとうございます</p>
+          </div>
+        ) : (
+          <>
+            <div className="shrink-0 border-b border-border bg-gray-50 p-3 dark:bg-muted/40">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">📍 発生箇所</p>
+              {contextLoading || !contextPreview ? (
+                <p className="text-xs text-muted-foreground">読み込み中…</p>
+              ) : (
+                <ul className="space-y-1 text-xs text-foreground">
+                  <li>
+                    <span className="text-muted-foreground">ページ: </span>
+                    {contextPreview.page_name}
+                  </li>
+                  {contextPreview.project_name ? (
+                    <li>
+                      <span className="text-muted-foreground">案件: </span>
+                      {contextPreview.project_name}
+                    </li>
+                  ) : null}
+                  {contextPreview.product_name ? (
+                    <li>
+                      <span className="text-muted-foreground">商材: </span>
+                      {contextPreview.product_name}
+                    </li>
+                  ) : null}
+                  {contextPreview.file_name ? (
+                    <li>
+                      <span className="text-muted-foreground">ファイル: </span>
+                      {contextPreview.file_name}
+                    </li>
+                  ) : null}
+                </ul>
+              )}
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="feedback-severity">緊急度</Label>
-                <Select
-                  value={severity}
-                  onValueChange={(v) => setSeverity(v as ErrorSeverity)}
-                >
-                  <SelectTrigger id="feedback-severity">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SEVERITY_OPTIONS.map((o) => (
-                      <SelectItem key={o.value} value={o.value}>
-                        {o.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+              <BotBubble>
+                こんにちは！どのような問題ですか？カテゴリを選んでください👇
+              </BotBubble>
 
-              <div className="space-y-2">
-                <Label htmlFor="feedback-title">タイトル</Label>
-                <Input
-                  id="feedback-title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="簡潔に"
-                  maxLength={500}
-                  required
-                />
-              </div>
+              {step === "category" && (
+                <div className="flex flex-wrap gap-2 pl-1">
+                  {CATEGORY_CHOICES.map((c) => (
+                    <Button
+                      key={c.value}
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-8 text-xs"
+                      onClick={() => pickCategory(c.value)}
+                    >
+                      {c.label}
+                    </Button>
+                  ))}
+                </div>
+              )}
 
-              <div className="space-y-2">
-                <Label htmlFor="feedback-description">詳細</Label>
-                <Textarea
-                  id="feedback-description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={5}
-                  placeholder="再現手順や期待する動作など"
-                  required
-                />
-              </div>
+              {category !== null && (
+                <>
+                  <BotBubble>緊急度を教えてください</BotBubble>
+                  {step === "severity" && (
+                    <div className="flex flex-wrap gap-2 pl-1">
+                      {SEVERITY_CHOICES.map((s) => (
+                        <Button
+                          key={s.value}
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8 text-xs"
+                          onClick={() => pickSeverity(s.value)}
+                        >
+                          {s.label}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              )}
 
-              <DialogFooter className="gap-2 sm:gap-0">
-                <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
-                  キャンセル
-                </Button>
-                <Button type="submit" disabled={submitting}>
-                  {submitting ? "送信中…" : "送信"}
-                </Button>
-              </DialogFooter>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
+              {severity !== null && (
+                <>
+                  <BotBubble>詳しく教えてください</BotBubble>
+                  <form onSubmit={handleSubmit} className="space-y-3 pl-1 pt-1">
+                    <Input
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="タイトル（1行）"
+                      maxLength={500}
+                      className="text-sm"
+                    />
+                    <Textarea
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      rows={4}
+                      placeholder="状況や再現手順など"
+                      className="resize-none text-sm"
+                    />
+                    <Button
+                      type="submit"
+                      className="w-full bg-blue-600 hover:bg-blue-700"
+                      disabled={submitting}
+                    >
+                      {submitting ? "送信中…" : "送信"}
+                    </Button>
+                  </form>
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </div>
     </>
   );
 }

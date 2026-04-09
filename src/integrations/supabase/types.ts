@@ -466,6 +466,7 @@ export type Database = {
       error_reports: {
         Row: {
           category: string
+          context_data: Json | null
           created_at: string
           description: string
           id: string
@@ -480,6 +481,7 @@ export type Database = {
         }
         Insert: {
           category: string
+          context_data?: Json | null
           created_at?: string | null
           description: string
           id?: string
@@ -494,6 +496,7 @@ export type Database = {
         }
         Update: {
           category?: string
+          context_data?: Json | null
           created_at?: string | null
           description?: string
           id?: string
@@ -1284,6 +1287,21 @@ export type Database = {
       }
     }
     Views: {
+      products_with_check_settings: {
+        Row: {
+          id: string | null
+          name: string | null
+        }
+        Insert: {
+          id?: never
+          name?: never
+        }
+        Update: {
+          id?: never
+          name?: never
+        }
+        Relationships: []
+      }
       share_links_safe: {
         Row: {
           allow_comment_read: boolean | null
