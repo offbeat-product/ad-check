@@ -7,12 +7,15 @@ import {
   useRef,
   useState,
   type ReactNode,
+  type Dispatch,
+  type SetStateAction,
 } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import type { ProjectFile } from "@/lib/db-types";
+import type { BulkSequentialProgressState } from "@/lib/bulk-sequential-check-types";
 
 /** @deprecated Auto-queue for uploaded files is disabled; kept for API compatibility. */
 export const MAX_CONCURRENT_AUTO_CHECKS_PER_PROJECT = 5;
@@ -27,6 +30,12 @@ export interface AutoCheckContextValue {
   markAutoCheckSession: (params: { projectId: string; projectName: string }) => void;
   /** Set briefly when a session completes globally so ProjectPage can flash the per-process badge */
   badgeFlashProjectId: string | null;
+  /** 一括AIチェック（直列）のグローバル表示。永続化しない（リロードで再開しない） */
+  bulkSequentialProgress: BulkSequentialProgressState | null;
+  setBulkSequentialProgress: Dispatch<SetStateAction<BulkSequentialProgressState | null>>;
+  registerBulkAbort: (ac: AbortController | null) => void;
+  cancelBulkSequentialCheck: () => void;
+  clearBulkSequentialProgress: () => void;
 }
 
 const AutoCheckContext = createContext<AutoCheckContextValue | null>(null);
@@ -52,6 +61,21 @@ export function AutoCheckProvider({ children }: ProviderProps) {
   const [badgeFlashProjectId, setBadgeFlashProjectId] = useState<string | null>(null);
   const badgeClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [bulkSequentialProgress, setBulkSequentialProgress] = useState<BulkSequentialProgressState | null>(null);
+  const bulkAbortRef = useRef<AbortController | null>(null);
+
+  const registerBulkAbort = useCallback((ac: AbortController | null) => {
+    bulkAbortRef.current = ac;
+  }, []);
+
+  const cancelBulkSequentialCheck = useCallback(() => {
+    bulkAbortRef.current?.abort();
+  }, []);
+
+  const clearBulkSequentialProgress = useCallback(() => {
+    setBulkSequentialProgress(null);
+  }, []);
+
   const maybeToastProjectCompleteRef = useRef<(projectId: string) => Promise<void>>(async () => {});
 
   const clearAllState = useCallback(() => {
@@ -61,6 +85,9 @@ export function AutoCheckProvider({ children }: ProviderProps) {
       badgeClearTimerRef.current = null;
     }
     setBadgeFlashProjectId(null);
+    bulkAbortRef.current?.abort();
+    bulkAbortRef.current = null;
+    setBulkSequentialProgress(null);
   }, []);
 
   useEffect(() => {
@@ -192,8 +219,21 @@ export function AutoCheckProvider({ children }: ProviderProps) {
       scheduleDrain,
       markAutoCheckSession,
       badgeFlashProjectId,
+      bulkSequentialProgress,
+      setBulkSequentialProgress,
+      registerBulkAbort,
+      cancelBulkSequentialCheck,
+      clearBulkSequentialProgress,
     }),
-    [scheduleDrain, markAutoCheckSession, badgeFlashProjectId]
+    [
+      scheduleDrain,
+      markAutoCheckSession,
+      badgeFlashProjectId,
+      bulkSequentialProgress,
+      registerBulkAbort,
+      cancelBulkSequentialCheck,
+      clearBulkSequentialProgress,
+    ]
   );
 
   return <AutoCheckContext.Provider value={value}>{children}</AutoCheckContext.Provider>;

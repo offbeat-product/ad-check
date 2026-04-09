@@ -3,6 +3,7 @@ import { Outlet, useNavigate } from "react-router-dom";
 import AppSidebar from "@/components/AppSidebar";
 import CreateProjectModal from "@/components/CreateProjectModal";
 import GlobalSearch from "@/components/GlobalSearch";
+import BatchCheckFloatingBar from "@/components/BatchCheckFloatingBar";
 import NotificationBell from "@/components/NotificationBell";
 import { Menu, X, Search } from "lucide-react";
 import { AdCheckLogoMark } from "@/components/AdCheckLogoMark";
@@ -81,6 +82,7 @@ export default function AppLayout() {
         onOpenChange={setCreateOpen}
         onCreated={(id) => navigate(`/project/${id}`)}
       />
+      <BatchCheckFloatingBar />
     </div>
   );
 }
