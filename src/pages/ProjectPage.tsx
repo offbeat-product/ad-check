@@ -340,11 +340,7 @@ export default function ProjectPage() {
   );
 
   const { progress: batchProgress, runBatchCheck, resetProgress: resetBatchProgress } = useBatchCheck();
-  const { scheduleDrain, markAutoCheckSession, badgeFlashProjectId } = useAutoCheck();
-  const scheduleDrainRef = useRef<() => void>(() => {});
-  scheduleDrainRef.current = () => {
-    if (id) scheduleDrain(id);
-  };
+  const { badgeFlashProjectId } = useAutoCheck();
 
   const renderProcessAiExtra = useCallback(
     (processKey: string) => (
@@ -644,13 +640,6 @@ export default function ProjectPage() {
           }
 
           if (newFile) {
-            const oldStatus = oldFile?.status;
-            const newStatus = newFile.status;
-            const becameChecked = newStatus === "checked" && oldStatus !== "checked";
-            const becameTerminalOrReverted =
-              (newStatus === "error" && oldStatus !== "error") ||
-              (newStatus === "uploaded" && oldStatus === "checking");
-
             setFiles(prev => {
               const idx = prev.findIndex(f => f.id === newFile.id);
               if (idx >= 0) {
@@ -673,9 +662,6 @@ export default function ProjectPage() {
               }
             }
 
-            if (payload.eventType === "UPDATE" && (becameChecked || becameTerminalOrReverted)) {
-              scheduleDrainRef.current();
-            }
           }
         }
       )
@@ -1044,20 +1030,13 @@ export default function ProjectPage() {
       setUploadPatternId(null);
       setUploadPatternMode("common");
       setUploadSubmissionType("internal");
-      void fetchData().then(() => {
-        const aiCfg = AI_CHECK_CONFIG[uploadProcessType || ""];
-        if (uploadedInBatch > 1 && aiCfg?.enabled && user && id) {
-          markAutoCheckSession({ projectId: id, projectName: project?.name ?? "案件" });
-          window.setTimeout(() => scheduleDrain(id), 500);
-        }
-      });
+      void fetchData();
 
-      // Auto-navigate to file review for automatic AI check (single file only)
-      // Skip auto-navigate if copy-to-pattern dialog should be shown
+      // 単一ファイル時はレビュー画面へ（AIチェックはユーザーが実行）
       if (lastInsertedFileId && !showedCopyDialog && uploadedInBatch <= 1) {
         const aiCfg = AI_CHECK_CONFIG[uploadProcessType || ""];
         if (aiCfg?.enabled) {
-          toast({ title: "🤖 AIチェックを自動実行します", description: "レビュー画面に移動中..." });
+          toast({ title: "アップロード完了", description: "レビュー画面でAIチェックを実行できます。" });
           setTimeout(() => navigate(`/project/${id}/file/${lastInsertedFileId}`), 500);
         }
       }
@@ -1506,9 +1485,7 @@ export default function ProjectPage() {
                                     toast({ title: `最大${MAX_BATCH}件まで一括チェック可能です`, description: `先頭${MAX_BATCH}件をチェックします。`, variant: "default" });
                                   }
                                   runBatchCheck(limitedTargets, product, client, id, () => {
-                                    void fetchData().then(() => {
-                                      if (id) scheduleDrain(id);
-                                    });
+                                    void fetchData();
                                     setSelectedFileIds(new Set());
                                     setSelectMode(false);
                                   });

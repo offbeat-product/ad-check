@@ -79,7 +79,6 @@ export default function FileReviewPage() {
   const [editingName, setEditingName] = useState(false);
   const [editName, setEditName] = useState("");
   const mediaPreviewRef = useRef<MediaPreviewHandle>(null);
-  const autoCheckPendingRef = useRef(false);
   const autoComparisonPendingRef = useRef(false);
   const [mediaCurrentTime, setMediaCurrentTime] = useState<number | null>(null);
   const [correctionCount, setCorrectionCount] = useState<number>(0);
@@ -309,26 +308,9 @@ export default function FileReviewPage() {
 
       await fetchVersions();
       if (!cancelled) setLoading(false);
-
-      // Auto-trigger AI check for newly uploaded files (status=uploaded, no check result)
-      if (!cancelled && f && f.status === "uploaded" && !f.check_result_id) {
-        autoCheckPendingRef.current = true;
-      }
     })();
     return () => { cancelled = true; };
   }, [fileId, projectId]);
-
-  // Auto-trigger AI check when file is loaded as "uploaded" with no check result
-  useEffect(() => {
-    if (!loading && autoCheckPendingRef.current && file && product && !checking && !record) {
-      autoCheckPendingRef.current = false;
-      const aiCfg = AI_CHECK_CONFIG[file.process_type];
-      if (aiCfg?.enabled) {
-        const timer = setTimeout(() => handleRunCheck(), 800);
-        return () => clearTimeout(timer);
-      }
-    }
-  }, [loading, file?.id, product?.id, checking, record]);
 
   // Fetch sibling files for navigation (all patterns in same process, ordered by pattern sort_order then file_name)
   useEffect(() => {
