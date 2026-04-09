@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2, CheckCircle2, XCircle, ChevronDown, ChevronUp, X } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +26,14 @@ export default function BatchCheckFloatingBar() {
   const successCount = progress.results.filter((r) => r.success).length;
   const failCount = progress.results.filter((r) => !r.success).length;
   const pct = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
+
+  useEffect(() => {
+    if (isRunning || progress.status === "idle") return;
+    const timer = window.setTimeout(() => {
+      clearBulkSequentialProgress();
+    }, 10000);
+    return () => window.clearTimeout(timer);
+  }, [isRunning, progress.status, clearBulkSequentialProgress]);
 
   return (
     <div className="fixed bottom-4 right-4 z-50 w-[360px] bg-card border border-border rounded-lg shadow-lg animate-in slide-in-from-bottom-4 duration-300">
