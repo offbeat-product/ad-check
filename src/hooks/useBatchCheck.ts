@@ -235,6 +235,7 @@ export function useBatchCheck() {
             ? `${successCount}件成功、${failCount}件失敗`
             : `${successCount}件すべて成功`,
         variant: failCount > 0 ? "destructive" : "default",
+        duration: 10000,
       });
 
       onComplete?.();
