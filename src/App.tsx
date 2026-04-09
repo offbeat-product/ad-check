@@ -8,6 +8,7 @@ import { ThemeProvider } from "next-themes";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { AutoCheckProvider } from "@/providers/AutoCheckProvider";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FeedbackButton } from "@/components/FeedbackButton";
 
 // Eagerly load the login page (first thing users see)
 import Login from "./pages/Login";
@@ -95,6 +96,7 @@ const App = () => (
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
+            <FeedbackButton product="ad_check" />
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
