@@ -66,6 +66,11 @@ import { useAutoCheck } from "@/providers/AutoCheckProvider";
 import { ProcessAiAutoCheckBadge } from "@/components/project/ProcessAiAutoCheckBadge";
 import { getSubmitBadgeClass, getSubmitLabel } from "@/lib/check-display";
 
+function hasFinalOverallStatus(status: string | null | undefined): boolean {
+  const s = (status || "").toUpperCase();
+  return s === "A" || s === "B" || s === "C" || s === "D";
+}
+
 function DeadlineDisplay({ deadline, className, isCompleted, label }: { deadline: string | null; className?: string; isCompleted?: boolean; label?: string }) {
   const prefix = label || "納期";
   if (!deadline) return <span className={cn("text-xs text-muted-foreground/50", className)}>{prefix}未設定</span>;
@@ -1758,7 +1763,7 @@ export default function ProjectPage() {
                                             <div className="flex items-center gap-1 mt-1 flex-wrap">
                                               <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
                                               <span className="text-[10px] text-muted-foreground">{draftLabel}</span>
-                                              {cr && file.status !== "fixed" && (
+                                              {cr && file.status !== "fixed" && hasFinalOverallStatus(cr.overall_status) && (
                                                 <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-sm", getSubmitBadgeClass(cr.overall_status))}>
                                                   {getSubmitLabel(cr.overall_status).label}
                                                 </span>
@@ -1892,7 +1897,7 @@ export default function ProjectPage() {
                                           <div className="flex items-center gap-1 mt-1 flex-wrap">
                                             <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
                                             <span className="text-[10px] text-muted-foreground">{draftLabel}</span>
-                                            {cr && file.status !== "fixed" && (
+                                            {cr && file.status !== "fixed" && hasFinalOverallStatus(cr.overall_status) && (
                                               <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-sm", getSubmitBadgeClass(cr.overall_status))}>
                                                 {getSubmitLabel(cr.overall_status).label}
                                               </span>
