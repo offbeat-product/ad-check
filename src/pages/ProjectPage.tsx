@@ -64,8 +64,6 @@ import { format, differenceInDays, isPast } from "date-fns";
 import { useBatchCheck } from "@/hooks/useBatchCheck";
 import { useAutoCheck } from "@/providers/AutoCheckProvider";
 import { ProcessAiAutoCheckBadge } from "@/components/project/ProcessAiAutoCheckBadge";
-import BatchCheckFloatingBar from "@/components/BatchCheckFloatingBar";
-
 import { getSubmitBadgeClass, getSubmitLabel } from "@/lib/check-display";
 
 function DeadlineDisplay({ deadline, className, isCompleted, label }: { deadline: string | null; className?: string; isCompleted?: boolean; label?: string }) {
@@ -339,7 +337,7 @@ export default function ProjectPage() {
     [project?.creative_type, mixedProcessTab, addProcess]
   );
 
-  const { progress: batchProgress, runBatchCheck, resetProgress: resetBatchProgress } = useBatchCheck();
+  const { progress: batchProgress, runBatchCheck } = useBatchCheck();
   const { badgeFlashProjectId } = useAutoCheck();
 
   const renderProcessAiExtra = useCallback(
@@ -1461,16 +1459,17 @@ export default function ProjectPage() {
                               return (a.created_at ?? "").localeCompare(b.created_at ?? "");
                             });
                             const selectedInSection = sortedTargets.filter(f => selectedFileIds.has(f.id));
-                            const uncheckedTargets = sortedTargets.filter(f => f.status !== "checked" && f.status !== "fixed" && f.status !== "checking");
+                            const uncheckedTargets = sortedTargets.filter(f => f.status === "uploaded");
+                            const selectedUploaded = selectedInSection.filter(f => f.status === "uploaded");
                             const hasSelection = selectedInSection.length > 0;
-                            const actualTargets = hasSelection ? selectedInSection : uncheckedTargets;
+                            const actualTargets = hasSelection ? selectedUploaded : uncheckedTargets;
                             // Apply video limits
                             const VIDEO_LIMITS: Record<string, number> = { vcon: 3, video_horizontal: 1, video_vertical: 1 };
                             const videoLimit = VIDEO_LIMITS[proc.process_key];
                             const MAX_BATCH = videoLimit ? Math.min(5, videoLimit) : 5;
                             const overLimit = actualTargets.length > MAX_BATCH;
                             const label = hasSelection
-                              ? `選択分AIチェック (${selectedInSection.length}${overLimit ? `/最大${MAX_BATCH}` : ""})`
+                              ? `選択分AIチェック (${selectedUploaded.length}${overLimit ? `/最大${MAX_BATCH}` : ""})`
                               : `一括AIチェック (${Math.min(uncheckedTargets.length, MAX_BATCH)}/${uncheckedTargets.length})`;
                             const limitedTargets = actualTargets.slice(0, MAX_BATCH);
                             return (
@@ -1478,17 +1477,37 @@ export default function ProjectPage() {
                                 size="sm"
                                 variant="outline"
                                 className="text-xs h-7 gap-1"
-                                disabled={batchProgress.status === "running" || actualTargets.length === 0}
+                                disabled={
+                                  batchProgress.status === "running" ||
+                                  actualTargets.length === 0 ||
+                                  (hasSelection && selectedUploaded.length === 0)
+                                }
                                 onClick={() => {
-                                  if (!product || !id) return;
+                                  if (!product || !id || !project) return;
+                                  if (hasSelection && selectedUploaded.length === 0) {
+                                    toast({
+                                      title: "対象がありません",
+                                      description: "未チェック（アップロード済み）のファイルのみ一括実行できます。",
+                                    });
+                                    return;
+                                  }
                                   if (overLimit) {
                                     toast({ title: `最大${MAX_BATCH}件まで一括チェック可能です`, description: `先頭${MAX_BATCH}件をチェックします。`, variant: "default" });
                                   }
-                                  runBatchCheck(limitedTargets, product, client, id, () => {
-                                    void fetchData();
-                                    setSelectedFileIds(new Set());
-                                    setSelectMode(false);
-                                  });
+                                  const processLabel =
+                                    processLabelByKey[proc.process_key] ?? proc.process_label ?? proc.process_key;
+                                  runBatchCheck(
+                                    limitedTargets,
+                                    product,
+                                    client,
+                                    id,
+                                    { projectName: project.name, processLabel },
+                                    () => {
+                                      void fetchData();
+                                      setSelectedFileIds(new Set());
+                                      setSelectMode(false);
+                                    }
+                                  );
                                 }}
                               >
                                 {batchProgress.status === "running" ? (
@@ -2219,14 +2238,6 @@ export default function ProjectPage() {
         onAdd={handleProcessManagementAdd}
         onDelete={deleteProcess}
         onReset={resetToDefaults}
-      />
-
-      {/* Batch check floating progress bar */}
-      <BatchCheckFloatingBar
-        progress={batchProgress}
-        onDismiss={resetBatchProgress}
-        getGradeLabel={(g) => getSubmitLabel(g)}
-        getGradeBadgeClass={(g) => getSubmitBadgeClass(g)}
       />
 
       {/* Copy to other patterns dialog */}

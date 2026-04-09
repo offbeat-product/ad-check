@@ -29,6 +29,8 @@ export interface RunSingleFileAiCheckResult {
   error?: string;
   /** Video/audio accepted async; file stays checking until n8n completes */
   asyncAccepted?: boolean;
+  /** 非同期完了待ち・結果参照用（sync 完了時も付与） */
+  checkResultId?: string;
 }
 
 export async function runSingleFileAiCheck(
@@ -197,7 +199,11 @@ export async function runSingleFileAiCheck(
             })
             .eq("id", file.id);
         }
-        return { success: true, asyncAccepted: true };
+        return {
+          success: true,
+          asyncAccepted: true,
+          checkResultId: (body.record_id as string) || undefined,
+        };
       }
       res = rawRes as typeof res;
     }
@@ -239,7 +245,7 @@ export async function runSingleFileAiCheck(
       })
       .eq("id", file.id);
 
-    return { success: true };
+    return { success: true, checkResultId: crData.id };
   } catch (err) {
     const message = err instanceof Error ? err.message : "不明なエラー";
     console.error(`[runSingleFileAiCheck] ${file.file_name}:`, err);
