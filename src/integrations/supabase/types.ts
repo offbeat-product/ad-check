@@ -463,6 +463,51 @@ export type Database = {
         }
         Relationships: []
       }
+      error_reports: {
+        Row: {
+          category: string
+          created_at: string
+          description: string
+          id: string
+          page_url: string | null
+          product: string
+          reporter_email: string | null
+          reporter_id: string | null
+          severity: string
+          status: string
+          title: string
+          user_agent: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string | null
+          description: string
+          id?: string
+          page_url?: string | null
+          product: string
+          reporter_email?: string | null
+          reporter_id?: string | null
+          severity: string
+          status?: string
+          title: string
+          user_agent?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string | null
+          description?: string
+          id?: string
+          page_url?: string | null
+          product?: string
+          reporter_email?: string | null
+          reporter_id?: string | null
+          severity?: string
+          status?: string
+          title?: string
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       invitations: {
         Row: {
           accepted_at: string | null
