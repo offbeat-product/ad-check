@@ -1,6 +1,6 @@
 import { supabase } from "@/integrations/supabase/client";
 
-const POLL_INTERVAL_MS = 2000;
+const POLL_INTERVAL_MS = 5000;
 const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000;
 
 export type WaitForAiCheckOutcome = "done" | "cancelled" | "timeout" | "failed";

@@ -186,24 +186,34 @@ export async function runSingleFileAiCheck(
         if (pendingCr) {
           body.record_id = pendingCr.id;
         }
+
+        // n8n responseMode(lastNode / immediately) に依存せず、DB polling で完了判定する。
+        // webhook の失敗/タイムアウトはここでは失敗扱いにせず、polling 側(5分)で判定する。
+        if (!body.record_id) {
+          throw new Error("一括チェック用のrecord_id生成に失敗しました");
+        }
+        await supabase
+          .from("project_files")
+          .update({
+            status: "checking",
+            check_result_id: body.record_id as string,
+          })
+          .eq("id", file.id);
+
+        void webhookFetch(webhookUrl, body).catch((err) => {
+          console.error(`[runSingleFileAiCheck] webhook dispatch failed for ${file.file_name}:`, err);
+        });
+
+        return {
+          success: true,
+          asyncAccepted: true,
+          checkResultId: body.record_id as string,
+        };
       }
 
       const rawRes = await webhookFetch(webhookUrl, body);
       if (rawRes === VIDEO_ASYNC_ACCEPTED) {
-        if (body.record_id) {
-          await supabase
-            .from("project_files")
-            .update({
-              status: "checking",
-              check_result_id: body.record_id as string,
-            })
-            .eq("id", file.id);
-        }
-        return {
-          success: true,
-          asyncAccepted: true,
-          checkResultId: (body.record_id as string) || undefined,
-        };
+        throw new Error("Unexpected async marker for non-async process");
       }
       res = rawRes as typeof res;
     }
