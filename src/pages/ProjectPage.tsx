@@ -1448,7 +1448,13 @@ export default function ProjectPage() {
                         {!isCollapsed && (
                           <div className="mt-2 flex items-center gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
                            {webhookAvailable && sectionFiles.filter(f => f.file_data && !f.parent_file_id).length > 0 && (() => {
-                            const allTargets = sectionFiles.filter(f => f.file_data && !f.parent_file_id);
+                            const allTargets = sectionFiles.filter(
+                              (f) =>
+                                f.file_data &&
+                                !f.parent_file_id &&
+                                f.project_id === id &&
+                                (f.process_type || "script") === proc.process_key
+                            );
                             // Sort by pattern order (left to right), then by created_at within same pattern
                             const patternOrderMap = new Map<string | null, number>();
                             patterns.forEach((p, idx) => patternOrderMap.set(p.id, idx));
@@ -1501,7 +1507,7 @@ export default function ProjectPage() {
                                     product,
                                     client,
                                     id,
-                                    { projectName: project.name, processLabel },
+                                    { projectName: project.name, processLabel, processType: proc.process_key },
                                     () => {
                                       void fetchData();
                                       setSelectedFileIds(new Set());

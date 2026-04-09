@@ -2,6 +2,7 @@ import { Badge } from "@/components/ui/badge";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import type { ProjectFile } from "@/lib/db-types";
 import { Loader2 } from "lucide-react";
+import { useAutoCheck } from "@/providers/AutoCheckProvider";
 
 interface Props {
   processKey: string;
@@ -11,14 +12,20 @@ interface Props {
 }
 
 export function ProcessAiAutoCheckBadge({ processKey, files, showAllComplete }: Props) {
+  const { bulkSequentialProgress } = useAutoCheck();
   const roots = files.filter((f) => f.process_type === processKey && !f.parent_file_id);
   const aiRoots = roots.filter((f) => Boolean(f.file_data) && AI_CHECK_CONFIG[processKey]?.enabled);
   if (aiRoots.length === 0) return null;
 
   const done = aiRoots.filter((f) => f.status === "checked" || f.status === "fixed").length;
-  const pending = aiRoots.filter((f) => f.status === "uploaded" || f.status === "checking").length;
+  const checkingCount = aiRoots.filter((f) => f.status === "checking").length;
+  const uploadedCount = aiRoots.filter((f) => f.status === "uploaded").length;
+  const isCurrentFileInThisProcess =
+    Boolean(bulkSequentialProgress?.currentFileId) &&
+    aiRoots.some((f) => f.id === bulkSequentialProgress?.currentFileId);
+  const isActuallyChecking = checkingCount > 0 || isCurrentFileInThisProcess;
 
-  if (pending > 0) {
+  if (isActuallyChecking) {
     return (
       <Badge
         variant="outline"
@@ -27,6 +34,18 @@ export function ProcessAiAutoCheckBadge({ processKey, files, showAllComplete }: 
       >
         <Loader2 className="h-3 w-3 animate-spin shrink-0" aria-hidden />
         AIチェック中… ({done}/{aiRoots.length})
+      </Badge>
+    );
+  }
+
+  if (uploadedCount > 0) {
+    return (
+      <Badge
+        variant="outline"
+        className="text-[10px] font-normal shrink-0 border-muted-foreground/30 text-muted-foreground"
+        onClick={(e) => e.stopPropagation()}
+      >
+        未チェック {uploadedCount}件
       </Badge>
     );
   }

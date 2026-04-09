@@ -32,13 +32,18 @@ export function useBatchCheck() {
       product: Product,
       client: Client | null,
       projectId: string,
-      meta: { projectName: string; processLabel: string },
+      meta: { projectName: string; processLabel: string; processType: string },
       onComplete?: () => void
     ) => {
       if (!user) return;
 
       const targetFiles = files.filter(
-        (f) => f.file_data && !f.parent_file_id && f.status === "uploaded"
+        (f) =>
+          f.file_data &&
+          !f.parent_file_id &&
+          f.status === "uploaded" &&
+          f.project_id === projectId &&
+          (f.process_type || "script") === meta.processType
       );
       if (targetFiles.length === 0) {
         toast({
@@ -100,6 +105,7 @@ export function useBatchCheck() {
         processLabel: meta.processLabel,
         completed: 0,
         total: batchFiles.length,
+        currentFileId: null,
         currentFileName: null,
         waitingN8n: false,
         results: [],
@@ -117,6 +123,7 @@ export function useBatchCheck() {
             p
               ? {
                   ...p,
+                  currentFileId: file.id,
                   currentFileName: file.file_name,
                   waitingN8n: false,
                   completed: i,
@@ -206,7 +213,7 @@ export function useBatchCheck() {
 
       if (ac.signal.aborted) {
         setBulkSequentialProgress((p) =>
-          p ? { ...p, status: "cancelled", results: [...results] } : null
+          p ? { ...p, status: "cancelled", currentFileId: null, results: [...results] } : null
         );
         toast({ title: "一括AIチェックを中止しました" });
         onComplete?.();
@@ -217,7 +224,7 @@ export function useBatchCheck() {
       const failCount = results.filter((x) => !x.success).length;
 
       setBulkSequentialProgress((p) =>
-        p ? { ...p, status: "done", results: [...results] } : null
+        p ? { ...p, status: "done", currentFileId: null, results: [...results] } : null
       );
 
       toast({

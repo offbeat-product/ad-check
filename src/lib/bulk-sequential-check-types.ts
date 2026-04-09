@@ -27,6 +27,7 @@ export interface BulkSequentialProgressState {
   processLabel: string;
   completed: number;
   total: number;
+  currentFileId: string | null;
   currentFileName: string | null;
   /** n8n 非同期結果待ち */
   waitingN8n: boolean;
