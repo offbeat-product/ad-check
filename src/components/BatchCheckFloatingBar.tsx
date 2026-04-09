@@ -9,7 +9,7 @@ import { useAutoCheck } from "@/providers/AutoCheckProvider";
 import { getSubmitBadgeClass, getSubmitLabel } from "@/lib/check-display";
 
 export default function BatchCheckFloatingBar() {
-  const { bulkSequentialProgress, bulkQueue, clearBulkSequentialProgress, cancelBulkSequentialCheck } =
+  const { bulkSequentialProgress, clearBulkSequentialProgress, cancelBulkSequentialCheck } =
     useAutoCheck();
   const [expanded, setExpanded] = useState(false);
 
@@ -50,7 +50,7 @@ export default function BatchCheckFloatingBar() {
 
         <span className="text-sm font-medium flex-1 truncate">
           {isRunning
-            ? `全体: ${progress.current} / ${progress.total} 件完了`
+            ? `AIチェック実行中: ${progress.current} / ${progress.total} 件完了`
             : isCancelled
               ? `一括チェックを中止 — ${successCount}件まで処理`
               : `一括チェック完了 — ${successCount}件成功${failCount > 0 ? `、${failCount}件失敗` : ""}`}
@@ -79,11 +79,8 @@ export default function BatchCheckFloatingBar() {
         <div className="px-3 pb-2 space-y-1">
           <Progress value={pct} className="h-1.5" />
           <p className="text-[11px] text-muted-foreground truncate" title={progress.currentFileName}>
-            現在: {progress.projectName ?? "—"} / {progress.processLabel ?? "—"} / {progress.currentFileName || "…"}
+            {progress.currentFileName || "…"}
           </p>
-          {bulkQueue.length > 0 && (
-            <p className="text-[10px] text-muted-foreground">待機中: {bulkQueue.length} 件</p>
-          )}
         </div>
       )}
 

@@ -15,7 +15,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import type { ProjectFile } from "@/lib/db-types";
-import type { BulkSequentialProgressState, BulkQueueEntry } from "@/lib/bulk-sequential-check-types";
+import type { BulkSequentialProgressState } from "@/lib/bulk-sequential-check-types";
 
 /** @deprecated Auto-queue for uploaded files is disabled; kept for API compatibility. */
 export const MAX_CONCURRENT_AUTO_CHECKS_PER_PROJECT = 5;
@@ -34,13 +34,8 @@ export interface AutoCheckContextValue {
   bulkSequentialProgress: BulkSequentialProgressState | null;
   setBulkSequentialProgress: Dispatch<SetStateAction<BulkSequentialProgressState | null>>;
   registerBulkAbort: (ac: AbortController | null) => void;
-  registerBulkCancelHandler: (fn: (() => void) | null) => void;
   cancelBulkSequentialCheck: () => void;
   clearBulkSequentialProgress: () => void;
-  bulkQueue: BulkQueueEntry[];
-  setBulkQueue: Dispatch<SetStateAction<BulkQueueEntry[]>>;
-  bulkActiveTaskId: string | null;
-  setBulkActiveTaskId: Dispatch<SetStateAction<string | null>>;
 }
 
 const AutoCheckContext = createContext<AutoCheckContextValue | null>(null);
@@ -67,22 +62,14 @@ export function AutoCheckProvider({ children }: ProviderProps) {
   const badgeClearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [bulkSequentialProgress, setBulkSequentialProgress] = useState<BulkSequentialProgressState | null>(null);
-  const [bulkQueue, setBulkQueue] = useState<BulkQueueEntry[]>([]);
-  const [bulkActiveTaskId, setBulkActiveTaskId] = useState<string | null>(null);
   const bulkAbortRef = useRef<AbortController | null>(null);
-  const bulkCancelHandlerRef = useRef<(() => void) | null>(null);
 
   const registerBulkAbort = useCallback((ac: AbortController | null) => {
     bulkAbortRef.current = ac;
   }, []);
 
-  const registerBulkCancelHandler = useCallback((fn: (() => void) | null) => {
-    bulkCancelHandlerRef.current = fn;
-  }, []);
-
   const cancelBulkSequentialCheck = useCallback(() => {
     bulkAbortRef.current?.abort();
-    bulkCancelHandlerRef.current?.();
   }, []);
 
   const clearBulkSequentialProgress = useCallback(() => {
@@ -100,10 +87,7 @@ export function AutoCheckProvider({ children }: ProviderProps) {
     setBadgeFlashProjectId(null);
     bulkAbortRef.current?.abort();
     bulkAbortRef.current = null;
-    bulkCancelHandlerRef.current = null;
     setBulkSequentialProgress(null);
-    setBulkQueue([]);
-    setBulkActiveTaskId(null);
   }, []);
 
   useEffect(() => {
@@ -238,13 +222,8 @@ export function AutoCheckProvider({ children }: ProviderProps) {
       bulkSequentialProgress,
       setBulkSequentialProgress,
       registerBulkAbort,
-      registerBulkCancelHandler,
       cancelBulkSequentialCheck,
       clearBulkSequentialProgress,
-      bulkQueue,
-      setBulkQueue,
-      bulkActiveTaskId,
-      setBulkActiveTaskId,
     }),
     [
       scheduleDrain,
@@ -252,11 +231,8 @@ export function AutoCheckProvider({ children }: ProviderProps) {
       badgeFlashProjectId,
       bulkSequentialProgress,
       registerBulkAbort,
-      registerBulkCancelHandler,
       cancelBulkSequentialCheck,
       clearBulkSequentialProgress,
-      bulkQueue,
-      bulkActiveTaskId,
     ]
   );
 

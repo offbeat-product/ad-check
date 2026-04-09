@@ -6,15 +6,6 @@ export interface BulkSequentialResultRow {
   error?: string;
 }
 
-export interface BulkQueueEntry {
-  id: string;
-  projectId: string;
-  processType: string;
-  projectName: string;
-  processLabel: string;
-  total: number;
-}
-
 /** フローティングバー・ボタン制御用（Provider 状態のマッピング先） */
 export interface BatchCheckProgress {
   total: number;
