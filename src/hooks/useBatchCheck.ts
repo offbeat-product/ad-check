@@ -4,6 +4,7 @@ import { useToast } from "@/hooks/use-toast";
 import { runSingleFileAiCheck } from "@/lib/run-single-file-ai-check";
 import { waitForAiCheckCompletion } from "@/lib/wait-for-ai-check-completion";
 import { mapBulkToBatchProgress } from "@/lib/bulk-sequential-check-map";
+import { supabase } from "@/integrations/supabase/client";
 import type { BulkSequentialProgressState } from "@/lib/bulk-sequential-check-types";
 import type { BatchCheckProgress } from "@/lib/bulk-sequential-check-types";
 import type { ProjectFile, Product, Client } from "@/lib/db-types";
@@ -162,6 +163,16 @@ export function useBatchCheck() {
 
               if (outcome === "cancelled") break;
               if (outcome === "timeout" || outcome === "failed") {
+                // n8n が反映されなかった場合は checking 残留を防ぐ
+                await supabase
+                  .from("project_files")
+                  .update({
+                    status: "uploaded",
+                    check_result_id: null,
+                    checking_by: null,
+                    checking_started_at: null,
+                  } as Record<string, unknown>)
+                  .eq("id", file.id);
                 results.push({
                   fileId: file.id,
                   fileName: file.file_name,

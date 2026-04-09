@@ -8,6 +8,16 @@ import type { CheckItem } from "@/lib/types";
 import type { Json } from "@/integrations/supabase/types";
 import type { ProjectFile, Product, Client } from "@/lib/db-types";
 
+function dispatchWebhookInBackground(url: string, body: Record<string, unknown>) {
+  void fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }).catch((err) => {
+    console.error("[runSingleFileAiCheck] webhook dispatch failed:", err);
+  });
+}
+
 export interface RunSingleFileAiCheckUser {
   id: string;
   email?: string | null;
@@ -200,9 +210,7 @@ export async function runSingleFileAiCheck(
           })
           .eq("id", file.id);
 
-        void webhookFetch(webhookUrl, body).catch((err) => {
-          console.error(`[runSingleFileAiCheck] webhook dispatch failed for ${file.file_name}:`, err);
-        });
+        dispatchWebhookInBackground(webhookUrl, body);
 
         return {
           success: true,
