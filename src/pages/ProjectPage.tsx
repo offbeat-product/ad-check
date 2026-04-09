@@ -59,6 +59,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { format, differenceInDays, isPast } from "date-fns";
 import { useBatchCheck } from "@/hooks/useBatchCheck";
@@ -343,7 +344,7 @@ export default function ProjectPage() {
   );
 
   const { runBatchCheck } = useBatchCheck();
-  const { badgeFlashProjectId, bulkSequentialProgress } = useAutoCheck();
+  const { badgeFlashProjectId, bulkSequentialProgress, bulkQueue, bulkActiveTaskId } = useAutoCheck();
 
   const renderProcessAiExtra = useCallback(
     (processKey: string) => (
@@ -1492,18 +1493,27 @@ export default function ProjectPage() {
                               bulkSequentialProgress?.status === "running" &&
                               bulkSequentialProgress.projectId === id &&
                               bulkSequentialProgress.processType === proc.process_key;
+                            const waitingIndex = bulkQueue.findIndex(
+                              (q) => q.projectId === id && q.processType === proc.process_key
+                            );
+                            const isWaiting = waitingIndex >= 0;
                             const isButtonLoading =
-                              sectionIsChecking || currentFileInThisSection || thisSectionBulkRunning;
-                            const isOtherBulkRunning =
-                              bulkSequentialProgress?.status === "running" && !thisSectionBulkRunning;
+                              Boolean(bulkActiveTaskId) &&
+                              (sectionIsChecking || currentFileInThisSection || thisSectionBulkRunning);
+                            const buttonLabel = isButtonLoading
+                              ? "AIチェック実行中"
+                              : isWaiting
+                                ? `待機中 (${waitingIndex + 1}番目)`
+                                : label;
 
-                            return (
+                            const buttonEl = (
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="text-xs h-7 gap-1"
+                                className={cn("text-xs h-7 gap-1", isWaiting && "opacity-80")}
                                 disabled={
-                                  isOtherBulkRunning ||
+                                  isButtonLoading ||
+                                  isWaiting ||
                                   actualTargets.length === 0 ||
                                   (hasSelection && selectedUploaded.length === 0)
                                 }
@@ -1537,11 +1547,21 @@ export default function ProjectPage() {
                               >
                                 {isButtonLoading ? (
                                   <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : isWaiting ? (
+                                  <Loader2 className="h-3 w-3 animate-spin opacity-60" />
                                 ) : (
                                   <Bot className="h-3 w-3" />
                                 )}
-                                {label}
+                                {buttonLabel}
                               </Button>
+                            );
+
+                            if (!isWaiting) return buttonEl;
+                            return (
+                              <Tooltip>
+                                <TooltipTrigger asChild>{buttonEl}</TooltipTrigger>
+                                <TooltipContent>他の一括AIチェックが実行中です</TooltipContent>
+                              </Tooltip>
                             );
                           })()}
                           {sectionFiles.some(f => f.check_result_id && !f.parent_file_id && f.status !== "fixed") && (

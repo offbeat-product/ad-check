@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, type Dispatch, type SetStateAction } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { runSingleFileAiCheck } from "@/lib/run-single-file-ai-check";
@@ -6,10 +6,197 @@ import { waitForAiCheckCompletion } from "@/lib/wait-for-ai-check-completion";
 import { mapBulkToBatchProgress } from "@/lib/bulk-sequential-check-map";
 import type { BulkSequentialProgressState } from "@/lib/bulk-sequential-check-types";
 import type { BatchCheckProgress } from "@/lib/bulk-sequential-check-types";
+import type { BulkQueueEntry } from "@/lib/bulk-sequential-check-types";
 import type { ProjectFile, Product, Client } from "@/lib/db-types";
 import { useAutoCheck } from "@/providers/AutoCheckProvider";
 
 export type { BatchCheckProgress } from "@/lib/bulk-sequential-check-types";
+
+interface QueueTask {
+  entry: BulkQueueEntry;
+  files: ProjectFile[];
+  product: Product;
+  client: Client | null;
+  projectId: string;
+  user: { id: string; email?: string | null };
+  onComplete?: () => void;
+}
+
+interface QueueRuntime {
+  toast: ReturnType<typeof useToast>["toast"];
+  setBulkSequentialProgress: Dispatch<SetStateAction<BulkSequentialProgressState | null>>;
+  registerBulkAbort: (ac: AbortController | null) => void;
+  setBulkQueue: Dispatch<SetStateAction<BulkQueueEntry[]>>;
+  setBulkActiveTaskId: Dispatch<SetStateAction<string | null>>;
+}
+
+let queueTasks: QueueTask[] = [];
+let processingQueue = false;
+
+async function executeQueueTask(task: QueueTask, runtime: QueueRuntime, signal: AbortSignal) {
+  const { files: batchFiles, product, client, projectId, user, entry, onComplete } = task;
+  const { toast, setBulkSequentialProgress } = runtime;
+
+  const initial: BulkSequentialProgressState = {
+    status: "running",
+    projectId,
+    projectName: entry.projectName,
+    processType: entry.processType,
+    processLabel: entry.processLabel,
+    completed: 0,
+    total: batchFiles.length,
+    currentFileId: null,
+    currentFileName: null,
+    waitingN8n: false,
+    results: [],
+  };
+  setBulkSequentialProgress(initial);
+
+  const results: BatchCheckProgress["results"] = [];
+
+  for (let i = 0; i < batchFiles.length; i++) {
+    if (signal.aborted) break;
+
+    const file = batchFiles[i];
+    setBulkSequentialProgress((p) =>
+      p
+        ? {
+            ...p,
+            currentFileId: file.id,
+            currentFileName: file.file_name,
+            waitingN8n: false,
+            completed: i,
+          }
+        : p
+    );
+
+    const r = await runSingleFileAiCheck({
+      file,
+      product,
+      client,
+      projectId,
+      user,
+      claimUploaded: true,
+    });
+
+    if (signal.aborted) break;
+
+    if (r.skipped) {
+      results.push({
+        fileId: file.id,
+        fileName: file.file_name,
+        success: false,
+        error: "スキップ",
+      });
+    } else if (r.success) {
+      if (r.asyncAccepted && r.checkResultId) {
+        setBulkSequentialProgress((p) => (p ? { ...p, waitingN8n: true } : p));
+        const outcome = await waitForAiCheckCompletion({
+          fileId: file.id,
+          checkResultId: r.checkResultId,
+          signal,
+        });
+        setBulkSequentialProgress((p) => (p ? { ...p, waitingN8n: false } : p));
+
+        if (outcome === "cancelled") break;
+        if (outcome === "timeout" || outcome === "failed") {
+          results.push({
+            fileId: file.id,
+            fileName: file.file_name,
+            success: false,
+            error: outcome === "timeout" ? "タイムアウト（5分）" : "チェック失敗",
+          });
+        } else {
+          results.push({
+            fileId: file.id,
+            fileName: file.file_name,
+            success: true,
+          });
+        }
+      } else if (r.asyncAccepted && !r.checkResultId) {
+        results.push({
+          fileId: file.id,
+          fileName: file.file_name,
+          success: false,
+          error: "結果IDがありません",
+        });
+      } else {
+        results.push({
+          fileId: file.id,
+          fileName: file.file_name,
+          success: true,
+        });
+      }
+    } else {
+      results.push({
+        fileId: file.id,
+        fileName: file.file_name,
+        success: false,
+        error: r.error,
+      });
+    }
+
+    setBulkSequentialProgress((p) =>
+      p
+        ? {
+            ...p,
+            completed: i + 1,
+            results: [...results],
+          }
+        : p
+    );
+  }
+
+  if (signal.aborted) {
+    setBulkSequentialProgress((p) =>
+      p ? { ...p, status: "cancelled", currentFileId: null, results: [...results] } : null
+    );
+    toast({ title: "一括AIチェックを中止しました" });
+    onComplete?.();
+    return;
+  }
+
+  const successCount = results.filter((x) => x.success).length;
+  const failCount = results.filter((x) => !x.success).length;
+
+  setBulkSequentialProgress((p) =>
+    p ? { ...p, status: "done", currentFileId: null, results: [...results] } : null
+  );
+
+  toast({
+    title: `「${entry.projectName}」の${entry.processLabel} ${batchFiles.length}件のAIチェックが完了しました`,
+    description:
+      failCount > 0 ? `${successCount}件成功、${failCount}件失敗` : `${successCount}件すべて成功`,
+    variant: failCount > 0 ? "destructive" : "default",
+    duration: 10000,
+  });
+
+  onComplete?.();
+}
+
+async function processGlobalQueue(runtime: QueueRuntime) {
+  if (processingQueue) return;
+  processingQueue = true;
+
+  try {
+    while (queueTasks.length > 0) {
+      const task = queueTasks.shift()!;
+      runtime.setBulkQueue((prev) => prev.filter((q) => q.id !== task.entry.id));
+      runtime.setBulkActiveTaskId(task.entry.id);
+
+      const ac = new AbortController();
+      runtime.registerBulkAbort(ac);
+      try {
+        await executeQueueTask(task, runtime, ac.signal);
+      } finally {
+        runtime.registerBulkAbort(null);
+        runtime.setBulkActiveTaskId(null);
+      }
+    }
+  } finally {
+    processingQueue = false;
+  }
+}
 
 export function useBatchCheck() {
   const { user } = useAuth();
@@ -18,13 +205,27 @@ export function useBatchCheck() {
     bulkSequentialProgress,
     setBulkSequentialProgress,
     registerBulkAbort,
+    registerBulkCancelHandler,
     clearBulkSequentialProgress,
+    bulkQueue,
+    setBulkQueue,
+    bulkActiveTaskId,
+    setBulkActiveTaskId,
   } = useAutoCheck();
 
   const progress = useMemo(
     () => mapBulkToBatchProgress(bulkSequentialProgress),
     [bulkSequentialProgress]
   );
+
+  useEffect(() => {
+    registerBulkCancelHandler(() => {
+      queueTasks = [];
+      setBulkQueue([]);
+      setBulkActiveTaskId(null);
+    });
+    return () => registerBulkCancelHandler(null);
+  }, [registerBulkCancelHandler, setBulkQueue, setBulkActiveTaskId]);
 
   const runBatchCheck = useCallback(
     async (
@@ -95,152 +296,68 @@ export function useBatchCheck() {
       }
       const batchFiles = finalFiles.slice(0, MAX_BATCH);
 
-      const ac = new AbortController();
-      registerBulkAbort(ac);
-
-      const initial: BulkSequentialProgressState = {
-        status: "running",
-        projectId,
-        projectName: meta.projectName,
-        processType: meta.processType,
-        processLabel: meta.processLabel,
-        completed: 0,
-        total: batchFiles.length,
-        currentFileId: null,
-        currentFileName: null,
-        waitingN8n: false,
-        results: [],
-      };
-      setBulkSequentialProgress(initial);
-
-      const results: BatchCheckProgress["results"] = [];
-
-      try {
-        for (let i = 0; i < batchFiles.length; i++) {
-          if (ac.signal.aborted) break;
-
-          const file = batchFiles[i];
-          setBulkSequentialProgress((p) =>
-            p
-              ? {
-                  ...p,
-                  currentFileId: file.id,
-                  currentFileName: file.file_name,
-                  waitingN8n: false,
-                  completed: i,
-                }
-              : p
-          );
-
-          const r = await runSingleFileAiCheck({
-            file,
-            product,
-            client,
-            projectId,
-            user: { id: user.id, email: user.email },
-            claimUploaded: true,
-          });
-
-          if (ac.signal.aborted) break;
-
-          if (r.skipped) {
-            results.push({
-              fileId: file.id,
-              fileName: file.file_name,
-              success: false,
-              error: "スキップ",
-            });
-          } else if (r.success) {
-            if (r.asyncAccepted && r.checkResultId) {
-              setBulkSequentialProgress((p) => (p ? { ...p, waitingN8n: true } : p));
-              const outcome = await waitForAiCheckCompletion({
-                fileId: file.id,
-                checkResultId: r.checkResultId,
-                signal: ac.signal,
-              });
-              setBulkSequentialProgress((p) => (p ? { ...p, waitingN8n: false } : p));
-
-              if (outcome === "cancelled") break;
-              if (outcome === "timeout" || outcome === "failed") {
-                results.push({
-                  fileId: file.id,
-                  fileName: file.file_name,
-                  success: false,
-                  error: outcome === "timeout" ? "タイムアウト（5分）" : "チェック失敗",
-                });
-              } else {
-                results.push({
-                  fileId: file.id,
-                  fileName: file.file_name,
-                  success: true,
-                });
-              }
-            } else if (r.asyncAccepted && !r.checkResultId) {
-              results.push({
-                fileId: file.id,
-                fileName: file.file_name,
-                success: false,
-                error: "結果IDがありません",
-              });
-            } else {
-              results.push({
-                fileId: file.id,
-                fileName: file.file_name,
-                success: true,
-              });
-            }
-          } else {
-            results.push({
-              fileId: file.id,
-              fileName: file.file_name,
-              success: false,
-              error: r.error,
-            });
-          }
-
-          setBulkSequentialProgress((p) =>
-            p
-              ? {
-                  ...p,
-                  completed: i + 1,
-                  results: [...results],
-                }
-              : p
-          );
-        }
-      } finally {
-        registerBulkAbort(null);
-      }
-
-      if (ac.signal.aborted) {
-        setBulkSequentialProgress((p) =>
-          p ? { ...p, status: "cancelled", currentFileId: null, results: [...results] } : null
-        );
-        toast({ title: "一括AIチェックを中止しました" });
-        onComplete?.();
+      const activeSameKey =
+        bulkSequentialProgress?.status === "running" &&
+        bulkSequentialProgress.projectId === projectId &&
+        bulkSequentialProgress.processType === meta.processType;
+      const queuedSameKey = bulkQueue.some(
+        (q) => q.projectId === projectId && q.processType === meta.processType
+      );
+      if (activeSameKey || queuedSameKey) {
+        toast({
+          title: "すでに待機中です",
+          description: `「${meta.processLabel}」の一括AIチェックは既に実行中または待機中です。`,
+        });
         return;
       }
 
-      const successCount = results.filter((x) => x.success).length;
-      const failCount = results.filter((x) => !x.success).length;
+      const entry: BulkQueueEntry = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        projectId,
+        processType: meta.processType,
+        projectName: meta.projectName,
+        processLabel: meta.processLabel,
+        total: batchFiles.length,
+      };
 
-      setBulkSequentialProgress((p) =>
-        p ? { ...p, status: "done", currentFileId: null, results: [...results] } : null
-      );
-
-      toast({
-        title: `「${meta.projectName}」の${meta.processLabel} ${batchFiles.length}件のAIチェックが完了しました`,
-        description:
-          failCount > 0
-            ? `${successCount}件成功、${failCount}件失敗`
-            : `${successCount}件すべて成功`,
-        variant: failCount > 0 ? "destructive" : "default",
-        duration: 10000,
+      queueTasks.push({
+        entry,
+        files: batchFiles,
+        product,
+        client,
+        projectId,
+        user: { id: user.id, email: user.email },
+        onComplete,
       });
+      setBulkQueue((prev) => [...prev, entry]);
 
-      onComplete?.();
+      if (bulkActiveTaskId) {
+        const queuePosition = bulkQueue.length + 1;
+        toast({
+          title: "一括AIチェックを待機列に追加しました",
+          description: `${entry.processLabel}（${queuePosition}番目）`,
+        });
+      }
+
+      void processGlobalQueue({
+        toast,
+        setBulkSequentialProgress,
+        registerBulkAbort,
+        setBulkQueue,
+        setBulkActiveTaskId,
+      });
     },
-    [user, toast, registerBulkAbort, setBulkSequentialProgress]
+    [
+      user,
+      toast,
+      setBulkSequentialProgress,
+      registerBulkAbort,
+      setBulkQueue,
+      setBulkActiveTaskId,
+      bulkQueue,
+      bulkSequentialProgress,
+      bulkActiveTaskId,
+    ]
   );
 
   const resetProgress = useCallback(() => {
