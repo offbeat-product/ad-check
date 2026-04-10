@@ -62,28 +62,7 @@ serve(async (req) => {
       );
     }
 
-    const userId = userData.user.id;
-    const userClient = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: `Bearer ${accessToken}` } } }
-    );
-
     const { password, check_result_id, expires_at, allow_download, allow_comment_read, allow_comment_write } = await req.json();
-
-    // Authorize by RLS visibility (workspace membership etc.), not only creator ownership.
-    const { data: checkResult, error: checkError } = await userClient
-      .from("check_results")
-      .select("id")
-      .eq("id", check_result_id)
-      .single();
-
-    if (checkError || !checkResult) {
-      return new Response(
-        JSON.stringify({ error: 'Forbidden: you cannot access this check result', user_id: userId }),
-        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
 
     let passwordHash: string | null = null;
     if (password) {
