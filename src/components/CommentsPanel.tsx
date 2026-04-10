@@ -14,6 +14,7 @@ import { Send, Pin, Reply, Paperclip, X, FileText, Pencil, Trash2, Check } from 
 import { cn } from "@/lib/utils";
 import MentionInput, { type MentionMember } from "@/components/comments/MentionInput";
 import TimestampBadge, { formatTimestamp } from "@/components/comments/TimestampBadge";
+import { ReplicateCommentDialog, type ReplicateCommentData } from "@/components/ReplicateCommentDialog";
 
 // 修正指示かどうかをキーワードで簡易判定
 function detectCorrectionIntent(text: string): boolean {
@@ -43,6 +44,7 @@ interface CommentsPanelProps {
   productId?: string;
   projectId?: string;
   processType?: string;
+  productCode?: string;
   patternId?: string | null;
   fileId?: string;
   onCommentCountChange?: (count: number) => void;
@@ -52,7 +54,7 @@ interface CommentsPanelProps {
   refreshKey?: number;
 }
 
-export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia, onCommentDeleted, productId, projectId, processType, patternId, fileId, onCommentCountChange, fileName, refreshKey }: CommentsPanelProps) {
+export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia, onCommentDeleted, productId, projectId, processType, productCode, patternId, fileId, onCommentCountChange, fileName, refreshKey }: CommentsPanelProps) {
   const { user } = useAuth();
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
@@ -64,6 +66,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [members, setMembers] = useState<MentionMember[]>([]);
   const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
+  const [replicateDialogComment, setReplicateDialogComment] = useState<ReplicateCommentData | null>(null);
 
   // Correction log state
   const [isCorrectionChecked, setIsCorrectionChecked] = useState(false);
@@ -345,6 +348,17 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
               onRecordCorrection={productId ? async (id, content) => {
                 await saveCorrectionRecord(id, content);
               } : undefined}
+              onReplicate={() => setReplicateDialogComment({
+                id: c.id,
+                content: c.content,
+                author_name: c.author_name,
+                author_email: c.author_email,
+                status: c.status,
+                attachment_url: c.attachment_url,
+                attachment_type: c.attachment_type,
+                attachment_name: c.attachment_name,
+                mentions: c.mentions,
+              })}
             />
             {replies(c.id).map((r) => (
               <div key={r.id} className="ml-5">
@@ -456,12 +470,20 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
           </div>
         )}
       </div>
+      <ReplicateCommentDialog
+        open={replicateDialogComment !== null}
+        onClose={() => setReplicateDialogComment(null)}
+        comment={replicateDialogComment}
+        currentCheckResultId={checkResultId}
+        productCode={productCode || ""}
+        processType={processType || ""}
+      />
     </div>
   );
 }
 
-function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdit, onDelete, timeAgo, isReply, onAnnotationClick, onCheckItemClick, onSeekMedia, fileName, onRecordCorrection }: {
-  comment: CommentRow; currentUserEmail: string; onToggleStatus: () => void; onReply: () => void; onEdit?: (id: string, content: string) => void; onDelete?: (id: string) => void; timeAgo: (d: string) => string; isReply?: boolean; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void; fileName?: string; onRecordCorrection?: (id: string, content: string) => Promise<void>;
+function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdit, onDelete, timeAgo, isReply, onAnnotationClick, onCheckItemClick, onSeekMedia, fileName, onRecordCorrection, onReplicate }: {
+  comment: CommentRow; currentUserEmail: string; onToggleStatus: () => void; onReply: () => void; onEdit?: (id: string, content: string) => void; onDelete?: (id: string) => void; timeAgo: (d: string) => string; isReply?: boolean; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void; fileName?: string; onRecordCorrection?: (id: string, content: string) => Promise<void>; onReplicate?: () => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.content);
@@ -580,6 +602,15 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
         {!isReply && (
           <button onClick={onReply} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1">
             <Reply className="h-3 w-3" />返信
+          </button>
+        )}
+        {!isReply && onReplicate && (
+          <button
+            onClick={onReplicate}
+            className="text-[10px] text-muted-foreground hover:text-primary flex items-center gap-1"
+            title="このコメントを同じ工程の他のファイルにも反映"
+          >
+            📋 他のファイルにも反映
           </button>
         )}
         {isOwn && !isEditing && (

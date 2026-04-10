@@ -170,7 +170,7 @@ export default function ReviewRightPanel({
 
         <TabsContent value="comments" forceMount className={cn("absolute inset-0 top-10 overflow-hidden mt-0 ring-0 focus-visible:ring-0", effectiveTab !== "comments" && "hidden")}>
           {checkResultId ? (
-            <CommentsPanel checkResultId={checkResultId} filterItemId={commentFilter} onAnnotationClick={onAnnotationClick} onCheckItemClick={onCheckItemClick} mediaCurrentTime={mediaCurrentTime} onSeekMedia={onSeekMedia} productId={productId} projectId={projectId} processType={file?.process_type} patternId={patternId} fileId={fileId} onCommentDeleted={onCommentDeleted} onCommentCountChange={setTotalCommentCount} fileName={file?.file_name} refreshKey={commentRefreshKey} />
+            <CommentsPanel checkResultId={checkResultId} filterItemId={commentFilter} onAnnotationClick={onAnnotationClick} onCheckItemClick={onCheckItemClick} mediaCurrentTime={mediaCurrentTime} onSeekMedia={onSeekMedia} productId={productId} projectId={projectId} processType={file?.process_type} productCode={productCode} patternId={patternId} fileId={fileId} onCommentDeleted={onCommentDeleted} onCommentCountChange={setTotalCommentCount} fileName={file?.file_name} refreshKey={commentRefreshKey} />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
               <MessageCircle className="h-10 w-10 mb-3 opacity-30" />
