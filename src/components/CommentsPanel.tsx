@@ -187,7 +187,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   };
 
 
-  const saveCorrectionLog = async (commentId: string, commentText: string) => {
+  const saveCorrectionRecord = async (commentId: string, commentText: string) => {
     if (!productId || !processType) return;
     try {
       await supabase.from("correction_logs").insert({
@@ -239,7 +239,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
 
     // Save to correction_logs if checked
     if (isCorrectionChecked && savedComment?.id) {
-      await saveCorrectionLog(savedComment.id, newComment);
+      await saveCorrectionRecord(savedComment.id, newComment);
     }
 
     setNewComment("");
@@ -343,7 +343,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
               onSeekMedia={onSeekMedia}
               fileName={fileName}
               onRecordCorrection={productId ? async (id, content) => {
-                await saveCorrectionLog(id, content);
+                await saveCorrectionRecord(id, content);
               } : undefined}
             />
             {replies(c.id).map((r) => (
@@ -435,7 +435,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
               </Label>
             </div>
             <p className="text-[10px] text-muted-foreground ml-6">
-              チェックすると修正パターンとしてAIルール学習に使用されます
+              チェックすると修正指示として履歴に記録されます
             </p>
             {isCorrectionChecked && (
               <RadioGroup

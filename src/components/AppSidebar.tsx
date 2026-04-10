@@ -4,11 +4,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useProjectTree } from "@/hooks/useProjectTree";
 import {
-  Home, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search, PanelLeftClose, PanelLeftOpen, Sparkles, BarChart3, X, EyeOff, Eye,
+  Home, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search, PanelLeftClose, PanelLeftOpen, BarChart3, X, EyeOff, Eye,
   ExternalLink, CircleCheckBig, Brain,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import NotificationBell from "@/components/NotificationBell";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -65,7 +64,6 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
     catch { return new Set<string>(); }
   });
   const [projectsOpen, setProjectsOpen] = useState(true);
-  const [pendingRuleCount, setPendingRuleCount] = useState(0);
 
   // New: inline search & active filter
   const [sidebarSearch, setSidebarSearch] = useState("");
@@ -78,11 +76,6 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
   useEffect(() => {
     localStorage.setItem("sb_hide_completed", String(hideCompleted));
   }, [hideCompleted]);
-
-  useEffect(() => {
-    supabase.from("rule_candidates").select("*", { count: "exact", head: true }).eq("status", "pending")
-      .then(({ count }) => setPendingRuleCount(count || 0));
-  }, []);
 
   // Drag state for reordering
   const dragItem = useRef<{ id: string; productId: string } | null>(null);
@@ -524,25 +517,6 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
           )}
         </div>
         )}
-
-        <button onClick={() => navigate("/rule-candidates")}
-          title={collapsed ? "ルール学習" : undefined}
-          className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium press-feedback",
-            collapsed ? "justify-center px-0" : "px-5",
-            location.pathname === "/rule-candidates" ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-[3px] border-primary"
-              : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent nav-item-interactive")}>
-          <Sparkles className="h-4 w-4 shrink-0" />
-          {!collapsed && (
-            <span className="flex items-center gap-2">
-              ルール学習
-              {pendingRuleCount > 0 && (
-                <Badge variant="secondary" className="h-5 px-1.5 text-[10px] font-medium">
-                  {pendingRuleCount}
-                </Badge>
-              )}
-            </span>
-          )}
-        </button>
 
         <button onClick={() => navigate("/report")}
           title={collapsed ? "レポート" : undefined}

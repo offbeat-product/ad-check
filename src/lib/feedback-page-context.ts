@@ -16,7 +16,6 @@ export function getPageContext(pathname: string): { page_name: string; pathname:
   else if (pathname.startsWith("/settings")) page_name = "設定";
   else if (pathname.startsWith("/notifications")) page_name = "通知";
   else if (pathname.startsWith("/report")) page_name = "レポート";
-  else if (pathname.startsWith("/rule-candidates")) page_name = "ルール候補";
   else if (pathname.startsWith("/shared/")) page_name = "共有ビュー";
   else if (pathname.startsWith("/accept-invite")) page_name = "招待受諾";
   else if (pathname.startsWith("/login")) page_name = "ログイン";

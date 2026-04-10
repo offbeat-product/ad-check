@@ -23,7 +23,6 @@ const AppLayout = lazy(() => import("./components/AppLayout"));
 const SharedViewPage = lazy(() => import("./pages/SharedViewPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const AcceptInvitePage = lazy(() => import("./pages/AcceptInvitePage"));
-const RuleCandidatesPage = lazy(() => import("./pages/RuleCandidatesPage"));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 const ReportPage = lazy(() => import("./pages/ReportPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -88,7 +87,6 @@ const App = () => (
                   <Route path="/project/:id" element={<ProjectPage />} />
                   <Route path="/project/:projectId/file/:fileId" element={<FileReviewPage />} />
                   <Route path="/settings" element={<SettingsPage />} />
-                  <Route path="/rule-candidates" element={<RuleCandidatesPage />} />
                   <Route path="/notifications" element={<NotificationsPage />} />
                   <Route path="/report" element={<ReportPage />} />
                 </Route>
