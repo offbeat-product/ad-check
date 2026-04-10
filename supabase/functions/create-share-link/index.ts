@@ -48,16 +48,16 @@ serve(async (req) => {
       );
     }
 
-    const userClient = createClient(
+    const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // Use getUser(accessToken) for stable JWT validation in Edge Functions.
-    const { data: userData, error: userError } = await userClient.auth.getUser(accessToken);
+    // Validate caller identity from the incoming JWT.
+    const { data: userData, error: userError } = await supabaseAdmin.auth.getUser(accessToken);
     if (userError || !userData?.user) {
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ error: 'Unauthorized', detail: userError?.message ?? null }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -66,7 +66,7 @@ serve(async (req) => {
 
     const { password, check_result_id, expires_at, allow_download, allow_comment_read, allow_comment_write } = await req.json();
 
-    const { data: checkResult, error: checkError } = await userClient
+    const { data: checkResult, error: checkError } = await supabaseAdmin
       .from("check_results")
       .select("user_id")
       .eq("id", check_result_id)
@@ -78,11 +78,6 @@ serve(async (req) => {
         { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
-
-    const supabaseAdmin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
 
     let passwordHash: string | null = null;
     if (password) {
