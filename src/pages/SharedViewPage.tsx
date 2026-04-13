@@ -15,13 +15,17 @@ import AICheckPanel from "@/components/review/AICheckPanel";
 import SharedCommentsPanel from "@/components/SharedCommentsPanel";
 import { useReviewState } from "@/hooks/useReviewState";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
-import { Lock, AlertTriangle, MessageCircle, Bot } from "lucide-react";
+import { Lock, AlertTriangle, Bot, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AdCheckLogoMark } from "@/components/AdCheckLogoMark";
 import { formatTimestamp } from "@/components/comments/TimestampBadge";
+import { downloadProjectFile, getSharedCheckDownloadPayload } from "@/lib/download-project-file";
+import { useToast } from "@/hooks/use-toast";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 export default function SharedViewPage() {
   const { token } = useParams<{ token: string }>();
+  const { toast } = useToast();
   const [shareLink, setShareLink] = useState<ShareLinkRow | null>(null);
   const [record, setRecord] = useState<CheckResultRow | null>(null);
   const [loading, setLoading] = useState(true);
@@ -173,6 +177,29 @@ export default function SharedViewPage() {
     setTimeout(() => setHighlightAnnotation(null), 3000);
   }, []);
 
+  const [downloadBusy, setDownloadBusy] = useState(false);
+
+  const handleSharedDownload = async () => {
+    if (!record || downloadBusy) return;
+    const payload = getSharedCheckDownloadPayload(record);
+    if (!payload) {
+      toast({
+        title: "ダウンロードできません",
+        description: "このチェック結果に保存されたファイルデータがありません。",
+        variant: "destructive",
+      });
+      return;
+    }
+    setDownloadBusy(true);
+    try {
+      await downloadProjectFile(payload.source, payload.displayBaseName);
+    } catch {
+      toast({ title: "ダウンロードに失敗しました", variant: "destructive" });
+    } finally {
+      setDownloadBusy(false);
+    }
+  };
+
   // --- Render States ---
   if (loading) return <div className="flex items-center justify-center min-h-screen text-muted-foreground">読み込み中...</div>;
 
@@ -210,6 +237,8 @@ export default function SharedViewPage() {
   const inputData = record.input_data as Record<string, string> | null;
   const canReadComments = shareLink?.allow_comment_read ?? false;
   const canWriteComments = shareLink?.allow_comment_write ?? false;
+  const allowDownload = shareLink?.allow_download === true;
+  const canOfferDownload = getSharedCheckDownloadPayload(record) !== null;
 
   const imageSrc = inputData?.image_base64 || null;
   const videoSrc = inputData?.video_url || null;
@@ -277,6 +306,7 @@ export default function SharedViewPage() {
 
   // --- Main Layout ---
   return (
+    <TooltipProvider delayDuration={300}>
     <div className="flex h-screen overflow-hidden">
       {/* Left: Preview */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
@@ -296,6 +326,37 @@ export default function SharedViewPage() {
 
         <div className="flex-1 overflow-y-auto">
           <div className="p-4">
+            {allowDownload && (
+              <div className="flex justify-end mb-2">
+                {!canOfferDownload ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="inline-flex">
+                        <Button type="button" variant="outline" size="sm" className="gap-1.5" disabled>
+                          <Download className="h-3.5 w-3.5" />
+                          ダウンロード
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom" className="max-w-xs">
+                      ダウンロード対象のファイルデータがありません
+                    </TooltipContent>
+                  </Tooltip>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    disabled={downloadBusy}
+                    onClick={() => void handleSharedDownload()}
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    {downloadBusy ? "ダウンロード中…" : "ダウンロード"}
+                  </Button>
+                )}
+              </div>
+            )}
             {renderPreview()}
           </div>
         </div>
@@ -366,5 +427,6 @@ export default function SharedViewPage() {
         </Tabs>
       </div>
     </div>
+    </TooltipProvider>
   );
 }

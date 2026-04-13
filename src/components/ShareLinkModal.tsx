@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Link2, Copy, Check, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ShareLinkModalProps {
   open: boolean;
@@ -24,7 +25,7 @@ export default function ShareLinkModal({ open, onOpenChange, checkResultId }: Sh
   const [password, setPassword] = useState("");
   const [useExpiry, setUseExpiry] = useState(false);
   const [expiryDays, setExpiryDays] = useState(30);
-  const [allowDownload, setAllowDownload] = useState(true);
+  const [allowDownload, setAllowDownload] = useState(false);
   const [allowCommentRead, setAllowCommentRead] = useState(true);
   const [allowCommentWrite, setAllowCommentWrite] = useState(true);
   const [generatedUrl, setGeneratedUrl] = useState<string | null>(null);
@@ -95,6 +96,7 @@ export default function ShareLinkModal({ open, onOpenChange, checkResultId }: Sh
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
+        <TooltipProvider delayDuration={300}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Link2 className="h-5 w-5 text-primary" />共有リンク
@@ -128,8 +130,17 @@ export default function ShareLinkModal({ open, onOpenChange, checkResultId }: Sh
               </div>
             )}
 
-            <div className="flex items-center justify-between">
-              <span className="text-sm">ダウンロードを許可する</span>
+            <div className="flex items-center justify-between gap-2">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="text-sm cursor-help border-b border-dotted border-muted-foreground">
+                    ダウンロードを許可する
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="max-w-xs">
+                  ONにすると閲覧者がファイルをダウンロードできます
+                </TooltipContent>
+              </Tooltip>
               <Switch checked={allowDownload} onCheckedChange={setAllowDownload} />
             </div>
 
@@ -186,6 +197,7 @@ export default function ShareLinkModal({ open, onOpenChange, checkResultId }: Sh
             )}
           </TabsContent>
         </Tabs>
+        </TooltipProvider>
       </DialogContent>
     </Dialog>
   );
