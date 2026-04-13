@@ -91,7 +91,7 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
 
   const navItems = [
     { icon: Home, label: "ホーム", path: "/dashboard" },
-    { icon: ClipboardList, label: "全案件一覧", path: "/projects" },
+    { icon: ClipboardList, label: "案件一覧", path: "/projects" },
   ];
 
   const routeProductId = location.pathname.match(/\/product\/([^/]+)/)?.[1];

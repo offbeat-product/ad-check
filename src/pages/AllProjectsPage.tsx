@@ -260,7 +260,7 @@ export default function AllProjectsPage() {
       <header className="sticky top-0 z-30 border-b border-border px-4 md:px-6 py-3 flex items-center justify-between bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
         <div className="flex items-center gap-2 min-w-0">
           <ClipboardList className="h-4 w-4 text-primary shrink-0" aria-hidden />
-          <h1 className="text-sm font-semibold truncate">全案件一覧</h1>
+          <h1 className="text-sm font-semibold truncate">案件一覧</h1>
         </div>
         <NotificationBell />
       </header>
