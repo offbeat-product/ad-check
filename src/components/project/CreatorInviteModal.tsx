@@ -17,7 +17,7 @@ import { Copy, Plus, Search, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
 
-type CreatorRow = Pick<Tables<"creators">, "id" | "name" | "email" | "slack_user_id" | "last_active_at">;
+type CreatorRow = Pick<Tables<"creators">, "id" | "name" | "email" | "last_active_at">;
 
 type CollaboratorRow = Pick<
   Tables<"project_collaborators">,
@@ -56,7 +56,6 @@ export function CreatorInviteModal({ projectId, open, onOpenChange, onInvitesCha
   const [addOpen, setAddOpen] = useState(false);
   const [addName, setAddName] = useState("");
   const [addEmail, setAddEmail] = useState("");
-  const [addSlack, setAddSlack] = useState("");
   const [addNotes, setAddNotes] = useState("");
   const [addBusy, setAddBusy] = useState(false);
   const [addEmailError, setAddEmailError] = useState<string | null>(null);
@@ -74,7 +73,7 @@ export function CreatorInviteModal({ projectId, open, onOpenChange, onInvitesCha
           .eq("is_active", true),
         supabase
           .from("creators")
-          .select("id, name, email, slack_user_id, last_active_at")
+          .select("id, name, email, last_active_at")
           .eq("is_active", true)
           .order("name"),
       ]);
@@ -145,11 +144,10 @@ export function CreatorInviteModal({ projectId, open, onOpenChange, onInvitesCha
         .insert({
           name: addName.trim(),
           email: addEmail.trim(),
-          slack_user_id: addSlack.trim() || null,
           notes: addNotes.trim() || null,
           created_by: uid ?? null,
         })
-        .select("id, name, email, slack_user_id, last_active_at")
+        .select("id, name, email, last_active_at")
         .single();
       if (error) {
         if (error.code === "23505" || error.message.includes("unique") || error.message.includes("duplicate")) {
@@ -164,7 +162,6 @@ export function CreatorInviteModal({ projectId, open, onOpenChange, onInvitesCha
       setAddOpen(false);
       setAddName("");
       setAddEmail("");
-      setAddSlack("");
       setAddNotes("");
       if (inserted) {
         setCreators((prev) => [...prev, inserted as CreatorRow].sort((a, b) => a.name.localeCompare(b.name, "ja")));
@@ -450,10 +447,6 @@ export function CreatorInviteModal({ projectId, open, onOpenChange, onInvitesCha
                 }}
               />
               {addEmailError && <p className="text-xs text-destructive mt-1">{addEmailError}</p>}
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">Slack User ID</Label>
-              <Input className="h-9 text-sm mt-1" value={addSlack} onChange={(e) => setAddSlack(e.target.value)} />
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">メモ</Label>

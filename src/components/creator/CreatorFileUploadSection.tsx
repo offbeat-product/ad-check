@@ -7,7 +7,7 @@ import type { CreatorProcess } from "@/hooks/useCreatorProcesses";
 import type { CreatorPattern } from "@/hooks/useCreatorPatterns";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Upload, FileText, FileImage, FileAudio2, FileVideo, Layers3 } from "lucide-react";
+import { Upload, FileText, FileImage, FileAudio2, FileVideo, Layers3, MessageCircle } from "lucide-react";
 import { FileRowThumbnail } from "@/components/project/FileRowThumbnail";
 import { CreatorUploadModal, type CreatorUploadParentCandidate } from "@/components/creator/CreatorUploadModal";
 import { FILE_STATUS_CONFIG } from "@/lib/db-types";
@@ -18,6 +18,7 @@ interface CreatorFileUploadSectionProps {
   files: CreatorProjectFile[];
   processes: CreatorProcess[];
   patterns: CreatorPattern[];
+  commentCounts: Record<string, number>;
   onUploadComplete: () => void;
 }
 
@@ -70,6 +71,7 @@ export function CreatorFileUploadSection({
   files,
   processes,
   patterns,
+  commentCounts,
   onUploadComplete,
 }: CreatorFileUploadSectionProps) {
   const navigate = useNavigate();
@@ -157,6 +159,7 @@ export function CreatorFileUploadSection({
                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
                       {groups.map((group) => {
                         const latest = group.latest;
+                        const commentCount = commentCounts[latest.file_id] ?? 0;
                         const st = FILE_STATUS_CONFIG[latest.status ?? "uploaded"] ?? FILE_STATUS_CONFIG.uploaded;
                         const draftLabel = group.draftCount === 1 ? "初稿" : `第${group.draftCount}稿`;
                         const TypeIcon = fileTypeIcon(latest.file_type);
@@ -166,6 +169,12 @@ export function CreatorFileUploadSection({
                             className="glass-card p-2 text-left w-full relative overflow-hidden cursor-pointer hover:bg-accent/40 transition-colors"
                             onClick={() => navigate(`/creator/${shareToken}/file/${group.latest.file_id}`)}
                           >
+                            {commentCount > 0 && (
+                              <div className="absolute top-2 right-2 z-10 inline-flex items-center gap-1 rounded-full bg-blue-500 text-white text-xs px-2 py-0.5 shadow-sm">
+                                <MessageCircle className="h-3 w-3" />
+                                {commentCount}
+                              </div>
+                            )}
                             <div className="min-w-0">
                               <FileRowThumbnail
                                 fileType={latest.file_type}
@@ -206,6 +215,7 @@ export function CreatorFileUploadSection({
                     <div className="space-y-2">
                       {rootGroups.map((group) => {
                         const latest = group.latest;
+                        const commentCount = commentCounts[latest.file_id] ?? 0;
                         const st = FILE_STATUS_CONFIG[latest.status ?? "uploaded"] ?? FILE_STATUS_CONFIG.uploaded;
                         const draftLabel = group.draftCount === 1 ? "初稿" : `第${group.draftCount}稿`;
                         const TypeIcon = fileTypeIcon(latest.file_type);
@@ -215,6 +225,12 @@ export function CreatorFileUploadSection({
                             className="glass-card p-2 text-left w-full relative overflow-hidden cursor-pointer hover:bg-accent/40 transition-colors"
                             onClick={() => navigate(`/creator/${shareToken}/file/${group.latest.file_id}`)}
                           >
+                            {commentCount > 0 && (
+                              <div className="absolute top-2 right-2 z-10 inline-flex items-center gap-1 rounded-full bg-blue-500 text-white text-xs px-2 py-0.5 shadow-sm">
+                                <MessageCircle className="h-3 w-3" />
+                                {commentCount}
+                              </div>
+                            )}
                             <div className="min-w-0">
                               <FileRowThumbnail
                                 fileType={latest.file_type}

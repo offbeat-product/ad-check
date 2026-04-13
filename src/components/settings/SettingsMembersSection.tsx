@@ -85,7 +85,6 @@ export function SettingsMembersSection() {
   const [creatorEditingId, setCreatorEditingId] = useState<string | null>(null);
   const [creatorName, setCreatorName] = useState("");
   const [creatorEmail, setCreatorEmail] = useState("");
-  const [creatorSlack, setCreatorSlack] = useState("");
   const [creatorNotes, setCreatorNotes] = useState("");
   const [creatorSaving, setCreatorSaving] = useState(false);
   const [creatorEmailError, setCreatorEmailError] = useState<string | null>(null);
@@ -278,7 +277,6 @@ export function SettingsMembersSection() {
     setCreatorEditingId(null);
     setCreatorName("");
     setCreatorEmail("");
-    setCreatorSlack("");
     setCreatorNotes("");
     setCreatorEmailError(null);
     setCreatorDialogOpen(true);
@@ -289,7 +287,6 @@ export function SettingsMembersSection() {
     setCreatorEditingId(c.id);
     setCreatorName(c.name);
     setCreatorEmail(c.email);
-    setCreatorSlack(c.slack_user_id ?? "");
     setCreatorNotes(c.notes ?? "");
     setCreatorEmailError(null);
     setCreatorDialogOpen(true);
@@ -309,7 +306,6 @@ export function SettingsMembersSection() {
         const { error } = await supabase.from("creators").insert({
           name: creatorName.trim(),
           email: creatorEmail.trim(),
-          slack_user_id: creatorSlack.trim() || null,
           notes: creatorNotes.trim() || null,
           created_by: uid ?? null,
         });
@@ -329,7 +325,6 @@ export function SettingsMembersSection() {
           .update({
             name: creatorName.trim(),
             email: creatorEmail.trim(),
-            slack_user_id: creatorSlack.trim() || null,
             notes: creatorNotes.trim() || null,
             updated_at: new Date().toISOString(),
           })
@@ -527,9 +522,8 @@ export function SettingsMembersSection() {
                 <TableRow className="hover:bg-transparent border-b border-border">
                   <TableHead className="text-xs">名前</TableHead>
                   <TableHead className="text-xs">メール</TableHead>
-                  <TableHead className="text-xs">Slack ID</TableHead>
                   <TableHead className="text-xs whitespace-nowrap">最終活動日</TableHead>
-                  <TableHead className="text-xs text-right">招待中案件</TableHead>
+                  <TableHead className="text-xs text-right">招待中の案件数</TableHead>
                   {isStaff && <TableHead className="text-xs text-right w-24">操作</TableHead>}
                 </TableRow>
               </TableHeader>
@@ -538,7 +532,6 @@ export function SettingsMembersSection() {
                   <TableRow key={c.id} className="border-b border-border/60">
                     <TableCell className="text-xs font-medium">{c.name}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">{c.email}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{c.slack_user_id || "—"}</TableCell>
                     <TableCell className="text-xs tabular-nums">{formatDate(c.last_active_at)}</TableCell>
                     <TableCell className="text-xs text-right tabular-nums">{collabCountByCreator[c.id] ?? 0}</TableCell>
                     {isStaff && (
@@ -567,7 +560,7 @@ export function SettingsMembersSection() {
                 ))}
                 {activeCreators.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={isStaff ? 6 : 5} className="text-center text-xs text-muted-foreground py-8">
+                    <TableCell colSpan={isStaff ? 5 : 4} className="text-center text-xs text-muted-foreground py-8">
                       クリエイターが登録されていません
                     </TableCell>
                   </TableRow>
@@ -673,10 +666,6 @@ export function SettingsMembersSection() {
               <Label className="text-xs text-muted-foreground">メール *</Label>
               <Input className={cn("h-9 text-sm mt-1", creatorEmailError && "border-destructive")} value={creatorEmail} onChange={(e) => { setCreatorEmail(e.target.value); setCreatorEmailError(null); }} />
               {creatorEmailError && <p className="text-xs text-destructive mt-1">{creatorEmailError}</p>}
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">Slack User ID</Label>
-              <Input className="h-9 text-sm mt-1" value={creatorSlack} onChange={(e) => setCreatorSlack(e.target.value)} />
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">メモ</Label>

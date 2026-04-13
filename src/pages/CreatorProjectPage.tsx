@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useCreatorProject } from "@/hooks/useCreatorProject";
 import { useCreatorProcesses } from "@/hooks/useCreatorProcesses";
 import { useCreatorPatterns } from "@/hooks/useCreatorPatterns";
+import { useCreatorCommentCounts } from "@/hooks/useCreatorCommentCounts";
 import { CreatorFileUploadSection } from "@/components/creator/CreatorFileUploadSection";
 import { AlertCircle, Loader2, CircleCheckBig, ImageIcon, LayoutGrid, Video } from "lucide-react";
 import { format } from "date-fns";
@@ -52,6 +53,7 @@ export default function CreatorProjectPage() {
   const { project, files, loading, error, refetch } = useCreatorProject(shareToken);
   const { processes, loading: processesLoading } = useCreatorProcesses(shareToken);
   const { patterns, loading: patternsLoading } = useCreatorPatterns(shareToken);
+  const { counts: commentCounts, refetch: refetchCommentCounts } = useCreatorCommentCounts(shareToken);
 
   useEffect(() => {
     const token = shareToken?.trim();
@@ -204,16 +206,13 @@ export default function CreatorProjectPage() {
             files={files}
             processes={processes}
             patterns={patterns}
-            onUploadComplete={() => void refetch()}
+            commentCounts={commentCounts}
+            onUploadComplete={() => {
+              void refetch();
+              void refetchCommentCounts();
+            }}
           />
         )}
-
-        <section className="glass-card p-6">
-          <h2 className="text-lg font-semibold mb-4">担当者からのコメント</h2>
-          <div className="text-sm text-muted-foreground">
-            [Part 5 で実装] ここに PM コメント一覧が入る
-          </div>
-        </section>
       </main>
     </div>
   );

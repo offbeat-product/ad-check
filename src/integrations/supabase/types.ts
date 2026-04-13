@@ -1460,6 +1460,10 @@ export type Database = {
         Args: { p_share_token: string; p_file_id?: string | null }
         Returns: Json
       }
+      get_file_comment_counts_for_creator: {
+        Args: { p_share_token: string }
+        Returns: Json
+      }
       get_project_files_for_creator: {
         Args: { p_share_token: string }
         Returns: Json
