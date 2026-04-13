@@ -6,6 +6,7 @@ import type { Project } from "@/lib/db-types";
 import { PROJECT_STATUS_CONFIG } from "@/lib/process-config";
 import { effectiveProjectDeadline, isProjectActiveForCount } from "@/lib/project-display";
 import { PROJECT_TREE_QUERY_KEY } from "@/hooks/useProjectTree";
+import { PROJECT_AUDIT_LOG_QUERY_KEY } from "@/components/ProjectAuditLog";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -95,6 +96,7 @@ export function ProjectTable({
   const invalidateTrees = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
     void queryClient.invalidateQueries({ queryKey: ["upcoming-deadlines"] });
+    void queryClient.invalidateQueries({ queryKey: [PROJECT_AUDIT_LOG_QUERY_KEY] });
   }, [queryClient]);
 
   const handleStatusChange = useCallback(

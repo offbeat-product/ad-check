@@ -68,6 +68,7 @@ import { useBatchCheck } from "@/hooks/useBatchCheck";
 import { useAutoCheck } from "@/providers/AutoCheckProvider";
 import { ProcessAiAutoCheckBadge } from "@/components/project/ProcessAiAutoCheckBadge";
 import { getSubmitBadgeClass, getSubmitLabel } from "@/lib/check-display";
+import { ProjectAuditLog, PROJECT_AUDIT_LOG_QUERY_KEY } from "@/components/ProjectAuditLog";
 
 function hasFinalOverallStatus(status: string | null | undefined): boolean {
   const s = (status || "").toUpperCase();
@@ -395,6 +396,7 @@ export default function ProjectPage() {
       if (!handleSupabaseError(error, "rename project")) {
         setProject(prev => prev ? { ...prev, name: newName } : prev);
         queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
+        void queryClient.invalidateQueries({ queryKey: [PROJECT_AUDIT_LOG_QUERY_KEY] });
         toast({ title: "案件名を変更しました" });
       }
     } finally {
@@ -751,6 +753,7 @@ export default function ProjectPage() {
       setProject({ ...project, status: newStatus });
       toast({ title: "ステータスを更新しました" });
       queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
+      void queryClient.invalidateQueries({ queryKey: [PROJECT_AUDIT_LOG_QUERY_KEY] });
     }
   };
 
@@ -760,6 +763,7 @@ export default function ProjectPage() {
     if (!handleSupabaseError(error, "deadline update")) {
       setProject({ ...project, overall_deadline: deadline });
       toast({ title: "納期を更新しました" });
+      void queryClient.invalidateQueries({ queryKey: [PROJECT_AUDIT_LOG_QUERY_KEY] });
     }
   };
 
@@ -1236,7 +1240,8 @@ export default function ProjectPage() {
       <div className="p-4 md:p-6 max-w-6xl mx-auto">
         <Tabs defaultValue="files">
           <TabsList className="mb-6 flex-wrap">
-            <TabsTrigger value="files">ファイル</TabsTrigger>
+            <TabsTrigger value="files">ファイル一覧</TabsTrigger>
+            <TabsTrigger value="audit">変更履歴</TabsTrigger>
             <TabsTrigger value="history">チェック履歴</TabsTrigger>
             <TabsTrigger value="patterns">修正パターン</TabsTrigger>
             <TabsTrigger value="rules">チェックルール</TabsTrigger>
@@ -1974,6 +1979,10 @@ export default function ProjectPage() {
                 })}
               </>
             )}
+          </TabsContent>
+
+          <TabsContent value="audit">
+            {id ? <ProjectAuditLog projectId={id} /> : null}
           </TabsContent>
 
           <TabsContent value="history">
