@@ -15,7 +15,8 @@ import type { MentionMember } from "@/components/comments/MentionInput";
 import type { Json } from "@/integrations/supabase/types";
 import type { ProjectFile, Product, Project, Client, CheckResultRow } from "@/lib/db-types";
 // getWebhookPaths no longer needed — unified v2 webhook
-import { useReviewState, useDownload, useExportCsv } from "@/hooks/useReviewState";
+import { useReviewState, useExportCsv } from "@/hooks/useReviewState";
+import { downloadProjectFile } from "@/lib/download-project-file";
 import { compressImage } from "@/lib/image-compress";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Button } from "@/components/ui/button";
@@ -58,7 +59,6 @@ export default function FileReviewPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
-  const { downloadFile } = useDownload();
   const { exportCsv } = useExportCsv();
 
   const [file, setFile] = useState<ProjectFile | null>(null);
@@ -859,14 +859,17 @@ export default function FileReviewPage() {
     }
   };
 
-  const handleDownload = () => {
+  const handleDownload = async () => {
     if (!file) return;
     const dlFile = latestVersionFile && latestVersionFile.id !== file.id ? latestVersionFile : file;
-    const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    if (dlFile.file_type === "image" && dlFile.file_data) {
-      downloadFile(dlFile.file_data, `${file.file_name}_${date}.jpg`, true);
-    } else {
-      downloadFile(dlFile.file_data || "", `${file.file_name}_${date}.txt`, false);
+    try {
+      await downloadProjectFile(dlFile, file.file_name);
+    } catch (err) {
+      toast({
+        title: "ダウンロードに失敗しました",
+        description: err instanceof Error ? err.message : "ネットワークまたはストレージのCORS設定を確認してください。",
+        variant: "destructive",
+      });
     }
   };
 
