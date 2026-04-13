@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { AD_BRAIN_URL } from "@/lib/constants";
@@ -167,17 +168,45 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
           )}
         </h1>
         {!collapsed && (
-          <div className="flex items-center justify-between mt-0.5">
-            <p className="text-[10px] text-muted-foreground whitespace-nowrap">広告制作現場に最良・最速の「GO」を。</p>
-            <button type="button" onClick={onToggleCollapse} className="p-1 rounded hover:bg-muted/50 text-muted-foreground transition-colors" title="サイドバーを閉じる">
-              <PanelLeftClose className="h-3.5 w-3.5" />
-            </button>
-          </div>
+          <>
+            <div className="relative mt-3">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none z-10" aria-hidden />
+              <Input
+                readOnly
+                placeholder="検索..."
+                className="h-9 pl-8 pr-14 text-xs cursor-pointer border-border bg-muted/30 placeholder:text-muted-foreground"
+                onFocus={(e) => {
+                  e.target.blur();
+                  openGlobalSearch();
+                }}
+                onClick={() => openGlobalSearch()}
+              />
+              <kbd className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground font-sans">
+                ⌘K
+              </kbd>
+            </div>
+            <div className="flex items-center justify-between mt-2">
+              <p className="text-[10px] text-muted-foreground whitespace-nowrap">広告制作現場に最良・最速の「GO」を。</p>
+              <button type="button" onClick={onToggleCollapse} className="p-1 rounded hover:bg-muted/50 text-muted-foreground transition-colors" title="サイドバーを閉じる">
+                <PanelLeftClose className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </>
         )}
         {collapsed && onToggleCollapse && (
-          <button type="button" onClick={onToggleCollapse} className="mt-2 p-1 rounded hover:bg-muted/50 text-muted-foreground transition-colors" title="サイドバーを開く">
-            <PanelLeftOpen className="h-3.5 w-3.5" />
-          </button>
+          <>
+            <button type="button" onClick={onToggleCollapse} className="mt-2 p-1 rounded hover:bg-muted/50 text-muted-foreground transition-colors" title="サイドバーを開く">
+              <PanelLeftOpen className="h-3.5 w-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={() => openGlobalSearch()}
+              className="mt-2 h-9 w-9 shrink-0 rounded-md border border-border bg-muted/30 flex items-center justify-center text-muted-foreground hover:bg-muted/50 transition-colors"
+              title="検索... (⌘K)"
+            >
+              <Search className="h-4 w-4" aria-hidden />
+            </button>
+          </>
         )}
       </div>
 
@@ -195,27 +224,6 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
             </button>
           );
         })}
-
-        {!collapsed ? (
-          <button
-            type="button"
-            onClick={() => openGlobalSearch()}
-            className="mx-4 mt-2 mb-1 flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted/30 text-muted-foreground hover:bg-muted/50 transition-colors"
-          >
-            <Search className="h-3.5 w-3.5 shrink-0" />
-            <span className="text-xs flex-1 text-left">検索</span>
-            <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px]">⌘K</kbd>
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => openGlobalSearch()}
-            className="w-full flex items-center justify-center py-2.5 text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent"
-            title="検索 (⌘K)"
-          >
-            <Search className="h-4 w-4" />
-          </button>
-        )}
 
         {collapsed ? (
           <button type="button" onClick={() => navigate("/dashboard")} title="クライアント / 商材"
