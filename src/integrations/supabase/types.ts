@@ -743,6 +743,81 @@ export type Database = {
           },
         ]
       }
+      creators: {
+        Row: {
+          id: string
+          name: string
+          email: string
+          slack_user_id: string | null
+          notes: string | null
+          is_active: boolean
+          created_by: string | null
+          last_active_at: string | null
+          created_at: string
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          email: string
+          slack_user_id?: string | null
+          notes?: string | null
+          is_active?: boolean
+          created_by?: string | null
+          last_active_at?: string | null
+          created_at?: string
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          email?: string
+          slack_user_id?: string | null
+          notes?: string | null
+          is_active?: boolean
+          created_by?: string | null
+          last_active_at?: string | null
+          created_at?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      project_collaborators: {
+        Row: {
+          id: string
+          project_id: string
+          creator_id: string
+          share_token: string
+          invited_at: string | null
+          last_accessed_at: string | null
+          is_active: boolean
+          invited_by: string | null
+          notification_enabled?: boolean | null
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          creator_id: string
+          share_token?: string
+          invited_at?: string | null
+          last_accessed_at?: string | null
+          is_active?: boolean
+          invited_by?: string | null
+          notification_enabled?: boolean | null
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          creator_id?: string
+          share_token?: string
+          invited_at?: string | null
+          last_accessed_at?: string | null
+          is_active?: boolean
+          invited_by?: string | null
+          notification_enabled?: boolean | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -1380,6 +1455,27 @@ export type Database = {
           id: string
         }[]
       }
+      /** SECURITY DEFINER — 戻りは DB の json 構造に依存（フロントはパーサで正規化） */
+      get_project_comments_for_creator: {
+        Args: { p_share_token: string; p_file_id?: string | null }
+        Returns: Json
+      }
+      get_project_files_for_creator: {
+        Args: { p_share_token: string }
+        Returns: Json
+      }
+      get_project_patterns_for_creator: {
+        Args: { p_share_token: string }
+        Returns: Json
+      }
+      get_project_processes_for_creator: {
+        Args: { p_share_token: string }
+        Returns: Json
+      }
+      get_project_for_creator: {
+        Args: { p_share_token: string }
+        Returns: Json
+      }
       get_share_link_by_token: {
         Args: { token_param: string }
         Returns: {
@@ -1472,6 +1568,23 @@ export type Database = {
           display_name: string
           id: string
         }[]
+      }
+      track_creator_access: {
+        Args: { p_share_token: string }
+        Returns: undefined
+      }
+      upload_file_as_creator: {
+        Args: {
+          p_file_data: string
+          p_file_name: string
+          p_file_size_bytes?: number | null
+          p_file_type: string
+          p_parent_file_id?: string | null
+          p_pattern_id?: string | null
+          p_process_type: string
+          p_share_token: string
+        }
+        Returns: string
       }
     }
     Enums: {

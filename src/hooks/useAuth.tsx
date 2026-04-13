@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { User, Session } from "@supabase/supabase-js";
 import { useToast } from "@/hooks/use-toast";
 
-type UserRole = "admin" | "member" | "viewer";
+type UserRole = "admin" | "director" | "member" | "viewer";
 
 interface AuthContextType {
   user: User | null;
@@ -12,6 +12,9 @@ interface AuthContextType {
   role: UserRole;
   roleLoading: boolean;
   isAdmin: boolean;
+  /** admin または director（DB の member は従来ディレクター相当として扱う） */
+  isStaff: boolean;
+  isDirector: boolean;
   canEdit: boolean;
   canManageTeam: boolean;
   signIn: (email: string, password: string) => Promise<void>;
@@ -121,11 +124,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const isAdmin = role === "admin";
-  const canEdit = role === "admin" || role === "member";
-  const canManageTeam = role === "admin";
+  const isDirector = role === "director" || role === "member";
+  const isStaff = isAdmin || isDirector;
+  const canEdit = isStaff;
+  const canManageTeam = isAdmin;
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, role, roleLoading, isAdmin, canEdit, canManageTeam, signIn, signOut, resetPassword }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        session,
+        loading,
+        role,
+        roleLoading,
+        isAdmin,
+        isStaff,
+        isDirector,
+        canEdit,
+        canManageTeam,
+        signIn,
+        signOut,
+        resetPassword,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

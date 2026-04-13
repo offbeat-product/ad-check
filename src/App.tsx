@@ -23,6 +23,8 @@ const AppLayout = lazy(() => import("./components/AppLayout"));
 const SharedViewPage = lazy(() => import("./pages/SharedViewPage"));
 const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const AcceptInvitePage = lazy(() => import("./pages/AcceptInvitePage"));
+const CreatorProjectPage = lazy(() => import("./pages/CreatorProjectPage"));
+const CreatorFileReviewPage = lazy(() => import("./pages/CreatorFileReviewPage"));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 const ReportPage = lazy(() => import("./pages/ReportPage"));
 const AllProjectsPage = lazy(() => import("./pages/AllProjectsPage"));
@@ -81,6 +83,8 @@ const App = () => (
                 <Route path="/" element={<Navigate to="/dashboard" replace />} />
                 <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
                 <Route path="/accept-invite" element={<AcceptInvitePage />} />
+                <Route path="/creator/:shareToken" element={<CreatorProjectPage />} />
+                <Route path="/creator/:shareToken/file/:fileId" element={<CreatorFileReviewPage />} />
                 <Route element={<ProtectedRoute><AutoCheckProvider><AppLayout /></AutoCheckProvider></ProtectedRoute>}>
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/projects" element={<AllProjectsPage />} />

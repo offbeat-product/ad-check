@@ -1,8 +1,11 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { format } from "date-fns";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useCreatorFileComments } from "@/hooks/useCreatorFileDetail";
+import { parseCreatorProjectFilesPayload, parseCreatorProjectPayload } from "@/lib/creator-project-rpc";
+import { CreatorUploadModal, type CreatorUploadParentCandidate } from "@/components/creator/CreatorUploadModal";
 import { runScriptCheck, getWebhookUrl, webhookFetch, getRelatedProcessData, VIDEO_ASYNC_ACCEPTED } from "@/lib/webhook";
 import { resolveWebhookProductId } from "@/lib/resolve-product-id";
 import { useVideoCheckPolling } from "@/hooks/useVideoCheckPolling";
@@ -34,7 +37,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, ArrowDown, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight, Lock, Unlock, Trash2, Pencil, CalendarDays, User, MoreHorizontal } from "lucide-react";
+import { ArrowLeft, ArrowDown, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight, Lock, Unlock, Trash2, Pencil, CalendarDays, User, MoreHorizontal, CircleCheckBig } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
@@ -54,12 +57,35 @@ interface AnnotationData {
   imagePosition?: { x: number; y: number; width: number; height: number };
 }
 
-export default function FileReviewPage() {
-  const { projectId, fileId } = useParams<{ projectId: string; fileId: string }>();
+interface FileReviewPageProps {
+  isCreatorMode?: boolean;
+  shareToken?: string;
+  fileId?: string;
+  creatorBreadcrumb?: {
+    clientName: string | null;
+    productName: string | null;
+    projectName: string | null;
+  };
+}
+
+export default function FileReviewPage({
+  isCreatorMode = false,
+  shareToken,
+  fileId: propFileId,
+  creatorBreadcrumb,
+}: FileReviewPageProps = {}) {
+  const { projectId: routeProjectId, fileId: routeFileId, shareToken: routeShareToken } =
+    useParams<{ projectId?: string; fileId?: string; shareToken?: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
   const { exportCsv } = useExportCsv();
+  const creatorMode = isCreatorMode;
+  const activeFileId = propFileId ?? routeFileId ?? "";
+  const activeProjectId = routeProjectId ?? "";
+  const activeShareToken = shareToken ?? routeShareToken ?? "";
+  const fileId = activeFileId || undefined;
+  const projectId = activeProjectId || undefined;
 
   const [file, setFile] = useState<ProjectFile | null>(null);
   const [project, setProject] = useState<Project | null>(null);
@@ -88,11 +114,37 @@ export default function FileReviewPage() {
   const [comparisonMode, setComparisonMode] = useState(false);
   const [submitToClientOpen, setSubmitToClientOpen] = useState(false);
   const [internalRevisionOpen, setInternalRevisionOpen] = useState(false);
+  const [creatorRevisionOpen, setCreatorRevisionOpen] = useState(false);
   const [comparisonDrafts, setComparisonDrafts] = useState<DraftEntry[]>([]);
   const [comparisonActivePairIndex, setComparisonActivePairIndex] = useState(0);
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [mobilePanel, setMobilePanel] = useState<"preview" | "check">("preview");
   const [activeCheckItem, setActiveCheckItem] = useState<CheckItem | null>(null);
+  const [creatorAllFiles, setCreatorAllFiles] = useState<ProjectFile[]>([]);
+  const creatorParentCandidates = useMemo<CreatorUploadParentCandidate[]>(() => {
+    if (!creatorMode || !file) return [];
+    const inProcess = creatorAllFiles.filter((f) => f.process_type === file.process_type);
+    const byRoot = new Map<string, ProjectFile>();
+    for (const f of inProcess) {
+      const rootId = f.parent_file_id || f.id;
+      const prev = byRoot.get(rootId);
+      const ver = f.version_number ?? 1;
+      const prevVer = prev?.version_number ?? 1;
+      if (!prev || ver > prevVer) byRoot.set(rootId, f);
+    }
+    return [...byRoot.entries()].map(([rootId, latest]) => ({
+      rootId,
+      fileName: latest.file_name,
+      versionNumber: latest.version_number ?? 1,
+      fileType: latest.file_type,
+      patternId: latest.pattern_id ?? null,
+    }));
+  }, [creatorMode, file, creatorAllFiles]);
+  const {
+    comments: creatorComments,
+    loading: creatorCommentsLoading,
+    error: creatorCommentsError,
+  } = useCreatorFileComments(creatorMode ? activeShareToken : undefined, creatorMode ? fileId : undefined);
   const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
   // Comments should always be associated with the root (original) check result, not comparison results
   const rootCheckResultId = record?.parent_check_result_id || record?.id || null;
@@ -190,6 +242,19 @@ export default function FileReviewPage() {
 
   const fetchVersions = async () => {
     if (!fileId) return;
+    if (creatorMode) {
+      const current = creatorAllFiles.find((f) => f.id === fileId);
+      if (!current) {
+        setVersions([]);
+        return;
+      }
+      const rootId = current.parent_file_id || current.id;
+      const vers = creatorAllFiles
+        .filter((f) => f.id === rootId || f.parent_file_id === rootId)
+        .sort((a, b) => (a.version_number ?? 1) - (b.version_number ?? 1));
+      setVersions(vers);
+      return;
+    }
     const { data: vers, error } = await supabase.from("project_files").select("*")
       .or(`id.eq.${fileId},parent_file_id.eq.${fileId}`)
       .order("version_number");
@@ -198,9 +263,105 @@ export default function FileReviewPage() {
   };
 
   useEffect(() => {
-    if (!fileId || !projectId) return;
+    if (!fileId) return;
+    if (!creatorMode && !projectId) return;
     let cancelled = false;
     (async () => {
+      if (creatorMode) {
+        try {
+          if (!activeShareToken) {
+            setLoading(false);
+            return;
+          }
+          const [{ data: projectPayload, error: projectErr }, { data: filesPayload, error: filesErr }] = await Promise.all([
+            supabase.rpc("get_project_for_creator", { p_share_token: activeShareToken }),
+            supabase.rpc("get_project_files_for_creator", { p_share_token: activeShareToken }),
+          ]);
+          if (cancelled) return;
+          if (projectErr) throw projectErr;
+          if (filesErr) throw filesErr;
+
+          const creatorProject = parseCreatorProjectPayload(projectPayload);
+          const creatorFiles = parseCreatorProjectFilesPayload(filesPayload).map((f) => ({
+            id: f.file_id,
+            project_id: creatorProject?.project_id ?? "",
+            process_type: f.process_type,
+            file_name: f.file_name,
+            file_type: f.file_type,
+            file_data: f.file_data,
+            file_size_bytes: f.file_size_bytes,
+            version_number: f.version_number,
+            parent_file_id: f.parent_file_id,
+            submission_type: f.submission_type,
+            status: f.status,
+            check_result_id: null,
+            checking_by: null,
+            checking_started_at: null,
+            created_by: null,
+            pattern_id: f.pattern_id,
+            updated_at: f.created_at,
+            created_at: f.created_at,
+            fixed_at: null,
+            fixed_by: null,
+          })) as ProjectFile[];
+
+          setCreatorAllFiles(creatorFiles);
+          const target = creatorFiles.find((f) => f.id === fileId);
+          if (!target) {
+            setLoading(false);
+            return;
+          }
+          setFile(target);
+          setRecord(null);
+          setChecking(false);
+          setComparisonMode(false);
+          setComparisonDrafts([]);
+          setComparisonActivePairIndex(0);
+
+          const pseudoProject = {
+            id: creatorProject?.project_id ?? "",
+            name: creatorProject?.project_name ?? "",
+            status: creatorProject?.status ?? "in_progress",
+            creative_type: creatorProject?.creative_type ?? "video",
+            product_id: "",
+            created_at: "",
+            updated_at: "",
+          } as unknown as Project;
+          setProject(pseudoProject);
+
+          setProduct({
+            id: "",
+            code: "",
+            name: creatorProject?.product_name ?? creatorBreadcrumb?.productName ?? "",
+            client_id: "",
+          } as unknown as Product);
+          setClient({
+            id: "",
+            name: creatorProject?.client_name ?? creatorBreadcrumb?.clientName ?? "",
+            workspace_id: "",
+            created_at: "",
+          } as unknown as Client);
+
+          const rootId = target.parent_file_id || target.id;
+          setVersions(
+            creatorFiles
+              .filter((f) => f.id === rootId || f.parent_file_id === rootId)
+              .sort((a, b) => (a.version_number ?? 1) - (b.version_number ?? 1))
+          );
+          setLoading(false);
+          return;
+        } catch (e) {
+          if (!cancelled) {
+            toast({
+              title: "取得エラー",
+              description: e instanceof Error ? e.message : "ファイルの取得に失敗しました",
+              variant: "destructive",
+            });
+            setLoading(false);
+          }
+          return;
+        }
+      }
       const { data: f, error: fErr } = await supabase.from("project_files").select("*").eq("id", fileId).maybeSingle();
       if (cancelled) return;
       if (handleSupabaseError(fErr, "file") || !f) { setLoading(false); return; }
@@ -310,14 +471,22 @@ export default function FileReviewPage() {
       if (!cancelled) setLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [fileId, projectId]);
+  }, [fileId, projectId, creatorMode, activeShareToken, creatorBreadcrumb, toast]);
 
   // Fetch sibling files for navigation (all patterns in same process, ordered by pattern sort_order then file_name)
   useEffect(() => {
-    if (!file || !projectId) return;
+    if (!file) return;
+    if (!creatorMode && !projectId) return;
     let cancelled = false;
 
     const fetchSiblings = async () => {
+      if (creatorMode) {
+        const allFiles = creatorAllFiles
+          .filter((f) => f.process_type === file.process_type && !f.parent_file_id)
+          .sort((a, b) => (a.file_name || "").localeCompare(b.file_name || "", "ja"));
+        setSiblingFiles(allFiles);
+        return;
+      }
       // Fetch patterns for this project to get sort_order
       const { data: projectPatterns } = await supabase
         .from("patterns")
@@ -356,15 +525,19 @@ export default function FileReviewPage() {
 
     fetchSiblings();
     return () => { cancelled = true; };
-  }, [file?.process_type, projectId, file?.id]);
+  }, [file?.process_type, projectId, file?.id, creatorMode, creatorAllFiles]);
 
   const currentIndex = siblingFiles.findIndex(f => f.id === fileId);
   const prevFile = currentIndex > 0 ? siblingFiles[currentIndex - 1] : null;
   const nextFile = currentIndex < siblingFiles.length - 1 ? siblingFiles[currentIndex + 1] : null;
 
   const navigateToFile = useCallback((targetFileId: string) => {
+    if (creatorMode && activeShareToken) {
+      navigate(`/creator/${activeShareToken}/file/${targetFileId}`, { replace: true });
+      return;
+    }
     navigate(`/project/${projectId}/file/${targetFileId}`, { replace: true });
-  }, [navigate, projectId]);
+  }, [navigate, projectId, creatorMode, activeShareToken]);
 
   // Keyboard shortcuts for prev/next
   useEffect(() => {
@@ -880,6 +1053,19 @@ export default function FileReviewPage() {
 
   // Fetch saved annotations from comments
   const fetchSavedAnnotations = useCallback(async () => {
+    if (creatorMode) {
+      const anns: AnnotationData[] = [];
+      creatorComments.forEach((c) => {
+        const ad = c.annotation_data as Record<string, unknown> | null;
+        if (ad && Array.isArray(ad.annotations)) {
+          ad.annotations.forEach((a: unknown) => anns.push(a as AnnotationData));
+        } else if (ad && ad.type) {
+          anns.push(ad as unknown as AnnotationData);
+        }
+      });
+      setSavedAnnotations(anns);
+      return;
+    }
     if (!record?.id) return;
     const { data, error } = await supabase
       .from("comments")
@@ -897,12 +1083,16 @@ export default function FileReviewPage() {
       }
     });
     setSavedAnnotations(anns);
-  }, [record?.id]);
+  }, [record?.id, creatorMode, creatorComments]);
 
   useEffect(() => { fetchSavedAnnotations(); }, [fetchSavedAnnotations]);
 
   // Fetch workspace members for mention in paint mode
   useEffect(() => {
+    if (creatorMode) {
+      setMentionMembers([]);
+      return;
+    }
     supabase.from("workspace_members").select("id, user_id, email, role, status").eq("status", "accepted").not("user_id", "is", null).then(({ data }) => {
       if (!data) return;
       const memberList: MentionMember[] = data.map((m) => ({
@@ -918,9 +1108,13 @@ export default function FileReviewPage() {
         });
       }
     });
-  }, []);
+  }, [creatorMode]);
 
   const handleAnnotationSave = async (annotations: unknown[], comment: string, mentionedUserIds?: string[], isCorrection?: boolean) => {
+    if (creatorMode) {
+      toast({ title: "閲覧専用です", description: "クリエイターモードでは注釈の追加はできません" });
+      return;
+    }
     if (!record?.id || !user) return;
     // Auto-capture media timestamp for video/audio annotations
     const currentMediaTime = mediaPreviewRef.current?.getCurrentTime() ?? null;
@@ -1057,8 +1251,8 @@ export default function FileReviewPage() {
   const hasCheckResult = !!record;
   const hasVersions = versions.length > 1;
   const aiCfg = AI_CHECK_CONFIG[file.process_type];
-  const canCheck = product && aiCfg?.enabled;
-  const checkDisabled = product && aiCfg && !aiCfg.enabled;
+  const canCheck = !creatorMode && product && aiCfg?.enabled;
+  const checkDisabled = !creatorMode && product && aiCfg && !aiCfg.enabled;
 
 
   return (
@@ -1079,7 +1273,7 @@ export default function FileReviewPage() {
             mobilePanel === "check" ? "text-primary border-t-2 border-primary bg-primary/5" : "text-muted-foreground"
           )}
         >
-          AIチェック・コメント
+          {creatorMode ? "コメント" : "AIチェック・コメント"}
         </button>
       </div>
 
@@ -1088,9 +1282,26 @@ export default function FileReviewPage() {
         <header className="border-b border-border bg-card shrink-0">
           <div className="flex items-center gap-1.5 px-3 h-11">
             {/* Back */}
-            <button onClick={() => navigate(`/project/${projectId}`)} className="text-muted-foreground hover:text-foreground transition-colors shrink-0 p-1">
+            <button
+              onClick={() => {
+                if (creatorMode && activeShareToken) {
+                  navigate(`/creator/${activeShareToken}`);
+                  return;
+                }
+                navigate(`/project/${projectId}`);
+              }}
+              className="text-muted-foreground hover:text-foreground transition-colors shrink-0 p-1"
+            >
               <ArrowLeft className="h-4 w-4" />
             </button>
+            {creatorMode && (
+              <div className="hidden md:flex items-center gap-1.5 shrink-0 select-none">
+                <CircleCheckBig size={18} className="text-primary" strokeWidth={2.25} aria-hidden />
+                <span className="bg-gradient-to-r from-sky-500 to-violet-600 bg-clip-text text-transparent tracking-tight text-sm font-semibold">
+                  Ad Check
+                </span>
+              </div>
+            )}
 
             {/* Prev */}
             <button
@@ -1101,8 +1312,14 @@ export default function FileReviewPage() {
               <ChevronLeft className="h-3.5 w-3.5" />
             </button>
 
+            {creatorMode && (
+              <span className="text-[10px] text-muted-foreground truncate max-w-[220px] hidden sm:inline">
+                {(creatorBreadcrumb?.clientName || "クライアント")} &gt; {(creatorBreadcrumb?.productName || "商材")} &gt; {(creatorBreadcrumb?.projectName || "案件")} &gt; {(file?.file_name || "ファイル")}
+              </span>
+            )}
+
             {/* File name */}
-            {editingName ? (
+            {!creatorMode && editingName ? (
               <form
                 className="flex items-center gap-1 min-w-0 flex-1"
                 onSubmit={async (e) => {
@@ -1125,6 +1342,10 @@ export default function FileReviewPage() {
                   onKeyDown={(e) => { if (e.key === "Escape") setEditingName(false); }}
                 />
               </form>
+            ) : creatorMode ? (
+              <span className="text-xs font-medium truncate min-w-0">
+                {file?.file_name}
+              </span>
             ) : (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -1183,7 +1404,7 @@ export default function FileReviewPage() {
             <div className="flex-1" />
 
             {/* Primary: AI Check button */}
-            {canCheck && !comparisonMode && (
+            {!creatorMode && canCheck && !comparisonMode && (
               <>
                 <Button size="sm" className="text-xs h-7 px-2.5" onClick={handleRunCheck} disabled={checking || videoPolling.pollingState.isPolling || !!lockedByUser}>
                   {checking ? <Loader2 className="h-3 w-3 animate-spin" /> : <Bot className="h-3 w-3" />}
@@ -1203,14 +1424,14 @@ export default function FileReviewPage() {
                 )}
               </>
             )}
-            {checkDisabled && !comparisonMode && (
+            {!creatorMode && checkDisabled && !comparisonMode && (
               <Button size="sm" variant="outline" className="text-[10px] h-7 opacity-50" disabled>
                 <Bot className="h-3 w-3" />準備中
               </Button>
             )}
 
             {/* Comparison check button */}
-            {hasCheckResult && !comparisonMode && (
+            {!creatorMode && hasCheckResult && !comparisonMode && (
               <Button size="sm" variant="outline" className="text-xs h-7 px-2 border-primary/50 text-primary hover:bg-primary/10" onClick={() => {
                 if (comparisonDrafts.length === 0) {
                   const inputMode = AI_CHECK_CONFIG[file.process_type]?.inputMode || "text";
@@ -1230,7 +1451,7 @@ export default function FileReviewPage() {
             )}
 
             {/* Status badge */}
-            <Popover>
+            {!creatorMode && <Popover>
               <PopoverTrigger asChild>
                 <button className={cn("px-2 py-0.5 rounded-full text-[10px] font-medium border whitespace-nowrap", sc.class)}>{sc.label}</button>
               </PopoverTrigger>
@@ -1242,10 +1463,10 @@ export default function FileReviewPage() {
                   </button>
                 ))}
               </PopoverContent>
-            </Popover>
+            </Popover>}
 
             {/* Share button - always visible */}
-            {record && (
+            {!creatorMode && record && (
               <Button size="sm" variant="outline" className="text-xs h-7 px-2" onClick={() => setShareOpen(true)}>
                 <Link2 className="h-3 w-3" />
                 <span className="hidden sm:inline ml-1">共有</span>
@@ -1253,7 +1474,7 @@ export default function FileReviewPage() {
             )}
 
             {/* More menu */}
-            <DropdownMenu>
+            {!creatorMode && <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="ghost" className="h-7 w-7 p-0">
                   <MoreHorizontal className="h-4 w-4" />
@@ -1330,7 +1551,7 @@ export default function FileReviewPage() {
                   <Trash2 className="h-3 w-3" />削除
                 </DropdownMenuItem>
               </DropdownMenuContent>
-            </DropdownMenu>
+            </DropdownMenu>}
           </div>
         </header>
         </TooltipProvider>
@@ -1396,7 +1617,13 @@ export default function FileReviewPage() {
                 return isMediaBlob ? actualFileData : undefined;
               }}
               paintMode={paintMode}
-              onPaintModeToggle={() => setPaintMode(!paintMode)}
+              onPaintModeToggle={() => {
+                if (creatorMode) {
+                  toast({ title: "閲覧専用です" });
+                  return;
+                }
+                setPaintMode(!paintMode);
+              }}
               onAnnotationSave={handleAnnotationSave}
               savedAnnotations={savedAnnotations}
               highlightAnnotation={highlightAnnotation}
@@ -1412,7 +1639,13 @@ export default function FileReviewPage() {
                 imageSrc={displayFile.file_data}
                 markers={hasCheckResult ? markers : []}
                 paintMode={paintMode}
-                onPaintModeToggle={() => setPaintMode(!paintMode)}
+                onPaintModeToggle={() => {
+                  if (creatorMode) {
+                    toast({ title: "閲覧専用です" });
+                    return;
+                  }
+                  setPaintMode(!paintMode);
+                }}
                 onMarkerClick={scrollToCard}
                 onAnnotationSave={handleAnnotationSave}
                 label={`${client?.name} / ${product?.name} / スタイルフレーム`}
@@ -1435,7 +1668,13 @@ export default function FileReviewPage() {
                   label={`${client?.name} / ${product?.name} / ${aiCfg.inputMode === "audio" ? "音声" : "動画"}`}
                   noDataMessage="メディアファイルなし"
                   paintMode={paintMode}
-                  onPaintModeToggle={() => setPaintMode(!paintMode)}
+                  onPaintModeToggle={() => {
+                    if (creatorMode) {
+                      toast({ title: "閲覧専用です" });
+                      return;
+                    }
+                    setPaintMode(!paintMode);
+                  }}
                   onAnnotationSave={handleAnnotationSave}
                   savedAnnotations={savedAnnotations}
                   highlightAnnotation={highlightAnnotation}
@@ -1479,8 +1718,22 @@ export default function FileReviewPage() {
               </div>
             )}
 
+            {creatorMode && (
+              <div className="mt-3">
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="w-full gap-2 text-sm h-12 border-primary/30 text-primary hover:bg-primary/5"
+                  onClick={() => setCreatorRevisionOpen(true)}
+                >
+                  <Upload className="h-5 w-5" />
+                  修正版をアップロード
+                </Button>
+              </div>
+            )}
+
             {/* Submit to client button */}
-            {file.submission_type !== "client" && (
+            {!creatorMode && file.submission_type !== "client" && (
               <div className="space-y-2 mt-4">
                 <Button
                   size="lg"
@@ -1501,7 +1754,7 @@ export default function FileReviewPage() {
                 </Button>
               </div>
             )}
-            {file.submission_type === "client" && (
+            {!creatorMode && file.submission_type === "client" && (
               <div className="space-y-2 mt-4">
                 <div className="flex items-center justify-center gap-2 py-3 rounded-lg border border-primary/30 bg-primary/5 text-primary text-sm font-medium">
                   <CheckCircle2 className="h-4 w-4" />
@@ -1525,7 +1778,7 @@ export default function FileReviewPage() {
 
 
       <div className={cn("pb-11 md:pb-0", mobilePanel === "preview" && "hidden md:block")}>
-      <ReviewRightPanel
+      {!creatorMode ? <ReviewRightPanel
         rightTab={rightTab}
         onTabChange={setRightTab}
         items={items}
@@ -1616,10 +1869,18 @@ export default function FileReviewPage() {
             )}
           </div>
         }
-      />
+      /> : (
+        <CreatorReadonlyCommentsPanel
+          comments={creatorComments}
+          loading={creatorCommentsLoading}
+          error={creatorCommentsError}
+          onAnnotationClick={handleAnnotationClick}
+          onSeekMedia={handleSeekMedia}
+        />
+      )}
       </div>
 
-      <UploadRevisionModal open={uploadRevisionOpen} onOpenChange={setUploadRevisionOpen} file={file} projectId={projectId!}
+      {!creatorMode && <UploadRevisionModal open={uploadRevisionOpen} onOpenChange={setUploadRevisionOpen} file={file} projectId={projectId!}
         onUploaded={(fileData, fileType, versionNumber) => {
           try {
             setUploadRevisionOpen(false);
@@ -1642,12 +1903,30 @@ export default function FileReviewPage() {
             console.error("[onUploaded] Error switching to comparison mode:", err);
             toast({ title: "比較モード切替エラー", description: err instanceof Error ? err.message : "不明なエラー", variant: "destructive" });
           }
-        }} />
+        }} />}
 
-      {record && <ShareLinkModal checkResultId={record.id} open={shareOpen} onOpenChange={setShareOpen} />}
+      {!creatorMode && record && <ShareLinkModal checkResultId={record.id} open={shareOpen} onOpenChange={setShareOpen} />}
+      {creatorMode && file && activeShareToken && (
+        <CreatorUploadModal
+          open={creatorRevisionOpen}
+          onOpenChange={setCreatorRevisionOpen}
+          shareToken={activeShareToken}
+          projectId={file.project_id || projectId || "creator"}
+          processType={file.process_type}
+          processLabel={file.process_type}
+          parentCandidates={creatorParentCandidates}
+          defaultUploadType="revision"
+          defaultParentFileId={file.parent_file_id ?? file.id}
+          skipTypeSelection
+          skipParentSelection
+          onUploaded={(newFileId) => {
+            navigate(`/creator/${activeShareToken}/file/${newFileId}`);
+          }}
+        />
+      )}
 
       {/* Submit to client confirmation dialog */}
-      <AlertDialog open={submitToClientOpen} onOpenChange={setSubmitToClientOpen}>
+      {!creatorMode && <AlertDialog open={submitToClientOpen} onOpenChange={setSubmitToClientOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>クライアントに提出</AlertDialogTitle>
@@ -1703,10 +1982,10 @@ export default function FileReviewPage() {
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
+      </AlertDialog>}
 
       {/* Internal revision confirmation dialog */}
-      <AlertDialog open={internalRevisionOpen} onOpenChange={setInternalRevisionOpen}>
+      {!creatorMode && <AlertDialog open={internalRevisionOpen} onOpenChange={setInternalRevisionOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>社内修正 → 比較チェック</AlertDialogTitle>
@@ -1747,7 +2026,132 @@ export default function FileReviewPage() {
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
+      </AlertDialog>}
+    </div>
+  );
+}
+
+function CreatorReadonlyCommentsPanel({
+  comments,
+  loading,
+  error,
+  onAnnotationClick,
+  onSeekMedia,
+}: {
+  comments: Array<{
+    id: string;
+    content: string;
+    author_name: string;
+    status: string;
+    created_at: string;
+    media_timestamp: number | null;
+    annotation_data: unknown | null;
+    parent_id: string | null;
+  }>;
+  loading: boolean;
+  error: string | null;
+  onAnnotationClick: (annotationData: unknown) => void;
+  onSeekMedia: (seconds: number) => void;
+}) {
+  const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
+
+  const filtered = comments.filter((c) => {
+    if (tab === "open") return c.status === "open";
+    if (tab === "resolved") return c.status === "resolved";
+    return true;
+  });
+  const topLevel = filtered.filter((c) => !c.parent_id);
+  const replies = (parentId: string) => filtered.filter((c) => c.parent_id === parentId);
+
+  const countByTab = (t: "all" | "open" | "resolved") => {
+    if (t === "open") return comments.filter((c) => c.status === "open").length;
+    if (t === "resolved") return comments.filter((c) => c.status === "resolved").length;
+    return comments.length;
+  };
+
+  const timeAgo = (dateStr: string) => {
+    const diff = Date.now() - new Date(dateStr).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return "たった今";
+    if (mins < 60) return `${mins}分前`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}時間前`;
+    return `${Math.floor(hrs / 24)}日前`;
+  };
+
+  const tabs = [
+    { key: "all" as const, label: "全て" },
+    { key: "open" as const, label: "未対応" },
+    { key: "resolved" as const, label: "対応済" },
+  ];
+
+  return (
+    <div className="w-full md:w-[380px] shrink-0 h-[calc(100vh-44px)] md:h-screen border-l-0 md:border-l border-border flex flex-col bg-card overflow-hidden">
+      <div className="px-3 py-2 border-b border-border shrink-0">
+        <div className="flex gap-1">
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={cn(
+                "px-2.5 py-1 rounded-md text-xs font-medium transition-colors",
+                tab === t.key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted"
+              )}
+            >
+              {t.label}
+              <span className="ml-1 opacity-70">({countByTab(t.key)})</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        {loading && <p className="text-xs text-muted-foreground text-center py-8">読み込み中...</p>}
+        {error && <p className="text-xs text-destructive text-center py-3">{error}</p>}
+        {!loading && topLevel.length === 0 && (
+          <p className="text-xs text-muted-foreground text-center py-8">コメントはまだありません</p>
+        )}
+        {topLevel.map((c) => (
+          <div key={c.id} className="rounded-lg border border-border p-3 space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs font-medium">{c.author_name}</p>
+              <span className="text-[10px] text-muted-foreground">{timeAgo(c.created_at)}</span>
+            </div>
+            <p className="text-sm whitespace-pre-wrap">{c.content}</p>
+            <div className="flex items-center gap-2">
+              <span className={cn("text-[10px] px-1.5 py-0.5 rounded", c.status === "resolved" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>
+                {c.status === "resolved" ? "対応済" : "未対応"}
+              </span>
+              {c.media_timestamp != null && c.media_timestamp > 0 && (
+                <button
+                  type="button"
+                  className="text-[10px] text-primary hover:underline"
+                  onClick={() => onSeekMedia(c.media_timestamp || 0)}
+                >
+                  {Math.floor((c.media_timestamp || 0) / 60)}:{String(Math.floor((c.media_timestamp || 0) % 60)).padStart(2, "0")}
+                </button>
+              )}
+              {c.annotation_data && (
+                <button
+                  type="button"
+                  className="text-[10px] text-primary hover:underline"
+                  onClick={() => onAnnotationClick(c.annotation_data)}
+                >
+                  注釈を表示
+                </button>
+              )}
+            </div>
+            {replies(c.id).map((r) => (
+              <div key={r.id} className="ml-3 pl-3 border-l border-border/70">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-medium">{r.author_name}</p>
+                  <span className="text-[10px] text-muted-foreground">{timeAgo(r.created_at)}</span>
+                </div>
+                <p className="text-sm whitespace-pre-wrap">{r.content}</p>
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

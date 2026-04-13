@@ -7,6 +7,9 @@ export interface Profile {
   email: string;
   display_name: string | null;
   avatar_url: string | null;
+  role: string;
+  is_active: boolean;
+  last_login_at: string | null;
   notify_check_complete: boolean;
   notify_comment: boolean;
   notify_invitation: boolean;

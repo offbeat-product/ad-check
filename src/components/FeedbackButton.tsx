@@ -169,6 +169,10 @@ export function FeedbackButton({ product, className }: FeedbackButtonProps) {
     setStep("details");
   };
 
+  if (location.pathname.startsWith("/creator/")) {
+    return null;
+  }
+
   return (
     <>
       <button

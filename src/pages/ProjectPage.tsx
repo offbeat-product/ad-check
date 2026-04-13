@@ -44,11 +44,12 @@ import { Label } from "@/components/ui/label";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import CheckRulesTab from "@/components/product/CheckRulesTab";
 import {
-  Upload, FileText, Image, ImageIcon, Film, MessageCircle, Plus, Settings, GripVertical,
+  Upload, ImageIcon, MessageCircle, Plus, Settings, GripVertical,
   ChevronDown, ChevronRight, CalendarIcon, AlertTriangle, Trash2, Grid3X3, List, Bot, Loader2, Pencil, Lock, CheckSquare, Send, MoreHorizontal, Layers, ArrowRightLeft,
   ExternalLink,
   Video,
   LayoutGrid,
+  UserPlus,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -66,6 +67,9 @@ import { useAutoCheck } from "@/providers/AutoCheckProvider";
 import { ProcessAiAutoCheckBadge } from "@/components/project/ProcessAiAutoCheckBadge";
 import { getSubmitBadgeClass, getSubmitLabel } from "@/lib/check-display";
 import { ProjectAuditLog, PROJECT_AUDIT_LOG_QUERY_KEY } from "@/components/ProjectAuditLog";
+import { CreatorInviteModal } from "@/components/project/CreatorInviteModal";
+import { ProjectCreatorCollaboratorsSection } from "@/components/project/ProjectCreatorCollaboratorsSection";
+import { FileRowThumbnail } from "@/components/project/FileRowThumbnail";
 
 function hasFinalOverallStatus(status: string | null | undefined): boolean {
   const s = (status || "").toUpperCase();
@@ -132,7 +136,7 @@ function DeadlinePicker({ deadline, onChange, isCompleted, label }: { deadline: 
 export default function ProjectPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isStaff } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -170,6 +174,8 @@ export default function ProjectPage() {
     fileType: string;
     fileSizeBytes: number;
   } | null>(null);
+  const [creatorInviteOpen, setCreatorInviteOpen] = useState(false);
+  const [creatorCollabRefreshKey, setCreatorCollabRefreshKey] = useState(0);
 
   const { patterns, addPattern, addPatternsBulk, deletePattern, updatePattern, refetch: refetchPatterns } = usePatterns(id);
 
@@ -1167,6 +1173,18 @@ export default function ProjectPage() {
               deadline={(project as any).overall_deadline ?? null}
               onChange={handleDeadlineChange}
             />
+            {isStaff && id && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs"
+                onClick={() => setCreatorInviteOpen(true)}
+              >
+                <UserPlus className="h-3.5 w-3.5 mr-1" />
+                クリエイター招待
+              </Button>
+            )}
             <NotificationBell />
             <Popover>
               <PopoverTrigger asChild>
@@ -1273,6 +1291,10 @@ export default function ProjectPage() {
                   </TabsTrigger>
                 </TabsList>
               </Tabs>
+            )}
+
+            {isStaff && id && (
+              <ProjectCreatorCollaboratorsSection projectId={id} refreshKey={creatorCollabRefreshKey} />
             )}
 
             {/* Pattern management header – compact */}
@@ -1683,7 +1705,6 @@ export default function ProjectPage() {
                                       const cr = file.check_result_id ? checkResults[file.check_result_id] : null;
                                       const st = FILE_STATUS_CONFIG[file.status ?? "uploaded"] ?? FILE_STATUS_CONFIG.uploaded;
                                       const cc = file.check_result_id ? (commentCounts[file.check_result_id] || 0) : 0;
-                                      const isImageFile = file.file_type === "image";
                                       const childVersions = files.filter(f => f.parent_file_id === file.id);
                                       const thumbnailData = (childVersions.length > 0
                                         ? childVersions.sort((a, b) => (b.version_number ?? 0) - (a.version_number ?? 0))[0]?.file_data
@@ -1731,23 +1752,12 @@ export default function ProjectPage() {
                                                 </div>
                                               </>
                                             )}
-                                            <div className="h-16 rounded-md bg-muted/50 flex items-center justify-center mb-1.5 overflow-hidden">
-                                              {isImageFile && thumbnailData ? (
-                                                <img src={thumbnailData} alt="" className="w-full h-full object-cover" />
-                                              ) : (file.file_type === "video" || proc.process_key.includes("video") || proc.process_key === "vcon") && thumbnailData ? (
-                                                <video src={thumbnailData} className="w-full h-full object-cover" muted preload="metadata" />
-                                              ) : file.file_type === "video" || proc.process_key.includes("video") || proc.process_key === "vcon" ? (
-                                                <Film className="h-8 w-8 text-muted-foreground/30" />
-                                              ) : file.file_type === "audio" || proc.process_key === "na_narration" || proc.process_key === "bgm" ? (
-                                                <FileText className="h-8 w-8 text-muted-foreground/30" />
-                                              ) : proc.process_key.includes("script") || proc.process_key === "na_script" ? (
-                                                <FileText className="h-8 w-8 text-muted-foreground/30" />
-                                              ) : thumbnailData && (thumbnailData.startsWith("data:image") || thumbnailData.match(/\.(jpg|jpeg|png|gif|webp)(\?|$)/i)) ? (
-                                                <img src={thumbnailData} alt="" className="w-full h-full object-cover" />
-                                              ) : (
-                                                <Image className="h-8 w-8 text-muted-foreground/30" />
-                                              )}
-                                            </div>
+                                            <FileRowThumbnail
+                                              fileType={file.file_type}
+                                              processKey={proc.process_key}
+                                              thumbnailData={thumbnailData}
+                                              className="mb-1.5"
+                                            />
                                             {editingFileId === file.id ? (
                                               <form onSubmit={(e) => { e.preventDefault(); handleRenameFile(file.id, editFileName); }}
                                                 onClick={(e) => e.stopPropagation()}>
@@ -1817,7 +1827,6 @@ export default function ProjectPage() {
                                     const cr = file.check_result_id ? checkResults[file.check_result_id] : null;
                                     const st = FILE_STATUS_CONFIG[file.status ?? "uploaded"] ?? FILE_STATUS_CONFIG.uploaded;
                                     const cc = file.check_result_id ? (commentCounts[file.check_result_id] || 0) : 0;
-                                    const isImageFile = file.file_type === "image";
                                     const childVersions = files.filter(f => f.parent_file_id === file.id);
                                     const thumbnailData = (childVersions.length > 0
                                       ? childVersions.sort((a, b) => (b.version_number ?? 0) - (a.version_number ?? 0))[0]?.file_data
@@ -1865,23 +1874,12 @@ export default function ProjectPage() {
                                               </div>
                                             </>
                                           )}
-                                          <div className="h-16 rounded-md bg-muted/50 flex items-center justify-center mb-1.5 overflow-hidden">
-                                            {isImageFile && thumbnailData ? (
-                                              <img src={thumbnailData} alt="" className="w-full h-full object-cover" />
-                                            ) : (file.file_type === "video" || proc.process_key.includes("video") || proc.process_key === "vcon") && thumbnailData ? (
-                                              <video src={thumbnailData} className="w-full h-full object-cover" muted preload="metadata" />
-                                            ) : file.file_type === "video" || proc.process_key.includes("video") || proc.process_key === "vcon" ? (
-                                              <Film className="h-8 w-8 text-muted-foreground/30" />
-                                            ) : file.file_type === "audio" || proc.process_key === "na_narration" || proc.process_key === "bgm" ? (
-                                              <FileText className="h-8 w-8 text-muted-foreground/30" />
-                                            ) : proc.process_key.includes("script") || proc.process_key === "na_script" ? (
-                                              <FileText className="h-8 w-8 text-muted-foreground/30" />
-                                            ) : thumbnailData && (thumbnailData.startsWith("data:image") || thumbnailData.match(/\.(jpg|jpeg|png|gif|webp)(\?|$)/i)) ? (
-                                              <img src={thumbnailData} alt="" className="w-full h-full object-cover" />
-                                            ) : (
-                                              <Image className="h-8 w-8 text-muted-foreground/30" />
-                                            )}
-                                          </div>
+                                          <FileRowThumbnail
+                                            fileType={file.file_type}
+                                            processKey={proc.process_key}
+                                            thumbnailData={thumbnailData}
+                                            className="mb-1.5"
+                                          />
                                           {editingFileId === file.id ? (
                                             <form onSubmit={(e) => { e.preventDefault(); handleRenameFile(file.id, editFileName); }}
                                               onClick={(e) => e.stopPropagation()}>
@@ -2305,6 +2303,15 @@ export default function ProjectPage() {
             }
             setCopyToPatternInfo(null);
           }}
+        />
+      )}
+
+      {isStaff && id && (
+        <CreatorInviteModal
+          projectId={id}
+          open={creatorInviteOpen}
+          onOpenChange={setCreatorInviteOpen}
+          onInvitesChanged={() => setCreatorCollabRefreshKey((k) => k + 1)}
         />
       )}
     </div>

@@ -1,0 +1,78 @@
+import { useCallback, useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  parseCreatorProjectPayload,
+  parseCreatorProjectFilesPayload,
+  parseCreatorProjectCommentsPayload,
+  type CreatorProjectData,
+  type CreatorProjectFile,
+  type CreatorProjectComment,
+} from "@/lib/creator-project-rpc";
+
+export type { CreatorProjectData, CreatorProjectFile, CreatorProjectComment };
+
+export function useCreatorProject(shareToken: string | undefined) {
+  const [project, setProject] = useState<CreatorProjectData | null>(null);
+  const [files, setFiles] = useState<CreatorProjectFile[]>([]);
+  const [comments, setComments] = useState<CreatorProjectComment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchAll = useCallback(async () => {
+    if (!shareToken?.trim()) {
+      setError("共有リンクが無効です");
+      setProject(null);
+      setFiles([]);
+      setComments([]);
+      setLoading(false);
+      return;
+    }
+
+    const token = shareToken.trim();
+    setLoading(true);
+    setError(null);
+
+    try {
+      const [projectRes, filesRes, commentsRes] = await Promise.all([
+        supabase.rpc("get_project_for_creator", { p_share_token: token }),
+        supabase.rpc("get_project_files_for_creator", { p_share_token: token }),
+        supabase.rpc("get_project_comments_for_creator", { p_share_token: token }),
+      ]);
+
+      if (projectRes.error) throw projectRes.error;
+      if (filesRes.error) throw filesRes.error;
+      if (commentsRes.error) throw commentsRes.error;
+
+      const parsedProject = parseCreatorProjectPayload(projectRes.data);
+      if (!parsedProject) {
+        setError("この共有リンクは無効か、期限切れです");
+        setProject(null);
+        setFiles([]);
+        setComments([]);
+        return;
+      }
+
+      setProject(parsedProject);
+      setFiles(parseCreatorProjectFilesPayload(filesRes.data));
+      setComments(parseCreatorProjectCommentsPayload(commentsRes.data));
+    } catch (e: unknown) {
+      console.error("[useCreatorProject] fetch error:", e);
+      const msg =
+        e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string"
+          ? (e as { message: string }).message
+          : "データの取得に失敗しました";
+      setError(msg);
+      setProject(null);
+      setFiles([]);
+      setComments([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [shareToken]);
+
+  useEffect(() => {
+    void fetchAll();
+  }, [fetchAll]);
+
+  return { project, files, comments, loading, error, refetch: fetchAll };
+}
