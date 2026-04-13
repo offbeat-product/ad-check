@@ -31,13 +31,13 @@ function ProductNavGlyph(item: {
   if (item.Icon) {
     const I = item.Icon;
     return (
-      <span className="w-4 h-4 shrink-0 flex items-center justify-center">
-        <I className={cn("h-4 w-4 shrink-0", item.iconClassName ?? "text-muted-foreground")} aria-hidden />
+      <span className="w-3.5 h-3.5 shrink-0 flex items-center justify-center">
+        <I className={cn("h-3.5 w-3.5 shrink-0", item.iconClassName ?? "text-muted-foreground")} aria-hidden />
       </span>
     );
   }
   return (
-    <span className="text-sm w-4 text-center" style={item.iconStyle}>
+    <span className="text-xs w-4 text-center" style={item.iconStyle}>
       {item.icon}
     </span>
   );
@@ -169,27 +169,31 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
         </h1>
         {!collapsed && (
           <>
-            <div className="relative mt-3">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none z-10" aria-hidden />
-              <Input
-                readOnly
-                placeholder="検索..."
-                className="h-9 pl-8 pr-14 text-xs cursor-pointer border-border bg-muted/30 placeholder:text-muted-foreground"
-                onFocus={(e) => {
-                  e.target.blur();
-                  openGlobalSearch();
-                }}
-                onClick={() => openGlobalSearch()}
-              />
-              <kbd className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground font-sans">
-                ⌘K
-              </kbd>
-            </div>
-            <div className="flex items-center justify-between mt-2">
-              <p className="text-[10px] text-muted-foreground whitespace-nowrap">広告制作現場に最良・最速の「GO」を。</p>
-              <button type="button" onClick={onToggleCollapse} className="p-1 rounded hover:bg-muted/50 text-muted-foreground transition-colors" title="サイドバーを閉じる">
+            <div className="flex items-start justify-between gap-2 mt-2">
+              <p className="text-[10px] text-muted-foreground leading-snug flex-1 min-w-0">
+                広告制作現場に最良・最速の「GO」を。
+              </p>
+              <button type="button" onClick={onToggleCollapse} className="p-1 rounded hover:bg-muted/50 text-muted-foreground transition-colors shrink-0" title="サイドバーを閉じる">
                 <PanelLeftClose className="h-3.5 w-3.5" />
               </button>
+            </div>
+            <div className="border-t border-sidebar-border mt-3 pt-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none z-10" aria-hidden />
+                <Input
+                  readOnly
+                  placeholder="検索"
+                  className="h-9 pl-9 pr-14 text-xs cursor-pointer rounded-full border-border bg-muted/30 placeholder:text-muted-foreground"
+                  onFocus={(e) => {
+                    e.target.blur();
+                    openGlobalSearch();
+                  }}
+                  onClick={() => openGlobalSearch()}
+                />
+                <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none hidden sm:inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground font-sans">
+                  ⌘K
+                </kbd>
+              </div>
             </div>
           </>
         )}
@@ -202,7 +206,7 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
               type="button"
               onClick={() => openGlobalSearch()}
               className="mt-2 h-9 w-9 shrink-0 rounded-md border border-border bg-muted/30 flex items-center justify-center text-muted-foreground hover:bg-muted/50 transition-colors"
-              title="検索... (⌘K)"
+              title="検索 (⌘K)"
             >
               <Search className="h-4 w-4" aria-hidden />
             </button>
@@ -215,11 +219,11 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
           const isActive = location.pathname === item.path;
           return (
             <button key={item.path} type="button" onClick={() => navigate(item.path)} title={collapsed ? item.label : undefined}
-              className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium press-feedback",
+              className={cn("w-full flex items-center gap-2 py-2 text-xs font-medium press-feedback",
                 collapsed ? "justify-center px-0" : "px-5",
                 isActive ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-[3px] border-primary"
                   : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent nav-item-interactive")}>
-              <item.icon className="h-4 w-4 shrink-0" />
+              <item.icon className="h-3.5 w-3.5 shrink-0" />
               {!collapsed && item.label}
             </button>
           );
@@ -227,14 +231,14 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
 
         {collapsed ? (
           <button type="button" onClick={() => navigate("/dashboard")} title="クライアント / 商材"
-            className="w-full flex items-center justify-center py-2.5 text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent">
-            <FolderOpen className="h-4 w-4" />
+            className="w-full flex items-center justify-center py-2 text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent">
+            <FolderOpen className="h-3.5 w-3.5" />
           </button>
         ) : (
           <div className="mt-1">
-            <div className="w-full flex items-center gap-3 px-5 py-2.5 text-sm font-medium text-muted-foreground border-l-[3px] border-transparent">
-              <button type="button" onClick={() => setTreeOpen(!treeOpen)} className="flex items-center gap-3 flex-1 min-w-0 hover:bg-muted/50 rounded-md -ml-1 pl-1 py-0.5 text-left">
-                <FolderOpen className="h-4 w-4 shrink-0" />
+            <div className="w-full flex items-center gap-2 px-5 py-2 text-xs font-medium text-muted-foreground border-l-[3px] border-transparent">
+              <button type="button" onClick={() => setTreeOpen(!treeOpen)} className="flex items-center gap-2 flex-1 min-w-0 hover:bg-muted/50 rounded-md -ml-1 pl-1 py-0.5 text-left">
+                <FolderOpen className="h-3.5 w-3.5 shrink-0" />
                 <span className="truncate">クライアント</span>
                 {treeOpen ? <ChevronDown className="h-3.5 w-3.5 shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0" />}
               </button>
@@ -253,11 +257,11 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
               >
                 <div className={cn("flex items-center w-full group", dragOverClientId === client.id && "bg-primary/5")}>
                   <GripVertical className="h-3 w-3 text-muted-foreground/30 ml-3 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab shrink-0" />
-                  <button type="button" onClick={() => toggleClient(client.id)} className="flex items-center gap-1 py-2 text-sm text-muted-foreground hover:bg-muted/50 shrink-0 px-2">
+                  <button type="button" onClick={() => toggleClient(client.id)} className="flex items-center gap-1 py-1.5 text-xs text-muted-foreground hover:bg-muted/50 shrink-0 px-2">
                     {openClients.has(client.id) ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                   </button>
                   <button type="button" onClick={() => navigate(`/client/${client.id}`)}
-                    className={cn("flex-1 py-2 pr-3 text-sm font-medium transition-colors truncate text-left border-l-[3px]",
+                    className={cn("flex-1 py-1.5 pr-3 text-xs font-medium transition-colors truncate text-left border-l-[3px]",
                       routeClientId === client.id ? "bg-sidebar-accent text-sidebar-accent-foreground border-primary" : "text-muted-foreground hover:text-foreground border-transparent")}>
                     {client.name}
                   </button>
@@ -274,7 +278,7 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
                     <div className={cn("flex items-center w-full group", dragOverProductId === product.id && "bg-primary/5")}>
                       <GripVertical className="h-3 w-3 text-muted-foreground/30 ml-7 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab shrink-0" />
                       <button type="button" onClick={() => navigate(`/product/${product.id}`)}
-                        className={cn("flex-1 flex items-center gap-2 py-1.5 pr-3 pl-2 text-sm transition-colors truncate border-l-[3px]",
+                        className={cn("flex-1 flex items-center gap-2 py-1.5 pr-3 pl-2 text-xs transition-colors truncate border-l-[3px]",
                           highlightedProductId === product.id ? "bg-sidebar-accent text-sidebar-accent-foreground border-primary font-medium" : "text-muted-foreground hover:text-foreground border-transparent")}>
                         <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: getProductColor(product.color) }} />
                         <span className="truncate">{product.name}</span>
@@ -289,20 +293,20 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
         )}
 
         <button type="button" onClick={() => navigate("/report")} title={collapsed ? "レポート" : undefined}
-          className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium press-feedback",
+          className={cn("w-full flex items-center gap-2 py-2 text-xs font-medium press-feedback",
             collapsed ? "justify-center px-0" : "px-5",
             location.pathname === "/report" ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-[3px] border-primary"
               : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent nav-item-interactive")}>
-          <BarChart3 className="h-4 w-4 shrink-0" />
+          <BarChart3 className="h-3.5 w-3.5 shrink-0" />
           {!collapsed && "レポート"}
         </button>
 
         <button type="button" onClick={() => navigate("/settings")} title={collapsed ? "設定" : undefined}
-          className={cn("w-full flex items-center gap-3 py-2.5 text-sm font-medium press-feedback",
+          className={cn("w-full flex items-center gap-2 py-2 text-xs font-medium press-feedback",
             collapsed ? "justify-center px-0" : "px-5",
             location.pathname === "/settings" ? "bg-sidebar-accent text-sidebar-accent-foreground border-l-[3px] border-primary"
               : "text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent nav-item-interactive")}>
-          <Settings className="h-4 w-4 shrink-0" />
+          <Settings className="h-3.5 w-3.5 shrink-0" />
           {!collapsed && "設定"}
         </button>
 
@@ -316,14 +320,14 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
               { label: "Ad Ops", href: "#", icon: "⚙️", iconStyle: {} as const, comingSoon: true },
             ].map((item) =>
               item.comingSoon ? (
-                <div key={item.label} className="w-full flex items-center gap-3 px-5 py-2 text-sm border-l-[3px] border-transparent text-muted-foreground/40 cursor-default">
+                <div key={item.label} className="w-full flex items-center gap-2 px-5 py-1.5 text-xs border-l-[3px] border-transparent text-muted-foreground/40 cursor-default">
                   <ProductNavGlyph {...item} />
                   <span className="flex-1">{item.label}</span>
                   <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground/50 font-medium">Coming Soon</span>
                 </div>
               ) : (
                 <a key={item.label} href={item.href} target="_blank" rel="noopener noreferrer"
-                  className="w-full flex items-center gap-3 px-5 py-2 text-sm border-l-[3px] border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors">
+                  className="w-full flex items-center gap-2 px-5 py-1.5 text-xs border-l-[3px] border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors">
                   <ProductNavGlyph {...item} />
                   <span className="flex-1">{item.label}</span>
                   <ExternalLink className="h-3 w-3 text-muted-foreground/40" />
