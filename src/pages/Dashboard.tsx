@@ -10,6 +10,7 @@ import { useUpcomingDeadlines, splitTodayAndWeek, type DeadlineProjectRow } from
 import { effectiveProjectDeadline } from "@/lib/project-display";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderOpen, ChevronLeft, ChevronRight, Plus, RefreshCw, WifiOff, User, Target, CheckCircle, FolderCheck, Calendar } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
@@ -18,6 +19,106 @@ import CreateProjectModal from "@/components/CreateProjectModal";
 import { getSubmitLabel, getSubmitBadgeClass } from "@/lib/check-display";
 
 const ITEMS_PER_PAGE = 10;
+const DEADLINE_LIST_PAGE_SIZE = 5;
+
+function deadlineLabelClassForRow(iso: string | null): string {
+  if (!iso) return "text-muted-foreground";
+  try {
+    const d = startOfDay(parseISO(iso.length > 10 ? iso : `${iso}T00:00:00`));
+    const days = differenceInCalendarDays(d, startOfDay(new Date()));
+    if (days < 0) return "text-status-ng font-medium";
+    if (days === 0) return "text-destructive font-medium";
+    if (days <= 3) return "text-status-warning font-medium";
+    return "text-muted-foreground";
+  } catch {
+    return "text-muted-foreground";
+  }
+}
+
+interface DeadlineColumnProps {
+  title: string;
+  titleIcon: React.ReactNode;
+  rows: DeadlineProjectRow[];
+  navigate: (path: string) => void;
+}
+
+function DeadlineColumn({ title, titleIcon, rows, navigate }: DeadlineColumnProps) {
+  const [expanded, setExpanded] = useState(false);
+  const slice = expanded ? rows : rows.slice(0, DEADLINE_LIST_PAGE_SIZE);
+
+  return (
+    <div className="glass-card flex flex-col min-h-0 overflow-hidden">
+      <div className="px-3 py-2 border-b border-border flex items-center gap-2 shrink-0">
+        {titleIcon}
+        <h2 className="text-sm font-semibold">
+          {title} ({rows.length}件)
+        </h2>
+      </div>
+      <div className="divide-y divide-border">
+        {rows.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-6 px-2">該当する案件はありません</p>
+        ) : (
+          <>
+            {slice.map((r) => {
+              const stCfg = PROJECT_STATUS_CONFIG[r.status || "in_progress"] || PROJECT_STATUS_CONFIG.in_progress;
+              const eff = effectiveProjectDeadline(r.deadline, r.overall_deadline);
+              const dateLabel = eff
+                ? format(parseISO(eff.length > 10 ? eff : `${eff}T00:00:00`), "M/d")
+                : "—";
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => navigate(`/project/${r.id}`)}
+                  className="w-full text-left px-3 py-2 hover:bg-muted/40 transition-colors flex items-center gap-2 min-w-0"
+                >
+                  <div className="min-w-0 flex-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className="text-xs font-medium truncate block">{r.name}</span>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom" className="max-w-lg break-all">
+                        <p className="text-sm">{r.name}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <Badge variant="outline" className={cn("text-[10px] h-5 shrink-0", stCfg.badgeClass)}>
+                    {stCfg.label}
+                  </Badge>
+                  <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+                    進捗 {r.completed_files}/{r.total_files}
+                  </span>
+                  <span className={cn("text-[10px] tabular-nums shrink-0 inline-flex items-center gap-0.5", deadlineLabelClassForRow(eff))}>
+                    <Calendar className="h-3 w-3 shrink-0" />
+                    {dateLabel}
+                  </span>
+                </button>
+              );
+            })}
+            {rows.length > DEADLINE_LIST_PAGE_SIZE && !expanded && (
+              <button
+                type="button"
+                className="w-full py-2 text-xs text-primary hover:bg-muted/30 transition-colors"
+                onClick={() => setExpanded(true)}
+              >
+                もっと見る
+              </button>
+            )}
+            {rows.length > DEADLINE_LIST_PAGE_SIZE && expanded && (
+              <button
+                type="button"
+                className="w-full py-2 text-xs text-muted-foreground hover:bg-muted/30 transition-colors"
+                onClick={() => setExpanded(false)}
+              >
+                折りたたむ
+              </button>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function StatCard({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: string | number; color: string }) {
   return (
@@ -84,61 +185,6 @@ export default function Dashboard() {
 
   const { data: deadlineRows = [] } = useUpcomingDeadlines();
   const { today: dueToday, weekRest: dueWeek } = useMemo(() => splitTodayAndWeek(deadlineRows), [deadlineRows]);
-
-  const deadlineLabelClass = (iso: string | null) => {
-    if (!iso) return "text-muted-foreground";
-    try {
-      const d = startOfDay(parseISO(iso.length > 10 ? iso : `${iso}T00:00:00`));
-      const days = differenceInCalendarDays(d, startOfDay(new Date()));
-      if (days < 0) return "text-status-ng font-medium";
-      if (days === 0) return "text-destructive font-medium";
-      if (days <= 3) return "text-status-warning font-medium";
-      return "text-muted-foreground";
-    } catch {
-      return "text-muted-foreground";
-    }
-  };
-
-  const renderDeadlineCards = (rows: DeadlineProjectRow[]) => {
-    if (rows.length === 0) {
-      return <p className="text-xs text-muted-foreground text-center py-6">該当する案件はありません</p>;
-    }
-    return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {rows.map((r) => {
-          const stCfg = PROJECT_STATUS_CONFIG[r.status || "in_progress"] || PROJECT_STATUS_CONFIG.in_progress;
-          const eff = effectiveProjectDeadline(r.deadline, r.overall_deadline);
-          const dateLabel = eff
-            ? format(parseISO(eff.length > 10 ? eff : `${eff}T00:00:00`), "yyyy/MM/dd")
-            : "—";
-          return (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => navigate(`/project/${r.id}`)}
-              className="glass-card p-4 text-left hover:border-primary/30 transition-colors"
-            >
-              <div className="flex items-center gap-2 mb-2">
-                <FolderOpen className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium truncate flex-1">{r.name}</span>
-                <Badge variant="outline" className={cn("text-[10px] shrink-0", stCfg.badgeClass)}>{stCfg.label}</Badge>
-              </div>
-              <p className="text-xs text-muted-foreground">{r.client_name} · {r.product_name}</p>
-              <div className="flex items-center justify-between mt-2 text-[10px] text-muted-foreground">
-                <span className={cn("inline-flex items-center gap-1", deadlineLabelClass(eff))}>
-                  <Calendar className="h-3 w-3" />
-                  納期 {dateLabel}
-                </span>
-                <span>
-                  進捗 {r.completed_files}/{r.total_files}
-                </span>
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    );
-  };
 
   // Phase 1: Fetch projects & products only (lightweight, fast)
   useEffect(() => {
@@ -445,20 +491,19 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
-            <h2 className="text-sm font-semibold">本日締切 ({dueToday.length}件)</h2>
-          </div>
-          {renderDeadlineCards(dueToday)}
-        </div>
-
-        <div>
-          <div className="flex items-center gap-2 mb-3">
-            <AlertTriangle className="h-4 w-4 text-status-warning shrink-0" />
-            <h2 className="text-sm font-semibold">今週の締切 ({dueWeek.length}件)</h2>
-          </div>
-          {renderDeadlineCards(dueWeek)}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <DeadlineColumn
+            title="本日締切"
+            titleIcon={<AlertTriangle className="h-4 w-4 text-destructive shrink-0" />}
+            rows={dueToday}
+            navigate={navigate}
+          />
+          <DeadlineColumn
+            title="今週の締切"
+            titleIcon={<AlertTriangle className="h-4 w-4 text-status-warning shrink-0" />}
+            rows={dueWeek}
+            navigate={navigate}
+          />
         </div>
 
         {/* Projects - loaded first (Phase 1) */}

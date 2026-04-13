@@ -113,6 +113,9 @@ export default function ProductPage() {
                 hideCompleted={hideCompleted}
                 onHideCompletedChange={setHideCompleted}
                 onRowNavigate={(projectId) => navigate(`/project/${projectId}`)}
+                onProjectUpdated={(projectId, patch) => {
+                  setProjects((prev) => prev.map((x) => (x.id === projectId ? { ...x, ...patch } : x)));
+                }}
               />
             )}
           </TabsContent>

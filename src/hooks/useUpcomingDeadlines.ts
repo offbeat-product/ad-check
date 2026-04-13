@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { isProjectActiveForCount, isFileDoneForProgress, effectiveProjectDeadline } from "@/lib/project-display";
-import { startOfDay, addDays, isSameDay, isAfter, parseISO } from "date-fns";
+import { startOfDay, addDays, isSameDay, isAfter, isBefore, parseISO } from "date-fns";
 
 export interface DeadlineProjectRow {
   id: string;
@@ -61,7 +61,7 @@ async function fetchDeadlineProjects(): Promise<DeadlineProjectRow[]> {
   });
 
   const today = startOfDay(new Date());
-  const horizon = addDays(today, 7);
+  const horizon = startOfDay(addDays(today, 7));
 
   const rows: DeadlineProjectRow[] = [];
   for (const p of active) {
@@ -73,6 +73,7 @@ async function fetchDeadlineProjects(): Promise<DeadlineProjectRow[]> {
     } catch {
       continue;
     }
+    if (isBefore(d, today)) continue;
     if (isAfter(d, horizon)) continue;
     const pinfo = p.product_id ? productMap.get(p.product_id) : undefined;
     const agg = fileAgg.get(p.id) || { total: 0, done: 0 };
@@ -107,9 +108,12 @@ export function useUpcomingDeadlines() {
   });
 }
 
-/** 本日締切 vs それ以外（期限超過・明日以降〜7日以内など）を分ける */
+/**
+ * 本日締切（納期が今日）と今週の締切（明日〜7日後、本日分は除外・期限超過は fetch 時点で除外済み）
+ */
 export function splitTodayAndWeek(rows: DeadlineProjectRow[]): { today: DeadlineProjectRow[]; weekRest: DeadlineProjectRow[] } {
   const today = startOfDay(new Date());
+  const horizon = startOfDay(addDays(today, 7));
   const todayList: DeadlineProjectRow[] = [];
   const weekRest: DeadlineProjectRow[] = [];
   for (const r of rows) {
@@ -122,7 +126,7 @@ export function splitTodayAndWeek(rows: DeadlineProjectRow[]): { today: Deadline
       continue;
     }
     if (isSameDay(d, today)) todayList.push(r);
-    else weekRest.push(r);
+    else if (isAfter(d, today) && !isAfter(d, horizon)) weekRest.push(r);
   }
   weekRest.sort((a, b) => {
     const da = effectiveProjectDeadline(a.deadline, a.overall_deadline) || "";
