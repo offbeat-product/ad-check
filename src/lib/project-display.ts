@@ -17,10 +17,14 @@ export function stripProjectListNamePrefix(name: string): string {
   return withoutBracket.replace(/^◆\d{4}年\d{1,2}月\d{1,2}日納品分_?/, "").replace(/^_\s*/, "").trim() || name;
 }
 
-const TERMINAL = new Set(["completed", "cancelled", "on_hold"]);
+import { isProjectStatusCancelledLike, isProjectStatusCompletedLike, isProjectStatusOnHoldLike } from "@/lib/process-config";
 
 export function isProjectActiveForCount(status: string | null | undefined): boolean {
-  return !TERMINAL.has((status || "").toLowerCase());
+  return (
+    !isProjectStatusCompletedLike(status) &&
+    !isProjectStatusCancelledLike(status) &&
+    !isProjectStatusOnHoldLike(status)
+  );
 }
 
 const DONE_FILE = new Set([

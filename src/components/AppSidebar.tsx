@@ -10,7 +10,7 @@ import { isProjectActiveForCount } from "@/lib/project-display";
 import { extractBracketProjectId, stripProjectListNamePrefix } from "@/lib/project-display";
 import {
   Home, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search, PanelLeftClose, PanelLeftOpen, BarChart3,
-  ExternalLink, CircleCheckBig, Brain, Star, Clock,
+  ExternalLink, CircleCheckBig, Brain, Star, Clock, ClipboardList,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -93,7 +93,10 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
     viewer: { label: "閲覧者", color: "text-muted-foreground bg-muted" },
   };
 
-  const navItems = [{ icon: Home, label: "ホーム", path: "/dashboard" }];
+  const navItems = [
+    { icon: Home, label: "ホーム", path: "/dashboard" },
+    { icon: ClipboardList, label: "全案件一覧", path: "/projects" },
+  ];
 
   const routeProductId = location.pathname.match(/\/product\/([^/]+)/)?.[1];
   const activeProjectId = location.pathname.match(/\/project\/([^/]+)/)?.[1];
@@ -197,19 +200,6 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
         )}
       </div>
 
-      {!collapsed ? (
-        <button type="button" onClick={() => openGlobalSearch()}
-          className="mx-4 mt-3 mb-1 flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted/30 text-muted-foreground hover:bg-muted/50 transition-colors">
-          <Search className="h-3.5 w-3.5" />
-          <span className="text-xs flex-1 text-left">検索</span>
-          <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px]">⌘K</kbd>
-        </button>
-      ) : (
-        <button type="button" onClick={() => openGlobalSearch()} className="mx-auto mt-3 mb-1 p-2 rounded-lg text-muted-foreground hover:bg-muted/50 transition-colors" title="検索 (⌘K)">
-          <Search className="h-4 w-4" />
-        </button>
-      )}
-
       <nav className="flex-1 overflow-y-auto py-2">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
@@ -224,6 +214,27 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
             </button>
           );
         })}
+
+        {!collapsed ? (
+          <button
+            type="button"
+            onClick={() => openGlobalSearch()}
+            className="mx-4 mt-2 mb-1 flex items-center gap-2 px-3 py-2 rounded-lg border border-border bg-muted/30 text-muted-foreground hover:bg-muted/50 transition-colors"
+          >
+            <Search className="h-3.5 w-3.5 shrink-0" />
+            <span className="text-xs flex-1 text-left">検索</span>
+            <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px]">⌘K</kbd>
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => openGlobalSearch()}
+            className="w-full flex items-center justify-center py-2.5 text-muted-foreground hover:bg-muted/50 border-l-[3px] border-transparent"
+            title="検索 (⌘K)"
+          >
+            <Search className="h-4 w-4" />
+          </button>
+        )}
 
         {!collapsed && (
           <>

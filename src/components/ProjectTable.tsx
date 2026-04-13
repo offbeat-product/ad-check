@@ -1,11 +1,13 @@
 import { useMemo, useState, useCallback } from "react";
 import { format, differenceInCalendarDays, parseISO, startOfDay } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import type { Project } from "@/lib/db-types";
-import { PROJECT_STATUS_CONFIG } from "@/lib/process-config";
+import { PROJECT_STATUS_CONFIG, canonicalProjectStatusForSelect } from "@/lib/process-config";
 import { effectiveProjectDeadline, isProjectActiveForCount } from "@/lib/project-display";
 import { PROJECT_TREE_QUERY_KEY } from "@/hooks/useProjectTree";
+import { ALL_PROJECTS_QUERY_KEY } from "@/hooks/useAllProjects";
 import { PROJECT_AUDIT_LOG_QUERY_KEY } from "@/components/ProjectAuditLog";
 import { useToast } from "@/hooks/use-toast";
 import { Progress } from "@/components/ui/progress";
@@ -20,6 +22,13 @@ import { cn } from "@/lib/utils";
 export interface ProjectProgress {
   total: number;
   done: number;
+}
+
+export interface ProjectTableDirectoryEntry {
+  clientId: string;
+  clientName: string;
+  productId: string;
+  productName: string;
 }
 
 const STATUS_OPTIONS = [
@@ -49,8 +58,8 @@ function deadlineClass(deadlineStr: string | null): string {
 }
 
 function statusCfgFor(status: string | null) {
-  const s = status === "active" ? "in_progress" : status;
-  return PROJECT_STATUS_CONFIG[s || "in_progress"] || PROJECT_STATUS_CONFIG.in_progress;
+  const key = canonicalProjectStatusForSelect(status);
+  return PROJECT_STATUS_CONFIG[key] || PROJECT_STATUS_CONFIG.in_progress;
 }
 
 interface ProjectTableProps {
@@ -60,6 +69,10 @@ interface ProjectTableProps {
   onHideCompletedChange: (value: boolean) => void;
   onRowNavigate: (projectId: string) => void;
   onProjectUpdated?: (projectId: string, patch: Partial<Project>) => void;
+  showClientColumn?: boolean;
+  showProductColumn?: boolean;
+  directoryByProjectId?: Record<string, ProjectTableDirectoryEntry>;
+  showHideCompletedToggle?: boolean;
 }
 
 export function ProjectTable({
@@ -69,9 +82,14 @@ export function ProjectTable({
   onHideCompletedChange,
   onRowNavigate,
   onProjectUpdated,
+  showClientColumn = false,
+  showProductColumn = false,
+  directoryByProjectId = {},
+  showHideCompletedToggle = true,
 }: ProjectTableProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [deadlineOpenId, setDeadlineOpenId] = useState<string | null>(null);
 
   const sorted = useMemo(() => {
@@ -97,6 +115,7 @@ export function ProjectTable({
     void queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
     void queryClient.invalidateQueries({ queryKey: ["upcoming-deadlines"] });
     void queryClient.invalidateQueries({ queryKey: [PROJECT_AUDIT_LOG_QUERY_KEY] });
+    void queryClient.invalidateQueries({ queryKey: ALL_PROJECTS_QUERY_KEY });
   }, [queryClient]);
 
   const handleStatusChange = useCallback(
@@ -140,6 +159,22 @@ export function ProjectTable({
     [patchProject, toast, invalidateTrees]
   );
 
+  const toggleRow = showHideCompletedToggle ? (
+    <div className="flex justify-end">
+      <button
+        type="button"
+        onClick={() => onHideCompletedChange(!hideCompleted)}
+        className={cn(
+          "flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-md transition-colors",
+          hideCompleted ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50"
+        )}
+      >
+        {hideCompleted ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+        {hideCompleted ? "完了済みを非表示中" : "完了済みも表示中"}
+      </button>
+    </div>
+  ) : null;
+
   if (sorted.length === 0) {
     const emptyMsg =
       projects.length > 0 && hideCompleted
@@ -147,19 +182,7 @@ export function ProjectTable({
         : "案件はまだありません";
     return (
       <div className="space-y-3">
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={() => onHideCompletedChange(!hideCompleted)}
-            className={cn(
-              "flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-md transition-colors",
-              hideCompleted ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50"
-            )}
-          >
-            {hideCompleted ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-            {hideCompleted ? "完了済みを非表示中" : "完了済みも表示中"}
-          </button>
-        </div>
+        {toggleRow}
         <p className="text-sm text-muted-foreground text-center py-12">{emptyMsg}</p>
       </div>
     );
@@ -167,24 +190,18 @@ export function ProjectTable({
 
   return (
     <div className="space-y-3">
-      <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={() => onHideCompletedChange(!hideCompleted)}
-          className={cn(
-            "flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-md transition-colors",
-            hideCompleted ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50"
-          )}
-        >
-          {hideCompleted ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
-          {hideCompleted ? "完了済みを非表示中" : "完了済みも表示中"}
-        </button>
-      </div>
+      {toggleRow}
 
       <div className="glass-card overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="border-b border-border hover:bg-transparent">
+              {showClientColumn && (
+                <TableHead className="text-xs font-medium text-muted-foreground min-w-[100px] max-w-[140px]">クライアント</TableHead>
+              )}
+              {showProductColumn && (
+                <TableHead className="text-xs font-medium text-muted-foreground min-w-[100px] max-w-[160px]">商材</TableHead>
+              )}
               <TableHead className="text-xs font-medium text-muted-foreground min-w-[200px]">案件名</TableHead>
               <TableHead className="text-xs font-medium text-muted-foreground whitespace-nowrap w-[130px]">ステータス</TableHead>
               <TableHead className="text-xs font-medium text-muted-foreground whitespace-nowrap w-[100px]">納品日</TableHead>
@@ -193,8 +210,7 @@ export function ProjectTable({
           </TableHeader>
           <TableBody>
             {sorted.map((p) => {
-              const rawStatus = p.status === "active" ? "in_progress" : (p.status || "in_progress");
-              const statusValue = (STATUS_OPTIONS as readonly string[]).includes(rawStatus) ? rawStatus : "in_progress";
+              const statusValue = canonicalProjectStatusForSelect(p.status);
               const eff = effectiveProjectDeadline(p.deadline, p.overall_deadline);
               const prog = progressByProjectId[p.id] || { total: 0, done: 0 };
               const pct = prog.total > 0 ? Math.round((prog.done / prog.total) * 100) : 0;
@@ -202,6 +218,7 @@ export function ProjectTable({
                 ? format(parseISO(eff.length > 10 ? eff : `${eff}T00:00:00`), "M/d")
                 : "—";
               const calSelected = eff ? parseISO(eff.length > 10 ? eff : `${eff}T00:00:00`) : undefined;
+              const dir = directoryByProjectId[p.id];
 
               return (
                 <TableRow
@@ -212,6 +229,36 @@ export function ProjectTable({
                     onRowNavigate(p.id);
                   }}
                 >
+                  {showClientColumn && (
+                    <TableCell className="text-xs align-middle max-w-[140px]" data-interactive onClick={(e) => e.stopPropagation()}>
+                      {dir?.clientId ? (
+                        <button
+                          type="button"
+                          className="text-left w-full truncate text-primary hover:underline font-medium"
+                          onClick={() => navigate(`/client/${dir.clientId}`)}
+                        >
+                          {dir.clientName}
+                        </button>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  )}
+                  {showProductColumn && (
+                    <TableCell className="text-xs align-middle max-w-[160px]" data-interactive onClick={(e) => e.stopPropagation()}>
+                      {dir?.productId ? (
+                        <button
+                          type="button"
+                          className="text-left w-full truncate text-primary hover:underline font-medium"
+                          onClick={() => navigate(`/product/${dir.productId}`)}
+                        >
+                          {dir.productName}
+                        </button>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell className="text-xs font-medium max-w-[min(480px,40vw)]">
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -223,10 +270,7 @@ export function ProjectTable({
                     </Tooltip>
                   </TableCell>
                   <TableCell data-interactive onClick={(e) => e.stopPropagation()}>
-                    <Select
-                      value={statusValue}
-                      onValueChange={(v) => void handleStatusChange(p, v)}
-                    >
+                    <Select value={statusValue} onValueChange={(v) => void handleStatusChange(p, v)}>
                       <SelectTrigger className="h-7 text-[10px] px-2 w-[124px]" data-interactive>
                         <SelectValue />
                       </SelectTrigger>

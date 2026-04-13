@@ -77,6 +77,73 @@ export const PROJECT_STATUS_CONFIG: Record<string, { label: string; color: strin
   cancelled:      { label: 'キャンセル', color: 'gray',   dotClass: 'bg-muted-foreground/50', badgeClass: 'bg-muted text-muted-foreground' },
 };
 
+/** DBに英語・日本語が混在する前提の完了扱い */
+export function isProjectStatusCompletedLike(status: string | null | undefined): boolean {
+  const s = (status || "").trim();
+  const l = s.toLowerCase();
+  return l === "completed" || l === "done" || s === "完了";
+}
+
+export function isProjectStatusCancelledLike(status: string | null | undefined): boolean {
+  const s = (status || "").trim();
+  const l = s.toLowerCase();
+  return l === "cancelled" || l === "canceled" || s === "キャンセル";
+}
+
+export function isProjectStatusOnHoldLike(status: string | null | undefined): boolean {
+  const s = (status || "").trim();
+  const l = s.toLowerCase();
+  return l === "on_hold" || s === "保留";
+}
+
+/** サマリー「進行中」相当: 完了・キャンセル・保留以外 */
+export function isProjectOpenForSummaryKpi(status: string | null | undefined): boolean {
+  return (
+    !isProjectStatusCompletedLike(status) &&
+    !isProjectStatusCancelledLike(status) &&
+    !isProjectStatusOnHoldLike(status)
+  );
+}
+
+const IN_PROGRESS_MOOD_KEYS = new Set([
+  "preparing",
+  "in_progress",
+  "revision",
+  "internal_revision",
+  "client_review",
+  "review",
+  "準備中",
+  "進行中",
+]);
+
+/**
+ * 仕様の「進行中系」: 明示リスト + 上記以外で完了/キャンセル/保留でもないもの
+ */
+export function isProjectStatusInProgressMood(status: string | null | undefined): boolean {
+  const s = (status || "").trim();
+  if (!s) return true;
+  if (IN_PROGRESS_MOOD_KEYS.has(s) || IN_PROGRESS_MOOD_KEYS.has(s.toLowerCase())) return true;
+  if (isProjectStatusCompletedLike(s) || isProjectStatusCancelledLike(s) || isProjectStatusOnHoldLike(s)) return false;
+  return true;
+}
+
+/** Select / フィルタ用に DB の生値を canonical キーへ寄せる */
+export function canonicalProjectStatusForSelect(raw: string | null | undefined): string {
+  const s = (raw || "").trim();
+  if (!s) return "in_progress";
+  const l = s.toLowerCase();
+  if (s === "準備中" || l === "preparing") return "preparing";
+  if (s === "進行中" || l === "in_progress" || l === "active") return "in_progress";
+  if (s === "完了" || l === "completed" || l === "done") return "completed";
+  if (l === "review" || l === "revision") return "revision";
+  if (l === "internal_revision") return "internal_revision";
+  if (l === "client_review") return "client_review";
+  if (l === "on_hold") return "on_hold";
+  if (l === "cancelled" || l === "canceled") return "cancelled";
+  if (l in PROJECT_STATUS_CONFIG) return l;
+  return "in_progress";
+}
+
 // Process status config (aligned with PROJECT_STATUS_CONFIG)
 export const PROCESS_STATUS_CONFIG: Record<string, { label: string; dotClass: string; badgeClass: string }> = {
   preparing:      { label: '準備中',     dotClass: 'bg-muted-foreground/50', badgeClass: 'bg-muted text-muted-foreground' },

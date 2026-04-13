@@ -25,6 +25,7 @@ const SettingsPage = lazy(() => import("./pages/SettingsPage"));
 const AcceptInvitePage = lazy(() => import("./pages/AcceptInvitePage"));
 const NotificationsPage = lazy(() => import("./pages/NotificationsPage"));
 const ReportPage = lazy(() => import("./pages/ReportPage"));
+const AllProjectsPage = lazy(() => import("./pages/AllProjectsPage"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient({
@@ -82,6 +83,7 @@ const App = () => (
                 <Route path="/accept-invite" element={<AcceptInvitePage />} />
                 <Route element={<ProtectedRoute><AutoCheckProvider><AppLayout /></AutoCheckProvider></ProtectedRoute>}>
                   <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/projects" element={<AllProjectsPage />} />
                   <Route path="/client/:id" element={<ClientPage />} />
                   <Route path="/product/:id" element={<ProductPage />} />
                   <Route path="/project/:id" element={<ProjectPage />} />
