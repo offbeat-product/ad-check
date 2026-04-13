@@ -256,8 +256,8 @@ export default function AllProjectsPage() {
   }
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-30 border-b border-border px-4 md:px-6 py-3 flex items-center justify-between bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+    <div className="min-h-screen flex flex-col">
+      <header className="sticky top-0 z-30 shrink-0 border-b border-border px-4 md:px-6 py-3 flex items-center justify-between bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
         <div className="flex items-center gap-2 min-w-0">
           <ClipboardList className="h-4 w-4 text-primary shrink-0" aria-hidden />
           <h1 className="text-sm font-semibold truncate">案件一覧</h1>
@@ -265,22 +265,23 @@ export default function AllProjectsPage() {
         <NotificationBell />
       </header>
 
-      <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6">
+      <div className="flex-1 flex flex-col min-h-0 w-full max-w-7xl mx-auto px-4 md:px-6 py-6">
         {isLoading ? (
-          <div className="flex items-center justify-center gap-2 py-24 text-muted-foreground text-sm">
+          <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-sm">
             <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             読み込み中...
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="flex-1 flex flex-col min-h-0 space-y-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <SummaryStat icon={Layers} label="全案件" value={summary.totalCount} iconTone="text-primary" />
               <SummaryStat icon={FolderKanban} label="進行中" value={summary.inProgressCount} iconTone="text-primary" />
               <SummaryStat icon={AlertTriangle} label="本日締切" value={summary.todayCount} iconTone="text-destructive" />
               <SummaryStat icon={CalendarDays} label="今週締切" value={summary.thisWeekCount} iconTone="text-status-warning" />
-            </div>
+              </div>
 
-            <div className="glass-card p-4 space-y-4">
+              <div className="glass-card p-4 space-y-4">
               <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
                 <div className="flex-1 min-w-[200px] max-w-md">
                   <Label className="text-[10px] text-muted-foreground mb-1 block">検索</Label>
@@ -393,69 +394,72 @@ export default function AllProjectsPage() {
                   </Label>
                 </div>
               </div>
+              </div>
+
+              <ProjectTable
+                projects={pageProjects}
+                progressByProjectId={progressByProjectId}
+                hideCompleted={false}
+                onHideCompletedChange={() => {}}
+                onRowNavigate={(projectId) => navigate(`/project/${projectId}`)}
+                onProjectUpdated={patchAllProjectsCache}
+                showClientColumn
+                showProductColumn
+                directoryByProjectId={directoryByProjectId}
+                showHideCompletedToggle={false}
+              />
             </div>
 
-            <ProjectTable
-              projects={pageProjects}
-              progressByProjectId={progressByProjectId}
-              hideCompleted={false}
-              onHideCompletedChange={() => {}}
-              onRowNavigate={(projectId) => navigate(`/project/${projectId}`)}
-              onProjectUpdated={patchAllProjectsCache}
-              showClientColumn
-              showProductColumn
-              directoryByProjectId={directoryByProjectId}
-              showHideCompletedToggle={false}
-            />
-
             {totalPages > 1 && (
-              <Pagination>
-                <PaginationContent className="flex-wrap gap-1">
-                  <PaginationItem>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1"
-                      disabled={currentPage <= 1}
-                      onClick={() => setPage(currentPage - 1)}
-                    >
-                      &lt;
-                    </Button>
-                  </PaginationItem>
-                  {visiblePages.map((item, idx) =>
-                    item === "gap" ? (
-                      <PaginationItem key={`g-${idx}`}>
-                        <PaginationEllipsis />
-                      </PaginationItem>
-                    ) : (
-                      <PaginationItem key={item}>
-                        <Button
-                          type="button"
-                          variant={item === currentPage ? "outline" : "ghost"}
-                          size="sm"
-                          className="min-w-9"
-                          onClick={() => setPage(item)}
-                        >
-                          {item}
-                        </Button>
-                      </PaginationItem>
-                    )
-                  )}
-                  <PaginationItem>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="gap-1"
-                      disabled={currentPage >= totalPages}
-                      onClick={() => setPage(currentPage + 1)}
-                    >
-                      &gt;
-                    </Button>
-                  </PaginationItem>
-                </PaginationContent>
-              </Pagination>
+              <div className="shrink-0 pt-6 mt-auto border-t border-border">
+                <Pagination>
+                  <PaginationContent className="flex-wrap gap-1">
+                    <PaginationItem>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1"
+                        disabled={currentPage <= 1}
+                        onClick={() => setPage(currentPage - 1)}
+                      >
+                        &lt;
+                      </Button>
+                    </PaginationItem>
+                    {visiblePages.map((item, idx) =>
+                      item === "gap" ? (
+                        <PaginationItem key={`g-${idx}`}>
+                          <PaginationEllipsis />
+                        </PaginationItem>
+                      ) : (
+                        <PaginationItem key={item}>
+                          <Button
+                            type="button"
+                            variant={item === currentPage ? "outline" : "ghost"}
+                            size="sm"
+                            className="min-w-9"
+                            onClick={() => setPage(item)}
+                          >
+                            {item}
+                          </Button>
+                        </PaginationItem>
+                      )
+                    )}
+                    <PaginationItem>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1"
+                        disabled={currentPage >= totalPages}
+                        onClick={() => setPage(currentPage + 1)}
+                      >
+                        &gt;
+                      </Button>
+                    </PaginationItem>
+                  </PaginationContent>
+                </Pagination>
+              </div>
             )}
           </>
         )}
