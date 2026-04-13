@@ -1,169 +1,162 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+import type { Client, Product, Project } from "@/lib/db-types";
+import { fetchProjectTreeData, PROJECT_TREE_QUERY_KEY } from "@/hooks/useProjectTree";
+import { GLOBAL_SEARCH_OPEN_EVENT } from "@/lib/global-search-events";
+import { extractBracketProjectId } from "@/lib/project-display";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { Search, FolderOpen, Package, Building2, FileText } from "lucide-react";
-import { cn } from "@/lib/utils";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+  CommandSeparator,
+} from "@/components/ui/command";
+import { Building2, FolderOpen, Package } from "lucide-react";
 
-interface SearchResult {
-  id: string;
-  type: "project" | "product" | "client";
-  name: string;
-  subtitle?: string;
-  path: string;
+function rowMatches(needle: string, project: Project, clientName: string, productName: string): boolean {
+  const t = needle.trim().toLowerCase();
+  if (!t) return true;
+  const obPm = String((project as Record<string, unknown>).ob_pm ?? "").toLowerCase();
+  const haystack = [project.name, clientName, productName, obPm, project.project_code ?? ""].join("\n").toLowerCase();
+  if (haystack.includes(t)) return true;
+
+  const idInName = extractBracketProjectId(project.name);
+  if (idInName && /^\d+$/.test(needle.trim())) {
+    if (idInName === needle.trim()) return true;
+    if (idInName.includes(needle.trim())) return true;
+  }
+  return false;
 }
 
 export default function GlobalSearch() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResult[]>([]);
-  const [selectedIdx, setSelectedIdx] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
-  // Cmd+K shortcut
+  const { data: tree, isPending } = useQuery({
+    queryKey: PROJECT_TREE_QUERY_KEY,
+    queryFn: fetchProjectTreeData,
+    enabled: open,
+    staleTime: 30_000,
+  });
+
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
+    const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         setOpen(true);
       }
     };
-    window.addEventListener("keydown", handler);
-    return () => window.removeEventListener("keydown", handler);
+    const onOpen = () => setOpen(true);
+    window.addEventListener("keydown", onKey);
+    window.addEventListener(GLOBAL_SEARCH_OPEN_EVENT, onOpen);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener(GLOBAL_SEARCH_OPEN_EVENT, onOpen);
+    };
   }, []);
 
-  // Focus input when opened
   useEffect(() => {
-    if (open) {
-      setQuery("");
-      setResults([]);
-      setSelectedIdx(0);
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
+    if (!open) return;
+    setQuery("");
   }, [open]);
 
-  // Search
-  const search = useCallback(async (q: string) => {
-    if (q.length < 1) { setResults([]); return; }
-    const pattern = `%${q}%`;
-
-    const [clients, products, projects] = await Promise.all([
-      supabase.from("clients").select("id, name").ilike("name", pattern).limit(5),
-      supabase.from("products").select("id, name, label").ilike("name", pattern).limit(5),
-      supabase.from("projects").select("id, name, product_id").ilike("name", pattern).limit(10),
-    ]);
-
-    const items: SearchResult[] = [];
-    (clients.data ?? []).forEach((c) =>
-      items.push({ id: c.id, type: "client", name: c.name, path: `/client/${c.id}` })
-    );
-    (products.data ?? []).forEach((p) =>
-      items.push({ id: p.id, type: "product", name: p.name, subtitle: p.label, path: `/product/${p.id}` })
-    );
-    (projects.data ?? []).forEach((p) =>
-      items.push({ id: p.id, type: "project", name: p.name, path: `/project/${p.id}` })
-    );
-    setResults(items);
-    setSelectedIdx(0);
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => search(query), 200);
-    return () => clearTimeout(timer);
-  }, [query, search]);
-
-  const handleSelect = (result: SearchResult) => {
-    setOpen(false);
-    navigate(result.path);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setSelectedIdx((i) => Math.min(i + 1, results.length - 1));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setSelectedIdx((i) => Math.max(i - 1, 0));
-    } else if (e.key === "Enter" && results[selectedIdx]) {
-      e.preventDefault();
-      handleSelect(results[selectedIdx]);
+  const filtered = useMemo(() => {
+    const clients = tree?.clients ?? [];
+    const products = tree?.products ?? [];
+    const projects = tree?.projects ?? [];
+    const q = query.trim();
+    if (!q) {
+      return { clients: clients.slice(0, 5), products: products.slice(0, 5), projects: projects.slice(0, 8) };
     }
-  };
+    const cl = clients.filter((c) => c.name.toLowerCase().includes(q.toLowerCase())).slice(0, 8);
+    const prd = products
+      .filter((p) => p.name.toLowerCase().includes(q.toLowerCase()) || p.code.toLowerCase().includes(q.toLowerCase()))
+      .slice(0, 8);
+    const clientMap = new Map(clients.map((c) => [c.id, c.name]));
+    const productMap = new Map(products.map((p) => [p.id, { name: p.name, clientId: p.client_id }]));
+    const proj = projects
+      .filter((p) => {
+        const pinfo = p.product_id ? productMap.get(p.product_id) : undefined;
+        const cn = pinfo?.clientId ? clientMap.get(pinfo.clientId) ?? "" : "";
+        const pn = pinfo?.name ?? "";
+        return rowMatches(q, p, cn, pn);
+      })
+      .slice(0, 20);
+    return { clients: cl, products: prd, projects: proj };
+  }, [tree, query]);
 
-  const iconMap = {
-    client: Building2,
-    product: Package,
-    project: FolderOpen,
-  };
-
-  const labelMap = {
-    client: "クライアント",
-    product: "商材",
-    project: "案件",
-  };
+  const runNavigate = useCallback(
+    (path: string) => {
+      setOpen(false);
+      navigate(path);
+    },
+    [navigate]
+  );
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogContent className="max-w-lg p-0 gap-0 overflow-hidden">
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-          <Search className="h-4 w-4 text-muted-foreground shrink-0" />
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="案件名、クライアント名、商材名で検索..."
-            className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
-          />
-          <kbd className="hidden sm:inline-flex items-center gap-0.5 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-            ESC
-          </kbd>
-        </div>
+      <DialogContent className="overflow-hidden p-0 shadow-lg max-w-lg gap-0">
+        <Command shouldFilter={false} className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5">
+          <CommandInput placeholder="案件名・ID・クライアント・商材・担当で検索…" value={query} onValueChange={setQuery} />
+          <CommandList>
+            {isPending && (
+              <div className="py-8 text-center text-sm text-muted-foreground">読み込み中…</div>
+            )}
+            {!isPending && <CommandEmpty>一致する結果がありません</CommandEmpty>}
 
-        <div className="max-h-[320px] overflow-y-auto">
-          {query.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">
-              <Search className="h-8 w-8 mx-auto mb-2 opacity-30" />
-              <p className="text-sm">検索キーワードを入力</p>
-              <p className="text-xs mt-1">案件、クライアント、商材を横断検索できます</p>
-            </div>
-          ) : results.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">
-              <p className="text-sm">「{query}」に一致する結果はありません</p>
-            </div>
-          ) : (
-            <div className="py-1">
-              {results.map((r, idx) => {
-                const Icon = iconMap[r.type];
-                return (
-                  <button
-                    key={`${r.type}-${r.id}`}
-                    onClick={() => handleSelect(r)}
-                    onMouseEnter={() => setSelectedIdx(idx)}
-                    className={cn(
-                      "w-full flex items-center gap-3 px-4 py-2.5 text-left transition-colors",
-                      idx === selectedIdx ? "bg-muted" : "hover:bg-muted/50"
-                    )}
-                  >
-                    <Icon className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{r.name}</p>
-                      {r.subtitle && <p className="text-xs text-muted-foreground truncate">{r.subtitle}</p>}
-                    </div>
-                    <span className="text-[10px] text-muted-foreground shrink-0">{labelMap[r.type]}</span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
+            {!isPending && filtered.clients.length > 0 && (
+              <CommandGroup heading="クライアント">
+                {filtered.clients.map((c) => (
+                  <CommandItem key={`c-${c.id}`} value={`client-${c.id}`} onSelect={() => runNavigate(`/client/${c.id}`)}>
+                    <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="truncate">{c.name}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
 
-        <div className="px-4 py-2 border-t border-border flex items-center gap-4 text-[10px] text-muted-foreground">
-          <span>↑↓ 移動</span>
-          <span>↵ 選択</span>
-          <span>esc 閉じる</span>
-        </div>
+            {!isPending && filtered.products.length > 0 && (
+              <>
+                {filtered.clients.length > 0 && <CommandSeparator />}
+                <CommandGroup heading="商材">
+                  {filtered.products.map((p) => (
+                    <CommandItem key={`p-${p.id}`} value={`product-${p.id}`} onSelect={() => runNavigate(`/product/${p.id}`)}>
+                      <Package className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="truncate">{p.name}</span>
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </>
+            )}
+
+            {!isPending && filtered.projects.length > 0 && (
+              <>
+                {(filtered.clients.length > 0 || filtered.products.length > 0) && <CommandSeparator />}
+                <CommandGroup heading="案件">
+                  {filtered.projects.map((p) => {
+                    const pinfo = p.product_id ? tree?.products.find((x) => x.id === p.product_id) : undefined;
+                    const cn = pinfo?.client_id ? tree?.clients.find((x) => x.id === pinfo.client_id)?.name ?? "" : "";
+                    const sub = [cn, pinfo?.name].filter(Boolean).join(" · ");
+                    return (
+                      <CommandItem key={`j-${p.id}`} value={`project-${p.id}`} onSelect={() => runNavigate(`/project/${p.id}`)}>
+                        <FolderOpen className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm">{p.name}</p>
+                          {sub ? <p className="text-[11px] text-muted-foreground truncate">{sub}</p> : null}
+                        </div>
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              </>
+            )}
+          </CommandList>
+        </Command>
       </DialogContent>
     </Dialog>
   );

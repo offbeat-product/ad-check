@@ -4,12 +4,15 @@ import { supabase } from "@/integrations/supabase/client";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import type { Product, Client, Project } from "@/lib/db-types";
 import { AD_BRAIN_URL } from "@/lib/constants";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import CheckRulesTab from "@/components/product/CheckRulesTab";
 import CreateProjectModal from "@/components/CreateProjectModal";
-import { FolderOpen, Plus, ExternalLink } from "lucide-react";
+import { ProjectTable, type ProjectProgress } from "@/components/ProjectTable";
+import { isFileDoneForProgress } from "@/lib/project-display";
+import { Plus, ExternalLink } from "lucide-react";
+
+const HIDE_COMPLETED_KEY = "product_table_hide_completed";
 
 export default function ProductPage() {
   const { id } = useParams<{ id: string }>();
@@ -17,15 +20,23 @@ export default function ProductPage() {
   const [product, setProduct] = useState<Product | null>(null);
   const [client, setClient] = useState<Client | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [progressByProjectId, setProgressByProjectId] = useState<Record<string, ProjectProgress>>({});
   const [loading, setLoading] = useState(true);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const [hideCompleted, setHideCompleted] = useState(() => {
+    try { return localStorage.getItem(HIDE_COMPLETED_KEY) !== "false"; }
+    catch { return true; }
+  });
+
+  useEffect(() => {
+    localStorage.setItem(HIDE_COMPLETED_KEY, String(hideCompleted));
+  }, [hideCompleted]);
 
   const fetchData = useCallback(async () => {
     if (!id) return;
     const { data: prod, error: prodErr } = await supabase.from("products_with_check_settings").select("*").eq("id", id).maybeSingle();
     if (handleSupabaseError(prodErr, "product") || !prod) { setLoading(false); return; }
     setProduct(prod);
-    
 
     const [clRes, prRes] = await Promise.all([
       prod.client_id ? supabase.from("clients").select("*").eq("id", prod.client_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
@@ -34,11 +45,30 @@ export default function ProductPage() {
     handleSupabaseError(clRes.error, "client");
     handleSupabaseError(prRes.error, "projects");
     setClient(clRes.data);
-    setProjects(prRes.data ?? []);
+    const list = prRes.data ?? [];
+    setProjects(list);
+
+    const ids = list.map((p) => p.id);
+    if (ids.length === 0) {
+      setProgressByProjectId({});
+    } else {
+      const { data: files, error: fe } = await supabase.from("project_files").select("project_id, status").in("project_id", ids);
+      if (!handleSupabaseError(fe, "project_files progress")) {
+        const map: Record<string, ProjectProgress> = {};
+        (files ?? []).forEach((f) => {
+          const pid = f.project_id;
+          if (!pid) return;
+          if (!map[pid]) map[pid] = { total: 0, done: 0 };
+          map[pid].total += 1;
+          if (isFileDoneForProgress(f.status)) map[pid].done += 1;
+        });
+        setProgressByProjectId(map);
+      }
+    }
     setLoading(false);
   }, [id]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => { void fetchData(); }, [fetchData]);
 
   if (loading) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">読み込み中...</div>;
   if (!product) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">商材が見つかりません</div>;
@@ -77,26 +107,13 @@ export default function ProductPage() {
             {projects.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-12">案件はまだありません</p>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                {projects.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => navigate(`/project/${p.id}`)}
-                    className="glass-card p-4 text-left hover:border-primary/30 transition-colors"
-                  >
-                    <div className="flex items-center gap-2 mb-1">
-                      <FolderOpen className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm font-medium truncate">{p.name}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                      <Badge variant="outline" className="text-[10px] h-4">{p.status === "active" ? "進行中" : p.status}</Badge>
-                      {p.project_code && <span>{p.project_code}</span>}
-                      <span>{new Date(p.created_at || "").toLocaleDateString("ja-JP")}</span>
-                    </div>
-                    {p.description && <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{p.description}</p>}
-                  </button>
-                ))}
-              </div>
+              <ProjectTable
+                projects={projects}
+                progressByProjectId={progressByProjectId}
+                hideCompleted={hideCompleted}
+                onHideCompletedChange={setHideCompleted}
+                onRowNavigate={(projectId) => navigate(`/project/${projectId}`)}
+              />
             )}
           </TabsContent>
 

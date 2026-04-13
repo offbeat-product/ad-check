@@ -15,8 +15,11 @@ export interface TreeData {
   refetch: () => void;
 }
 
-async function fetchTreeData() {
-  // Sequential queries to reduce concurrent DB connections
+export async function fetchProjectTreeData(): Promise<{
+  clients: Client[];
+  products: Product[];
+  projects: Project[];
+}> {
   const c = await supabase.from("clients").select("*").order("sort_order").order("name");
   handleSupabaseError(c.error, "clients");
 
@@ -42,7 +45,7 @@ export function useProjectTree(): TreeData & {
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: PROJECT_TREE_QUERY_KEY,
-    queryFn: fetchTreeData,
+    queryFn: fetchProjectTreeData,
     staleTime: 30_000,
     retry: 3,
     retryDelay: (attempt) => Math.min(1000 * Math.pow(2, attempt), 10000),

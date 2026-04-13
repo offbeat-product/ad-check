@@ -1,13 +1,16 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
+import { format, parseISO, startOfDay, differenceInCalendarDays } from "date-fns";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import type { Project, Product, CheckResultRow, ProjectFile } from "@/lib/db-types";
 import { FILE_STATUS_CONFIG } from "@/lib/db-types";
 import { PROJECT_STATUS_CONFIG, getProcessLabel } from "@/lib/process-config";
+import { useUpcomingDeadlines, splitTodayAndWeek, type DeadlineProjectRow } from "@/hooks/useUpcomingDeadlines";
+import { effectiveProjectDeadline } from "@/lib/project-display";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Badge } from "@/components/ui/badge";
-import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderOpen, ChevronLeft, ChevronRight, Plus, RefreshCw, WifiOff, User, Target, CheckCircle, FolderCheck } from "lucide-react";
+import { ClipboardCheck, AlertTriangle, BarChart3, TrendingUp, FileText, FolderOpen, ChevronLeft, ChevronRight, Plus, RefreshCw, WifiOff, User, Target, CheckCircle, FolderCheck, Calendar } from "lucide-react";
 import NotificationBell from "@/components/NotificationBell";
 import { TopCorrectionPatterns } from "@/components/CorrectionPatterns";
 import { cn } from "@/lib/utils";
@@ -78,6 +81,64 @@ export default function Dashboard() {
   const [page, setPage] = useState(0);
   const [createOpen, setCreateOpen] = useState(false);
   const [refetchKey, setRefetchKey] = useState(0);
+
+  const { data: deadlineRows = [] } = useUpcomingDeadlines();
+  const { today: dueToday, weekRest: dueWeek } = useMemo(() => splitTodayAndWeek(deadlineRows), [deadlineRows]);
+
+  const deadlineLabelClass = (iso: string | null) => {
+    if (!iso) return "text-muted-foreground";
+    try {
+      const d = startOfDay(parseISO(iso.length > 10 ? iso : `${iso}T00:00:00`));
+      const days = differenceInCalendarDays(d, startOfDay(new Date()));
+      if (days < 0) return "text-status-ng font-medium";
+      if (days === 0) return "text-destructive font-medium";
+      if (days <= 3) return "text-status-warning font-medium";
+      return "text-muted-foreground";
+    } catch {
+      return "text-muted-foreground";
+    }
+  };
+
+  const renderDeadlineCards = (rows: DeadlineProjectRow[]) => {
+    if (rows.length === 0) {
+      return <p className="text-xs text-muted-foreground text-center py-6">該当する案件はありません</p>;
+    }
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {rows.map((r) => {
+          const stCfg = PROJECT_STATUS_CONFIG[r.status || "in_progress"] || PROJECT_STATUS_CONFIG.in_progress;
+          const eff = effectiveProjectDeadline(r.deadline, r.overall_deadline);
+          const dateLabel = eff
+            ? format(parseISO(eff.length > 10 ? eff : `${eff}T00:00:00`), "yyyy/MM/dd")
+            : "—";
+          return (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => navigate(`/project/${r.id}`)}
+              className="glass-card p-4 text-left hover:border-primary/30 transition-colors"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <FolderOpen className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium truncate flex-1">{r.name}</span>
+                <Badge variant="outline" className={cn("text-[10px] shrink-0", stCfg.badgeClass)}>{stCfg.label}</Badge>
+              </div>
+              <p className="text-xs text-muted-foreground">{r.client_name} · {r.product_name}</p>
+              <div className="flex items-center justify-between mt-2 text-[10px] text-muted-foreground">
+                <span className={cn("inline-flex items-center gap-1", deadlineLabelClass(eff))}>
+                  <Calendar className="h-3 w-3" />
+                  納期 {dateLabel}
+                </span>
+                <span>
+                  進捗 {r.completed_files}/{r.total_files}
+                </span>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
 
   // Phase 1: Fetch projects & products only (lightweight, fast)
   useEffect(() => {
@@ -382,6 +443,22 @@ export default function Dashboard() {
               </div>
             ))
           )}
+        </div>
+
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+            <h2 className="text-sm font-semibold">本日締切 ({dueToday.length}件)</h2>
+          </div>
+          {renderDeadlineCards(dueToday)}
+        </div>
+
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <AlertTriangle className="h-4 w-4 text-status-warning shrink-0" />
+            <h2 className="text-sm font-semibold">今週の締切 ({dueWeek.length}件)</h2>
+          </div>
+          {renderDeadlineCards(dueWeek)}
         </div>
 
         {/* Projects - loaded first (Phase 1) */}

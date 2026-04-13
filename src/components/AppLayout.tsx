@@ -6,6 +6,7 @@ import GlobalSearch from "@/components/GlobalSearch";
 import BatchCheckFloatingBar from "@/components/BatchCheckFloatingBar";
 import NotificationBell from "@/components/NotificationBell";
 import { Menu, X, Search } from "lucide-react";
+import { openGlobalSearch } from "@/lib/global-search-events";
 import { AdCheckLogoMark } from "@/components/AdCheckLogoMark";
 
 export default function AppLayout() {
@@ -65,9 +66,8 @@ export default function AppLayout() {
           </h1>
           <NotificationBell />
           <button
-            onClick={() => {
-              window.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }));
-            }}
+            type="button"
+            onClick={() => openGlobalSearch()}
             className="p-2 rounded-lg hover:bg-muted"
           >
             <Search className="h-4 w-4 text-muted-foreground" />
