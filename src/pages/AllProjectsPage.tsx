@@ -2,7 +2,7 @@ import { useMemo, useCallback, useEffect, type ElementType } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { format, parseISO, startOfDay, addDays } from "date-fns";
-import { ClipboardList, FolderKanban, Loader2, Search, AlertTriangle, CalendarDays, Eye, EyeOff } from "lucide-react";
+import { ClipboardList, FolderKanban, Layers, Loader2, Search, AlertTriangle, CalendarDays, Eye, EyeOff } from "lucide-react";
 import { useAllProjects, ALL_PROJECTS_QUERY_KEY, type EnrichedProjectRow } from "@/hooks/useAllProjects";
 import { ProjectTable, type ProjectTableDirectoryEntry } from "@/components/ProjectTable";
 import { effectiveProjectDeadline, isProjectActiveForCount } from "@/lib/project-display";
