@@ -3,14 +3,11 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useProjectTree } from "@/hooks/useProjectTree";
-import { useRecentProjects } from "@/hooks/useRecentProjects";
-import { useFavoriteProjects } from "@/hooks/useFavoriteProjects";
 import { openGlobalSearch } from "@/lib/global-search-events";
 import { isProjectActiveForCount } from "@/lib/project-display";
-import { extractBracketProjectId, stripProjectListNamePrefix } from "@/lib/project-display";
 import {
   Home, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search, PanelLeftClose, PanelLeftOpen, BarChart3,
-  ExternalLink, CircleCheckBig, Brain, Star, Clock, ClipboardList,
+  ExternalLink, CircleCheckBig, Brain, ClipboardList,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
@@ -51,8 +48,6 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
   const navigate = useNavigate();
   const location = useLocation();
   const { clients, products, projects, updateClientOrder, updateProductOrder } = useProjectTree() as ReturnType<typeof useProjectTree>;
-  const { entries: recentEntries } = useRecentProjects();
-  const { ids: favoriteIds } = useFavoriteProjects();
 
   const [openClients, setOpenClients] = useState<Set<string>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem("sb_open_clients") || "[]")); }
@@ -118,20 +113,6 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
     (productId: string) => projects.filter((p) => p.product_id === productId && isProjectActiveForCount(p.status)).length,
     [projects]
   );
-
-  const favoriteProjectsResolved = useMemo(() => {
-    return favoriteIds
-      .slice(0, 10)
-      .map((id) => projects.find((p) => p.id === id))
-      .filter((p): p is NonNullable<typeof p> => Boolean(p));
-  }, [favoriteIds, projects]);
-
-  const shortProjectLabel = (name: string) => {
-    const idPart = extractBracketProjectId(name);
-    const stripped = stripProjectListNamePrefix(name);
-    const tail = stripped.length > 28 ? `${stripped.slice(0, 28)}…` : stripped;
-    return idPart ? `ID${idPart} ${tail}` : tail;
-  };
 
   const handleClientDragStart = (clientId: string) => { dragClientItem.current = clientId; };
   const handleClientDragEnter = (clientId: string) => { setDragOverClientId(clientId); };
@@ -234,61 +215,6 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
           >
             <Search className="h-4 w-4" />
           </button>
-        )}
-
-        {!collapsed && (
-          <>
-            <div className="px-5 pt-3 pb-1">
-              <div className="flex items-center gap-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                <Star className="h-3 w-3" />
-                お気に入り
-                <span className="text-muted-foreground/70 font-normal normal-case">({favoriteProjectsResolved.length})</span>
-              </div>
-              {favoriteProjectsResolved.length === 0 ? (
-                <p className="text-[10px] text-muted-foreground/80 py-1">ピン留め案件がありません</p>
-              ) : (
-                <ul className="mt-1 space-y-0.5">
-                  {favoriteProjectsResolved.map((p) => (
-                    <li key={p.id}>
-                      <button type="button" onClick={() => navigate(`/project/${p.id}`)}
-                        className={cn("w-full text-left text-xs py-1 pl-2 border-l-2 border-transparent hover:bg-muted/40 rounded-r truncate press-feedback",
-                          activeProjectId === p.id ? "text-primary font-medium border-primary" : "text-muted-foreground")}>
-                        {shortProjectLabel(p.name)}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div className="px-5 pt-2 pb-1">
-              <div className="flex items-center gap-2 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
-                <Clock className="h-3 w-3" />
-                最近見た案件
-              </div>
-              {recentEntries.length === 0 ? (
-                <p className="text-[10px] text-muted-foreground/80 py-1">まだありません</p>
-              ) : (
-                <ul className="mt-1 space-y-0.5">
-                  {recentEntries.slice(0, 10).map((e) => {
-                    const bid = extractBracketProjectId(e.project_name);
-                    const short = stripProjectListNamePrefix(e.project_name);
-                    const line = bid ? `ID${bid} ${short}` : short;
-                    const show = line.length > 44 ? `${line.slice(0, 44)}…` : line;
-                    return (
-                      <li key={`${e.project_id}-${e.viewed_at}`}>
-                        <button type="button" onClick={() => navigate(`/project/${e.project_id}`)}
-                          className={cn("w-full text-left text-xs py-1 pl-2 border-l-2 border-transparent hover:bg-muted/40 rounded-r truncate press-feedback",
-                            activeProjectId === e.project_id ? "text-primary font-medium border-primary" : "text-muted-foreground")}>
-                          {show}
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </div>
-          </>
         )}
 
         {collapsed ? (

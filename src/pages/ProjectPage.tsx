@@ -13,8 +13,6 @@ import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { useProjectProcesses, type ProjectProcess } from "@/hooks/useProjectProcesses";
 import { PROJECT_STATUS_CONFIG, PROCESS_STATUS_CONFIG, getProcessFileUploadConfig, getProcessWebhookPath, AI_CHECK_CONFIG } from "@/lib/process-config";
 import { PROJECT_TREE_QUERY_KEY } from "@/hooks/useProjectTree";
-import { pushRecentProject } from "@/hooks/useRecentProjects";
-import { useFavoriteProjects } from "@/hooks/useFavoriteProjects";
 import { useProcessTypes } from "@/hooks/useProcessTypes";
 import {
   buildProcessLabelLookup,
@@ -51,7 +49,6 @@ import {
   ExternalLink,
   Video,
   LayoutGrid,
-  Star,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -177,19 +174,6 @@ export default function ProjectPage() {
   const { patterns, addPattern, addPatternsBulk, deletePattern, updatePattern, refetch: refetchPatterns } = usePatterns(id);
 
   const { processes, updateProcess, reorderProcesses, addProcess, deleteProcess, resetToDefaults } = useProjectProcesses(id);
-
-  const { isFavorite, toggleFavorite } = useFavoriteProjects();
-
-  useEffect(() => {
-    if (!project || !client || !product) return;
-    pushRecentProject({
-      project_id: project.id,
-      project_name: project.name,
-      client_name: client.name,
-      product_name: product.name,
-      viewed_at: new Date().toISOString(),
-    });
-  }, [project?.id, project?.name, client?.id, client?.name, product?.id, product?.name]);
 
   useEffect(() => {
     setMixedProcessTab("banner");
@@ -1184,16 +1168,6 @@ export default function ProjectPage() {
               onChange={handleDeadlineChange}
             />
             <NotificationBell />
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="h-8 gap-1 text-xs text-muted-foreground"
-              onClick={() => project && toggleFavorite(project.id)}
-            >
-              <Star className={cn("h-4 w-4", project && isFavorite(project.id) && "fill-primary text-primary")} />
-              {project && isFavorite(project.id) ? "お気に入り済み" : "お気に入りに追加"}
-            </Button>
             <Popover>
               <PopoverTrigger asChild>
                 <button className={cn("px-3 py-1.5 rounded-full text-xs font-medium border flex items-center gap-1 transition-colors hover:opacity-80", statusCfg.badgeClass)}>

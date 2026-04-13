@@ -43,7 +43,6 @@ import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { FILE_STATUS_CONFIG } from "@/lib/db-types";
 import { useCheckProgress, ESTIMATED_DURATION } from "@/hooks/useCheckProgress";
-import { pushRecentProject } from "@/hooks/useRecentProjects";
 import { Progress } from "@/components/ui/progress";
 
 interface AnnotationData {
@@ -99,17 +98,6 @@ export default function FileReviewPage() {
   const rootCheckResultId = record?.parent_check_result_id || record?.id || null;
   const { items, markers, commentCounts, paintMode, setPaintMode, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
     useReviewState(rootCheckResultId, checkItems);
-
-  useEffect(() => {
-    if (!project || !client || !product) return;
-    pushRecentProject({
-      project_id: project.id,
-      project_name: project.name,
-      client_name: client.name,
-      product_name: product.name,
-      viewed_at: new Date().toISOString(),
-    });
-  }, [project?.id, project?.name, client?.id, client?.name, product?.id, product?.name]);
 
   // Re-fetch the latest check_result from DB before validating submission
   const validateAndOpenSubmit = useCallback(async () => {
