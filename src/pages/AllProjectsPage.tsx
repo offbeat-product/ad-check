@@ -19,8 +19,10 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem } from "@/components/ui/pagination";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import NotificationBell from "@/components/NotificationBell";
+import { ProjectStatusView } from "@/components/projects/ProjectStatusView";
 import type { Project } from "@/lib/db-types";
 
 const PAGE_SIZE = 50;
@@ -85,6 +87,19 @@ export default function AllProjectsPage() {
   const q = searchParams.get("q") ?? "";
   const hideCompleted = searchParams.get("hide_completed") !== "0";
   const pageRaw = Math.max(1, parseInt(searchParams.get("page") || "1", 10) || 1);
+  const listTabView = searchParams.get("view") === "status" ? "status" : "normal";
+
+  const handleListViewTabChange = (value: string) => {
+    setSearchParams(
+      (prev) => {
+        const n = new URLSearchParams(prev);
+        if (value === "status") n.set("view", "status");
+        else n.delete("view");
+        return n;
+      },
+      { replace: true }
+    );
+  };
 
   const setFilters = useCallback(
     (patch: Record<string, string | undefined>, resetPage = true) => {
@@ -266,15 +281,21 @@ export default function AllProjectsPage() {
       </header>
 
       <div className="flex-1 flex flex-col min-h-0 w-full max-w-7xl mx-auto px-4 md:px-6 py-6">
-        {isLoading ? (
-          <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-sm">
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-            読み込み中...
-          </div>
-        ) : (
-          <>
-            <div className="flex-1 flex flex-col min-h-0 space-y-6">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <Tabs value={listTabView} onValueChange={handleListViewTabChange} className="flex-1 flex flex-col min-h-0">
+          <TabsList className="mb-4 w-fit shrink-0">
+            <TabsTrigger value="normal">通常ビュー</TabsTrigger>
+            <TabsTrigger value="status">進捗ビュー</TabsTrigger>
+          </TabsList>
+          <TabsContent value="normal" className="mt-0 flex-1 flex flex-col min-h-0 data-[state=inactive]:hidden">
+            {isLoading ? (
+              <div className="flex-1 flex items-center justify-center gap-2 text-muted-foreground text-sm">
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                読み込み中...
+              </div>
+            ) : (
+              <>
+                <div className="flex-1 flex flex-col min-h-0 space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <SummaryStat icon={Layers} label="全案件" value={summary.totalCount} iconTone="text-primary" />
               <SummaryStat icon={FolderKanban} label="進行中" value={summary.inProgressCount} iconTone="text-primary" />
               <SummaryStat icon={AlertTriangle} label="本日締切" value={summary.todayCount} iconTone="text-destructive" />
@@ -410,59 +431,64 @@ export default function AllProjectsPage() {
               />
             </div>
 
-            {totalPages > 1 && (
-              <div className="shrink-0 pt-6 mt-auto border-t border-border">
-                <Pagination>
-                  <PaginationContent className="flex-wrap gap-1">
-                    <PaginationItem>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="gap-1"
-                        disabled={currentPage <= 1}
-                        onClick={() => setPage(currentPage - 1)}
-                      >
-                        &lt;
-                      </Button>
-                    </PaginationItem>
-                    {visiblePages.map((item, idx) =>
-                      item === "gap" ? (
-                        <PaginationItem key={`g-${idx}`}>
-                          <PaginationEllipsis />
-                        </PaginationItem>
-                      ) : (
-                        <PaginationItem key={item}>
+                {totalPages > 1 && (
+                  <div className="shrink-0 pt-6 mt-auto border-t border-border">
+                    <Pagination>
+                      <PaginationContent className="flex-wrap gap-1">
+                        <PaginationItem>
                           <Button
                             type="button"
-                            variant={item === currentPage ? "outline" : "ghost"}
+                            variant="ghost"
                             size="sm"
-                            className="min-w-9"
-                            onClick={() => setPage(item)}
+                            className="gap-1"
+                            disabled={currentPage <= 1}
+                            onClick={() => setPage(currentPage - 1)}
                           >
-                            {item}
+                            &lt;
                           </Button>
                         </PaginationItem>
-                      )
-                    )}
-                    <PaginationItem>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="gap-1"
-                        disabled={currentPage >= totalPages}
-                        onClick={() => setPage(currentPage + 1)}
-                      >
-                        &gt;
-                      </Button>
-                    </PaginationItem>
-                  </PaginationContent>
-                </Pagination>
-              </div>
+                        {visiblePages.map((item, idx) =>
+                          item === "gap" ? (
+                            <PaginationItem key={`g-${idx}`}>
+                              <PaginationEllipsis />
+                            </PaginationItem>
+                          ) : (
+                            <PaginationItem key={item}>
+                              <Button
+                                type="button"
+                                variant={item === currentPage ? "outline" : "ghost"}
+                                size="sm"
+                                className="min-w-9"
+                                onClick={() => setPage(item)}
+                              >
+                                {item}
+                              </Button>
+                            </PaginationItem>
+                          )
+                        )}
+                        <PaginationItem>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="gap-1"
+                            disabled={currentPage >= totalPages}
+                            onClick={() => setPage(currentPage + 1)}
+                          >
+                            &gt;
+                          </Button>
+                        </PaginationItem>
+                      </PaginationContent>
+                    </Pagination>
+                  </div>
+                )}
+              </>
             )}
-          </>
-        )}
+          </TabsContent>
+          <TabsContent value="status" className="mt-0 flex-1 min-h-0 data-[state=inactive]:hidden">
+            <ProjectStatusView />
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );

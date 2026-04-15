@@ -1480,6 +1480,10 @@ export type Database = {
         Args: { p_share_token: string }
         Returns: Json
       }
+      get_project_status_summary: {
+        Args: Record<PropertyKey, never>
+        Returns: Json
+      }
       get_share_link_by_token: {
         Args: { token_param: string }
         Returns: {
