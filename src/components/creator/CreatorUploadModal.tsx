@@ -233,7 +233,7 @@ export function CreatorUploadModal({
         const newFileId = typeof data === "string" ? data : "";
         if (!newFileId) throw new Error("アップロード結果の file_id が取得できませんでした");
         uploadedIds.push(newFileId);
-        setProgress(Math.round(5 + ((i + 1) / total) * 90)));
+        setProgress(Math.round(5 + ((i + 1) / total) * 90));
       }
 
       if (uploadedIds.length === 0) {
