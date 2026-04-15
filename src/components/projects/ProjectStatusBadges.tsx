@@ -1,5 +1,4 @@
 import { FILE_STATUS_CONFIG, type ProjectFileStatus } from "@/lib/db-types";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface ProjectStatusBadgesProps {
   counts: Record<ProjectFileStatus, number>;
@@ -15,6 +14,15 @@ const STATUS_ORDER: ProjectFileStatus[] = [
   "fixed",
 ];
 
+const SHORT_LABEL: Record<ProjectFileStatus, string> = {
+  uploaded: "初稿前",
+  checking: "チェック中",
+  checked: "初稿完了",
+  internal_revision: "修正中",
+  client_review: "CL確認",
+  fixed: "FIX",
+};
+
 export function ProjectStatusBadges({ counts, total }: ProjectStatusBadgesProps) {
   if (total === 0) {
     return <span className="text-xs text-muted-foreground">ファイルなし</span>;
@@ -28,19 +36,14 @@ export function ProjectStatusBadges({ counts, total }: ProjectStatusBadgesProps)
         const config = FILE_STATUS_CONFIG[status];
         if (!config) return null;
         return (
-          <Tooltip key={status}>
-            <TooltipTrigger asChild>
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs ${config.class}`}>
-                {cnt}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              {config.label}: {cnt}件
-            </TooltipContent>
-          </Tooltip>
+          <span
+            key={status}
+            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs whitespace-nowrap ${config.class}`}
+          >
+            {SHORT_LABEL[status]} {cnt}
+          </span>
         );
       })}
-      <span className="text-xs text-muted-foreground ml-1">/ 計{total}件</span>
     </div>
   );
 }
