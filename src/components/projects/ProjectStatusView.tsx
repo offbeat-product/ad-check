@@ -1,9 +1,10 @@
-import { useMemo, useState, useEffect, type ElementType } from "react";
+import { useMemo, useState, useEffect, useCallback, type ElementType } from "react";
 import { useNavigate } from "react-router-dom";
-import { format, differenceInCalendarDays, parseISO, startOfDay } from "date-fns";
+import { useQueryClient } from "@tanstack/react-query";
+import { format, differenceInCalendarDays, parseISO, startOfDay, isToday } from "date-fns";
 import {
+  AlertTriangle,
   CheckCircle,
-  Circle,
   Eye,
   EyeOff,
   Layers,
@@ -11,13 +12,16 @@ import {
   Search,
   Send,
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 import { useProjectStatusSummary, type ProjectStatusSummary } from "@/hooks/useProjectStatusSummary";
 import { CLSubmitDialog } from "@/components/projects/CLSubmitDialog";
 import { FixConfirmDialog } from "@/components/projects/FixConfirmDialog";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Progress } from "@/components/ui/progress";
 import {
   Select,
@@ -29,6 +33,11 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem } from "@/components/ui/pagination";
+import { useToast } from "@/hooks/use-toast";
+import { ALL_PROJECTS_QUERY_KEY } from "@/hooks/useAllProjects";
+import { PROJECT_TREE_QUERY_KEY } from "@/hooks/useProjectTree";
+import { PROJECT_AUDIT_LOG_QUERY_KEY } from "@/components/ProjectAuditLog";
+import { effectiveProjectDeadline } from "@/lib/project-display";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 50;
@@ -71,8 +80,8 @@ function categorizeProject(p: ProjectStatusSummary): SectionKey {
 
 function sortProjects(projects: ProjectStatusSummary[]): ProjectStatusSummary[] {
   return [...projects].sort((a, b) => {
-    const dateA = a.overall_deadline || a.deadline;
-    const dateB = b.overall_deadline || b.deadline;
+    const dateA = effectiveProjectDeadline(a.deadline, a.overall_deadline);
+    const dateB = effectiveProjectDeadline(b.deadline, b.overall_deadline);
     if (dateA && dateB) {
       if (dateA !== dateB) return dateA.localeCompare(dateB);
     } else if (dateA) {
@@ -135,8 +144,17 @@ function getVisiblePages(current: number, total: number): (number | "gap")[] {
   return out;
 }
 
+function rowDeadlineValue(p: ProjectStatusSummary, patch: Record<string, string>): string | null {
+  if (Object.prototype.hasOwnProperty.call(patch, p.project_id)) {
+    return patch[p.project_id] ?? null;
+  }
+  return p.deadline ?? null;
+}
+
 export function ProjectStatusView() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const { data, loading, error, refetch } = useProjectStatusSummary();
   const [clSubmitTarget, setClSubmitTarget] = useState<ProjectStatusSummary | null>(null);
   const [fixTarget, setFixTarget] = useState<ProjectStatusSummary | null>(null);
@@ -146,21 +164,25 @@ export function ProjectStatusView() {
   const [productId, setProductId] = useState("");
   const [sectionKey, setSectionKey] = useState("");
   const [assignee, setAssignee] = useState("");
-  const [hideFixCompleted, setHideFixCompleted] = useState(true);
+  const [hideFixCompleted, setHideFixCompleted] = useState(false);
   const [page, setPage] = useState(1);
+  const [deadlineOpenId, setDeadlineOpenId] = useState<string | null>(null);
+  const [deadlinePatch, setDeadlinePatch] = useState<Record<string, string>>({});
 
   const summary = useMemo(() => {
     const totalCount = data.length;
-    let initial = 0;
-    let cl = 0;
-    let fix = 0;
-    for (const p of data) {
-      const cat = categorizeProject(p);
-      if (cat === "initial_check_pending") initial += 1;
-      if (cat === "cl_submit_ready") cl += 1;
-      if (cat === "fix_ready") fix += 1;
-    }
-    return { totalCount, initial, cl, fix };
+    const todayDue = data.filter((p) => {
+      const eff = effectiveProjectDeadline(p.deadline, p.overall_deadline);
+      if (!eff) return false;
+      try {
+        return isToday(parseISO(eff.length > 10 ? eff : `${eff}T00:00:00`));
+      } catch {
+        return false;
+      }
+    }).length;
+    const clSubmitCount = data.filter((p) => p.ready_for_cl_submit > 0).length;
+    const fixReadyCount = data.filter((p) => p.ready_for_fix > 0).length;
+    return { totalCount, todayDue, clSubmitCount, fixReadyCount };
   }, [data]);
 
   const clientOptions = useMemo(() => {
@@ -232,6 +254,43 @@ export function ProjectStatusView() {
 
   const visiblePages = useMemo(() => getVisiblePages(currentPage, totalPages), [currentPage, totalPages]);
 
+  const handleDeadlineChange = useCallback(
+    async (projectId: string, newDate: Date | undefined) => {
+      if (!newDate) return;
+      const ymd = format(newDate, "yyyy-MM-dd");
+      setDeadlinePatch((prev) => ({ ...prev, [projectId]: ymd }));
+      setDeadlineOpenId(null);
+      const { error: upErr } = await supabase
+        .from("projects")
+        .update({ deadline: ymd, updated_at: new Date().toISOString() })
+        .eq("id", projectId);
+      if (upErr) {
+        setDeadlinePatch((prev) => {
+          const n = { ...prev };
+          delete n[projectId];
+          return n;
+        });
+        toast({
+          title: "納品日の更新に失敗しました",
+          description: upErr.message,
+          variant: "destructive",
+        });
+        return;
+      }
+      toast({ title: "納品日を更新しました" });
+      void queryClient.invalidateQueries({ queryKey: PROJECT_TREE_QUERY_KEY });
+      void queryClient.invalidateQueries({ queryKey: ALL_PROJECTS_QUERY_KEY });
+      void queryClient.invalidateQueries({ queryKey: [PROJECT_AUDIT_LOG_QUERY_KEY] });
+      await refetch();
+      setDeadlinePatch((prev) => {
+        const n = { ...prev };
+        delete n[projectId];
+        return n;
+      });
+    },
+    [queryClient, refetch, toast]
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -253,9 +312,14 @@ export function ProjectStatusView() {
       <div className="flex-1 flex flex-col min-h-0 space-y-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <SummaryStat icon={Layers} label="全案件" value={summary.totalCount} iconTone="text-primary" />
-          <SummaryStat icon={Circle} label="初稿チェック前" value={summary.initial} iconTone="text-primary" />
-          <SummaryStat icon={Send} label="CL提出可能" value={summary.cl} iconTone="text-primary" />
-          <SummaryStat icon={CheckCircle} label="FIX確定可能" value={summary.fix} iconTone="text-primary" />
+          <SummaryStat icon={AlertTriangle} label="本日締切" value={summary.todayDue} iconTone="text-destructive" />
+          <SummaryStat icon={Send} label="CL提出可能" value={summary.clSubmitCount} iconTone="text-primary" />
+          <SummaryStat
+            icon={CheckCircle}
+            label="FIX確定可能"
+            value={summary.fixReadyCount}
+            iconTone="text-[hsl(264,100%,58%)]"
+          />
         </div>
 
         <div className="glass-card p-4 space-y-4">
@@ -421,10 +485,12 @@ export function ProjectStatusView() {
                 {pageSlice.map((p) => {
                   const section = categorizeProject(p);
                   const badge = SECTION_BADGE[section];
-                  const eff = p.overall_deadline || p.deadline;
+                  const dLine = rowDeadlineValue(p, deadlinePatch);
+                  const eff = effectiveProjectDeadline(dLine, p.overall_deadline);
                   const dateLabel = eff
                     ? format(parseISO(eff.length > 10 ? eff : `${eff}T00:00:00`), "M/d")
                     : "—";
+                  const calSelected = eff ? parseISO(eff.length > 10 ? eff : `${eff}T00:00:00`) : undefined;
                   const done = p.count_fixed;
                   const total = p.total;
                   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
@@ -492,7 +558,37 @@ export function ProjectStatusView() {
                           {badge.emoji} {badge.label}
                         </span>
                       </TableCell>
-                      <TableCell className={cn("text-xs whitespace-nowrap", deadlineClass(eff))}>{dateLabel}</TableCell>
+                      <TableCell
+                        data-interactive
+                        className={cn("text-xs whitespace-nowrap", deadlineClass(eff))}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <Popover
+                          open={deadlineOpenId === p.project_id}
+                          onOpenChange={(o) => setDeadlineOpenId(o ? p.project_id : null)}
+                        >
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              className={cn(
+                                "inline-flex items-center gap-1 rounded px-1 py-0.5 hover:bg-muted/60 transition-colors tabular-nums",
+                                deadlineClass(eff)
+                              )}
+                              data-interactive
+                            >
+                              <span>{dateLabel}</span>
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={calSelected}
+                              onSelect={(d) => void handleDeadlineChange(p.project_id, d)}
+                              className="p-3 pointer-events-auto"
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </TableCell>
                       <TableCell className="text-xs">
                         {total === 0 ? (
                           <span className="text-[10px] text-muted-foreground">ファイルなし</span>
