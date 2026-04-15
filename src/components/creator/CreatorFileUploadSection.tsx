@@ -309,8 +309,12 @@ export function CreatorFileUploadSection({
           onOpenChange={(next) => {
             setDialogOpen(next);
             if (!next) {
+              // Radix Dialog の Portal 解放と同一コミットで子を破棄すると removeChild 系の不整合が起きることがあるため、
+              // 閉じる処理を次フレームにずらす
               setParentCandidates([]);
-              setTargetProcess(null);
+              window.setTimeout(() => {
+                setTargetProcess(null);
+              }, 0);
             }
           }}
           shareToken={shareToken}

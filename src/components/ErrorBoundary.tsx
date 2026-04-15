@@ -12,6 +12,15 @@ interface State {
   error: Error | null;
 }
 
+/** Portal / 同一ティックの大量 setState などで起きうる React の一過性 DOM 不整合 */
+function isLikelyTransientDomReconcileError(error: Error): boolean {
+  const msg = error?.message ?? "";
+  return (
+    (msg.includes("removeChild") && msg.includes("not a child")) ||
+    (msg.includes("insertBefore") && msg.includes("not a child"))
+  );
+}
+
 export class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props);
@@ -19,10 +28,17 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
+    if (isLikelyTransientDomReconcileError(error)) {
+      return { hasError: false, error: null };
+    }
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    if (isLikelyTransientDomReconcileError(error)) {
+      console.warn("[ErrorBoundary] Transient DOM reconcile error (recovered without full-screen UI)", error, errorInfo);
+      return;
+    }
     console.error("[ErrorBoundary]", error, errorInfo);
   }
 
@@ -67,10 +83,17 @@ export class SectionErrorBoundary extends React.Component<Props, State> {
   }
 
   static getDerivedStateFromError(error: Error): State {
+    if (isLikelyTransientDomReconcileError(error)) {
+      return { hasError: false, error: null };
+    }
     return { hasError: true, error };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    if (isLikelyTransientDomReconcileError(error)) {
+      console.warn("[SectionErrorBoundary] Transient DOM reconcile error (recovered)", error, errorInfo);
+      return;
+    }
     console.error("[SectionErrorBoundary]", error, errorInfo);
   }
 

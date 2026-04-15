@@ -43,6 +43,7 @@ export async function tusUpload(options: TusUploadOptions): Promise<TusUploadRes
 
   // For small files (< 6MB), use standard upload (faster)
   if (fileSize < CHUNK_SIZE) {
+    onProgress?.(5);
     const { error } = await supabase.storage
       .from(bucketName)
       .upload(path, file, { upsert, contentType });
@@ -96,7 +97,10 @@ export async function tusUpload(options: TusUploadOptions): Promise<TusUploadRes
         reject(new Error(`アップロードに失敗しました: ${detail}`));
       },
       onProgress: (bytesUploaded, bytesTotal) => {
-        const percentage = Math.round((bytesUploaded / bytesTotal) * 100);
+        if (!bytesTotal || bytesTotal <= 0) return;
+        const raw = (bytesUploaded / bytesTotal) * 100;
+        const percentage = Math.min(100, Math.max(0, Math.round(raw)));
+        if (!Number.isFinite(percentage)) return;
         onProgress?.(percentage);
       },
       onSuccess: () => {
@@ -110,6 +114,8 @@ export async function tusUpload(options: TusUploadOptions): Promise<TusUploadRes
       if (previousUploads.length > 0) {
         upload.resumeFromPreviousUpload(previousUploads[0]);
       }
+      // 最初の onProgress が遅い環境でも UI が 0% のまま固まらないようにする
+      onProgress?.(1);
       upload.start();
     });
   });

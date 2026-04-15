@@ -98,8 +98,8 @@ export function CreatorUploadModal({
   };
 
   const closeModal = () => {
-    onOpenChange(false);
     resetState();
+    onOpenChange(false);
   };
 
   const filterDroppedFiles = (files: File[]): File[] => {
@@ -196,6 +196,7 @@ export function CreatorUploadModal({
     setProgress(5);
     const uploadedIds: string[] = [];
     const total = selectedFiles.length;
+    let closedSuccessfully = false;
 
     try {
       for (let i = 0; i < total; i++) {
@@ -246,12 +247,16 @@ export function CreatorUploadModal({
         toast({
           title: uploadType === "revision" ? "修正版をアップロードしました" : "ファイルをアップロードしました",
         });
-        onUploaded(uploadedIds[0]!);
       } else {
         toast({ title: `${uploadedIds.length}件アップロードしました` });
-        onUploaded(uploadedIds);
       }
       closeModal();
+      closedSuccessfully = true;
+      const payload = uploadedIds.length === 1 ? uploadedIds[0]! : uploadedIds;
+      // 親側の Dialog 閉じる処理（setTimeout 0）より後に実行され、Portal 解放と競合しにくくする
+      window.setTimeout(() => {
+        onUploaded(payload);
+      }, 0);
     } catch (e: unknown) {
       const message =
         e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string"
@@ -259,8 +264,10 @@ export function CreatorUploadModal({
           : "不明なエラー";
       toast({ title: "アップロードに失敗しました", description: message, variant: "destructive" });
     } finally {
-      setUploading(false);
-      setProgress(0);
+      if (!closedSuccessfully) {
+        setUploading(false);
+        setProgress(0);
+      }
     }
   };
 
@@ -543,7 +550,15 @@ export function CreatorUploadModal({
                 }}
               />
             </div>
-            {uploading && <Progress value={progress} className="h-2" />}
+            {uploading && (
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>アップロード中...</span>
+                  <span className="tabular-nums">{progress}%</span>
+                </div>
+                <Progress value={progress} className="h-2" />
+              </div>
+            )}
           </div>
         )}
 

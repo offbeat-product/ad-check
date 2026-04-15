@@ -916,7 +916,7 @@ export default function ProjectPage() {
   const handleFileUpload = async () => {
     if (!uploadModal || !id || !user) return;
     setUploading(true);
-    setUploadProgress(0);
+    setUploadProgress(2);
 
     const cfg = getProcessFileUploadConfig(uploadModal);
     const usePerFilePatterns = patterns.length > 0 && selectedFiles.length > 1 && Object.keys(filePatternAssignments).length > 0;
@@ -1033,26 +1033,36 @@ export default function ProjectPage() {
       lastInsertedFileId = null;
       uploadedInBatch = 0;
     } finally {
-      setUploadModal(null);
-      setSelectedFiles([]);
-      setFilePatternAssignments({});
-      setUploadTextInput("");
-      setUseTextInput(false);
       setUploading(false);
       setUploadProgress(null);
-      setUploadPatternId(null);
-      setUploadPatternMode("common");
-      setUploadSubmissionType("internal");
-      void fetchData();
 
-      // 単一ファイル時はレビュー画面へ（AIチェックはユーザーが実行）
-      if (lastInsertedFileId && !showedCopyDialog && uploadedInBatch <= 1) {
-        const aiCfg = AI_CHECK_CONFIG[uploadProcessType || ""];
-        if (aiCfg?.enabled) {
-          toast({ title: "アップロード完了", description: "レビュー画面でAIチェックを実行できます。" });
-          setTimeout(() => navigate(`/project/${id}/file/${lastInsertedFileId}`), 500);
+      const navigateTargetId = lastInsertedFileId;
+      const navigateOk = Boolean(navigateTargetId && !showedCopyDialog && uploadedInBatch <= 1);
+      const navigateProcessKey = uploadProcessType;
+
+      const clearUploadUiAndRefresh = () => {
+        setUploadModal(null);
+        setSelectedFiles([]);
+        setFilePatternAssignments({});
+        setUploadTextInput("");
+        setUseTextInput(false);
+        setUploadPatternId(null);
+        setUploadPatternMode("common");
+        setUploadSubmissionType("internal");
+        void fetchData();
+
+        if (navigateOk && navigateTargetId) {
+          const aiCfg = AI_CHECK_CONFIG[navigateProcessKey || ""];
+          if (aiCfg?.enabled) {
+            toast({ title: "アップロード完了", description: "レビュー画面でAIチェックを実行できます。" });
+            setTimeout(() => navigate(`/project/${id}/file/${navigateTargetId}`), 500);
+          }
         }
-      }
+      };
+
+      // Dialog Portal のアンマウントと fetchData による大規模再レンダーを同一ティックに重ねると
+      // 「removeChild … not a child」が発生することがあるため、閉じる処理を次のタスクにずらす
+      window.setTimeout(clearUploadUiAndRefresh, 0);
     }
   };
 
