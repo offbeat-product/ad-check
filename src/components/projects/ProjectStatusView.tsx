@@ -22,7 +22,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
@@ -45,31 +44,78 @@ const ALL_SENTINEL = "__all__";
 
 type SectionKey = "initial_check_pending" | "cl_submit_ready" | "fix_ready" | "completed";
 
-const SECTION_BADGE: Record<
+/** ステータスバッジ・進捗バー・件数・アクションを行ごとに統一 */
+const SECTION_ROW_STYLE: Record<
   SectionKey,
-  { label: string; emoji: string; class: string }
+  {
+    label: string;
+    emoji: string;
+    badgeClass: string;
+    progressIndicator: string;
+    progressCount: string;
+    clButtonClass: string;
+    fixButtonClass: string;
+    idleDashClass: string;
+  }
 > = {
   initial_check_pending: {
     label: "初稿チェック前",
     emoji: "⚪",
-    class: "bg-muted text-muted-foreground",
+    badgeClass: "bg-muted text-muted-foreground border border-border",
+    progressIndicator: "bg-muted-foreground/45",
+    progressCount: "text-muted-foreground",
+    clButtonClass:
+      "border border-border bg-background text-foreground hover:bg-muted/60 h-8 text-xs px-3",
+    fixButtonClass:
+      "border border-border bg-background text-foreground hover:bg-muted/60 h-8 text-xs px-3",
+    idleDashClass: "text-muted-foreground",
   },
   cl_submit_ready: {
     label: "CL提出可能",
     emoji: "🔵",
-    class: "bg-primary/10 text-primary",
+    badgeClass: "bg-primary/10 text-primary border border-primary/30 font-medium",
+    progressIndicator: "bg-primary",
+    progressCount: "text-primary",
+    clButtonClass: "bg-primary text-primary-foreground hover:bg-primary/90 h-8 text-xs px-3 shadow-none",
+    fixButtonClass:
+      "border border-primary/50 bg-primary/10 text-primary hover:bg-primary/20 h-8 text-xs px-3 shadow-none",
+    idleDashClass: "text-primary/70",
   },
   fix_ready: {
     label: "FIX確定可能",
     emoji: "🟣",
-    class: "bg-status-client-review/15 text-status-client-review",
+    badgeClass:
+      "bg-[hsl(264,100%,58%)]/12 text-[hsl(264,100%,42%)] border border-[hsl(264,100%,58%)]/35 font-medium",
+    progressIndicator: "bg-[hsl(264,100%,58%)]",
+    progressCount: "text-[hsl(264,100%,45%)]",
+    clButtonClass:
+      "border border-[hsl(264,100%,58%)]/45 bg-[hsl(264,100%,58%)]/12 text-[hsl(264,100%,38%)] hover:bg-[hsl(264,100%,58%)]/22 h-8 text-xs px-3 shadow-none",
+    fixButtonClass:
+      "bg-[hsl(264,100%,48%)] text-white hover:bg-[hsl(264,100%,42%)] h-8 text-xs px-3 shadow-none",
+    idleDashClass: "text-[hsl(264,100%,45%)]/80",
   },
   completed: {
     label: "FIX済",
     emoji: "🟢",
-    class: "bg-status-ok/10 text-status-ok",
+    badgeClass: "bg-status-ok/10 text-status-ok border border-status-ok/40 font-medium",
+    progressIndicator: "bg-status-ok",
+    progressCount: "text-status-ok",
+    clButtonClass:
+      "border border-status-ok/40 bg-status-ok/10 text-status-ok hover:bg-status-ok/20 h-8 text-xs px-3 shadow-none",
+    fixButtonClass:
+      "border border-status-ok/40 bg-status-ok/10 text-status-ok hover:bg-status-ok/20 h-8 text-xs px-3 shadow-none",
+    idleDashClass: "text-status-ok/70",
   },
 };
+
+function StatusProgressBar({ value, indicatorClass }: { value: number; indicatorClass: string }) {
+  const pct = Math.min(100, Math.max(0, value));
+  return (
+    <div className="relative h-1.5 w-full overflow-hidden rounded-full bg-secondary">
+      <div className={cn("h-full rounded-full transition-all", indicatorClass)} style={{ width: `${pct}%` }} />
+    </div>
+  );
+}
 
 function categorizeProject(p: ProjectStatusSummary): SectionKey {
   if (p.total > 0 && p.count_fixed === p.total) return "completed";
@@ -163,7 +209,7 @@ export function ProjectStatusView() {
   const [clientId, setClientId] = useState("");
   const [productId, setProductId] = useState("");
   const [sectionKey, setSectionKey] = useState("");
-  const [hideFixCompleted, setHideFixCompleted] = useState(false);
+  const [hideFixCompleted, setHideFixCompleted] = useState(true);
   const [page, setPage] = useState(1);
   const [deadlineOpenId, setDeadlineOpenId] = useState<string | null>(null);
   const [deadlinePatch, setDeadlinePatch] = useState<Record<string, string>>({});
@@ -458,7 +504,7 @@ export function ProjectStatusView() {
               <TableBody>
                 {pageSlice.map((p) => {
                   const section = categorizeProject(p);
-                  const badge = SECTION_BADGE[section];
+                  const rowStyle = SECTION_ROW_STYLE[section];
                   const dLine = rowDeadlineValue(p, deadlinePatch);
                   const eff = effectiveProjectDeadline(dLine, p.overall_deadline);
                   const dateLabel = eff
@@ -525,11 +571,11 @@ export function ProjectStatusView() {
                       <TableCell className="text-xs align-middle">
                         <span
                           className={cn(
-                            "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium",
-                            badge.class
+                            "inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs",
+                            rowStyle.badgeClass
                           )}
                         >
-                          {badge.emoji} {badge.label}
+                          {rowStyle.emoji} {rowStyle.label}
                         </span>
                       </TableCell>
                       <TableCell
@@ -565,11 +611,13 @@ export function ProjectStatusView() {
                       </TableCell>
                       <TableCell className="text-xs">
                         {total === 0 ? (
-                          <span className="text-[10px] text-muted-foreground">ファイルなし</span>
+                          <span className={cn("text-[10px] tabular-nums", rowStyle.progressCount)}>ファイルなし</span>
                         ) : (
                           <div className="flex items-center gap-2 min-w-[100px]">
-                            <Progress value={pct} className="h-1.5 flex-1" />
-                            <span className="text-[10px] text-muted-foreground tabular-nums shrink-0">
+                            <StatusProgressBar value={pct} indicatorClass={rowStyle.progressIndicator} />
+                            <span
+                              className={cn("text-[10px] tabular-nums shrink-0 font-medium", rowStyle.progressCount)}
+                            >
                               {done}/{total}
                             </span>
                           </div>
@@ -577,21 +625,26 @@ export function ProjectStatusView() {
                       </TableCell>
                       <TableCell className="text-right" data-interactive onClick={(e) => e.stopPropagation()}>
                         {p.ready_for_cl_submit === 0 && p.ready_for_fix === 0 ? (
-                          <span className="text-xs text-muted-foreground">-</span>
+                          <span className={cn("text-xs", rowStyle.idleDashClass)}>-</span>
                         ) : (
                           <div className="flex items-center gap-2 justify-end flex-wrap">
                             {p.ready_for_cl_submit > 0 && (
                               <Button
-                                size="sm"
-                                variant="secondary"
                                 type="button"
+                                variant="secondary"
+                                className={rowStyle.clButtonClass}
                                 onClick={() => setClSubmitTarget(p)}
                               >
                                 CL提出 {p.ready_for_cl_submit}
                               </Button>
                             )}
                             {p.ready_for_fix > 0 && (
-                              <Button size="sm" type="button" onClick={() => setFixTarget(p)}>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                className={rowStyle.fixButtonClass}
+                                onClick={() => setFixTarget(p)}
+                              >
                                 FIX確定 {p.ready_for_fix}
                               </Button>
                             )}
