@@ -163,7 +163,6 @@ export function ProjectStatusView() {
   const [clientId, setClientId] = useState("");
   const [productId, setProductId] = useState("");
   const [sectionKey, setSectionKey] = useState("");
-  const [assignee, setAssignee] = useState("");
   const [hideFixCompleted, setHideFixCompleted] = useState(false);
   const [page, setPage] = useState(1);
   const [deadlineOpenId, setDeadlineOpenId] = useState<string | null>(null);
@@ -203,14 +202,6 @@ export function ProjectStatusView() {
     return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1], "ja"));
   }, [data, clientId]);
 
-  const assigneeOptions = useMemo(() => {
-    const s = new Set<string>();
-    data.forEach((r) => {
-      if (r.ob_pm) s.add(r.ob_pm);
-    });
-    return [...s].sort((a, b) => a.localeCompare(b, "ja"));
-  }, [data]);
-
   useEffect(() => {
     if (!productId) return;
     const ok = data.some((r) => r.product_id === productId && (!clientId || r.client_id === clientId));
@@ -231,14 +222,13 @@ export function ProjectStatusView() {
     }
     if (clientId) list = list.filter((r) => r.client_id === clientId);
     if (productId) list = list.filter((r) => r.product_id === productId);
-    if (assignee) list = list.filter((r) => (r.ob_pm || "") === assignee);
     if (sectionKey) list = list.filter((r) => categorizeProject(r) === sectionKey);
     return sortProjects(list);
-  }, [data, hideFixCompleted, q, clientId, productId, assignee, sectionKey]);
+  }, [data, hideFixCompleted, q, clientId, productId, sectionKey]);
 
   useEffect(() => {
     setPage(1);
-  }, [hideFixCompleted, q, clientId, productId, assignee, sectionKey]);
+  }, [hideFixCompleted, q, clientId, productId, sectionKey]);
 
   const totalPages = Math.max(1, Math.ceil(filteredSorted.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -325,7 +315,9 @@ export function ProjectStatusView() {
         <div className="glass-card p-4 space-y-4">
           <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end">
             <div className="flex-1 min-w-[200px] max-w-md">
-              <Label className="text-[10px] text-muted-foreground mb-1 block">検索</Label>
+              <Label className="text-[10px] text-muted-foreground mb-1 block">
+                検索（クライアント・商材・案件名）
+              </Label>
               <div className="relative">
                 <Search
                   className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground"
@@ -333,7 +325,7 @@ export function ProjectStatusView() {
                 />
                 <Input
                   className="pl-8 h-9 text-xs"
-                  placeholder="案件名・クライアント・商材"
+                  placeholder="クライアント名・商材名・案件名のいずれかに一致"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                 />
@@ -390,7 +382,7 @@ export function ProjectStatusView() {
               </Select>
             </div>
             <div className="w-full sm:w-[180px]">
-              <Label className="text-[10px] text-muted-foreground mb-1 block">セクション</Label>
+              <Label className="text-[10px] text-muted-foreground mb-1 block">ステータス</Label>
               <Select value={sectionKey || ALL_SENTINEL} onValueChange={(v) => setSectionKey(v === ALL_SENTINEL ? "" : v)}>
                 <SelectTrigger className="h-9 text-xs">
                   <SelectValue placeholder="すべて" />
@@ -400,35 +392,17 @@ export function ProjectStatusView() {
                     すべて
                   </SelectItem>
                   <SelectItem value="initial_check_pending" className="text-xs">
-                    ⚪ 初稿チェック前案件
+                    ⚪ 初稿チェック前
                   </SelectItem>
                   <SelectItem value="cl_submit_ready" className="text-xs">
-                    🔵 CL提出可能案件
+                    🔵 CL提出可能
                   </SelectItem>
                   <SelectItem value="fix_ready" className="text-xs">
-                    🟣 FIX確定可能案件
+                    🟣 FIX確定可能
                   </SelectItem>
                   <SelectItem value="completed" className="text-xs">
-                    🟢 FIX済案件
+                    🟢 FIX済
                   </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="w-full sm:w-[200px]">
-              <Label className="text-[10px] text-muted-foreground mb-1 block">担当 (PM)</Label>
-              <Select value={assignee || ALL_SENTINEL} onValueChange={(v) => setAssignee(v === ALL_SENTINEL ? "" : v)}>
-                <SelectTrigger className="h-9 text-xs">
-                  <SelectValue placeholder="すべて" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL_SENTINEL} className="text-xs">
-                    すべて
-                  </SelectItem>
-                  {assigneeOptions.map((name) => (
-                    <SelectItem key={name} value={name} className="text-xs">
-                      {name}
-                    </SelectItem>
-                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -470,7 +444,7 @@ export function ProjectStatusView() {
                   </TableHead>
                   <TableHead className="text-xs font-medium text-muted-foreground min-w-[200px]">案件名</TableHead>
                   <TableHead className="text-xs font-medium text-muted-foreground whitespace-nowrap w-[140px]">
-                    セクション
+                    ステータス
                   </TableHead>
                   <TableHead className="text-xs font-medium text-muted-foreground whitespace-nowrap w-[100px]">
                     納品日
