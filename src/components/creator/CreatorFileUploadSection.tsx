@@ -321,6 +321,7 @@ export function CreatorFileUploadSection({
           patterns={patterns}
           onUploaded={(newFileId) => {
             onUploadComplete();
+            if (Array.isArray(newFileId)) return;
             navigate(`/creator/${shareToken}/file/${newFileId}`);
           }}
         />
