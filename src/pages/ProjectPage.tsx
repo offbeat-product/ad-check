@@ -76,6 +76,36 @@ function hasFinalOverallStatus(status: string | null | undefined): boolean {
   return s === "A" || s === "B" || s === "C" || s === "D";
 }
 
+function toEpoch(value: string | null | undefined): number {
+  if (!value) return 0;
+  const t = Date.parse(value);
+  return Number.isNaN(t) ? 0 : t;
+}
+
+function pickCanonicalProcessByKey(a: ProjectProcess, b: ProjectProcess): ProjectProcess {
+  const aUpdated = toEpoch(a.updated_at);
+  const bUpdated = toEpoch(b.updated_at);
+  if (aUpdated !== bUpdated) return aUpdated > bUpdated ? a : b;
+  const aCreated = toEpoch(a.created_at);
+  const bCreated = toEpoch(b.created_at);
+  if (aCreated !== bCreated) return aCreated > bCreated ? a : b;
+  if (a.sort_order !== b.sort_order) return a.sort_order < b.sort_order ? a : b;
+  return a;
+}
+
+function dedupeProcessesByKey(rows: ProjectProcess[]): ProjectProcess[] {
+  const byKey = new Map<string, ProjectProcess>();
+  for (const row of rows) {
+    const prev = byKey.get(row.process_key);
+    if (!prev) {
+      byKey.set(row.process_key, row);
+      continue;
+    }
+    byKey.set(row.process_key, pickCanonicalProcessByKey(prev, row));
+  }
+  return [...byKey.values()].sort((a, b) => a.sort_order - b.sort_order);
+}
+
 function DeadlineDisplay({ deadline, className, isCompleted, label }: { deadline: string | null; className?: string; isCompleted?: boolean; label?: string }) {
   const prefix = label || "納期";
   if (!deadline) return <span className={cn("text-xs text-muted-foreground/50", className)}>{prefix}未設定</span>;
@@ -180,6 +210,7 @@ export default function ProjectPage() {
   const { patterns, addPattern, addPatternsBulk, deletePattern, updatePattern, refetch: refetchPatterns } = usePatterns(id);
 
   const { processes, updateProcess, reorderProcesses, addProcess, deleteProcess, resetToDefaults } = useProjectProcesses(id);
+  const dedupedProcesses = useMemo(() => dedupeProcessesByKey(processes), [processes]);
 
   useEffect(() => {
     setMixedProcessTab("banner");
@@ -219,7 +250,7 @@ export default function ProjectPage() {
   );
 
   const uploadProcessOptions = useMemo(() => {
-    let base = [...processes].filter((p) => p.is_active).sort((a, b) => a.sort_order - b.sort_order);
+    let base = [...dedupedProcesses].filter((p) => p.is_active).sort((a, b) => a.sort_order - b.sort_order);
     const ct = project?.creative_type ?? "video";
     if (ct === "mixed") {
       base = base.filter((p) =>
@@ -234,7 +265,7 @@ export default function ProjectPage() {
     }
     return base;
   }, [
-    processes,
+    dedupedProcesses,
     project?.creative_type,
     mixedProcessTab,
     processCreativeByCode,
@@ -243,7 +274,7 @@ export default function ProjectPage() {
   ]);
 
   const displayActiveProcesses = useMemo(() => {
-    const act = processes.filter((p) => p.is_active);
+    const act = dedupedProcesses.filter((p) => p.is_active);
     const ct = project?.creative_type ?? "video";
     if (ct !== "mixed") return act;
     return act.filter((p) =>
@@ -256,7 +287,7 @@ export default function ProjectPage() {
       )
     );
   }, [
-    processes,
+    dedupedProcesses,
     project?.creative_type,
     mixedProcessTab,
     processCreativeByCode,
@@ -266,8 +297,8 @@ export default function ProjectPage() {
 
   const processesForPatternMatrix = useMemo(() => {
     const ct = project?.creative_type ?? "video";
-    if (ct !== "mixed") return processes;
-    return processes.filter(
+    if (ct !== "mixed") return dedupedProcesses;
+    return dedupedProcesses.filter(
       (p) =>
         !p.is_active ||
         projectProcessMatchesMixedTab(
@@ -279,7 +310,7 @@ export default function ProjectPage() {
         )
     );
   }, [
-    processes,
+    dedupedProcesses,
     project?.creative_type,
     mixedProcessTab,
     processCreativeByCode,
@@ -289,9 +320,9 @@ export default function ProjectPage() {
 
   const processesForManagementModal = useMemo(() => {
     if (project?.creative_type !== "mixed") {
-      return [...processes].sort((a, b) => a.sort_order - b.sort_order);
+      return [...dedupedProcesses].sort((a, b) => a.sort_order - b.sort_order);
     }
-    return [...processes]
+    return [...dedupedProcesses]
       .sort((a, b) => a.sort_order - b.sort_order)
       .filter((p) =>
         projectProcessMatchesMixedTab(
@@ -303,7 +334,7 @@ export default function ProjectPage() {
         )
       );
   }, [
-    processes,
+    dedupedProcesses,
     project?.creative_type,
     mixedProcessTab,
     processCreativeByCode,
@@ -318,7 +349,7 @@ export default function ProjectPage() {
         return;
       }
       const merged = mergeMixedProcessesAfterLaneReorder(
-        processes,
+        dedupedProcesses,
         reordered,
         mixedProcessTab,
         processCreativeByCode,
@@ -329,7 +360,7 @@ export default function ProjectPage() {
     },
     [
       project?.creative_type,
-      processes,
+      dedupedProcesses,
       mixedProcessTab,
       processCreativeByCode,
       mixedBannerProcessKeys,
@@ -2290,7 +2321,7 @@ export default function ProjectPage() {
           sourcePattern={patterns.find(p => p.id === copyToPatternInfo.sourcePatternId)!}
           allPatterns={patterns}
           processLabel={
-            processes.find(p => p.process_key === copyToPatternInfo.processType)?.process_label || copyToPatternInfo.processType
+            dedupedProcesses.find(p => p.process_key === copyToPatternInfo.processType)?.process_label || copyToPatternInfo.processType
           }
           onConfirm={async (targetIds) => {
             if (!id || !user) return;
