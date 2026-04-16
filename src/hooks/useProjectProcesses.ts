@@ -20,11 +20,73 @@ export interface ProjectProcess {
   updated_at: string;
 }
 
+function toEpoch(value: string | null | undefined): number {
+  if (!value) return 0;
+  const t = Date.parse(value);
+  return Number.isNaN(t) ? 0 : t;
+}
+
+function pickCanonicalProcess(a: ProjectProcess, b: ProjectProcess): ProjectProcess {
+  const aUpdated = toEpoch(a.updated_at);
+  const bUpdated = toEpoch(b.updated_at);
+  if (aUpdated !== bUpdated) return aUpdated > bUpdated ? a : b;
+  const aCreated = toEpoch(a.created_at);
+  const bCreated = toEpoch(b.created_at);
+  if (aCreated !== bCreated) return aCreated > bCreated ? a : b;
+  if (a.sort_order !== b.sort_order) return a.sort_order < b.sort_order ? a : b;
+  return a;
+}
+
+function dedupeByProcessKey(rows: ProjectProcess[]): {
+  unique: ProjectProcess[];
+  duplicateIds: string[];
+} {
+  const byKey = new Map<string, ProjectProcess>();
+  for (const row of rows) {
+    const prev = byKey.get(row.process_key);
+    if (!prev) {
+      byKey.set(row.process_key, row);
+      continue;
+    }
+    byKey.set(row.process_key, pickCanonicalProcess(prev, row));
+  }
+  const unique = [...byKey.values()].sort((a, b) => a.sort_order - b.sort_order);
+  const keepIds = new Set(unique.map((r) => r.id));
+  const duplicateIds = rows.filter((r) => !keepIds.has(r.id)).map((r) => r.id);
+  return { unique, duplicateIds };
+}
+
 export function useProjectProcesses(projectId: string | undefined) {
   const queryClient = useQueryClient();
   const { data: processMaster = [], isFetched: typesFetched } = useProcessTypes();
   const [processes, setProcesses] = useState<ProjectProcess[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const cleanupDuplicateProcesses = useCallback(
+    async (rows: ProjectProcess[]): Promise<ProjectProcess[]> => {
+      const { unique, duplicateIds } = dedupeByProcessKey(rows);
+      if (duplicateIds.length > 0) {
+        const { error: delErr } = await supabase
+          .from("project_processes")
+          .delete()
+          .in("id", duplicateIds);
+        handleSupabaseError(delErr, "dedupe duplicate processes");
+      }
+
+      const normalized = unique.map((p, i) => ({ ...p, sort_order: i + 1 }));
+      for (const p of normalized) {
+        const current = unique.find((u) => u.id === p.id);
+        if (!current || current.sort_order === p.sort_order) continue;
+        const { error: orderErr } = await supabase
+          .from("project_processes")
+          .update({ sort_order: p.sort_order })
+          .eq("id", p.id);
+        handleSupabaseError(orderErr, "normalize process sort_order");
+      }
+      return normalized;
+    },
+    []
+  );
 
   const fetchProcesses = useCallback(async () => {
     if (!projectId) {
@@ -68,18 +130,28 @@ export function useProjectProcesses(projectId: string | undefined) {
         project_id: projectId,
         ...p,
       }));
-      const { data: created, error: insertErr } = await supabase
+      const { error: insertErr } = await supabase
         .from("project_processes")
         .insert(inserts)
-        .select("*");
+        .select("id");
       if (!handleSupabaseError(insertErr, "project_processes insert")) {
-        setProcesses((created ?? []) as ProjectProcess[]);
+        // 同時初期化で重複行が作られることがあるため、挿入後に再取得して正規化
+        const { data: freshRows, error: refetchErr } = await supabase
+          .from("project_processes")
+          .select("*")
+          .eq("project_id", projectId)
+          .order("sort_order");
+        if (!handleSupabaseError(refetchErr, "project_processes refetch after insert")) {
+          const normalized = await cleanupDuplicateProcesses((freshRows ?? []) as ProjectProcess[]);
+          setProcesses(normalized);
+        }
       }
     } else {
-      setProcesses(data as ProjectProcess[]);
+      const normalized = await cleanupDuplicateProcesses(data as ProjectProcess[]);
+      setProcesses(normalized);
     }
     setLoading(false);
-  }, [projectId, typesFetched, processMaster, queryClient]);
+  }, [projectId, typesFetched, processMaster, queryClient, cleanupDuplicateProcesses]);
 
   useEffect(() => {
     void fetchProcesses();

@@ -13,11 +13,31 @@ export interface CreatorProcess {
   expected_height: number | null;
   skip_size_check: boolean;
   is_common: boolean;
+  is_active: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+function toEpoch(value: string | null | undefined): number {
+  if (!value) return 0;
+  const t = Date.parse(value);
+  return Number.isNaN(t) ? 0 : t;
+}
+
+function pickCanonicalProcess(a: CreatorProcess, b: CreatorProcess): CreatorProcess {
+  const aUpdated = toEpoch(a.updated_at);
+  const bUpdated = toEpoch(b.updated_at);
+  if (aUpdated !== bUpdated) return aUpdated > bUpdated ? a : b;
+  const aCreated = toEpoch(a.created_at);
+  const bCreated = toEpoch(b.created_at);
+  if (aCreated !== bCreated) return aCreated > bCreated ? a : b;
+  if (a.sort_order !== b.sort_order) return a.sort_order < b.sort_order ? a : b;
+  return a;
 }
 
 function normalizeProcesses(data: unknown): CreatorProcess[] {
   if (!Array.isArray(data)) return [];
-  return data
+  const rows = data
     .filter((row): row is Record<string, unknown> => !!row && typeof row === "object" && !Array.isArray(row))
     .map((row) => ({
       id: String(row.id ?? ""),
@@ -31,9 +51,22 @@ function normalizeProcesses(data: unknown): CreatorProcess[] {
       expected_height: row.expected_height == null ? null : Number(row.expected_height),
       skip_size_check: Boolean(row.skip_size_check),
       is_common: Boolean(row.is_common),
-    }))
-    .filter((p) => p.id && p.process_key)
-    .sort((a, b) => a.sort_order - b.sort_order);
+      is_active: row.is_active == null ? true : Boolean(row.is_active),
+      created_at: row.created_at == null ? null : String(row.created_at),
+      updated_at: row.updated_at == null ? null : String(row.updated_at),
+    }));
+
+  const valid = rows.filter((p) => p.id && p.process_key && p.is_active);
+  const byKey = new Map<string, CreatorProcess>();
+  for (const row of valid) {
+    const prev = byKey.get(row.process_key);
+    if (!prev) {
+      byKey.set(row.process_key, row);
+      continue;
+    }
+    byKey.set(row.process_key, pickCanonicalProcess(prev, row));
+  }
+  return [...byKey.values()].sort((a, b) => a.sort_order - b.sort_order);
 }
 
 export function useCreatorProcesses(shareToken: string | undefined) {
