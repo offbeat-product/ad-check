@@ -157,7 +157,7 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Noto Sans JP', system-ui, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
   }
 }
 
