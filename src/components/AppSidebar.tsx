@@ -7,40 +7,17 @@ import { openGlobalSearch } from "@/lib/global-search-events";
 import { isProjectActiveForCount } from "@/lib/project-display";
 import {
   Home, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search, PanelLeftClose, PanelLeftOpen, BarChart3,
-  ExternalLink, CircleCheckBig, Brain, ClipboardList,
+  ExternalLink, CircleCheckBig, Brain, ClipboardList, Infinity as InfinityIcon, Sparkles,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { AD_BRAIN_URL } from "@/lib/constants";
 
 interface AppSidebarProps {
   onCreateProject?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
-}
-
-function ProductNavGlyph(item: {
-  icon?: string;
-  iconStyle?: React.CSSProperties;
-  Icon?: LucideIcon;
-  iconClassName?: string;
-}) {
-  if (item.Icon) {
-    const I = item.Icon;
-    return (
-      <span className="w-3.5 h-3.5 shrink-0 flex items-center justify-center">
-        <I className={cn("h-3.5 w-3.5 shrink-0", item.iconClassName ?? "text-muted-foreground")} aria-hidden />
-      </span>
-    );
-  }
-  return (
-    <span className="text-xs w-4 text-center" style={item.iconStyle}>
-      {item.icon}
-    </span>
-  );
 }
 
 export default function AppSidebar({ onCreateProject, collapsed = false, onToggleCollapse }: AppSidebarProps) {
@@ -319,27 +296,41 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
         {!collapsed && (
           <div className="mt-2 pt-2 border-t border-sidebar-border">
             <p className="px-5 py-1.5 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">連携プロダクト</p>
-            {[
-              { label: "Ad Loop Portal", href: "https://adloop-portal.lovable.app/", emoji: "🌀", dotColor: "#4A90E2", comingSoon: false },
-              { label: "Ad Brain", href: "https://ad-brain-rho.vercel.app/", emoji: "🧠", dotColor: "#6366f1", comingSoon: false },
-              { label: "Ad Gen", href: "https://ad-gen-creative.lovable.app/", emoji: "✨", dotColor: "#8b5cf6", comingSoon: false },
-              { label: "Ad Ops", href: "#", emoji: "📊", dotColor: "#f59e0b", comingSoon: true },
-            ].map((item) =>
-              item.comingSoon ? (
-                <div key={item.label} className="w-full flex items-center gap-2 px-5 py-1.5 text-xs border-l-[3px] border-transparent text-muted-foreground/40 cursor-default">
-                  <span className="text-sm w-4 text-center" aria-hidden>{item.emoji}</span>
-                  <span className="flex-1">{item.label}</span>
-                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground/50 font-medium">Coming Soon</span>
-                </div>
-              ) : (
-                <a key={item.label} href={item.href} target="_blank" rel="noopener noreferrer"
-                  className="w-full flex items-center gap-2 px-5 py-1.5 text-xs border-l-[3px] border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors group">
-                  <span className="text-sm w-4 text-center" aria-hidden>{item.emoji}</span>
-                  <span className="flex-1">{item.label}</span>
-                  <ExternalLink className="h-3 w-3 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
-                </a>
-              )
-            )}
+            <a
+              href="https://adloop-portal.lovable.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center gap-2 px-5 py-1.5 text-xs border-l-[3px] border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+            >
+              <InfinityIcon className="h-4 w-4" />
+              <span className="flex-1">AdLoop Portal</span>
+              <ExternalLink className="ml-auto h-3 w-3 opacity-50" />
+            </a>
+            <a
+              href="https://ad-brain-rho.vercel.app/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center gap-2 px-5 py-1.5 text-xs border-l-[3px] border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+            >
+              <Brain className="h-4 w-4" />
+              <span className="flex-1">Ad Brain</span>
+              <ExternalLink className="ml-auto h-3 w-3 opacity-50" />
+            </a>
+            <a
+              href="#"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-full flex items-center gap-2 px-5 py-1.5 text-xs border-l-[3px] border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
+            >
+              <Sparkles className="h-4 w-4" />
+              <span className="flex-1">Ad Gen</span>
+              <ExternalLink className="ml-auto h-3 w-3 opacity-50" />
+            </a>
+            <div className="w-full flex items-center gap-2 px-5 py-1.5 text-xs border-l-[3px] border-transparent text-muted-foreground/40 cursor-default">
+              <BarChart3 className="h-4 w-4" />
+              <span className="flex-1">Ad Ops</span>
+              <Badge variant="secondary" className="ml-auto text-xs">Coming Soon</Badge>
+            </div>
           </div>
         )}
       </nav>
