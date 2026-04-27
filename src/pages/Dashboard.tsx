@@ -559,9 +559,12 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* Check results table - Phase 2 */}
-          <div className="lg:col-span-3 glass-card overflow-hidden">
-            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-              <h2 className="text-sm font-semibold">最近のチェック結果</h2>
+          <div className="lg:col-span-3 overflow-hidden bg-white border-[1.5px] border-slate-200 rounded-2xl shadow-sm">
+            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+              <h2 className="text-sm font-semibold flex items-center gap-2">
+                <span aria-hidden className="inline-block w-2 h-2 rounded-full" style={{ background: "#10b981" }} />
+                最近のチェック結果
+              </h2>
               <span className="text-xs text-muted-foreground">{checksLoaded ? `${totalCount} 件` : "..."}</span>
             </div>
             {/* Desktop table */}
