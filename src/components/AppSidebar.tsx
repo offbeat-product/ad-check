@@ -159,10 +159,16 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
       collapsed ? "w-[60px] min-w-[60px]" : "w-[260px] min-w-[260px]"
     )}>
       <div className={cn("px-5 py-5 border-b border-sidebar-border", collapsed && "px-3 py-4 flex flex-col items-center")}>
-        <h1 className={cn("font-bold flex items-center leading-none", collapsed ? "justify-center flex-col gap-1 text-base" : "gap-1.5 text-base")}>
-          <CircleCheckBig size={22} className="shrink-0 text-primary [&_svg]:block" strokeWidth={2.25} aria-hidden />
+        <h1 className={cn("font-bold flex items-center leading-none", collapsed ? "justify-center flex-col gap-1 text-base" : "gap-2 text-base")}>
+          <span
+            className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md text-white text-sm font-bold"
+            style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
+            aria-hidden
+          >
+            ✓
+          </span>
           {!collapsed && (
-            <span className="bg-gradient-to-r from-sky-500 to-violet-600 bg-clip-text text-transparent tracking-tight translate-y-[0.5px]">
+            <span className="tracking-tight" style={{ color: "#0A0E1A" }}>
               Ad Check
             </span>
           )}
