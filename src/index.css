@@ -16,8 +16,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    /* Primary: #0EA5E9 Sky Blue */
-    --primary: 199 89% 48%;
+    /* Primary: #4A90E2 Ad Loop Blue */
+    --primary: 212 72% 59%;
     --primary-foreground: 0 0% 100%;
 
     /* Secondary: #7C7AFF Periwinkle */
@@ -27,8 +27,12 @@
     --muted: 210 40% 96%;
     --muted-foreground: 215 16% 47%;
 
-    --accent: 199 93% 94%;
+    --accent: 199 89% 94%;
     --accent-foreground: 222 47% 11%;
+
+    /* Ad Check identity (#10b981) */
+    --check: 160 84% 39%;
+    --check-foreground: 0 0% 100%;
 
     /* Danger #EF4444 */
     --destructive: 0 84% 60%;
@@ -36,7 +40,7 @@
 
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 199 89% 48%;
+    --ring: 212 72% 59%;
 
     --radius: 0.75rem;
 
@@ -153,7 +157,7 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Noto Sans JP', system-ui, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
   }
 }
 
