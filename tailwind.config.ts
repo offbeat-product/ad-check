@@ -68,6 +68,10 @@ export default {
           manual: "hsl(var(--status-manual))",
           "client-review": "hsl(var(--status-client-review))",
         },
+        check: {
+          DEFAULT: "hsl(var(--check, 160 84% 39%))",
+          foreground: "hsl(var(--check-foreground, 0 0% 100%))",
+        },
         grade: {
           a: "hsl(var(--grade-a))",
           b: "hsl(var(--grade-b))",
