@@ -81,7 +81,8 @@ export function TopCorrectionPatterns({ limit = 5, productCode }: TopPatternsPro
   if (patterns.length === 0) {
     return (
       <div className="glass-card overflow-hidden">
-        <div className="px-4 py-3 border-b border-border">
+        <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+          <Lightbulb className="h-4 w-4 text-status-warning" />
           <h2 className="text-sm font-semibold">よくある修正パターン</h2>
         </div>
         <div className="p-8 text-center text-muted-foreground">
@@ -104,7 +105,8 @@ export function TopCorrectionPatterns({ limit = 5, productCode }: TopPatternsPro
 
   return (
     <div className="glass-card overflow-hidden">
-      <div className="px-4 py-3 border-b border-border">
+      <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+        <Lightbulb className="h-4 w-4 text-status-warning" />
         <h2 className="text-sm font-semibold">よくある修正パターン</h2>
       </div>
       <div className="divide-y divide-border">

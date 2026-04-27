@@ -7,17 +7,40 @@ import { openGlobalSearch } from "@/lib/global-search-events";
 import { isProjectActiveForCount } from "@/lib/project-display";
 import {
   Home, Settings, LogOut, ChevronDown, ChevronRight, Plus, FolderOpen, GripVertical, Search, PanelLeftClose, PanelLeftOpen, BarChart3,
-  ExternalLink, CircleCheckBig, Brain, ClipboardList, Infinity as InfinityIcon, Sparkles,
+  ExternalLink, CircleCheckBig, Brain, ClipboardList,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { AD_BRAIN_URL } from "@/lib/constants";
 
 interface AppSidebarProps {
   onCreateProject?: () => void;
   collapsed?: boolean;
   onToggleCollapse?: () => void;
+}
+
+function ProductNavGlyph(item: {
+  icon?: string;
+  iconStyle?: React.CSSProperties;
+  Icon?: LucideIcon;
+  iconClassName?: string;
+}) {
+  if (item.Icon) {
+    const I = item.Icon;
+    return (
+      <span className="w-3.5 h-3.5 shrink-0 flex items-center justify-center">
+        <I className={cn("h-3.5 w-3.5 shrink-0", item.iconClassName ?? "text-muted-foreground")} aria-hidden />
+      </span>
+    );
+  }
+  return (
+    <span className="text-xs w-4 text-center" style={item.iconStyle}>
+      {item.icon}
+    </span>
+  );
 }
 
 export default function AppSidebar({ onCreateProject, collapsed = false, onToggleCollapse }: AppSidebarProps) {
@@ -136,16 +159,10 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
       collapsed ? "w-[60px] min-w-[60px]" : "w-[260px] min-w-[260px]"
     )}>
       <div className={cn("px-5 py-5 border-b border-sidebar-border", collapsed && "px-3 py-4 flex flex-col items-center")}>
-        <h1 className={cn("font-bold flex items-center leading-none", collapsed ? "justify-center flex-col gap-1 text-base" : "gap-2 text-base")}>
-          <span
-            className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md text-white text-sm font-bold"
-            style={{ background: "linear-gradient(135deg, #10b981, #059669)" }}
-            aria-hidden
-          >
-            ✓
-          </span>
+        <h1 className={cn("font-bold flex items-center leading-none", collapsed ? "justify-center flex-col gap-1 text-base" : "gap-1.5 text-base")}>
+          <CircleCheckBig size={22} className="shrink-0 text-primary [&_svg]:block" strokeWidth={2.25} aria-hidden />
           {!collapsed && (
-            <span className="tracking-tight" style={{ color: "#0A0E1A" }}>
+            <span className="bg-gradient-to-r from-sky-500 to-violet-600 bg-clip-text text-transparent tracking-tight translate-y-[0.5px]">
               Ad Check
             </span>
           )}
@@ -153,7 +170,7 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
         {!collapsed && (
           <>
             <div className="flex items-start justify-between gap-2 mt-2">
-              <p className="text-[10px] leading-snug flex-1 min-w-0" style={{ color: "#64748B" }}>
+              <p className="text-[10px] text-muted-foreground leading-snug flex-1 min-w-0">
                 広告制作現場に最良・最速の「GO」を。
               </p>
               <button type="button" onClick={onToggleCollapse} className="p-1 rounded hover:bg-muted/50 text-muted-foreground transition-colors shrink-0" title="サイドバーを閉じる">
@@ -295,42 +312,28 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
 
         {!collapsed && (
           <div className="mt-2 pt-2 border-t border-sidebar-border">
-            <p className="px-5 py-1.5 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">連携プロダクト</p>
-            <a
-              href="https://adloop-portal.lovable.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center gap-2 px-5 py-1.5 text-xs border-l-[3px] border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
-            >
-              <InfinityIcon className="h-4 w-4" />
-              <span className="flex-1">AdLoop Portal</span>
-              <ExternalLink className="ml-auto h-3 w-3 opacity-50" />
-            </a>
-            <a
-              href="https://ad-brain-rho.vercel.app/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center gap-2 px-5 py-1.5 text-xs border-l-[3px] border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
-            >
-              <Brain className="h-4 w-4" />
-              <span className="flex-1">Ad Brain</span>
-              <ExternalLink className="ml-auto h-3 w-3 opacity-50" />
-            </a>
-            <a
-              href="#"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="w-full flex items-center gap-2 px-5 py-1.5 text-xs border-l-[3px] border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors"
-            >
-              <Sparkles className="h-4 w-4" />
-              <span className="flex-1">Ad Gen</span>
-              <ExternalLink className="ml-auto h-3 w-3 opacity-50" />
-            </a>
-            <div className="w-full flex items-center gap-2 px-5 py-1.5 text-xs border-l-[3px] border-transparent text-muted-foreground/40 cursor-default">
-              <BarChart3 className="h-4 w-4" />
-              <span className="flex-1">Ad Ops</span>
-              <Badge variant="secondary" className="ml-auto text-xs">Coming Soon</Badge>
-            </div>
+            <p className="px-5 py-1.5 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">プロダクト</p>
+            {[
+              { label: "AdLoop", href: "https://adloop-portal.lovable.app", icon: "∞", iconStyle: { background: "linear-gradient(135deg, #0EA5E9, #7C7AFF)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" } as const, comingSoon: false },
+              { label: "Ad Brain", href: AD_BRAIN_URL, Icon: Brain, iconClassName: "text-primary", comingSoon: false },
+              { label: "Ad Gen", href: "#", icon: "✨", iconStyle: {} as const, comingSoon: true },
+              { label: "Ad Ops", href: "#", icon: "⚙️", iconStyle: {} as const, comingSoon: true },
+            ].map((item) =>
+              item.comingSoon ? (
+                <div key={item.label} className="w-full flex items-center gap-2 px-5 py-1.5 text-xs border-l-[3px] border-transparent text-muted-foreground/40 cursor-default">
+                  <ProductNavGlyph {...item} />
+                  <span className="flex-1">{item.label}</span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground/50 font-medium">Coming Soon</span>
+                </div>
+              ) : (
+                <a key={item.label} href={item.href} target="_blank" rel="noopener noreferrer"
+                  className="w-full flex items-center gap-2 px-5 py-1.5 text-xs border-l-[3px] border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors">
+                  <ProductNavGlyph {...item} />
+                  <span className="flex-1">{item.label}</span>
+                  <ExternalLink className="h-3 w-3 text-muted-foreground/40" />
+                </a>
+              )
+            )}
           </div>
         )}
       </nav>

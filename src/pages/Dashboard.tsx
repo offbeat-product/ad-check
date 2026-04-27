@@ -122,12 +122,7 @@ function DeadlineColumn({ title, titleIcon, rows, navigate }: DeadlineColumnProp
 
 function StatCard({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: string | number; color: string }) {
   return (
-    <div className="relative glass-card p-4 flex items-center gap-4 overflow-hidden rounded-2xl">
-      <span
-        aria-hidden
-        className="absolute top-0 left-0 right-0 h-1"
-        style={{ background: "linear-gradient(90deg, #10b981, #059669)" }}
-      />
+    <div className="glass-card p-4 flex items-center gap-4">
       <div className={`p-2.5 rounded-lg bg-muted ${color}`}>
         <Icon className="h-5 w-5" />
       </div>
@@ -466,11 +461,8 @@ export default function Dashboard() {
         <h1 className="text-sm font-semibold">{new Date().toLocaleDateString("ja-JP", { year: "numeric", month: "long" })}</h1>
         <div className="flex items-center gap-2">
           <NotificationBell />
-          <button
-            onClick={() => setCreateOpen(true)}
-            className="px-3 md:px-4 py-2 rounded-lg text-white text-xs md:text-sm font-semibold flex items-center gap-1.5 shadow-md transition-all duration-150 hover:shadow-lg hover:-translate-y-px active:translate-y-0"
-            style={{ background: "linear-gradient(135deg, #4A90E2, #2563eb)" }}
-          >
+          <button onClick={() => setCreateOpen(true)}
+            className="px-3 md:px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs md:text-sm font-semibold hover:opacity-90 transition-opacity flex items-center gap-1.5">
             <Plus className="h-4 w-4" />新規プロジェクトを作成
           </button>
         </div>
@@ -559,12 +551,9 @@ export default function Dashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
           {/* Check results table - Phase 2 */}
-          <div className="lg:col-span-3 overflow-hidden bg-white border-[1.5px] border-slate-200 rounded-2xl shadow-sm">
-            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
-              <h2 className="text-sm font-semibold flex items-center gap-2">
-                <span aria-hidden className="inline-block w-2 h-2 rounded-full" style={{ background: "#10b981" }} />
-                最近のチェック結果
-              </h2>
+          <div className="lg:col-span-3 glass-card overflow-hidden">
+            <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+              <h2 className="text-sm font-semibold">最近のチェック結果</h2>
               <span className="text-xs text-muted-foreground">{checksLoaded ? `${totalCount} 件` : "..."}</span>
             </div>
             {/* Desktop table */}
