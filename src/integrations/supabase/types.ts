@@ -14,6 +14,70 @@ export type Database = {
   }
   public: {
     Tables: {
+      brain_knowledge_base: {
+        Row: {
+          category: string | null
+          client_id: string | null
+          created_at: string | null
+          file_name: string | null
+          file_type: string | null
+          file_url: string | null
+          id: string
+          memo: string | null
+          product_id: string | null
+          project_id: string | null
+          scope: string | null
+        }
+        Insert: {
+          category?: string | null
+          client_id?: string | null
+          created_at?: string | null
+          file_name?: string | null
+          file_type?: string | null
+          file_url?: string | null
+          id?: string
+          memo?: string | null
+          product_id?: string | null
+          project_id?: string | null
+          scope?: string | null
+        }
+        Update: {
+          category?: string | null
+          client_id?: string | null
+          created_at?: string | null
+          file_name?: string | null
+          file_type?: string | null
+          file_url?: string | null
+          id?: string
+          memo?: string | null
+          product_id?: string | null
+          project_id?: string | null
+          scope?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brain_knowledge_base_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brain_knowledge_base_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "brain_knowledge_base_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       check_results: {
         Row: {
           check_items: Json | null
@@ -103,63 +167,6 @@ export type Database = {
           },
         ]
       }
-      check_feedback: {
-        Row: {
-          ai_judgment: string
-          check_result_id: string | null
-          created_at: string
-          created_by: string | null
-          feedback_type: string
-          human_judgment: string
-          id: string
-          is_active: boolean
-          item_description: string
-          process_type: string
-          product_id: string
-          project_id: string | null
-          reason: string | null
-          rule_pattern_id: string | null
-          scope: string
-          updated_at: string
-        }
-        Insert: {
-          ai_judgment: string
-          check_result_id?: string | null
-          created_at?: string
-          created_by?: string | null
-          feedback_type?: string
-          human_judgment: string
-          id?: string
-          is_active?: boolean
-          item_description: string
-          process_type: string
-          product_id: string
-          project_id?: string | null
-          reason?: string | null
-          rule_pattern_id?: string | null
-          scope?: string
-          updated_at?: string
-        }
-        Update: {
-          ai_judgment?: string
-          check_result_id?: string | null
-          created_at?: string
-          created_by?: string | null
-          feedback_type?: string
-          human_judgment?: string
-          id?: string
-          is_active?: boolean
-          item_description?: string
-          process_type?: string
-          product_id?: string
-          project_id?: string | null
-          reason?: string | null
-          rule_pattern_id?: string | null
-          scope?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       check_rules: {
         Row: {
           category: string
@@ -238,20 +245,29 @@ export type Database = {
         Row: {
           created_at: string | null
           id: string
+          industry: string | null
+          memo: string | null
           name: string
           sort_order: number | null
+          updated_at: string | null
         }
         Insert: {
           created_at?: string | null
           id?: string
+          industry?: string | null
+          memo?: string | null
           name: string
           sort_order?: number | null
+          updated_at?: string | null
         }
         Update: {
           created_at?: string | null
           id?: string
+          industry?: string | null
+          memo?: string | null
           name?: string
           sort_order?: number | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -463,53 +479,169 @@ export type Database = {
         }
         Relationships: []
       }
-      error_reports: {
+      creative_performance: {
         Row: {
-          category: string
-          context_data: Json | null
-          created_at: string
-          description: string
+          clicks: number | null
+          conversions: number | null
+          cost: number | null
+          cpa: number | null
+          created_at: string | null
+          creative_id: string | null
+          ctr: number | null
+          cvr: number | null
+          date: string | null
           id: string
-          page_url: string | null
-          product: string
-          reporter_email: string | null
-          reporter_id: string | null
-          severity: string
-          status: string
-          title: string
-          user_agent: string | null
+          impressions: number | null
+          roas: number | null
         }
         Insert: {
-          category: string
-          context_data?: Json | null
+          clicks?: number | null
+          conversions?: number | null
+          cost?: number | null
+          cpa?: number | null
           created_at?: string | null
-          description: string
+          creative_id?: string | null
+          ctr?: number | null
+          cvr?: number | null
+          date?: string | null
           id?: string
-          page_url?: string | null
-          product: string
-          reporter_email?: string | null
-          reporter_id?: string | null
-          severity: string
-          status?: string
-          title: string
-          user_agent?: string | null
+          impressions?: number | null
+          roas?: number | null
         }
         Update: {
-          category?: string
-          context_data?: Json | null
+          clicks?: number | null
+          conversions?: number | null
+          cost?: number | null
+          cpa?: number | null
           created_at?: string | null
-          description?: string
+          creative_id?: string | null
+          ctr?: number | null
+          cvr?: number | null
+          date?: string | null
           id?: string
-          page_url?: string | null
-          product?: string
-          reporter_email?: string | null
-          reporter_id?: string | null
-          severity?: string
-          status?: string
-          title?: string
-          user_agent?: string | null
+          impressions?: number | null
+          roas?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "creative_performance_creative_id_fkey"
+            columns: ["creative_id"]
+            isOneToOne: false
+            referencedRelation: "creatives"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creatives: {
+        Row: {
+          created_at: string | null
+          file_url: string | null
+          format: string | null
+          id: string
+          media_type: string | null
+          name: string
+          product_id: string | null
+          project_id: string | null
+          status: string | null
+          thumbnail_url: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          file_url?: string | null
+          format?: string | null
+          id?: string
+          media_type?: string | null
+          name: string
+          product_id?: string | null
+          project_id?: string | null
+          status?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          file_url?: string | null
+          format?: string | null
+          id?: string
+          media_type?: string | null
+          name?: string
+          product_id?: string | null
+          project_id?: string | null
+          status?: string | null
+          thumbnail_url?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creatives_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creatives_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      csv_imports: {
+        Row: {
+          client_id: string | null
+          created_at: string | null
+          file_name: string | null
+          id: string
+          media_type: string | null
+          period_end: string | null
+          period_start: string | null
+          product_id: string | null
+          record_count: number | null
+          status: string | null
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string | null
+          file_name?: string | null
+          id?: string
+          media_type?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          product_id?: string | null
+          record_count?: number | null
+          status?: string | null
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string | null
+          file_name?: string | null
+          id?: string
+          media_type?: string | null
+          period_end?: string | null
+          period_start?: string | null
+          product_id?: string | null
+          record_count?: number | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "csv_imports_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "csv_imports_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       invitations: {
         Row: {
@@ -651,33 +783,6 @@ export type Database = {
           },
         ]
       }
-      process_types: {
-        Row: {
-          code: string
-          creative_type: string
-          is_active: boolean
-          name: string
-          sort_order: number
-          used_by_check: boolean
-        }
-        Insert: {
-          code: string
-          creative_type: string
-          is_active?: boolean
-          name: string
-          sort_order?: number
-          used_by_check?: boolean
-        }
-        Update: {
-          code?: string
-          creative_type?: string
-          is_active?: boolean
-          name?: string
-          sort_order?: number
-          used_by_check?: boolean
-        }
-        Relationships: []
-      }
       products: {
         Row: {
           client_id: string | null
@@ -688,12 +793,14 @@ export type Database = {
           id: string
           info_lines: string[] | null
           label: string
+          memo: string | null
           meta: string | null
           name: string
           rules_desc: string | null
           sample_text: string | null
           sf_enabled: boolean | null
           sort_order: number | null
+          updated_at: string | null
           warning: string | null
           webhook_paths: Json | null
         }
@@ -706,12 +813,14 @@ export type Database = {
           id?: string
           info_lines?: string[] | null
           label: string
+          memo?: string | null
           meta?: string | null
           name: string
           rules_desc?: string | null
           sample_text?: string | null
           sf_enabled?: boolean | null
           sort_order?: number | null
+          updated_at?: string | null
           warning?: string | null
           webhook_paths?: Json | null
         }
@@ -724,12 +833,14 @@ export type Database = {
           id?: string
           info_lines?: string[] | null
           label?: string
+          memo?: string | null
           meta?: string | null
           name?: string
           rules_desc?: string | null
           sample_text?: string | null
           sf_enabled?: boolean | null
           sort_order?: number | null
+          updated_at?: string | null
           warning?: string | null
           webhook_paths?: Json | null
         }
@@ -742,81 +853,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      creators: {
-        Row: {
-          id: string
-          name: string
-          email: string
-          slack_user_id: string | null
-          notes: string | null
-          is_active: boolean
-          created_by: string | null
-          last_active_at: string | null
-          created_at: string
-          updated_at: string | null
-        }
-        Insert: {
-          id?: string
-          name: string
-          email: string
-          slack_user_id?: string | null
-          notes?: string | null
-          is_active?: boolean
-          created_by?: string | null
-          last_active_at?: string | null
-          created_at?: string
-          updated_at?: string | null
-        }
-        Update: {
-          id?: string
-          name?: string
-          email?: string
-          slack_user_id?: string | null
-          notes?: string | null
-          is_active?: boolean
-          created_by?: string | null
-          last_active_at?: string | null
-          created_at?: string
-          updated_at?: string | null
-        }
-        Relationships: []
-      }
-      project_collaborators: {
-        Row: {
-          id: string
-          project_id: string
-          creator_id: string
-          share_token: string
-          invited_at: string | null
-          last_accessed_at: string | null
-          is_active: boolean
-          invited_by: string | null
-          notification_enabled?: boolean | null
-        }
-        Insert: {
-          id?: string
-          project_id: string
-          creator_id: string
-          share_token?: string
-          invited_at?: string | null
-          last_accessed_at?: string | null
-          is_active?: boolean
-          invited_by?: string | null
-          notification_enabled?: boolean | null
-        }
-        Update: {
-          id?: string
-          project_id?: string
-          creator_id?: string
-          share_token?: string
-          invited_at?: string | null
-          last_accessed_at?: string | null
-          is_active?: boolean
-          invited_by?: string | null
-          notification_enabled?: boolean | null
-        }
-        Relationships: []
       }
       profiles: {
         Row: {
@@ -1052,47 +1088,56 @@ export type Database = {
       }
       projects: {
         Row: {
+          assigned_to: string | null
           created_at: string | null
           created_by: string | null
-          creative_type: string
           deadline: string | null
           description: string | null
+          end_date: string | null
           id: string
+          memo: string | null
           name: string
           overall_deadline: string | null
           product_id: string | null
           project_code: string | null
           sort_order: number | null
+          start_date: string | null
           status: string | null
           updated_at: string | null
         }
         Insert: {
+          assigned_to?: string | null
           created_at?: string | null
           created_by?: string | null
-          creative_type?: string
           deadline?: string | null
           description?: string | null
+          end_date?: string | null
           id?: string
+          memo?: string | null
           name: string
           overall_deadline?: string | null
           product_id?: string | null
           project_code?: string | null
           sort_order?: number | null
+          start_date?: string | null
           status?: string | null
           updated_at?: string | null
         }
         Update: {
+          assigned_to?: string | null
           created_at?: string | null
           created_by?: string | null
-          creative_type?: string
           deadline?: string | null
           description?: string | null
+          end_date?: string | null
           id?: string
+          memo?: string | null
           name?: string
           overall_deadline?: string | null
           product_id?: string | null
           project_code?: string | null
           sort_order?: number | null
+          start_date?: string | null
           status?: string | null
           updated_at?: string | null
         }
@@ -1362,21 +1407,6 @@ export type Database = {
       }
     }
     Views: {
-      products_with_check_settings: {
-        Row: {
-          id: string | null
-          name: string | null
-        }
-        Insert: {
-          id?: never
-          name?: never
-        }
-        Update: {
-          id?: never
-          name?: never
-        }
-        Relationships: []
-      }
       share_links_safe: {
         Row: {
           allow_comment_read: boolean | null
@@ -1454,35 +1484,6 @@ export type Database = {
           email: string
           id: string
         }[]
-      }
-      /** SECURITY DEFINER — 戻りは DB の json 構造に依存（フロントはパーサで正規化） */
-      get_project_comments_for_creator: {
-        Args: { p_share_token: string; p_file_id?: string | null }
-        Returns: Json
-      }
-      get_file_comment_counts_for_creator: {
-        Args: { p_share_token: string }
-        Returns: Json
-      }
-      get_project_files_for_creator: {
-        Args: { p_share_token: string }
-        Returns: Json
-      }
-      get_project_patterns_for_creator: {
-        Args: { p_share_token: string }
-        Returns: Json
-      }
-      get_project_processes_for_creator: {
-        Args: { p_share_token: string }
-        Returns: Json
-      }
-      get_project_for_creator: {
-        Args: { p_share_token: string }
-        Returns: Json
-      }
-      get_project_status_summary: {
-        Args: Record<PropertyKey, never>
-        Returns: Json
       }
       get_share_link_by_token: {
         Args: { token_param: string }
@@ -1576,23 +1577,6 @@ export type Database = {
           display_name: string
           id: string
         }[]
-      }
-      track_creator_access: {
-        Args: { p_share_token: string }
-        Returns: undefined
-      }
-      upload_file_as_creator: {
-        Args: {
-          p_file_data: string
-          p_file_name: string
-          p_file_size_bytes?: number | null
-          p_file_type: string
-          p_parent_file_id?: string | null
-          p_pattern_id?: string | null
-          p_process_type: string
-          p_share_token: string
-        }
-        Returns: string
       }
     }
     Enums: {
