@@ -176,7 +176,7 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
         {!collapsed && (
           <>
             <div className="flex items-start justify-between gap-2 mt-2">
-              <p className="text-[10px] text-muted-foreground leading-snug flex-1 min-w-0">
+              <p className="text-[10px] leading-snug flex-1 min-w-0" style={{ color: "#64748B" }}>
                 広告制作現場に最良・最速の「GO」を。
               </p>
               <button type="button" onClick={onToggleCollapse} className="p-1 rounded hover:bg-muted/50 text-muted-foreground transition-colors shrink-0" title="サイドバーを閉じる">
@@ -318,25 +318,25 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
 
         {!collapsed && (
           <div className="mt-2 pt-2 border-t border-sidebar-border">
-            <p className="px-5 py-1.5 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">プロダクト</p>
+            <p className="px-5 py-1.5 text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider">連携プロダクト</p>
             {[
-              { label: "AdLoop", href: "https://adloop-portal.lovable.app", icon: "∞", iconStyle: { background: "linear-gradient(135deg, #0EA5E9, #7C7AFF)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", backgroundClip: "text" } as const, comingSoon: false },
-              { label: "Ad Brain", href: AD_BRAIN_URL, Icon: Brain, iconClassName: "text-primary", comingSoon: false },
-              { label: "Ad Gen", href: "#", icon: "✨", iconStyle: {} as const, comingSoon: true },
-              { label: "Ad Ops", href: "#", icon: "⚙️", iconStyle: {} as const, comingSoon: true },
+              { label: "Ad Loop Portal", href: "https://adloop-portal.lovable.app/", emoji: "🌀", dotColor: "#4A90E2", comingSoon: false },
+              { label: "Ad Brain", href: "https://ad-brain-rho.vercel.app/", emoji: "🧠", dotColor: "#6366f1", comingSoon: false },
+              { label: "Ad Gen", href: "https://ad-gen-creative.lovable.app/", emoji: "✨", dotColor: "#8b5cf6", comingSoon: false },
+              { label: "Ad Ops", href: "#", emoji: "📊", dotColor: "#f59e0b", comingSoon: true },
             ].map((item) =>
               item.comingSoon ? (
                 <div key={item.label} className="w-full flex items-center gap-2 px-5 py-1.5 text-xs border-l-[3px] border-transparent text-muted-foreground/40 cursor-default">
-                  <ProductNavGlyph {...item} />
+                  <span className="text-sm w-4 text-center" aria-hidden>{item.emoji}</span>
                   <span className="flex-1">{item.label}</span>
                   <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground/50 font-medium">Coming Soon</span>
                 </div>
               ) : (
                 <a key={item.label} href={item.href} target="_blank" rel="noopener noreferrer"
-                  className="w-full flex items-center gap-2 px-5 py-1.5 text-xs border-l-[3px] border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors">
-                  <ProductNavGlyph {...item} />
+                  className="w-full flex items-center gap-2 px-5 py-1.5 text-xs border-l-[3px] border-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors group">
+                  <span className="text-sm w-4 text-center" aria-hidden>{item.emoji}</span>
                   <span className="flex-1">{item.label}</span>
-                  <ExternalLink className="h-3 w-3 text-muted-foreground/40" />
+                  <ExternalLink className="h-3 w-3 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
                 </a>
               )
             )}
