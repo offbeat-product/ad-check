@@ -122,7 +122,12 @@ function DeadlineColumn({ title, titleIcon, rows, navigate }: DeadlineColumnProp
 
 function StatCard({ icon: Icon, label, value, color }: { icon: React.ElementType; label: string; value: string | number; color: string }) {
   return (
-    <div className="glass-card p-4 flex items-center gap-4">
+    <div className="relative glass-card p-4 flex items-center gap-4 overflow-hidden rounded-2xl">
+      <span
+        aria-hidden
+        className="absolute top-0 left-0 right-0 h-1"
+        style={{ background: "linear-gradient(90deg, #10b981, #059669)" }}
+      />
       <div className={`p-2.5 rounded-lg bg-muted ${color}`}>
         <Icon className="h-5 w-5" />
       </div>
