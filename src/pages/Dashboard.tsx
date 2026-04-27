@@ -466,8 +466,11 @@ export default function Dashboard() {
         <h1 className="text-sm font-semibold">{new Date().toLocaleDateString("ja-JP", { year: "numeric", month: "long" })}</h1>
         <div className="flex items-center gap-2">
           <NotificationBell />
-          <button onClick={() => setCreateOpen(true)}
-            className="px-3 md:px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs md:text-sm font-semibold hover:opacity-90 transition-opacity flex items-center gap-1.5">
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="px-3 md:px-4 py-2 rounded-lg text-white text-xs md:text-sm font-semibold flex items-center gap-1.5 shadow-md transition-all duration-150 hover:shadow-lg hover:-translate-y-px active:translate-y-0"
+            style={{ background: "linear-gradient(135deg, #4A90E2, #2563eb)" }}
+          >
             <Plus className="h-4 w-4" />新規プロジェクトを作成
           </button>
         </div>
