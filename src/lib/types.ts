@@ -1,14 +1,15 @@
 export interface CheckItem {
-  item: string;
-  pattern_id: string;
+  /** check_results.check_items の jsonb 由来 — OK 等では null になり得る */
+  item: string | null;
+  pattern_id: string | null;
   status: "NG" | "WARNING" | "OK" | "MANUAL";
   severity: "high" | "medium" | "low";
-  location?: string;
-  detail: string;
-  suggestion?: string;
+  location?: string | null;
+  detail: string | null;
+  suggestion?: string | null;
   confidence?: number;
-  timestamp_start?: string;
-  timestamp_end?: string;
+  timestamp_start?: string | null;
+  timestamp_end?: string | null;
   bounding_box?: [number, number, number, number] | null;
 }
 

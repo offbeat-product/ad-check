@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { CheckItem } from "@/lib/types";
+import { checkItemStr } from "@/lib/check-display";
 import { getCheckMarkers } from "@/lib/marker-positions";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 
@@ -83,7 +84,7 @@ export function useExportCsv() {
   const exportCsv = (items: CheckItem[], filename: string) => {
     const header = "pattern_id,item,status,severity,location,detail,suggestion";
     const rows = items.map((ci) =>
-      [ci.pattern_id, ci.item, ci.status, ci.severity, ci.location || "", ci.detail, ci.suggestion || ""]
+      [checkItemStr(ci.pattern_id), checkItemStr(ci.item), ci.status, ci.severity, checkItemStr(ci.location), checkItemStr(ci.detail), checkItemStr(ci.suggestion)]
         .map((v) => `"${String(v).replace(/"/g, '""')}"`)
         .join(",")
     );

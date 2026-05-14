@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import type { CheckItem } from "@/lib/types";
 import type { CheckMarker } from "@/lib/marker-positions";
+import { checkItemStr } from "@/lib/check-display";
 import { useMemo } from "react";
 
 interface ScriptDisplayProps {
@@ -23,11 +24,13 @@ interface InlineHighlight {
  */
 function extractPhrases(item: CheckItem): string[] {
   const phrases: string[] = [];
-  const sources = [item.detail, item.item, item.suggestion || ""];
+  const sources = [item.detail, item.item, item.suggestion];
 
   for (const src of sources) {
+    const s = checkItemStr(src);
+    if (!s) continue;
     // Japanese quotes 「…」
-    const jpQuotes = src.match(/「([^」]+)」/g);
+    const jpQuotes = s.match(/「([^」]+)」/g);
     if (jpQuotes) {
       jpQuotes.forEach((q) => {
         const inner = q.slice(1, -1);
@@ -35,7 +38,7 @@ function extractPhrases(item: CheckItem): string[] {
       });
     }
     // Double quotes "…"
-    const dblQuotes = src.match(/"([^"]+)"/g);
+    const dblQuotes = s.match(/"([^"]+)"/g);
     if (dblQuotes) {
       dblQuotes.forEach((q) => {
         const inner = q.slice(1, -1);
@@ -106,13 +109,15 @@ export default function ScriptDisplay({ text, items, markers, onItemClick }: Scr
       {lines.map((line, i) => {
         // Section-level matching (existing logic)
         const ngMatch = ngItems.find((n) => {
-          if (!n.location) return false;
-          const loc = n.location.replace(/^📍\s*/, "");
+          const locRaw = checkItemStr(n.location);
+          if (!locRaw) return false;
+          const loc = locRaw.replace(/^📍\s*/, "");
           return sectionKeywords.some((kw) => loc.includes(kw) && line.includes(kw));
         });
         const warnMatch = !ngMatch ? warnItems.find((w) => {
-          if (!w.location) return false;
-          const loc = w.location.replace(/^📍\s*/, "");
+          const locRaw = checkItemStr(w.location);
+          if (!locRaw) return false;
+          const loc = locRaw.replace(/^📍\s*/, "");
           return sectionKeywords.some((kw) => loc.includes(kw) && line.includes(kw));
         }) : null;
         const sectionMatch = ngMatch || warnMatch;

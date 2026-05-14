@@ -1,5 +1,10 @@
 // Shared helpers for check result display labels & colors
 
+/** Null-safe: check_items の文字列フィールドは DB 上 null になり得る */
+export function checkItemStr(v: string | null | undefined): string {
+  return v ?? "";
+}
+
 /** Derive GO/NG from overall_status (A/B = GO, C/D = NG). This is the primary source of truth. */
 export function getSubmitLabel(status: string | null | undefined): { label: string; isOk: boolean } {
   const s = (status || "").toUpperCase();
@@ -29,11 +34,11 @@ export function getSubmitBadgeClassFromCounts(ngCount: number | null | undefined
 
 /** Get the effective ID for a check item, falling back to item text if pattern_id is missing.
  *  Includes item text hash to disambiguate items sharing the same pattern_id. */
-export function getCheckItemId(item: { pattern_id?: string; item?: string; detail?: string }): string {
-  const base = item.pattern_id || item.item || "";
+export function getCheckItemId(item: { pattern_id?: string | null; item?: string | null; detail?: string | null }): string {
+  const base = item.pattern_id || checkItemStr(item.item) || "";
   // If pattern_id exists, append a short hash of item+detail to make it unique
-  if (item.pattern_id && item.item) {
-    const hash = simpleHash(`${item.item}||${item.detail || ""}`);
+  if (item.pattern_id && checkItemStr(item.item)) {
+    const hash = simpleHash(`${checkItemStr(item.item)}||${checkItemStr(item.detail)}`);
     return `${base}_${hash}`;
   }
   return base;
@@ -54,7 +59,7 @@ function simpleHash(str: string): string {
  */
 export function getEffectiveSubmitLabel(
   overallStatus: string | null | undefined,
-  checkItems: Array<{ status: string; pattern_id: string; item?: string; detail?: string }> | null | undefined,
+  checkItems: Array<{ status: string; pattern_id: string | null; item?: string | null; detail?: string | null }> | null | undefined,
   resolvedItems: string[] | null | undefined,
 ): { label: string; isOk: boolean } {
   const base = getSubmitLabel(overallStatus);
@@ -74,7 +79,7 @@ export function getEffectiveSubmitLabel(
 
 export function getEffectiveSubmitBadgeClass(
   overallStatus: string | null | undefined,
-  checkItems: Array<{ status: string; pattern_id: string; detail?: string }> | null | undefined,
+  checkItems: Array<{ status: string; pattern_id: string | null; detail?: string | null }> | null | undefined,
   resolvedItems: string[] | null | undefined,
 ): string {
   const { isOk } = getEffectiveSubmitLabel(overallStatus, checkItems, resolvedItems);

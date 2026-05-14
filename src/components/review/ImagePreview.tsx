@@ -6,6 +6,7 @@ import type { MentionMember } from "@/components/comments/MentionInput";
 import { Pin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CheckMarker } from "@/lib/marker-positions";
+import { checkItemStr } from "@/lib/check-display";
 
 interface AnnotationData {
   type: string;
@@ -63,7 +64,7 @@ export default function ImagePreview({
         {/* Auto-generated check markers - z-30 to be above canvas */}
         <TooltipProvider>
           {markers.map((m) => (
-            <Tooltip key={m.item.pattern_id}>
+            <Tooltip key={`${checkItemStr(m.item.pattern_id)}-${m.number}`}>
               <TooltipTrigger asChild>
                 <div
                   className={cn(
@@ -78,7 +79,7 @@ export default function ImagePreview({
                 </div>
               </TooltipTrigger>
               <TooltipContent side="top" className="text-xs max-w-[200px] z-50">
-                <span className="font-bold">{m.item.pattern_id}</span>: {m.item.item}
+                <span className="font-bold">{checkItemStr(m.item.pattern_id) || "—"}</span>: {checkItemStr(m.item.item) || "—"}
               </TooltipContent>
             </Tooltip>
           ))}

@@ -12,7 +12,7 @@ import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import { supabase } from "@/integrations/supabase/client";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
-import { getSubmitLabel, getSubmitBadgeClass, STATUS_FILTER_OPTIONS, getEffectiveSubmitLabel, getCheckItemId } from "@/lib/check-display";
+import { getSubmitLabel, getSubmitBadgeClass, STATUS_FILTER_OPTIONS, getEffectiveSubmitLabel, getCheckItemId, checkItemStr } from "@/lib/check-display";
 import type { CheckItem, CheckResult } from "@/lib/types";
 import type { CheckMarker } from "@/lib/marker-positions";
 import type { Json } from "@/integrations/supabase/types";
@@ -605,9 +605,9 @@ export default function ComparisonCheckPanel({
           toUpdate.push({ id: ex.id, frequency: (ex.frequency ?? 0) + 1 });
         } else {
           toInsert.push({
-            user_id: user.id, product_code: pCode, rule_id: item.pattern_id,
-            rule_title: item.item, original_content: item.detail,
-            corrected_content: item.suggestion || "", category: item.severity,
+            user_id: user.id, product_code: pCode, rule_id: checkItemStr(item.pattern_id),
+            rule_title: checkItemStr(item.item) || "—", original_content: checkItemStr(item.detail) || "—",
+            corrected_content: checkItemStr(item.suggestion), category: item.severity,
           });
         }
       }
@@ -636,7 +636,7 @@ export default function ComparisonCheckPanel({
           return {
             check_result_id: targetCheckResultId, check_item_id: item.pattern_id,
             author_name: "比較チェック", author_email: user.email || "",
-            content: `【${item.pattern_id}】${item.item}\n\n${item.detail}\n\n💡 修正案: ${item.suggestion || "なし"}`,
+            content: `【${checkItemStr(item.pattern_id)}】${checkItemStr(item.item) || "—"}\n\n${checkItemStr(item.detail) || "—"}\n\n💡 修正案: ${checkItemStr(item.suggestion) || "なし"}`,
             status: "open" as const,
           };
         }).filter(Boolean);

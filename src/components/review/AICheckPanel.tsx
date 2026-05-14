@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useCheckFeedback } from "@/hooks/useCheckFeedback";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
-import { getSubmitLabel, getSubmitBadgeClass, STATUS_LABEL, STATUS_FILTER_OPTIONS, getEffectiveSubmitLabel, getCheckItemId } from "@/lib/check-display";
+import { getSubmitLabel, getSubmitBadgeClass, STATUS_LABEL, STATUS_FILTER_OPTIONS, getEffectiveSubmitLabel, getCheckItemId, checkItemStr } from "@/lib/check-display";
 import { cn } from "@/lib/utils";
 import CheckItemCard from "./CheckItemCard";
 import ReferenceStatusIndicator from "@/components/reference/ReferenceStatusIndicator";
@@ -119,8 +119,8 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
 
     for (const item of filtered) {
       // Normalize: lowercase, strip whitespace/punctuation for comparison
-      const normItem = item.item.replace(/[\s\u3000]/g, "").toLowerCase();
-      const normDetail = item.detail.replace(/[\s\u3000]/g, "").toLowerCase();
+      const normItem = checkItemStr(item.item).replace(/[\s\u3000]/g, "").toLowerCase();
+      const normDetail = checkItemStr(item.detail).replace(/[\s\u3000]/g, "").toLowerCase();
       // Use a similarity key: same title OR very similar detail (first 60 chars)
       const key = `${item.status}::${normItem}::${normDetail.slice(0, 60)}`;
 
@@ -174,7 +174,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
       items.forEach(i => { itemByCheckId.set(getCheckItemId(i), i); });
 
       const matchedItems = selectedIds.map(id => itemByCheckId.get(id)).filter(Boolean) as CheckItem[];
-      const rawPatternIds = matchedItems.map(i => i.pattern_id);
+      const rawPatternIds = matchedItems.map((i) => checkItemStr(i.pattern_id)).filter(Boolean);
 
       const { data: existing, error: fetchErr } = await supabase
         .from("correction_patterns")
@@ -197,14 +197,16 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
       }> = [];
 
       for (const item of matchedItems) {
-        const ex = existingMap.get(item.pattern_id);
+        const pid = checkItemStr(item.pattern_id);
+        if (!pid) continue;
+        const ex = existingMap.get(pid);
         if (ex) {
           toUpdate.push({ id: ex.id, frequency: (ex.frequency ?? 0) + 1 });
         } else {
           toInsert.push({
-            user_id: user.id, product_code: productCode, rule_id: item.pattern_id,
-            rule_title: item.item, original_content: item.detail,
-            corrected_content: item.suggestion || "", category: item.severity,
+            user_id: user.id, product_code: productCode, rule_id: pid,
+            rule_title: checkItemStr(item.item) || "—", original_content: checkItemStr(item.detail) || "—",
+            corrected_content: checkItemStr(item.suggestion), category: item.severity,
           });
         }
       }
@@ -225,12 +227,14 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
       }
 
       if (checkResultId) {
-        const commentInserts = matchedItems.map((item) => ({
-          check_result_id: checkResultId, check_item_id: item.pattern_id,
-          author_name: "AIチェック", author_email: user.email || "",
-          content: `【${item.pattern_id}】${item.item}\n\n${item.detail}\n\n💡 修正案: ${item.suggestion || "なし"}`,
-          status: "open" as const,
-        }));
+        const commentInserts = matchedItems
+          .filter((item) => checkItemStr(item.pattern_id))
+          .map((item) => ({
+            check_result_id: checkResultId, check_item_id: checkItemStr(item.pattern_id),
+            author_name: "AIチェック", author_email: user.email || "",
+            content: `【${checkItemStr(item.pattern_id)}】${checkItemStr(item.item) || "—"}\n\n${checkItemStr(item.detail) || "—"}\n\n💡 修正案: ${checkItemStr(item.suggestion) || "なし"}`,
+            status: "open" as const,
+          }));
         if (commentInserts.length > 0) {
           promises.push((async () => {
             const { error } = await supabase.from("comments").insert(commentInserts);
@@ -318,7 +322,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
               isSelected={selectedItems.has(itemId)}
               isHighlighted={highlightCard === item.pattern_id}
               isApplied={appliedItems.has(itemId)}
-              commentCount={commentCounts[item.pattern_id] || 0}
+              commentCount={commentCounts[checkItemStr(item.pattern_id)] || 0}
               productCode={productCode}
               dupeCount={dupeCount}
               onToggleSelect={() => toggleSelectItem(itemId)}
@@ -445,7 +449,7 @@ function OkItemsSection({ okItems, markers, resolvedItems, selectedItems, highli
             isSelected={selectedItems.has(itemId)}
             isHighlighted={highlightCard === item.pattern_id}
             isApplied={appliedItems.has(itemId)}
-            commentCount={commentCounts[item.pattern_id] || 0}
+            commentCount={commentCounts[checkItemStr(item.pattern_id)] || 0}
             productCode={productCode}
             onToggleSelect={() => onToggleSelect(itemId)}
             onToggleResolved={() => onToggleResolved(itemId)}

@@ -39,8 +39,8 @@ const locationKeywords: [string, MarkerPosition][] = [
 // These keywords get index-based vertical offset
 const indexOffsetKeywords = ["全体", "全カット", "全画面"];
 
-export function getMarkerPosition(location: string | undefined, index: number, total: number): MarkerPosition {
-  if (!location) {
+export function getMarkerPosition(location: string | null | undefined, index: number, total: number): MarkerPosition {
+  if (location == null || location === "") {
     return { x: 92, y: 10 + (index * Math.min(12, 80 / Math.max(total, 1))) };
   }
 

@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Lightbulb, MessageCircle, Check, CheckCheck, AlertTriangle } from "lucide-react";
 import { CorrectionPatternCard } from "@/components/CorrectionPatterns";
 import { cn } from "@/lib/utils";
-import { STATUS_LABEL } from "@/lib/check-display";
+import { STATUS_LABEL, checkItemStr } from "@/lib/check-display";
 import type { CheckItem } from "@/lib/types";
 import type { CheckMarker } from "@/lib/marker-positions";
 import { forwardRef, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
@@ -33,7 +33,8 @@ const severityBadge: Record<string, string> = {
 };
 
 /** Parse timestamp strings like 00:20, 1:23, 00:01:30, 00:20.350 into seconds (with millisecond support) */
-function parseTimestamp(ts: string): number {
+function parseTimestamp(ts: string | null | undefined): number {
+  if (ts == null || ts === "") return -1;
   // Split off milliseconds if present (e.g., "00:20.350" -> "00:20" + "350")
   const [timePart, msPart] = ts.split(".");
   const parts = timePart.split(":").map(Number);
@@ -55,12 +56,13 @@ function parseTimestamp(ts: string): number {
 }
 
 /** Render text with clickable timestamps */
-function renderWithTimestamps(text: string, onSeek?: (seconds: number) => void): ReactNode {
-  if (!onSeek) return text;
+function renderWithTimestamps(text: string | null | undefined, onSeek?: (seconds: number) => void): ReactNode {
+  const safe = checkItemStr(text);
+  if (!onSeek) return safe || "\u00A0";
   // Match patterns like 00:20, 0:30, 1:23:45, 00:20.350 (with optional milliseconds)
   const timestampRegex = /(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,3})?)/g;
-  const parts = text.split(timestampRegex);
-  if (parts.length <= 1) return text;
+  const parts = safe.split(timestampRegex);
+  if (parts.length <= 1) return safe || "\u00A0";
 
   return parts.map((part, i) => {
     if (timestampRegex.lastIndex = 0, timestampRegex.test(part)) {
@@ -144,7 +146,7 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
         }
       }
       const timestampRegex = /(\d{1,2}:\d{2}(?::\d{2})?(?:\.\d{1,3})?)/;
-      const fields = [item.location || "", item.item || "", item.detail || ""];
+      const fields = [checkItemStr(item.location), checkItemStr(item.item), checkItemStr(item.detail)];
       for (const field of fields) {
         const match = field.match(timestampRegex);
         if (match) {
@@ -185,7 +187,7 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
             )}
             {marker && (
               <button
-                onClick={(e) => { e.stopPropagation(); onMarkerClick?.(item.pattern_id); }}
+                onClick={(e) => { e.stopPropagation(); onMarkerClick?.(checkItemStr(item.pattern_id)); }}
                 className={cn(
                   "w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold cursor-pointer hover:scale-110 transition-transform",
                   item.status === "NG" ? "bg-status-ng" : "bg-status-warning"
@@ -200,7 +202,7 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap mb-1">
               <span className="text-[10px] font-mono text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{sourceLabel}</span>
-              <span className="text-[10px] font-mono text-muted-foreground">{item.pattern_id}</span>
+              <span className="text-[10px] font-mono text-muted-foreground">{checkItemStr(item.pattern_id) || "—"}</span>
               <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", severityBadge[item.severity] || "")}>
                 {item.severity}
               </Badge>
@@ -223,13 +225,15 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
                 onClick={(e) => { e.stopPropagation(); handleCardSeek(); }}
                 className="text-xs text-primary cursor-pointer hover:underline"
               >
-                🕐 {item.timestamp_end ? `${item.timestamp_start} 〜 ${item.timestamp_end}` : item.timestamp_start}
+                🕐 {item.timestamp_end ? `${checkItemStr(item.timestamp_start)} 〜 ${checkItemStr(item.timestamp_end)}` : checkItemStr(item.timestamp_start)}
               </button>
             )}
-            {item.location && <p className="text-xs text-muted-foreground">📍 {renderWithTimestamps(item.location, onSeekMedia)}</p>}
+            {checkItemStr(item.location) ? (
+              <p className="text-xs text-muted-foreground">📍 {renderWithTimestamps(item.location, onSeekMedia)}</p>
+            ) : null}
             <p className="text-xs text-foreground/80 mt-1">{renderWithTimestamps(item.detail, onSeekMedia)}</p>
 
-            {item.suggestion && item.status !== "OK" && (
+            {checkItemStr(item.suggestion) && item.status !== "OK" && (
               <div className="text-xs text-primary bg-primary/5 rounded-md p-2 mt-2 flex items-start gap-1.5">
                 <Lightbulb className="h-3 w-3 shrink-0 mt-0.5" />
                 <span>修正案: {renderWithTimestamps(item.suggestion, onSeekMedia)}</span>
@@ -339,9 +343,9 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
               </div>
             )}
 
-            {item.status !== "OK" && (
+            {item.status !== "OK" && checkItemStr(item.pattern_id) && (
               <div className="mt-2">
-                <CorrectionPatternCard ruleId={item.pattern_id} productCode={productCode} />
+                <CorrectionPatternCard ruleId={checkItemStr(item.pattern_id)} productCode={productCode} />
               </div>
             )}
           </div>
