@@ -1,4 +1,5 @@
 import type { CheckResult } from "./types";
+import { parseCheckItems } from "@/schemas/checkItem";
 import { fetchWithRetry, type RetryOptions } from "./fetch-with-retry";
 import { resolveWebhookProductId } from "./resolve-product-id";
 import { supabase } from "@/integrations/supabase/client";
@@ -56,7 +57,7 @@ function parseResponse(raw: any): CheckResult {
   return {
     detected_case: data.detected_case || "",
     design_variant: data.design_variant || "",
-    check_items: data.check_items || [],
+    check_items: parseCheckItems(data.check_items ?? []),
     overall_status: data.overall_status || "D",
     ng_count: data.ng_count ?? 0,
     warning_count: data.warning_count ?? 0,
