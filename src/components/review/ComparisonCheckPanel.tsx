@@ -14,6 +14,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { getSubmitLabel, getSubmitBadgeClass, STATUS_FILTER_OPTIONS, getEffectiveSubmitLabel, getCheckItemId, checkItemStr } from "@/lib/check-display";
 import type { CheckItem, CheckResult } from "@/lib/types";
+import { parseCheckItems } from "@/schemas/checkItem";
 import type { CheckMarker } from "@/lib/marker-positions";
 import type { Json } from "@/integrations/supabase/types";
 import { useToast } from "@/hooks/use-toast";
@@ -197,7 +198,7 @@ export default function ComparisonCheckPanel({
             ok_count: d.ok_count ?? 0,
             total_checks: d.total_checks ?? 0,
             comparison_round: (d as any).comparison_round ?? 0,
-            check_items: (d.check_items as unknown as CheckItem[]) || [],
+            check_items: parseCheckItems(d.check_items ?? []),
           };
         }));
         setHistoryResolvedMap(resolvedMap);
@@ -243,7 +244,7 @@ export default function ComparisonCheckPanel({
           parent_check_result_id: checkResultId || null,
         }).eq("id", recordId);
 
-        const items = (data.check_items as unknown as CheckItem[]) || [];
+        const items = parseCheckItems(data.check_items ?? []);
         const completedResult: CheckResult = {
           overall_status: (data.overall_status || "D") as "A" | "B" | "C" | "D",
           ng_count: data.ng_count ?? 0,

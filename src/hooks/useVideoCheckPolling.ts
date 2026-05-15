@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import type { CheckResultRow } from "@/lib/db-types";
+import { parseCheckResultRow, type CheckResultWithParsedItems } from "@/lib/parse-check-result";
 
 export interface VideoPollingState {
   isPolling: boolean;
@@ -48,7 +48,7 @@ export function useVideoCheckPolling() {
    * Returns the CheckResultRow when found, or null on timeout.
    */
   const startPolling = useCallback(
-    (productCode: string, processType: string, webhookSentAt?: string): Promise<CheckResultRow | null> => {
+    (productCode: string, processType: string, webhookSentAt?: string): Promise<CheckResultWithParsedItems | null> => {
       cancelledRef.current = false;
       startTimeRef.current = Date.now();
       const sentAt = webhookSentAt || new Date().toISOString();
@@ -65,7 +65,7 @@ export function useVideoCheckPolling() {
         setPollingState((prev) => ({ ...prev, elapsedSeconds: elapsed }));
       }, 1000);
 
-      return new Promise<CheckResultRow | null>((resolve) => {
+      return new Promise<CheckResultWithParsedItems | null>((resolve) => {
 
         const poll = async () => {
           if (cancelledRef.current) {
@@ -101,7 +101,7 @@ export function useVideoCheckPolling() {
             if (data && data.check_items) {
               cleanup();
               setPollingState({ isPolling: false, elapsedSeconds: 0, message: "" });
-              resolve(data);
+              resolve(parseCheckResultRow(data));
               return;
             }
           } catch (err) {

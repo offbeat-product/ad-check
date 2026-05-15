@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import type { CheckItem } from "@/lib/types";
 import type { CheckResultRow, ShareLinkRow } from "@/lib/db-types";
+import { parseCheckResultRow, type CheckResultWithParsedItems } from "@/lib/parse-check-result";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +27,7 @@ export default function SharedViewPage() {
   const { token } = useParams<{ token: string }>();
   const { toast } = useToast();
   const [shareLink, setShareLink] = useState<ShareLinkRow | null>(null);
-  const [record, setRecord] = useState<CheckResultRow | null>(null);
+  const [record, setRecord] = useState<CheckResultWithParsedItems | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [passwordRequired, setPasswordRequired] = useState(false);
@@ -39,7 +39,7 @@ export default function SharedViewPage() {
   const [totalCommentCount, setTotalCommentCount] = useState(0);
   const mediaRef = useRef<MediaPreviewHandle>(null);
 
-  const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
+  const checkItems = record?.check_items ?? null;
   const { items, markers, commentCounts, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
     useReviewState(record?.id, checkItems);
 
@@ -91,7 +91,7 @@ export default function SharedViewPage() {
     if (error || !cr) {
       setError("チェック結果が見つかりません");
     } else {
-      setRecord(cr as CheckResultRow);
+      setRecord(parseCheckResultRow(cr as CheckResultRow));
     }
     setLoading(false);
   };

@@ -1,17 +1,4 @@
-export interface CheckItem {
-  /** check_results.check_items の jsonb 由来 — OK 等では null になり得る */
-  item: string | null;
-  pattern_id: string | null;
-  status: "NG" | "WARNING" | "OK" | "MANUAL";
-  severity: "high" | "medium" | "low";
-  location?: string | null;
-  detail: string | null;
-  suggestion?: string | null;
-  confidence?: number;
-  timestamp_start?: string | null;
-  timestamp_end?: string | null;
-  bounding_box?: [number, number, number, number] | null;
-}
+export type { CheckItem } from '@/schemas/checkItem';
 
 export interface CheckResult {
   detected_case?: string;

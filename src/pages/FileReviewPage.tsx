@@ -17,6 +17,8 @@ import { getEffectiveSubmitLabel } from "@/lib/check-display";
 import type { MentionMember } from "@/components/comments/MentionInput";
 import type { Json } from "@/integrations/supabase/types";
 import type { ProjectFile, Product, Project, Client, CheckResultRow } from "@/lib/db-types";
+import { parseCheckResultRow, type CheckResultWithParsedItems } from "@/lib/parse-check-result";
+import { parseCheckItems } from "@/schemas/checkItem";
 // getWebhookPaths no longer needed — unified v2 webhook
 import { useReviewState, useExportCsv } from "@/hooks/useReviewState";
 import { downloadProjectFile } from "@/lib/download-project-file";
@@ -91,7 +93,10 @@ export default function FileReviewPage({
   const [project, setProject] = useState<Project | null>(null);
   const [product, setProduct] = useState<Product | null>(null);
   const [client, setClient] = useState<Client | null>(null);
-  const [record, setRecord] = useState<CheckResultRow | null>(null);
+  const [record, setRecord] = useState<CheckResultWithParsedItems | null>(null);
+  const applyRecord = useCallback((row: CheckResultRow | null | undefined) => {
+    setRecord(row ? parseCheckResultRow(row) : null);
+  }, []);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const isRecheckingRef = useRef(false);
@@ -145,7 +150,7 @@ export default function FileReviewPage({
     loading: creatorCommentsLoading,
     error: creatorCommentsError,
   } = useCreatorFileComments(creatorMode ? activeShareToken : undefined, creatorMode ? fileId : undefined);
-  const checkItems = record?.check_items ? (record.check_items as unknown as CheckItem[]) : null;
+  const checkItems = record?.check_items ?? null;
   // Comments should always be associated with the root (original) check result, not comparison results
   const rootCheckResultId = record?.parent_check_result_id || record?.id || null;
   const { items, markers, commentCounts, paintMode, setPaintMode, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
@@ -165,7 +170,11 @@ export default function FileReviewPage({
     }
     // Also update local record state so it stays in sync
     setRecord(prev => prev ? { ...prev, overall_status: fresh.overall_status, resolved_items: fresh.resolved_items } : prev);
-    const effective = getEffectiveSubmitLabel(fresh.overall_status, fresh.check_items as unknown as CheckItem[], (fresh.resolved_items as unknown as string[]) ?? []);
+    const effective = getEffectiveSubmitLabel(
+      fresh.overall_status,
+      parseCheckItems(fresh.check_items ?? []),
+      (fresh.resolved_items as unknown as string[]) ?? [],
+    );
     if (!effective.isOk) {
       toast({ title: "NG項目が未解消です", description: "全てのNG項目を修正済みにしてからクライアントに提出してください。", variant: "destructive" });
       return;
@@ -410,7 +419,7 @@ export default function FileReviewPage({
               checking_started_at: null 
             } as any).eq("id", f.id);
             setFile(prev => prev ? { ...prev, status: cr ? "checked" : "uploaded", checking_by: null, checking_started_at: null } : prev);
-            if (cr) setRecord(cr);
+            if (cr) applyRecord(cr);
           } else {
             setChecking(true);
           }
@@ -427,7 +436,7 @@ export default function FileReviewPage({
           if (!cancelled && compHistory && compHistory.length > 0) {
             const latest = compHistory[0];
             // Show latest comparison result by default
-            setRecord(latest as any);
+            applyRecord(latest);
 
             // Restore the after-draft image from input_data
             const inputData = latest.input_data as Record<string, unknown> | null;
@@ -446,7 +455,7 @@ export default function FileReviewPage({
               }
             }
           } else {
-            setRecord(cr);
+            applyRecord(cr);
           }
         }
       } else if (f.status === "checking") {
@@ -564,7 +573,7 @@ export default function FileReviewPage({
       if (freshFile.check_result_id) {
         const { data: cr } = await supabase.from("check_results").select("*").eq("id", freshFile.check_result_id).maybeSingle();
         if (cr && cr.check_items && !isRecheckingRef.current) {
-          setRecord(cr);
+          applyRecord(cr);
           setChecking(false);
           // Update file status if still "checking"
           if (freshFile.status === "checking") {
@@ -604,7 +613,7 @@ export default function FileReviewPage({
       }
       const { data: cr } = await supabase.from("check_results").select("*").eq("id", file.check_result_id!).maybeSingle();
       if (cr && cr.check_items && Array.isArray(cr.check_items) && (cr.check_items as unknown[]).length > 0 && !isRecheckingRef.current) {
-        setRecord(cr);
+        applyRecord(cr);
         setChecking(false);
         pollingStartRef.current = 0;
         // Update file status in DB to "checked"
@@ -865,7 +874,7 @@ export default function FileReviewPage({
             if (pendingRecordId) {
               const { data: updatedCr } = await supabase.from("check_results").select("*").eq("id", pendingRecordId).maybeSingle();
               if (updatedCr && updatedCr.status === "completed" && updatedCr.check_items) {
-                setRecord(updatedCr);
+                applyRecord(updatedCr);
                 await supabase.from("project_files").update({ status: "checked", check_result_id: updatedCr.id }).eq("id", file.id);
                 setFile({ ...file, status: "checked", check_result_id: updatedCr.id });
                 checkProgress.complete();
@@ -877,7 +886,7 @@ export default function FileReviewPage({
             if (previousCheckResultId) {
               const { data: prevCr } = await supabase.from("check_results").select("*").eq("id", previousCheckResultId).maybeSingle();
               if (prevCr) {
-                setRecord(prevCr);
+                applyRecord(prevCr);
                 await supabase.from("project_files").update({ 
                   status: "checked", 
                   check_result_id: prevCr.id,
@@ -899,7 +908,7 @@ export default function FileReviewPage({
             return;
           }
           // n8n wrote the result directly — load it
-          setRecord(polled);
+          applyRecord(polled);
           // Link to file
           const { error: updateErr } = await supabase.from("project_files").update({
             status: "checked",
@@ -945,7 +954,7 @@ export default function FileReviewPage({
       setFile({ ...file, status: "checked", check_result_id: crData.id });
 
       const { data: fullCr } = await supabase.from("check_results").select("*").eq("id", crData.id).maybeSingle();
-      setRecord(fullCr);
+      applyRecord(fullCr);
 
       checkProgress.complete();
       toast({ title: "チェック完了", description: `Grade: ${res.overall_status}` });
@@ -975,7 +984,7 @@ export default function FileReviewPage({
             .maybeSingle();
 
           if (cr && cr.status === "completed" && cr.check_items) {
-            setRecord(cr);
+            applyRecord(cr);
             await supabase.from("project_files").update({ status: "checked", check_result_id: cr.id }).eq("id", file.id);
             setFile({ ...file, status: "checked", check_result_id: cr.id });
             checkProgress.complete();
@@ -995,7 +1004,7 @@ export default function FileReviewPage({
       if (previousCheckResultId) {
         const { data: prevCr } = await supabase.from("check_results").select("*").eq("id", previousCheckResultId).maybeSingle();
         if (prevCr) {
-          setRecord(prevCr);
+          applyRecord(prevCr);
           await supabase.from("project_files").update({ 
             status: "checked", 
             check_result_id: prevCr.id,
@@ -1823,7 +1832,7 @@ export default function FileReviewPage({
           // Load full comparison result from DB and set as the current displayed record
           const { data: fullCr } = await supabase.from("check_results").select("*").eq("id", entry.id).maybeSingle();
           if (fullCr) {
-            setRecord(fullCr);
+            applyRecord(fullCr);
           }
         }}
         onClearAfterData={() => {
