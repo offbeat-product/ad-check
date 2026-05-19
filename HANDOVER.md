@@ -94,9 +94,10 @@ HANDOVER.md
 | videos | 動画ファイル | 上限5GB |
 | reference-materials | 参考資料 | |
 
-### Edge Functions（5つ）
+### Edge Functions（6つ）
 | 関数名 | 用途 | 呼び出し元 |
 |--------|------|-----------|
+| accept-invitation | 招待受諾（Auth ユーザー作成 + email_confirm） | AcceptInvitePage |
 | create-share-link | 共有リンク生成 | ProjectPage |
 | extract-text | ファイルからテキスト抽出 | アップロード時 |
 | fetch-external-rules | 外部ルール取得 | SettingsPage |
@@ -104,18 +105,24 @@ HANDOVER.md
 | verify-share-password | 共有パスワード検証 | SharedViewPage |
 
 ### Edge Functions のデプロイ方法
+
+**Vercel のフロントデプロイには Edge Function は含まれない。** `supabase/functions/` を変更した PR をマージしたあとも、本番 Supabase へは CLI で別途デプロイが必要。
+
+```bash
 # Supabase CLIが必要
 npm install -g supabase
 
 # ログイン
 supabase login
 
-# 各Edge Functionをデプロイ
+# 各 Edge Function をデプロイ（変更した関数だけで可）
+supabase functions deploy accept-invitation --project-ref itdwxycecvdamarubpww
 supabase functions deploy create-share-link --project-ref itdwxycecvdamarubpww
 supabase functions deploy extract-text --project-ref itdwxycecvdamarubpww
 supabase functions deploy fetch-external-rules --project-ref itdwxycecvdamarubpww
 supabase functions deploy shared-comments --project-ref itdwxycecvdamarubpww
 supabase functions deploy verify-share-password --project-ref itdwxycecvdamarubpww
+```
 
 ## 4. n8n ワークフロー詳細
 
