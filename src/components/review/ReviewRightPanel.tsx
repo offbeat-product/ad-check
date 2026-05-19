@@ -4,6 +4,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import CommentsPanel from "@/components/CommentsPanel";
 import AICheckPanel from "./AICheckPanel";
 import ComparisonCheckPanel, { type ComparisonHistoryEntry } from "./ComparisonCheckPanel";
+import { SectionErrorBoundary } from "@/components/common/SectionErrorBoundary";
 import { MessageCircle, Bot, GitCompare } from "lucide-react";
 import type { CheckItem } from "@/lib/types";
 import type { CheckResult } from "@/lib/types";
@@ -99,6 +100,7 @@ export default function ReviewRightPanel({
         <TabsContent value="ai-check" forceMount className={cn("absolute inset-0 top-10 flex flex-col overflow-hidden mt-0 ring-0 focus-visible:ring-0", effectiveTab !== "ai-check" && "hidden")}>
           {comparisonMode ? (
             file && productId && projectId ? (
+              <SectionErrorBoundary label="比較チェック" className="flex-1 min-h-0 flex flex-col">
               <ComparisonCheckPanel
                 file={file}
                 productId={productId}
@@ -133,6 +135,7 @@ export default function ReviewRightPanel({
                 initialOverallStatus={overallStatus}
                 initialCheckedAt={checkedAt}
               />
+              </SectionErrorBoundary>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
                 <GitCompare className="h-10 w-10 mb-3 opacity-30" />
@@ -140,6 +143,7 @@ export default function ReviewRightPanel({
               </div>
             )
           ) : hasCheckResult ? (
+            <SectionErrorBoundary label="AIチェック結果" className="flex-1 min-h-0 flex flex-col">
             <AICheckPanel
               items={items}
               markers={markers}
@@ -158,6 +162,7 @@ export default function ReviewRightPanel({
               onMarkerClick={onMarkerClick}
               onActiveCheckItemChange={onActiveCheckItemChange}
             />
+            </SectionErrorBoundary>
           ) : (
             emptyCheckMessage || (
               <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">

@@ -12,6 +12,7 @@ import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { getSubmitLabel, getSubmitBadgeClass, STATUS_LABEL, STATUS_FILTER_OPTIONS, getEffectiveSubmitLabel, getCheckItemId, checkItemStr } from "@/lib/check-display";
 import { cn } from "@/lib/utils";
 import CheckItemCard from "./CheckItemCard";
+import { SectionErrorBoundary } from "@/components/common/SectionErrorBoundary";
 import ReferenceStatusIndicator from "@/components/reference/ReferenceStatusIndicator";
 
 
@@ -312,28 +313,32 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
                 }
               : null;
           return (
-            <CheckItemCard
-              key={itemId}
-              ref={(el) => { cardRefs.current[item.pattern_id] = el; }}
-              item={item}
-              index={i}
-              marker={marker}
-              isResolved={resolvedItems.has(itemId)}
-              isSelected={selectedItems.has(itemId)}
-              isHighlighted={highlightCard === item.pattern_id}
-              isApplied={appliedItems.has(itemId)}
-              commentCount={commentCounts[checkItemStr(item.pattern_id)] || 0}
-              productCode={productCode}
-              dupeCount={dupeCount}
-              onToggleSelect={() => toggleSelectItem(itemId)}
-              onToggleResolved={() => toggleResolved(itemId)}
-              onCommentClick={() => onCommentClick(item.pattern_id)}
-              onSeekMedia={onSeekMedia}
-              onMarkerClick={onMarkerClick}
-              onMouseEnter={() => onActiveCheckItemChange?.(item)}
-              onMouseLeave={() => onActiveCheckItemChange?.(null)}
-              falsePositiveFeedback={fpProps}
-            />
+            <SectionErrorBoundary
+              key={item.pattern_id ?? `${item.status}-${item.item}`}
+              label="チェック項目"
+            >
+              <CheckItemCard
+                ref={(el) => { cardRefs.current[item.pattern_id] = el; }}
+                item={item}
+                index={i}
+                marker={marker}
+                isResolved={resolvedItems.has(itemId)}
+                isSelected={selectedItems.has(itemId)}
+                isHighlighted={highlightCard === item.pattern_id}
+                isApplied={appliedItems.has(itemId)}
+                commentCount={commentCounts[checkItemStr(item.pattern_id)] || 0}
+                productCode={productCode}
+                dupeCount={dupeCount}
+                onToggleSelect={() => toggleSelectItem(itemId)}
+                onToggleResolved={() => toggleResolved(itemId)}
+                onCommentClick={() => onCommentClick(item.pattern_id)}
+                onSeekMedia={onSeekMedia}
+                onMarkerClick={onMarkerClick}
+                onMouseEnter={() => onActiveCheckItemChange?.(item)}
+                onMouseLeave={() => onActiveCheckItemChange?.(null)}
+                falsePositiveFeedback={fpProps}
+              />
+            </SectionErrorBoundary>
           );
         })}
 
@@ -439,24 +444,28 @@ function OkItemsSection({ okItems, markers, resolvedItems, selectedItems, highli
         const itemId = getCheckItemId(item);
         const marker = markers.find((m) => m.item.pattern_id === item.pattern_id);
         return (
-          <CheckItemCard
-            key={itemId}
-            ref={(el) => { cardRefs.current[item.pattern_id] = el; }}
-            item={item}
-            index={i}
-            marker={marker}
-            isResolved={resolvedItems.has(itemId)}
-            isSelected={selectedItems.has(itemId)}
-            isHighlighted={highlightCard === item.pattern_id}
-            isApplied={appliedItems.has(itemId)}
-            commentCount={commentCounts[checkItemStr(item.pattern_id)] || 0}
-            productCode={productCode}
-            onToggleSelect={() => onToggleSelect(itemId)}
-            onToggleResolved={() => onToggleResolved(itemId)}
+          <SectionErrorBoundary
+            key={item.pattern_id ?? `${item.status}-${item.item}`}
+            label="チェック項目"
+          >
+            <CheckItemCard
+              ref={(el) => { cardRefs.current[item.pattern_id] = el; }}
+              item={item}
+              index={i}
+              marker={marker}
+              isResolved={resolvedItems.has(itemId)}
+              isSelected={selectedItems.has(itemId)}
+              isHighlighted={highlightCard === item.pattern_id}
+              isApplied={appliedItems.has(itemId)}
+              commentCount={commentCounts[checkItemStr(item.pattern_id)] || 0}
+              productCode={productCode}
+              onToggleSelect={() => onToggleSelect(itemId)}
+              onToggleResolved={() => onToggleResolved(itemId)}
               onCommentClick={() => onCommentClick(item.pattern_id)}
               onSeekMedia={onSeekMedia}
               onMarkerClick={onMarkerClick}
-          />
+            />
+          </SectionErrorBoundary>
         );
       })}
     </div>

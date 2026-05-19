@@ -35,6 +35,7 @@ import ScriptDisplay from "@/components/review/ScriptDisplay";
 import MediaPreview, { type MediaPreviewHandle } from "@/components/review/MediaPreview";
 import ReviewRightPanel from "@/components/review/ReviewRightPanel";
 import ComparisonLeftPanel, { type DraftEntry } from "@/components/review/ComparisonLeftPanel";
+import { SectionErrorBoundary } from "@/components/common/SectionErrorBoundary";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -1567,6 +1568,7 @@ export default function FileReviewPage({
 
         <div className="flex-1 overflow-y-auto">
           {comparisonMode ? (
+             <SectionErrorBoundary label="比較表示">
              <ComparisonLeftPanel
               file={file}
               drafts={comparisonDrafts}
@@ -1641,9 +1643,11 @@ export default function FileReviewPage({
               onSubmitToClient={validateAndOpenSubmit}
               onInternalRevision={() => setInternalRevisionOpen(true)}
             />
+             </SectionErrorBoundary>
           ) : (
           <div className="p-4">
             {isSf ? (
+              <SectionErrorBoundary label="プレビュー">
               <ImagePreview
                 imageSrc={displayFile.file_data}
                 markers={hasCheckResult ? markers : []}
@@ -1668,8 +1672,9 @@ export default function FileReviewPage({
                   </div>
                 ) : undefined}
               />
+              </SectionErrorBoundary>
             ) : aiCfg?.inputMode === "audio" || aiCfg?.inputMode === "video" ? (
-              <div>
+              <SectionErrorBoundary label="プレビュー">
                 <MediaPreview
                   ref={mediaPreviewRef}
                   src={displayFile.file_data}
@@ -1691,11 +1696,11 @@ export default function FileReviewPage({
                   boundingBox={activeCheckItem?.bounding_box ?? null}
                   boundingBoxLabel={activeCheckItem?.item}
                 />
-              </div>
+              </SectionErrorBoundary>
             ) : (
-              <div>
+              <SectionErrorBoundary label="スクリプト">
                 <ScriptDisplay text={displayFile.file_data || ""} items={items} markers={markers} onItemClick={scrollToCard} />
-              </div>
+              </SectionErrorBoundary>
             )}
 
             {/* File navigation bar below creative */}
