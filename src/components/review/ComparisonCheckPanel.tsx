@@ -22,6 +22,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import CheckItemCard from "./CheckItemCard";
+import { SectionErrorBoundary } from "@/components/common/SectionErrorBoundary";
 
 export interface ComparisonHistoryEntry {
   id: string;
@@ -813,26 +814,30 @@ export default function ComparisonCheckPanel({
                     }
                   : null;
               return (
-                <CheckItemCard
-                  key={itemId}
-                  ref={(el) => { cardRefs.current[item.pattern_id] = el; }}
-                  item={item}
-                  index={i}
-                  marker={marker}
-                  isResolved={resolvedItems.has(itemId)}
-                  isSelected={selectedItems.has(itemId)}
-                  isHighlighted={highlightCard === item.pattern_id}
-                  isApplied={appliedItems.has(itemId)}
-                  commentCount={commentCounts[item.pattern_id] || 0}
-                  productCode={productCode || ""}
-                  onToggleSelect={() => toggleSelectItem(itemId)}
-                  onToggleResolved={() => toggleResolved(itemId)}
-                  onCommentClick={() => onCommentClick?.(item.pattern_id)}
-                  onSeekMedia={onSeekMedia}
-                  onMarkerClick={onMarkerClick}
-                  sourceLabel="比較チェック"
-                  falsePositiveFeedback={fpProps}
-                />
+                <SectionErrorBoundary
+                  key={item.pattern_id ?? `${item.status}-${item.item}`}
+                  label="チェック項目"
+                >
+                  <CheckItemCard
+                    ref={(el) => { cardRefs.current[item.pattern_id] = el; }}
+                    item={item}
+                    index={i}
+                    marker={marker}
+                    isResolved={resolvedItems.has(itemId)}
+                    isSelected={selectedItems.has(itemId)}
+                    isHighlighted={highlightCard === item.pattern_id}
+                    isApplied={appliedItems.has(itemId)}
+                    commentCount={commentCounts[item.pattern_id] || 0}
+                    productCode={productCode || ""}
+                    onToggleSelect={() => toggleSelectItem(itemId)}
+                    onToggleResolved={() => toggleResolved(itemId)}
+                    onCommentClick={() => onCommentClick?.(item.pattern_id)}
+                    onSeekMedia={onSeekMedia}
+                    onMarkerClick={onMarkerClick}
+                    sourceLabel="比較チェック"
+                    falsePositiveFeedback={fpProps}
+                  />
+                </SectionErrorBoundary>
               );
             })}
 
@@ -995,8 +1000,11 @@ function OkItemsCollapsed({ items, markers, resolvedItems, selectedItems, highli
         const itemId = getCheckItemId(item);
         const marker = markers.find((m) => m.item.pattern_id === item.pattern_id);
         return (
+          <SectionErrorBoundary
+            key={item.pattern_id ?? `${item.status}-${item.item}`}
+            label="チェック項目"
+          >
           <CheckItemCard
-            key={itemId}
             ref={(el) => { cardRefs.current[item.pattern_id] = el; }}
             item={item}
             index={i}
@@ -1014,6 +1022,7 @@ function OkItemsCollapsed({ items, markers, resolvedItems, selectedItems, highli
             onMarkerClick={onMarkerClick}
             sourceLabel="比較チェック"
           />
+          </SectionErrorBoundary>
         );
       })}
     </div>
