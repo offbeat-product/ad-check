@@ -8,7 +8,12 @@ import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { AdCheckLogoMark } from "@/components/AdCheckLogoMark";
 
-const ROLE_LABELS: Record<string, string> = { admin: "管理者", member: "メンバー", viewer: "閲覧者" };
+const ROLE_LABELS: Record<string, string> = {
+  admin: "管理者",
+  director: "ディレクター",
+  member: "メンバー",
+  viewer: "閲覧者",
+};
 
 interface InvitationInfo {
   id: string;
@@ -19,6 +24,12 @@ interface InvitationInfo {
   expires_at: string;
   inviter_name: string | null;
 }
+
+type AcceptInvitationResponse = {
+  ok?: boolean;
+  error?: string;
+  email?: string;
+};
 
 export default function AcceptInvitePage() {
   const [params] = useSearchParams();
@@ -44,16 +55,20 @@ export default function AcceptInvitePage() {
 
     (async () => {
       const { data, error: err } = await supabase.rpc("get_invitation_by_token", { p_token: token });
-      if (err || !data || (data as any[]).length === 0) {
+      if (err || !data || (data as InvitationInfo[]).length === 0) {
         setError("この招待リンクは無効です。管理者に再招待を依頼してください。");
         setLoading(false);
         return;
       }
 
-      const inv = (data as any[])[0] as InvitationInfo;
+      const inv = (data as InvitationInfo[])[0];
 
       if (inv.status !== "pending") {
-        setError(inv.status === "accepted" ? "この招待は既に承認されています。ログインしてください。" : "この招待リンクは無効または期限切れです。");
+        setError(
+          inv.status === "accepted"
+            ? "この招待は既に承認されています。ログインしてください。"
+            : "この招待リンクは無効または期限切れです。",
+        );
         setLoading(false);
         return;
       }
@@ -86,41 +101,37 @@ export default function AcceptInvitePage() {
 
     setSubmitting(true);
     try {
-      // Sign up with Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: invitation.email,
-        password,
-        options: {
-          data: { display_name: displayName || undefined },
-          emailRedirectTo: `${window.location.origin}/dashboard`,
+      const { data, error: fnError } = await supabase.functions.invoke<AcceptInvitationResponse>(
+        "accept-invitation",
+        {
+          body: {
+            token,
+            password,
+            display_name: displayName.trim() || undefined,
+          },
         },
+      );
+
+      if (fnError) throw fnError;
+
+      const result = data as AcceptInvitationResponse | null;
+      if (!result?.ok) {
+        throw new Error(result?.error || "招待の承認に失敗しました。");
+      }
+
+      const email = result.email ?? invitation.email;
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
 
-      if (authError) throw authError;
-
-      // Accept the invitation (updates profile role)
-      if (authData.user) {
-        await supabase.rpc("accept_invitation", { p_token: token, p_user_id: authData.user.id });
-
-        // Update display_name if provided
-        if (displayName) {
-          await supabase.from("profiles").update({ display_name: displayName }).eq("id", authData.user.id);
-        }
-      }
+      if (signInError) throw signInError;
 
       toast({ title: "アカウントを作成しました", description: "ダッシュボードにリダイレクトします。" });
       navigate("/dashboard");
-    } catch (err: any) {
-      // If user already exists, try sign in
-      if (err.message?.includes("already registered") || err.message?.includes("already been registered")) {
-        toast({
-          title: "このメールアドレスは既に登録されています",
-          description: "ログインページからログインしてください。",
-        });
-        navigate("/login");
-      } else {
-        toast({ title: "エラー", description: err.message, variant: "destructive" });
-      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "招待の承認に失敗しました。";
+      toast({ title: "エラー", description: message, variant: "destructive" });
     } finally {
       setSubmitting(false);
     }
@@ -175,7 +186,7 @@ export default function AcceptInvitePage() {
               {invitation?.inviter_name}さんから招待されました
             </p>
             <Badge variant="secondary" className="mt-2">
-              {ROLE_LABELS[invitation?.role || "viewer"]}として参加
+              {ROLE_LABELS[invitation?.role || "viewer"] ?? invitation?.role}として参加
             </Badge>
           </div>
 
