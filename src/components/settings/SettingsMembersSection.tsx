@@ -205,15 +205,6 @@ export function SettingsMembersSection() {
         invited_by: user.id,
       });
 
-      await supabase.auth.signUp({
-        email,
-        password: crypto.randomUUID().slice(0, 16),
-        options: {
-          data: { display_name: inviteStaffDisplayName.trim() || undefined, role: roleToSave },
-          emailRedirectTo: `${window.location.origin}/accept-invite`,
-        },
-      });
-
       const link = `${window.location.origin}/accept-invite?token=${invitation.token}`;
       setGeneratedInviteLink(link);
       await fetchData();
