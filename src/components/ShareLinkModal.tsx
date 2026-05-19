@@ -114,21 +114,17 @@ export default function ShareLinkModal({ open, onOpenChange, checkResultId }: Sh
               <span className="text-sm">パスワード付きリンク</span>
               <Switch checked={usePassword} onCheckedChange={setUsePassword} />
             </div>
-            {usePassword && (
-              <Input type="text" placeholder="半角英数字のみ使用可能" value={password}
-                onChange={(e) => setPassword(e.target.value.replace(/[^a-zA-Z0-9]/g, ""))} />
-            )}
+            {usePassword ? <Input type="text" placeholder="半角英数字のみ使用可能" value={password}
+                onChange={(e) => setPassword(e.target.value.replace(/[^a-zA-Z0-9]/g, ""))} /> : null}
 
             <div className="flex items-center justify-between">
               <span className="text-sm">有効期限を指定する</span>
               <Switch checked={useExpiry} onCheckedChange={setUseExpiry} />
             </div>
-            {useExpiry && (
-              <div className="flex items-center gap-2">
+            {useExpiry ? <div className="flex items-center gap-2">
                 <Input type="number" min={1} max={100} value={expiryDays} onChange={(e) => setExpiryDays(Number(e.target.value))} className="w-20" />
                 <span className="text-sm text-muted-foreground">日間</span>
-              </div>
-            )}
+              </div> : null}
 
             <div className="flex items-center justify-between gap-2">
               <Tooltip>
@@ -161,14 +157,12 @@ export default function ShareLinkModal({ open, onOpenChange, checkResultId }: Sh
               <Link2 className="h-4 w-4 mr-2" />共有リンクを発行
             </Button>
 
-            {generatedUrl && (
-              <div className="flex gap-2">
+            {generatedUrl ? <div className="flex gap-2">
                 <Input value={generatedUrl} readOnly className="text-xs" />
                 <Button size="icon" variant="outline" onClick={handleCopy}>
                   {copied ? <Check className="h-4 w-4 text-status-ok" /> : <Copy className="h-4 w-4" />}
                 </Button>
-              </div>
-            )}
+              </div> : null}
           </TabsContent>
 
           <TabsContent value="history" className="mt-4">

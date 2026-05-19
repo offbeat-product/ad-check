@@ -88,9 +88,7 @@ export default function CopyToPatternDialog({
                 />
                 <div className="min-w-0">
                   <span className="text-sm">{p.name}</span>
-                  {p.description && (
-                    <span className="block text-[10px] text-muted-foreground truncate">{p.description}</span>
-                  )}
+                  {p.description ? <span className="block text-[10px] text-muted-foreground truncate">{p.description}</span> : null}
                 </div>
               </label>
             ))}

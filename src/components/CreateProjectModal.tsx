@@ -261,8 +261,7 @@ export default function CreateProjectModal({ open, onOpenChange, onCreated, defa
                       {p.name}
                     </SelectItem>
                   ))}
-                  {clientId && (
-                    <>
+                  {clientId ? <>
                       <Separator className="my-1" />
                       <button
                         type="button"
@@ -276,8 +275,7 @@ export default function CreateProjectModal({ open, onOpenChange, onCreated, defa
                         <Plus className="h-3.5 w-3.5" />
                         新しい商材を追加
                       </button>
-                    </>
-                  )}
+                    </> : null}
                 </SelectContent>
               </Select>
             ) : (

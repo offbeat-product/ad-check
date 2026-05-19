@@ -37,8 +37,7 @@ export default function AppLayout() {
       </div>
 
       {/* Mobile overlay */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-50 md:hidden">
+      {mobileOpen ? <div className="fixed inset-0 z-50 md:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
           <div className="relative w-[280px] h-full animate-in slide-in-from-left duration-200">
             <AppSidebar onCreateProject={() => { setCreateOpen(true); setMobileOpen(false); }} collapsed={false} />
@@ -49,8 +48,7 @@ export default function AppLayout() {
               <X className="h-4 w-4" />
             </button>
           </div>
-        </div>
-      )}
+        </div> : null}
 
       <main className="flex-1 overflow-auto">
         {/* Mobile header */}

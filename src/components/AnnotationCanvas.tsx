@@ -424,8 +424,7 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
       />
 
       {/* Mandatory comment popup overlay */}
-      {showingPopup && (
-        <>
+      {showingPopup ? <>
           {/* Semi-transparent overlay to block canvas interaction */}
           <div className="absolute inset-0 z-[35] bg-black/20" onClick={(e) => e.stopPropagation()} />
           
@@ -453,7 +452,7 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
                 onKeyDown={(e) => { if (e.key === "Enter" && e.metaKey) handleConfirmComment(); }}
               />
             </div>
-            {commentError && <p className="text-[10px] text-destructive mb-2">コメントを入力してください</p>}
+            {commentError ? <p className="text-[10px] text-destructive mb-2">コメントを入力してください</p> : null}
             <label className="flex items-center gap-2 mb-2 cursor-pointer">
               <Checkbox checked={isCorrection} onCheckedChange={(v) => setIsCorrection(!!v)} />
               <span className="text-xs text-muted-foreground">修正指示として記録する</span>
@@ -463,12 +462,10 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
               <Button size="sm" className="text-xs" onClick={handleConfirmComment}>保存して投稿</Button>
             </div>
           </div>
-        </>
-      )}
+        </> : null}
 
       {/* Text input popover */}
-      {textInput && !showingPopup && (
-        <div
+      {textInput && !showingPopup ? <div
           className="absolute z-30 bg-card border border-border rounded-lg shadow-lg p-2 w-48"
           style={{ left: textInput.x, top: textInput.y }}
           onClick={(e) => e.stopPropagation()}
@@ -486,12 +483,10 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
             <Button size="sm" onClick={confirmText} className="text-xs flex-1 h-7">確定</Button>
             <Button size="sm" variant="outline" onClick={() => setTextInput(null)} className="text-xs h-7">取消</Button>
           </div>
-        </div>
-      )}
+        </div> : null}
 
       {/* Pin input popover */}
-      {pinInput && !showingPopup && (
-        <div
+      {pinInput && !showingPopup ? <div
           className="absolute z-30 bg-card border border-border rounded-lg shadow-lg p-2 w-52"
           style={{ left: pinInput.x, top: pinInput.y }}
           onClick={(e) => e.stopPropagation()}
@@ -507,8 +502,7 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
             <Button size="sm" onClick={confirmPin} className="text-xs flex-1 h-7">保存</Button>
             <Button size="sm" variant="outline" onClick={() => setPinInput(null)} className="text-xs h-7">取消</Button>
           </div>
-        </div>
-      )}
+        </div> : null}
 
       {/* Toolbar */}
       <div className="absolute bottom-0 left-0 right-0 z-30 bg-card/95 backdrop-blur-sm border-t border-border shadow-lg px-3 py-2 flex items-center gap-1 flex-wrap" style={{ transform: "translateY(100%)" }} onClick={(e) => e.stopPropagation()}>

@@ -169,8 +169,7 @@ export default function SharedCommentsPanel({
         ))}
       </div>
 
-      {allowWrite && (
-        <div className="border-t border-border p-3 shrink-0 space-y-2">
+      {allowWrite ? <div className="border-t border-border p-3 shrink-0 space-y-2">
           {showGuestForm ? (
             <div className="space-y-2">
               <p className="text-xs font-medium text-muted-foreground">コメントするにはお名前を入力してください</p>
@@ -205,8 +204,7 @@ export default function SharedCommentsPanel({
               </div>
             </>
           )}
-        </div>
-      )}
+        </div> : null}
     </div>
   );
 }
@@ -233,21 +231,17 @@ function SharedCommentCard({ comment, timeAgo, onAnnotationClick, onSeekMedia, o
         <span className="text-[10px] text-muted-foreground">{timeAgo(comment.created_at)}</span>
       </div>
       <p className="text-xs whitespace-pre-wrap">{comment.content}</p>
-      {hasAnnotation && (
-        <button onClick={() => onAnnotationClick?.(comment.annotation_data)} className="text-[10px] text-primary hover:underline">
+      {hasAnnotation ? <button onClick={() => onAnnotationClick?.(comment.annotation_data)} className="text-[10px] text-primary hover:underline">
           📌 アノテーションを表示
-        </button>
-      )}
+        </button> : null}
       <div className="flex items-center gap-2">
         <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full",
           comment.status === "open" ? "bg-status-warning/10 text-status-warning" : "bg-status-ok/10 text-status-ok")}>
           {comment.status === "open" ? "未対応" : "対応済"}
         </span>
-        {onReply && (
-          <button onClick={onReply} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
+        {onReply ? <button onClick={onReply} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
             <Reply className="h-3 w-3" />返信
-          </button>
-        )}
+          </button> : null}
       </div>
     </div>
   );

@@ -69,14 +69,11 @@ export default function ReferenceMaterialsSection({ projectId, productId, produc
           {expanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
           <ClipboardList className="h-4 w-4 text-primary" />
           <span className="text-sm font-semibold">参考資料</span>
-          {loaded && (
-            <span className="text-xs text-muted-foreground">
+          {loaded ? <span className="text-xs text-muted-foreground">
               {totalRegistered > 0 ? `${totalRegistered}件登録済み` : "未登録"}
-            </span>
-          )}
+            </span> : null}
         </button>
-        {expanded && (
-          <div className="p-4 border-t border-border">
+        {expanded ? <div className="p-4 border-t border-border">
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3">
               {MATERIAL_TYPES.map((mt) => {
                 const pmCount = productMaterials.filter(m => m.material_type === mt.id && m.is_active).length;
@@ -125,12 +122,10 @@ export default function ReferenceMaterialsSection({ projectId, productId, produc
                 );
               })}
             </div>
-          </div>
-        )}
+          </div> : null}
       </div>
 
-      {openType && (
-        <MaterialDetailModal
+      {openType ? <MaterialDetailModal
           open={!!openType}
           onOpenChange={(o) => !o && setOpenType(null)}
           materialType={openType}
@@ -141,8 +136,7 @@ export default function ReferenceMaterialsSection({ projectId, productId, produc
           productMaterials={productMaterials.filter(m => m.material_type === openType)}
           projectMaterials={projectMaterials.filter(m => m.material_type === openType)}
           onRefresh={refresh}
-        />
-      )}
+        /> : null}
     </>
   );
 }

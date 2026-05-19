@@ -372,14 +372,11 @@ export function CreatorUploadModal({
 
         {step === "upload" && (
           <div className="space-y-3">
-            {uploadType === "revision" && currentParent && (
-              <p className="text-xs text-muted-foreground">
+            {uploadType === "revision" && currentParent ? <p className="text-xs text-muted-foreground">
                 親ファイル: {currentParent.fileName} v{currentParent.versionNumber || 1}
-              </p>
-            )}
+              </p> : null}
 
-            {showPatternRadios && (
-              <div className="space-y-2">
+            {showPatternRadios ? <div className="space-y-2">
                 <Label className="text-xs font-medium">対象</Label>
                 <RadioGroup
                   value={uploadPatternMode}
@@ -414,11 +411,9 @@ export function CreatorUploadModal({
                     </SelectContent>
                   </Select>
                 )}
-              </div>
-            )}
+              </div> : null}
 
-            {showPerFilePatterns && (
-              <div className="space-y-2">
+            {showPerFilePatterns ? <div className="space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <Label className="text-xs font-medium">パターン割り当て</Label>
                   <div className="flex flex-wrap gap-1 justify-end">
@@ -489,8 +484,7 @@ export function CreatorUploadModal({
                     </div>
                   ))}
                 </div>
-              </div>
-            )}
+              </div> : null}
 
             <div
               className={cn(
@@ -550,15 +544,13 @@ export function CreatorUploadModal({
                 }}
               />
             </div>
-            {uploading && (
-              <div className="space-y-1">
+            {uploading ? <div className="space-y-1">
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span>アップロード中...</span>
                   <span className="tabular-nums">{progress}%</span>
                 </div>
                 <Progress value={progress} className="h-2" />
-              </div>
-            )}
+              </div> : null}
           </div>
         )}
 

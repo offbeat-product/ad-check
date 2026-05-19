@@ -130,22 +130,16 @@ export default function MaterialDetailModal({
           </div>
           <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
             <span>登録日: {new Date(m.created_at).toLocaleDateString("ja-JP")}</span>
-            {m.created_by && <span>登録者: {m.created_by}</span>}
-            {m.source_type === "url_reference" && m.source_url && (
-              <Badge variant="outline" className="text-[9px] h-4">URL参照</Badge>
-            )}
+            {m.created_by ? <span>登録者: {m.created_by}</span> : null}
+            {m.source_type === "url_reference" && m.source_url ? <Badge variant="outline" className="text-[9px] h-4">URL参照</Badge> : null}
           </div>
           {renderWCheckSummary(m)}
-          {!isWCheck && m.content_text && (
-            <p className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1 line-clamp-2">
+          {!isWCheck && m.content_text ? <p className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1 line-clamp-2">
               抽出テキスト: 「{stripJsonPart(m.content_text).slice(0, 100)}...」
-            </p>
-          )}
-          {isWCheck && m.content_text && !getWCheckParsedJson(m.content_text) && (
-            <p className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1 line-clamp-2">
+            </p> : null}
+          {isWCheck && m.content_text && !getWCheckParsedJson(m.content_text) ? <p className="text-xs text-muted-foreground bg-muted/50 rounded px-2 py-1 line-clamp-2">
               抽出テキスト: 「{stripJsonPart(m.content_text).slice(0, 100)}...」
-            </p>
-          )}
+            </p> : null}
         </>
       )}
     </div>
@@ -268,24 +262,20 @@ export default function MaterialDetailModal({
       </DialogContent>
 
       {/* Single material copy dialog */}
-      {copyMaterial && (
-        <CopyMaterialToProductDialog
+      {copyMaterial ? <CopyMaterialToProductDialog
           open={!!copyMaterial}
           onOpenChange={(o) => !o && setCopyMaterial(null)}
           materials={[copyMaterial]}
           currentProductId={productId}
-        />
-      )}
+        /> : null}
 
       {/* Bulk copy dialog */}
-      {copyAllScope && (
-        <CopyMaterialToProductDialog
+      {copyAllScope ? <CopyMaterialToProductDialog
           open={!!copyAllScope}
           onOpenChange={(o) => !o && setCopyAllScope(null)}
           materials={copyAllScope === "product" ? productMaterials : projectMaterials}
           currentProductId={productId}
-        />
-      )}
+        /> : null}
     </Dialog>
   );
 }

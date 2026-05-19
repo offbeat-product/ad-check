@@ -18,6 +18,14 @@ export default function BatchCheckFloatingBar() {
     [bulkSequentialProgress]
   );
 
+  useEffect(() => {
+    if (progress.status === "idle" || progress.status === "running") return;
+    const timer = window.setTimeout(() => {
+      clearBulkSequentialProgress();
+    }, 10000);
+    return () => window.clearTimeout(timer);
+  }, [progress.status, clearBulkSequentialProgress]);
+
   if (progress.status === "idle") return null;
 
   const isRunning = progress.status === "running";
@@ -26,14 +34,6 @@ export default function BatchCheckFloatingBar() {
   const successCount = progress.results.filter((r) => r.success).length;
   const failCount = progress.results.filter((r) => !r.success).length;
   const pct = progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0;
-
-  useEffect(() => {
-    if (isRunning || progress.status === "idle") return;
-    const timer = window.setTimeout(() => {
-      clearBulkSequentialProgress();
-    }, 10000);
-    return () => window.clearTimeout(timer);
-  }, [isRunning, progress.status, clearBulkSequentialProgress]);
 
   return (
     <div className="fixed bottom-4 right-4 z-50 w-[360px] bg-card border border-border rounded-lg shadow-lg animate-in slide-in-from-bottom-4 duration-300">
@@ -62,11 +62,9 @@ export default function BatchCheckFloatingBar() {
           </button>
         )}
 
-        {isRunning && (
-          <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs shrink-0" onClick={cancelBulkSequentialCheck}>
+        {isRunning ? <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs shrink-0" onClick={cancelBulkSequentialCheck}>
             中止
-          </Button>
-        )}
+          </Button> : null}
 
         {!isRunning && (
           <button type="button" onClick={clearBulkSequentialProgress} className="p-1 rounded hover:bg-muted">
@@ -75,17 +73,14 @@ export default function BatchCheckFloatingBar() {
         )}
       </div>
 
-      {isRunning && (
-        <div className="px-3 pb-2 space-y-1">
+      {isRunning ? <div className="px-3 pb-2 space-y-1">
           <Progress value={pct} className="h-1.5" />
           <p className="text-[11px] text-muted-foreground truncate" title={progress.currentFileName}>
             {progress.currentFileName || "…"}
           </p>
-        </div>
-      )}
+        </div> : null}
 
-      {expanded && progress.results.length > 0 && (
-        <div className="border-t border-border px-3 py-2 max-h-48 overflow-y-auto space-y-1">
+      {expanded && progress.results.length > 0 ? <div className="border-t border-border px-3 py-2 max-h-48 overflow-y-auto space-y-1">
           {progress.results.map((r, i) => (
             <div
               key={`${r.fileId}-${i}`}
@@ -104,8 +99,7 @@ export default function BatchCheckFloatingBar() {
               )}
             </div>
           ))}
-        </div>
-      )}
+        </div> : null}
     </div>
   );
 }

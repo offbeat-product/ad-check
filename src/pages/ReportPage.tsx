@@ -390,8 +390,7 @@ export default function ReportPage() {
       <header className="sticky top-0 z-30 border-b border-border px-4 md:px-6 py-3 flex items-center justify-between bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
         <h1 className="text-lg font-bold">レポート</h1>
         <div className="flex items-center gap-2">
-          {isAdmin && (
-            <Dialog open={targetDialogOpen} onOpenChange={setTargetDialogOpen}>
+          {isAdmin ? <Dialog open={targetDialogOpen} onOpenChange={setTargetDialogOpen}>
               <DialogTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1.5">
                   <Settings2 className="h-3.5 w-3.5" />目標設定
@@ -401,8 +400,7 @@ export default function ReportPage() {
                 <DialogHeader><DialogTitle>KPI 目標値の設定</DialogTitle></DialogHeader>
                 <TargetEditor targets={targets} onSaved={updated => { setTargets(updated); setTargetDialogOpen(false); }} />
               </DialogContent>
-            </Dialog>
-          )}
+            </Dialog> : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="sm" className="gap-1.5">

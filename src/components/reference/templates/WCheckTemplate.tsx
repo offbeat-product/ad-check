@@ -75,7 +75,7 @@ export default function WCheckTemplate({ initialData, onChange }: Props) {
     const lines = bulkText.split("\n").map(l => l.trim()).filter(Boolean);
     const newItems: WCheckItem[] = lines.map(line => ({
       category: "その他",
-      content: line.replace(/^[□■●・\-]\s*/, ""),
+      content: line.replace(/^[□■●・-]\s*/, ""),
       severity: "medium",
     }));
     if (newItems.length > 0) {
@@ -144,15 +144,13 @@ export default function WCheckTemplate({ initialData, onChange }: Props) {
           </Button>
         </div>
 
-        {bulkMode && (
-          <div className="space-y-1.5 border border-border rounded p-2 bg-muted/20">
+        {bulkMode ? <div className="space-y-1.5 border border-border rounded p-2 bg-muted/20">
             <label className="text-xs font-medium text-muted-foreground">改行区切りで一括入力（カテゴリ: その他、重要度: 中 で追加）</label>
             <Textarea value={bulkText} onChange={e => setBulkText(e.target.value)} className="min-h-[80px] text-xs font-mono" placeholder="冒頭3秒でフックがあるか&#10;CTAが明確か&#10;ロゴサイズが規定内か" />
             <Button size="sm" className="text-xs h-7" onClick={parseBulk} disabled={!bulkText.trim()}>
               パースして追加
             </Button>
-          </div>
-        )}
+          </div> : null}
 
         <p className="text-[10px] text-muted-foreground">現在 {data.items.filter(i => i.content.trim()).length} 件のチェック項目</p>
       </div>

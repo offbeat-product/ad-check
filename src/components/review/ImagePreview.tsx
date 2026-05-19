@@ -46,7 +46,7 @@ export default function ImagePreview({
   return (
     <div className="relative">
       <div className="flex items-center justify-between mb-2">
-        {label && <span className="text-xs text-muted-foreground">{label}</span>}
+        {label ? <span className="text-xs text-muted-foreground">{label}</span> : null}
         <Button size="sm" variant={paintMode ? "default" : "outline"} onClick={onPaintModeToggle} className="text-xs h-7">
           <Pin className="h-3 w-3 mr-1" />
           ペイントモード
@@ -86,20 +86,16 @@ export default function ImagePreview({
         </TooltipProvider>
 
         {/* Saved annotation overlays (from comments) - only visible in paint mode */}
-        {paintMode && savedAnnotations && savedAnnotations.length > 0 && (
-          <svg className="absolute inset-0 w-full h-full pointer-events-none z-[15]" viewBox={`0 0 ${imageSize.width || 800} ${imageSize.height || 400}`} preserveAspectRatio="none">
+        {paintMode && savedAnnotations && savedAnnotations.length > 0 ? <svg className="absolute inset-0 w-full h-full pointer-events-none z-[15]" viewBox={`0 0 ${imageSize.width || 800} ${imageSize.height || 400}`} preserveAspectRatio="none">
             {savedAnnotations.map((ann, i) => (
               <SavedAnnotationSvg key={i} ann={ann} containerWidth={imageSize.width || 800} containerHeight={imageSize.height || 400} />
             ))}
-          </svg>
-        )}
+          </svg> : null}
 
         {/* Highlight overlay for clicked annotation — render same shape as paint mode */}
-        {highlightAnnotation?.imagePosition && (
-          <svg className="absolute inset-0 w-full h-full pointer-events-none z-[25] animate-pulse" viewBox={`0 0 ${imageSize.width || 800} ${imageSize.height || 400}`} preserveAspectRatio="none">
+        {highlightAnnotation?.imagePosition ? <svg className="absolute inset-0 w-full h-full pointer-events-none z-[25] animate-pulse" viewBox={`0 0 ${imageSize.width || 800} ${imageSize.height || 400}`} preserveAspectRatio="none">
             <SavedAnnotationSvg ann={highlightAnnotation} containerWidth={imageSize.width || 800} containerHeight={imageSize.height || 400} highlight />
-          </svg>
-        )}
+          </svg> : null}
 
         <AnnotationCanvas active={paintMode} width={imageSize.width || 800} height={imageSize.height || 400} onSaveAnnotations={onAnnotationSave} members={members} />
 

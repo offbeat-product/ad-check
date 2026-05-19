@@ -86,7 +86,8 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
   const toggleResolved = useCallback((patternId: string) => {
     setResolvedItems((s) => {
       const next = new Set(s);
-      next.has(patternId) ? next.delete(patternId) : next.add(patternId);
+      if (next.has(patternId)) next.delete(patternId);
+      else next.add(patternId);
       persistResolved(next);
       return next;
     });
@@ -157,7 +158,12 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
   }, [overallStatus, items, resolvedItems]);
 
   const toggleSelectItem = (id: string) => {
-    setSelectedItems((s) => { const next = new Set(s); next.has(id) ? next.delete(id) : next.add(id); return next; });
+    setSelectedItems((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const selectAll = () => {
@@ -262,9 +268,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
     <div className="flex flex-col h-full min-h-0">
       {/* Compact summary bar */}
       <div className="shrink-0 border-b border-border px-3 py-1.5 space-y-1">
-        {productId && projectId && (
-          <ReferenceStatusIndicator projectId={projectId} productId={productId} processKey={processKey} />
-        )}
+        {productId && projectId ? <ReferenceStatusIndicator projectId={projectId} productId={productId} processKey={processKey} /> : null}
         <div className="flex items-center gap-1.5 flex-wrap">
           <Badge className={cn("text-[10px] font-bold px-2 py-0.5", effectiveSubmit.isOk ? "bg-status-ok text-white border-status-ok" : "bg-status-ng text-white border-status-ng")}>
             {effectiveSubmit.label}
@@ -288,9 +292,7 @@ export default function AICheckPanel({ items, markers, productCode, commentCount
             );
           })}
           <button onClick={showAll} className="text-[10px] text-muted-foreground hover:text-foreground px-1">全て</button>
-          {checkedAt && (
-            <span className="text-[10px] text-muted-foreground ml-auto whitespace-nowrap">{format(new Date(checkedAt), "MM/dd HH:mm")}</span>
-          )}
+          {checkedAt ? <span className="text-[10px] text-muted-foreground ml-auto whitespace-nowrap">{format(new Date(checkedAt), "MM/dd HH:mm")}</span> : null}
         </div>
       </div>
 
@@ -440,7 +442,7 @@ function OkItemsSection({ okItems, markers, resolvedItems, selectedItems, highli
         <span className={cn("transition-transform", open && "rotate-90")}>▶</span>
         <span>問題なし ({okItems.length}件)</span>
       </button>
-      {open && okItems.map((item, i) => {
+      {open ? okItems.map((item, i) => {
         const itemId = getCheckItemId(item);
         const marker = markers.find((m) => m.item.pattern_id === item.pattern_id);
         return (
@@ -467,7 +469,7 @@ function OkItemsSection({ okItems, markers, resolvedItems, selectedItems, highli
             />
           </SectionErrorBoundary>
         );
-      })}
+      }) : null}
     </div>
   );
 }

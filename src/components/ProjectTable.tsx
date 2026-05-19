@@ -196,12 +196,8 @@ export function ProjectTable({
         <Table>
           <TableHeader>
             <TableRow className="border-b border-border hover:bg-transparent">
-              {showClientColumn && (
-                <TableHead className="text-xs font-medium text-muted-foreground min-w-[100px] max-w-[140px]">クライアント</TableHead>
-              )}
-              {showProductColumn && (
-                <TableHead className="text-xs font-medium text-muted-foreground min-w-[100px] max-w-[160px]">商材</TableHead>
-              )}
+              {showClientColumn ? <TableHead className="text-xs font-medium text-muted-foreground min-w-[100px] max-w-[140px]">クライアント</TableHead> : null}
+              {showProductColumn ? <TableHead className="text-xs font-medium text-muted-foreground min-w-[100px] max-w-[160px]">商材</TableHead> : null}
               <TableHead className="text-xs font-medium text-muted-foreground min-w-[200px]">案件名</TableHead>
               <TableHead className="text-xs font-medium text-muted-foreground whitespace-nowrap w-[130px]">ステータス</TableHead>
               <TableHead className="text-xs font-medium text-muted-foreground whitespace-nowrap w-[100px]">納品日</TableHead>
@@ -229,8 +225,7 @@ export function ProjectTable({
                     onRowNavigate(p.id);
                   }}
                 >
-                  {showClientColumn && (
-                    <TableCell className="text-xs align-middle max-w-[140px]" data-interactive onClick={(e) => e.stopPropagation()}>
+                  {showClientColumn ? <TableCell className="text-xs align-middle max-w-[140px]" data-interactive onClick={(e) => e.stopPropagation()}>
                       {dir?.clientId ? (
                         <button
                           type="button"
@@ -242,10 +237,8 @@ export function ProjectTable({
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
-                    </TableCell>
-                  )}
-                  {showProductColumn && (
-                    <TableCell className="text-xs align-middle max-w-[160px]" data-interactive onClick={(e) => e.stopPropagation()}>
+                    </TableCell> : null}
+                  {showProductColumn ? <TableCell className="text-xs align-middle max-w-[160px]" data-interactive onClick={(e) => e.stopPropagation()}>
                       {dir?.productId ? (
                         <button
                           type="button"
@@ -257,8 +250,7 @@ export function ProjectTable({
                       ) : (
                         <span className="text-muted-foreground">—</span>
                       )}
-                    </TableCell>
-                  )}
+                    </TableCell> : null}
                   <TableCell className="text-xs font-medium max-w-[min(480px,40vw)]">
                     <Tooltip>
                       <TooltipTrigger asChild>

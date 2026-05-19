@@ -118,38 +118,27 @@ export default function CreatorProjectPage() {
         <section className="glass-card p-6 space-y-3">
           <h1 className="text-xl font-semibold">{project.project_name}</h1>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            {project.client_name && (
-              <div>
+            {project.client_name ? <div>
                 <div className="text-muted-foreground text-xs">クライアント</div>
                 <div>{project.client_name}</div>
-              </div>
-            )}
-            {project.product_name && (
-              <div>
+              </div> : null}
+            {project.product_name ? <div>
                 <div className="text-muted-foreground text-xs">商材</div>
                 <div>{project.product_name}</div>
-              </div>
-            )}
-            {project.ob_pm && (
-              <div>
+              </div> : null}
+            {project.ob_pm ? <div>
                 <div className="text-muted-foreground text-xs">担当 PM</div>
                 <div>{project.ob_pm}</div>
-              </div>
-            )}
-            {deadlineLabel && (
-              <div>
+              </div> : null}
+            {deadlineLabel ? <div>
                 <div className="text-muted-foreground text-xs">納期</div>
                 <div>{deadlineLabel}</div>
-              </div>
-            )}
-            {overallLabel && (
-              <div>
+              </div> : null}
+            {overallLabel ? <div>
                 <div className="text-muted-foreground text-xs">全体納期</div>
                 <div>{overallLabel}</div>
-              </div>
-            )}
-            {statusLabel && (
-              <div>
+              </div> : null}
+            {statusLabel ? <div>
                 <div className="text-muted-foreground text-xs">ステータス</div>
                 <Badge
                   variant="outline"
@@ -158,10 +147,8 @@ export default function CreatorProjectPage() {
                   <span className={cn("w-2 h-2 rounded-full shrink-0", statusCfg.dotClass)} />
                   {statusCfg.label}
                 </Badge>
-              </div>
-            )}
-            {creativeTypeLabel && (
-              <div>
+              </div> : null}
+            {creativeTypeLabel ? <div>
                 <div className="text-muted-foreground text-xs">制作種別</div>
                 {(project.creative_type ?? "video") === "banner" ? (
                   <Badge
@@ -188,19 +175,15 @@ export default function CreatorProjectPage() {
                     {creativeTypeLabel ?? "動画"}
                   </Badge>
                 )}
-              </div>
-            )}
+              </div> : null}
           </div>
-          {project.description && (
-            <div className="pt-3 border-t border-border">
+          {project.description ? <div className="pt-3 border-t border-border">
               <div className="text-muted-foreground text-xs mb-1">案件説明</div>
               <p className="text-sm whitespace-pre-wrap">{project.description}</p>
-            </div>
-          )}
+            </div> : null}
         </section>
 
-        {shareToken && (
-          <CreatorFileUploadSection
+        {shareToken ? <CreatorFileUploadSection
             shareToken={shareToken}
             projectId={project.project_id}
             files={files}
@@ -211,8 +194,7 @@ export default function CreatorProjectPage() {
               void refetch();
               void refetchCommentCounts();
             }}
-          />
-        )}
+          /> : null}
       </main>
     </div>
   );

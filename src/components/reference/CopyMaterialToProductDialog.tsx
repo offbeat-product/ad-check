@@ -191,7 +191,7 @@ export default function CopyMaterialToProductDialog({ open, onOpenChange, materi
                 <label key={p.id} className="flex items-center gap-2 p-1.5 rounded hover:bg-muted/50 cursor-pointer">
                   <Checkbox checked={selectedIds.includes(p.id)} onCheckedChange={() => toggle(p.id)} />
                   <span className="text-xs flex-1">{p.name}</span>
-                  {p.label && <Badge variant="outline" className="text-[9px] h-4">{p.label}</Badge>}
+                  {p.label ? <Badge variant="outline" className="text-[9px] h-4">{p.label}</Badge> : null}
                 </label>
               ))}
             </div>

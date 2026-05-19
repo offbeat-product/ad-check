@@ -104,9 +104,7 @@ export default function GlobalSearch() {
         <Command shouldFilter={false} className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5">
           <CommandInput placeholder="案件名・ID・クライアント・商材・担当で検索…" value={query} onValueChange={setQuery} />
           <CommandList>
-            {isPending && (
-              <div className="py-8 text-center text-sm text-muted-foreground">読み込み中…</div>
-            )}
+            {isPending ? <div className="py-8 text-center text-sm text-muted-foreground">読み込み中…</div> : null}
             {!isPending && <CommandEmpty>一致する結果がありません</CommandEmpty>}
 
             {!isPending && filtered.clients.length > 0 && (

@@ -121,8 +121,7 @@ export default function MentionInput({ value, onChange, members, onMentions, pla
         placeholder={placeholder}
         className={className}
       />
-      {showDropdown && filtered.length > 0 && (
-        <div ref={dropdownRef} className="absolute bottom-full left-0 mb-1 w-full bg-popover border border-border rounded-md shadow-lg z-[9999] max-h-40 overflow-y-auto">
+      {showDropdown && filtered.length > 0 ? <div ref={dropdownRef} className="absolute bottom-full left-0 mb-1 w-full bg-popover border border-border rounded-md shadow-lg z-[9999] max-h-40 overflow-y-auto">
           {filtered.map((m, i) => (
             <button
               key={m.id}
@@ -143,8 +142,7 @@ export default function MentionInput({ value, onChange, members, onMentions, pla
               </div>
             </button>
           ))}
-        </div>
-      )}
+        </div> : null}
     </div>
   );
 }

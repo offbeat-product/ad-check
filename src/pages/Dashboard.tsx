@@ -104,15 +104,13 @@ function DeadlineColumn({ title, titleIcon, rows, navigate }: DeadlineColumnProp
                 もっと見る
               </button>
             )}
-            {rows.length > DEADLINE_LIST_PAGE_SIZE && expanded && (
-              <button
+            {rows.length > DEADLINE_LIST_PAGE_SIZE && expanded ? <button
                 type="button"
                 className="w-full py-2 text-xs text-muted-foreground hover:bg-muted/30 transition-colors"
                 onClick={() => setExpanded(false)}
               >
                 折りたたむ
-              </button>
-            )}
+              </button> : null}
           </>
         )}
       </div>

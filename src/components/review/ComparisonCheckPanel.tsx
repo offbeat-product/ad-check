@@ -133,7 +133,8 @@ export default function ComparisonCheckPanel({
   const toggleResolved = useCallback((patternId: string) => {
     setResolvedItems((s) => {
       const next = new Set(s);
-      next.has(patternId) ? next.delete(patternId) : next.add(patternId);
+      if (next.has(patternId)) next.delete(patternId);
+      else next.add(patternId);
       const targetId = selectedHistoryId || checkResultId;
       persistResolved(next, targetId);
       // Also update the history resolved map for badge consistency
@@ -565,7 +566,12 @@ export default function ComparisonCheckPanel({
   }, [displayResult?.overall_status, displayItems, resolvedItems]);
 
   const toggleSelectItem = (id: string) => {
-    setSelectedItems((s) => { const next = new Set(s); next.has(id) ? next.delete(id) : next.add(id); return next; });
+    setSelectedItems((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const selectAll = () => {
@@ -736,15 +742,12 @@ export default function ComparisonCheckPanel({
       )}
 
       {/* Result summary bar (when result exists) */}
-      {displayResult && (
-        <div className="shrink-0 border-b border-border px-3 py-2 space-y-2">
-          {isShowingInitialCheck && (
-            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+      {displayResult ? <div className="shrink-0 border-b border-border px-3 py-2 space-y-2">
+          {isShowingInitialCheck ? <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
               <Bot className="h-3 w-3" />
               <span>初稿AIチェック結果</span>
-              {initialCheckedAt && <span className="ml-auto">{format(new Date(initialCheckedAt), "MM/dd HH:mm")}</span>}
-            </div>
-          )}
+              {initialCheckedAt ? <span className="ml-auto">{format(new Date(initialCheckedAt), "MM/dd HH:mm")}</span> : null}
+            </div> : null}
           <div className="flex items-center gap-2 flex-wrap">
             <Badge className={cn("text-xs font-bold px-2.5 py-1", submit.isOk ? "bg-status-ok text-white border-status-ok" : "bg-status-ng text-white border-status-ng")}>
               {submit.label}
@@ -773,8 +776,7 @@ export default function ComparisonCheckPanel({
             })}
             <button onClick={() => setActiveFilters(new Set(STATUS_FILTER_OPTIONS.map((o) => o.key)))} className="text-[10px] text-muted-foreground hover:text-foreground px-1.5">全て</button>
           </div>
-        </div>
-      )}
+        </div> : null}
 
       {/* Main content area */}
       <div className="flex-1 overflow-y-auto p-3 space-y-3 min-h-0">
@@ -858,8 +860,7 @@ export default function ComparisonCheckPanel({
       {/* Bottom action bar */}
       <div className="shrink-0 border-t border-border p-3 bg-card space-y-2">
         {/* Apply corrections bar (when result exists) */}
-        {displayResult && (
-          <>
+        {displayResult ? <>
             {/* Bulk resolve all NG items */}
             {(() => {
               const unresolvedNg = displayItems.filter(i => i.status === "NG" && !resolvedItems.has(getCheckItemId(i)));
@@ -898,8 +899,7 @@ export default function ComparisonCheckPanel({
             >
               {applying ? "保存中..." : `チェックしたコメントを反映 (${selectedItems.size})`}
             </Button>
-          </>
-        )}
+          </> : null}
 
         {/* Comparison mode buttons */}
         {!hasNewContent && !displayResult && history.length === 0 && (
@@ -907,26 +907,19 @@ export default function ComparisonCheckPanel({
             <GitCompare className="h-3 w-3 mr-1" />比較モードを開く
           </Button>
         )}
-        {(history.length > 0 || displayResult) && !hasNewContent && (
-          <Button size="sm" variant="outline" className="w-full text-xs" onClick={onOpenComparisonMode}>
+        {(history.length > 0 || displayResult) && !hasNewContent ? <Button size="sm" variant="outline" className="w-full text-xs" onClick={onOpenComparisonMode}>
             <GitCompare className="h-3 w-3 mr-1" />次の稿をチェック
-          </Button>
-        )}
-        {hasNewContent && enabled && (
-          <Button size="sm" className="w-full text-xs" onClick={handleRunComparison} disabled={checking || !!lockedByUser}>
+          </Button> : null}
+        {hasNewContent && enabled ? <Button size="sm" className="w-full text-xs" onClick={handleRunComparison} disabled={checking || !!lockedByUser}>
             {checking ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <GitCompare className="h-3 w-3 mr-1" />}
             {checking ? "比較チェック中..." : lockedByUser ? `${lockedByUser}さんがチェック中` : `比較チェック実行（${comparisonRoundLabel}）`}
-          </Button>
-        )}
-        {hasNewContent && !enabled && (
-          <Button size="sm" variant="outline" className="w-full text-xs opacity-50" disabled>
+          </Button> : null}
+        {hasNewContent && !enabled ? <Button size="sm" variant="outline" className="w-full text-xs opacity-50" disabled>
             <Bot className="h-3 w-3 mr-1" />比較チェック（準備中）
-          </Button>
-        )}
+          </Button> : null}
 
         {/* Submit to client button */}
-        {submissionType !== "client" && onSubmitToClient && (displayResult || history.length > 0) && (
-          <div className="space-y-2">
+        {submissionType !== "client" && onSubmitToClient && (displayResult || history.length > 0) ? <div className="space-y-2">
             <Button
               size="sm"
               className="w-full text-xs gap-1.5"
@@ -935,34 +928,29 @@ export default function ComparisonCheckPanel({
               <CheckCircle2 className="h-3.5 w-3.5" />
               クライアントに提出する
             </Button>
-            {onInternalRevision && (
-              <Button
+            {onInternalRevision ? <Button
                 size="sm"
                 variant="outline"
                 className="w-full text-xs gap-1.5"
                 onClick={onInternalRevision}
               >
                 社内修正する
-              </Button>
-            )}
-          </div>
-        )}
+              </Button> : null}
+          </div> : null}
         {submissionType === "client" && (
           <div className="space-y-2">
             <div className="flex items-center justify-center gap-2 py-2 rounded-lg border border-primary/30 bg-primary/5 text-primary text-xs font-medium">
               <CheckCircle2 className="h-3.5 w-3.5" />
               クライアント提出済み
             </div>
-            {onInternalRevision && (
-              <Button
+            {onInternalRevision ? <Button
                 size="sm"
                 variant="outline"
                 className="w-full text-xs gap-1.5"
                 onClick={onInternalRevision}
               >
                 社内修正する
-              </Button>
-            )}
+              </Button> : null}
           </div>
         )}
       </div>
@@ -996,7 +984,7 @@ function OkItemsCollapsed({ items, markers, resolvedItems, selectedItems, highli
         <span className={cn("transition-transform", open && "rotate-90")}>▶</span>
         <span>問題なし ({items.length}件)</span>
       </button>
-      {open && items.map((item, i) => {
+      {open ? items.map((item, i) => {
         const itemId = getCheckItemId(item);
         const marker = markers.find((m) => m.item.pattern_id === item.pattern_id);
         return (
@@ -1024,7 +1012,7 @@ function OkItemsCollapsed({ items, markers, resolvedItems, selectedItems, highli
           />
           </SectionErrorBoundary>
         );
-      })}
+      }) : null}
     </div>
   );
 }

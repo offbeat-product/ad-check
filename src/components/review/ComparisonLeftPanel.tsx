@@ -140,17 +140,14 @@ export default function ComparisonLeftPanel({
         <img src={data} alt={label} className="w-full max-h-[25vh] object-contain" onLoad={(e) => handleImageLoad(draftIndex, e)} />
         
         {/* Saved annotations overlay */}
-        {savedAnnotations && savedAnnotations.length > 0 && draftIndex === 0 && (
-          <svg className="absolute inset-0 w-full h-full pointer-events-none z-[15]" viewBox={`0 0 ${size.width} ${size.height}`} preserveAspectRatio="none">
+        {savedAnnotations && savedAnnotations.length > 0 && draftIndex === 0 ? <svg className="absolute inset-0 w-full h-full pointer-events-none z-[15]" viewBox={`0 0 ${size.width} ${size.height}`} preserveAspectRatio="none">
             {savedAnnotations.map((ann, i) => (
               <SavedAnnotationSvg key={i} ann={ann} containerWidth={size.width} containerHeight={size.height} />
             ))}
-          </svg>
-        )}
+          </svg> : null}
 
         {/* Highlight annotation */}
-        {highlightAnnotation?.imagePosition && draftIndex === 0 && (
-          <div
+        {highlightAnnotation?.imagePosition && draftIndex === 0 ? <div
             className="absolute border-3 border-primary border-dashed rounded animate-pulse z-[25] pointer-events-none"
             style={{
               left: `${highlightAnnotation.imagePosition.x}%`,
@@ -159,13 +156,10 @@ export default function ComparisonLeftPanel({
               height: `${highlightAnnotation.imagePosition.height}%`,
               borderWidth: '3px',
             }}
-          />
-        )}
+          /> : null}
 
         {/* Annotation canvas - only on active draft pair */}
-        {paintMode && isActiveDraft && (
-          <AnnotationCanvas active={paintMode} width={size.width} height={size.height} onSaveAnnotations={onAnnotationSave} members={members} />
-        )}
+        {paintMode && isActiveDraft ? <AnnotationCanvas active={paintMode} width={size.width} height={size.height} onSaveAnnotations={onAnnotationSave} members={members} /> : null}
       </div>
     );
   };
@@ -217,12 +211,10 @@ export default function ComparisonLeftPanel({
           <span className="text-sm font-medium">比較チェックモード</span>
         </div>
         <div className="flex items-center gap-1">
-          {isImage && onPaintModeToggle && (
-            <Button size="sm" variant={paintMode ? "default" : "outline"} onClick={onPaintModeToggle} className="text-xs h-7">
+          {isImage && onPaintModeToggle ? <Button size="sm" variant={paintMode ? "default" : "outline"} onClick={onPaintModeToggle} className="text-xs h-7">
               <Pin className="h-3 w-3 mr-1" />
               ペイント
-            </Button>
-          )}
+            </Button> : null}
           <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={onClose}>
             <X className="h-3 w-3 mr-1" />閉じる
           </Button>
@@ -247,9 +239,7 @@ export default function ComparisonLeftPanel({
                     {i === 0 ? "初" : i + 1}
                   </span>
                   {draft.label}
-                  {i === activePairIndex && afterDraft && (
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">比較元</span>
-                  )}
+                  {i === activePairIndex && afterDraft ? <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">比較元</span> : null}
                   {i === activePairIndex + 1 && (
                     <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">比較先</span>
                   )}
@@ -348,13 +338,10 @@ export default function ComparisonLeftPanel({
           </Button>
         </div>
 
-        {!isImage && !isMedia && beforeDraft?.data && afterDraft?.data && (
-          <TextDiff original={beforeDraft.data} revised={afterDraft.data} />
-        )}
+        {!isImage && !isMedia && beforeDraft?.data && afterDraft?.data ? <TextDiff original={beforeDraft.data} revised={afterDraft.data} /> : null}
 
         {/* Submit to client button — show draft number */}
-        {submissionType !== "client" && onSubmitToClient && afterDraft && (
-          <div className="space-y-2">
+        {submissionType !== "client" && onSubmitToClient && afterDraft ? <div className="space-y-2">
             <Button
               size="sm"
               className="w-full text-xs gap-1.5 h-10"
@@ -363,8 +350,7 @@ export default function ComparisonLeftPanel({
               <CheckCircle2 className="h-4 w-4" />
               クライアントに第{activePairIndex + 2}稿を提出する
             </Button>
-            {onInternalRevision && (
-              <Button
+            {onInternalRevision ? <Button
                 size="sm"
                 variant="outline"
                 className="w-full text-xs gap-1.5 h-10"
@@ -372,18 +358,15 @@ export default function ComparisonLeftPanel({
               >
                 <ArrowDown className="h-4 w-4" />
                 社内で第{activePairIndex + 2}稿を修正する
-              </Button>
-            )}
-          </div>
-        )}
+              </Button> : null}
+          </div> : null}
         {submissionType === "client" && (
           <div className="space-y-2">
             <div className="flex items-center justify-center gap-2 py-2.5 rounded-lg border border-primary/30 bg-primary/5 text-primary text-xs font-medium">
               <CheckCircle2 className="h-3.5 w-3.5" />
               クライアント提出済み
             </div>
-            {onInternalRevision && (
-              <Button
+            {onInternalRevision ? <Button
                 size="sm"
                 variant="outline"
                 className="w-full text-xs gap-1.5 h-10"
@@ -391,8 +374,7 @@ export default function ComparisonLeftPanel({
               >
                 <ArrowDown className="h-4 w-4" />
                 社内で第{activePairIndex + 2}稿を修正する
-              </Button>
-            )}
+              </Button> : null}
           </div>
         )}
       </div>
@@ -437,8 +419,7 @@ function TextDiff({ original, revised }: { original: string; revised: string }) 
         <GitCompare className="h-3 w-3" />
         {show ? "差分を隠す" : "差分ハイライト表示"}
       </button>
-      {show && (
-        <div className="border border-border rounded-lg overflow-hidden text-xs">
+      {show ? <div className="border border-border rounded-lg overflow-hidden text-xs">
           <div className="flex border-b border-border bg-muted/30">
             <div className="flex-1 px-3 py-1.5 font-semibold text-muted-foreground">修正前</div>
             <div className="w-px bg-border" />
@@ -462,8 +443,7 @@ function TextDiff({ original, revised }: { original: string; revised: string }) 
               );
             })}
           </div>
-        </div>
-      )}
+        </div> : null}
     </div>
   );
 }

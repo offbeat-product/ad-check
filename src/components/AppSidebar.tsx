@@ -69,7 +69,12 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
   const handleSignOut = async () => { await signOut(); navigate("/login"); };
 
   const toggleClient = (id: string) => {
-    setOpenClients((s) => { const next = new Set(s); next.has(id) ? next.delete(id) : next.add(id); return next; });
+    setOpenClients((s) => {
+      const next = new Set(s);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
   const DEFAULT_PRODUCT_COLOR = "#3B82F6";
   const legacyColorMap: Record<string, string> = {
@@ -197,8 +202,7 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
             </div>
           </>
         )}
-        {collapsed && onToggleCollapse && (
-          <>
+        {collapsed && onToggleCollapse ? <>
             <button type="button" onClick={onToggleCollapse} className="mt-2 p-1 rounded hover:bg-muted/50 text-muted-foreground transition-colors" title="サイドバーを開く">
               <PanelLeftOpen className="h-3.5 w-3.5" />
             </button>
@@ -210,8 +214,7 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
             >
               <Search className="h-4 w-4" aria-hidden />
             </button>
-          </>
-        )}
+          </> : null}
       </div>
 
       <nav className="flex-1 overflow-y-auto py-2">
@@ -247,7 +250,7 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
               </button>
             </div>
 
-            {treeOpen && sortedTree.map(({ client, products: clientProducts }) => (
+            {treeOpen ? sortedTree.map(({ client, products: clientProducts }) => (
               <div key={client.id}
                 draggable
                 onDragStart={() => handleClientDragStart(client.id)}
@@ -288,7 +291,7 @@ export default function AppSidebar({ onCreateProject, collapsed = false, onToggl
                   </div>
                 ))}
               </div>
-            ))}
+            )) : null}
           </div>
         )}
 

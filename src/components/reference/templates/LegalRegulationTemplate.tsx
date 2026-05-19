@@ -218,16 +218,14 @@ export default function LegalRegulationTemplate({ initialData, onChange }: Props
                     <Switch checked={isActive} onCheckedChange={() => toggleLaw(preset.id)} />
                   </div>
                 </div>
-                {isIndustry && isActive && (
-                  <div className="mt-1.5 ml-7">
+                {isIndustry && isActive ? <div className="mt-1.5 ml-7">
                     <Textarea
                       value={industryCustom}
                       onChange={e => handleIndustryChange(e.target.value)}
                       className="min-h-[80px] text-xs"
                       placeholder="例: AGA治療広告の固有規制、着圧商品の表示ルール、特定媒体（Meta/Google等）のポリシー"
                     />
-                  </div>
-                )}
+                  </div> : null}
               </div>
             );
           })}

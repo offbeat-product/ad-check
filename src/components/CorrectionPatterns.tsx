@@ -42,13 +42,11 @@ export function CorrectionPatternCard({ ruleId, productCode, onApply }: Correcti
         前回の修正: 「{pattern.corrected_content}」
       </p>
       <div className="flex gap-2">
-        {onApply && (
-          <Button size="sm" variant="outline"
+        {onApply ? <Button size="sm" variant="outline"
             className="h-7 text-xs border-status-ok/30 text-status-ok hover:bg-status-ok/10"
             onClick={() => onApply(pattern.corrected_content)}>
             <Check className="h-3 w-3 mr-1" />この修正を適用
-          </Button>
-        )}
+          </Button> : null}
         <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => setDismissed(true)}>
           <X className="h-3 w-3 mr-1" />無視
         </Button>

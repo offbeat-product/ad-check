@@ -96,9 +96,7 @@ export default function NotificationsPage() {
                   </span>
                 </div>
                 <p className="text-sm font-medium mt-1">{n.title}</p>
-                {n.message && (
-                  <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-line line-clamp-3">{n.message}</p>
-                )}
+                {n.message ? <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-line line-clamp-3">{n.message}</p> : null}
               </div>
               {!n.is_read && (
                 <button

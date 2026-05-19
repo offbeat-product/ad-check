@@ -303,8 +303,7 @@ export function CreatorFileUploadSection({
         })}
       </div>
 
-      {targetProcess && (
-        <CreatorUploadModal
+      {targetProcess ? <CreatorUploadModal
           open={dialogOpen}
           onOpenChange={(next) => {
             setDialogOpen(next);
@@ -328,8 +327,7 @@ export function CreatorFileUploadSection({
             if (Array.isArray(newFileId)) return;
             navigate(`/creator/${shareToken}/file/${newFileId}`);
           }}
-        />
-      )}
+        /> : null}
     </section>
   );
 }

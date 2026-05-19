@@ -1304,14 +1304,12 @@ export default function FileReviewPage({
             >
               <ArrowLeft className="h-4 w-4" />
             </button>
-            {creatorMode && (
-              <div className="hidden md:flex items-center gap-1.5 shrink-0 select-none">
+            {creatorMode ? <div className="hidden md:flex items-center gap-1.5 shrink-0 select-none">
                 <CircleCheckBig size={18} className="text-primary" strokeWidth={2.25} aria-hidden />
                 <span className="bg-gradient-to-r from-sky-500 to-violet-600 bg-clip-text text-transparent tracking-tight text-sm font-semibold">
                   Ad Check
                 </span>
-              </div>
-            )}
+              </div> : null}
 
             {/* Prev */}
             <button
@@ -1322,11 +1320,9 @@ export default function FileReviewPage({
               <ChevronLeft className="h-3.5 w-3.5" />
             </button>
 
-            {creatorMode && (
-              <span className="text-[10px] text-muted-foreground truncate max-w-[220px] hidden sm:inline">
+            {creatorMode ? <span className="text-[10px] text-muted-foreground truncate max-w-[220px] hidden sm:inline">
                 {(creatorBreadcrumb?.clientName || "クライアント")} &gt; {(creatorBreadcrumb?.productName || "商材")} &gt; {(creatorBreadcrumb?.projectName || "案件")} &gt; {(file?.file_name || "ファイル")}
-              </span>
-            )}
+              </span> : null}
 
             {/* File name */}
             {!creatorMode && editingName ? (
@@ -1369,8 +1365,8 @@ export default function FileReviewPage({
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="text-xs">
                   {file?.file_name}
-                  {file?.created_at && <> · {format(new Date(file.created_at), "yyyy/MM/dd HH:mm")}</>}
-                  {file?.created_by && <> · {file.created_by.includes("@") ? file.created_by.split("@")[0] : file.created_by}</>}
+                  {file?.created_at ? <> · {format(new Date(file.created_at), "yyyy/MM/dd HH:mm")}</> : null}
+                  {file?.created_by ? <> · {file.created_by.includes("@") ? file.created_by.split("@")[0] : file.created_by}</> : null}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -1399,50 +1395,39 @@ export default function FileReviewPage({
             )}
 
             {/* Lock indicator */}
-            {lockedByUser && (
-              <Tooltip>
+            {lockedByUser ? <Tooltip>
                 <TooltipTrigger asChild>
                   <span className="shrink-0 flex items-center gap-1 px-1.5 py-0.5 rounded bg-destructive/10 text-destructive text-[10px] font-medium">
                     <Lock className="h-2.5 w-2.5" />{lockedByUser}
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>{lockedByUser}さんがチェック中 — 操作はロックされています</TooltipContent>
-              </Tooltip>
-            )}
+              </Tooltip> : null}
 
             {/* Spacer */}
             <div className="flex-1" />
 
             {/* Primary: AI Check button */}
-            {!creatorMode && canCheck && !comparisonMode && (
-              <>
+            {!creatorMode && canCheck && !comparisonMode ? <>
                 <Button size="sm" className="text-xs h-7 px-2.5" onClick={handleRunCheck} disabled={checking || videoPolling.pollingState.isPolling || !!lockedByUser}>
                   {checking ? <Loader2 className="h-3 w-3 animate-spin" /> : <Bot className="h-3 w-3" />}
                   <span className="hidden sm:inline ml-1">{checking ? "チェック中..." : "AIチェック"}</span>
                 </Button>
-                {checking && !videoPolling.pollingState.isPolling && checkProgress.isRunning && (
-                  <div className="flex items-center gap-1.5 min-w-[100px]">
+                {checking && !videoPolling.pollingState.isPolling && checkProgress.isRunning ? <div className="flex items-center gap-1.5 min-w-[100px]">
                     <Progress value={checkProgress.progress} className="h-1.5 flex-1" />
                     <span className="text-[10px] text-muted-foreground font-mono w-7">{checkProgress.progress}%</span>
-                  </div>
-                )}
-                {videoPolling.pollingState.isPolling && (
-                  <div className="flex items-center gap-1.5 min-w-[160px]">
+                  </div> : null}
+                {videoPolling.pollingState.isPolling ? <div className="flex items-center gap-1.5 min-w-[160px]">
                     <Progress value={Math.min((videoPolling.pollingState.elapsedSeconds / 300) * 100, 95)} className="h-1.5 flex-1" />
                     <span className="text-[10px] text-muted-foreground font-mono whitespace-nowrap">{videoPolling.formatElapsed(videoPolling.pollingState.elapsedSeconds)}</span>
-                  </div>
-                )}
-              </>
-            )}
-            {!creatorMode && checkDisabled && !comparisonMode && (
-              <Button size="sm" variant="outline" className="text-[10px] h-7 opacity-50" disabled>
+                  </div> : null}
+              </> : null}
+            {!creatorMode && checkDisabled && !comparisonMode ? <Button size="sm" variant="outline" className="text-[10px] h-7 opacity-50" disabled>
                 <Bot className="h-3 w-3" />準備中
-              </Button>
-            )}
+              </Button> : null}
 
             {/* Comparison check button */}
-            {!creatorMode && hasCheckResult && !comparisonMode && (
-              <Button size="sm" variant="outline" className="text-xs h-7 px-2 border-primary/50 text-primary hover:bg-primary/10" onClick={() => {
+            {!creatorMode && hasCheckResult && !comparisonMode ? <Button size="sm" variant="outline" className="text-xs h-7 px-2 border-primary/50 text-primary hover:bg-primary/10" onClick={() => {
                 if (comparisonDrafts.length === 0) {
                   const inputMode = AI_CHECK_CONFIG[file.process_type]?.inputMode || "text";
                   const isText = inputMode === "text";
@@ -1457,8 +1442,7 @@ export default function FileReviewPage({
               }}>
                 <GitCompare className="h-3 w-3" />
                 <span className="hidden sm:inline ml-1">比較</span>
-              </Button>
-            )}
+              </Button> : null}
 
             {/* Status badge */}
             {!creatorMode && <Popover>
@@ -1476,12 +1460,10 @@ export default function FileReviewPage({
             </Popover>}
 
             {/* Share button - always visible */}
-            {!creatorMode && record && (
-              <Button size="sm" variant="outline" className="text-xs h-7 px-2" onClick={() => setShareOpen(true)}>
+            {!creatorMode && record ? <Button size="sm" variant="outline" className="text-xs h-7 px-2" onClick={() => setShareOpen(true)}>
                 <Link2 className="h-3 w-3" />
                 <span className="hidden sm:inline ml-1">共有</span>
-              </Button>
-            )}
+              </Button> : null}
 
             {/* More menu */}
             {!creatorMode && <DropdownMenu>
@@ -1492,8 +1474,7 @@ export default function FileReviewPage({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-44">
                 {/* FIX / Unfix */}
-                {hasCheckResult && currentStatus !== "fixed" && ["checked", "internal_revision", "client_review"].includes(currentStatus) && (
-                  <DropdownMenuItem className="text-xs gap-2" onClick={async () => {
+                {hasCheckResult && currentStatus !== "fixed" && ["checked", "internal_revision", "client_review"].includes(currentStatus) ? <DropdownMenuItem className="text-xs gap-2" onClick={async () => {
                     const confirmed = window.confirm('このクリエイティブをFIX（最終確定）しますか？\nFIXしたデータは他工程のAIチェック時に照合用として使用されます。');
                     if (!confirmed || !file) return;
                     if (projectId) {
@@ -1508,8 +1489,7 @@ export default function FileReviewPage({
                     else { setFile({ ...file, status: "fixed" }); toast({ title: "✅ FIX確定しました" }); }
                   }}>
                     <Lock className="h-3 w-3" />FIX確定
-                  </DropdownMenuItem>
-                )}
+                  </DropdownMenuItem> : null}
                 {currentStatus === "fixed" && (
                   <DropdownMenuItem className="text-xs gap-2" onClick={async () => {
                     if (!file) return;
@@ -1542,7 +1522,9 @@ export default function FileReviewPage({
                         const url = new URL(file.file_data);
                         const pathMatch = url.pathname.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)/);
                         if (pathMatch) { await supabase.storage.from(pathMatch[1]).remove([pathMatch[2]]); }
-                      } catch {}
+                      } catch {
+                        void 0;
+                      }
                     }
                     // Manual cascade: unlink check_result, delete children, then delete file
                     const checkResultId = file.check_result_id;
@@ -1732,8 +1714,7 @@ export default function FileReviewPage({
               </div>
             )}
 
-            {creatorMode && (
-              <div className="mt-3">
+            {creatorMode ? <div className="mt-3">
                 <Button
                   size="lg"
                   variant="outline"
@@ -1743,8 +1724,7 @@ export default function FileReviewPage({
                   <Upload className="h-5 w-5" />
                   修正版をアップロード
                 </Button>
-              </div>
-            )}
+              </div> : null}
 
             {/* Submit to client button */}
             {!creatorMode && file.submission_type !== "client" && (
@@ -1858,29 +1838,23 @@ export default function FileReviewPage({
             <Bot className="h-10 w-10 mb-3 opacity-30" />
             <p className="text-sm font-medium">AIチェック未実行</p>
             <p className="text-xs mt-1">AIチェックを実行してください</p>
-            {canCheck && (
-              <div className="flex flex-col items-center gap-2">
+            {canCheck ? <div className="flex flex-col items-center gap-2">
                 <Button size="sm" className="mt-4" onClick={handleRunCheck} disabled={checking || videoPolling.pollingState.isPolling}>
                   {checking ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : <Bot className="h-3 w-3 mr-1" />}
                   {checking ? "チェック中..." : "AIチェック実行"}
                 </Button>
-                {checking && !videoPolling.pollingState.isPolling && checkProgress.isRunning && (
-                  <div className="flex items-center gap-2 w-48">
+                {checking && !videoPolling.pollingState.isPolling && checkProgress.isRunning ? <div className="flex items-center gap-2 w-48">
                     <Progress value={checkProgress.progress} className="h-2 flex-1" />
                     <span className="text-xs text-muted-foreground font-mono w-8">{checkProgress.progress}%</span>
-                  </div>
-                )}
-                {videoPolling.pollingState.isPolling && (
-                  <div className="flex flex-col items-center gap-1 w-64 mt-2">
+                  </div> : null}
+                {videoPolling.pollingState.isPolling ? <div className="flex flex-col items-center gap-1 w-64 mt-2">
                     <span className="text-xs text-muted-foreground">{videoPolling.pollingState.message}</span>
                     <div className="flex items-center gap-2 w-full">
                       <Progress value={Math.min((videoPolling.pollingState.elapsedSeconds / 300) * 100, 95)} className="h-2 flex-1" />
                       <span className="text-xs text-muted-foreground font-mono whitespace-nowrap">経過: {videoPolling.formatElapsed(videoPolling.pollingState.elapsedSeconds)}</span>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
+                  </div> : null}
+              </div> : null}
           </div>
         }
       /> : (
@@ -1919,9 +1893,8 @@ export default function FileReviewPage({
           }
         }} />}
 
-      {!creatorMode && record && <ShareLinkModal checkResultId={record.id} open={shareOpen} onOpenChange={setShareOpen} />}
-      {creatorMode && file && activeShareToken && (
-        <CreatorUploadModal
+      {!creatorMode && record ? <ShareLinkModal checkResultId={record.id} open={shareOpen} onOpenChange={setShareOpen} /> : null}
+      {creatorMode && file && activeShareToken ? <CreatorUploadModal
           open={creatorRevisionOpen}
           onOpenChange={setCreatorRevisionOpen}
           shareToken={activeShareToken}
@@ -1936,8 +1909,7 @@ export default function FileReviewPage({
           onUploaded={(newFileId) => {
             navigate(`/creator/${activeShareToken}/file/${newFileId}`);
           }}
-        />
-      )}
+        /> : null}
 
       {/* Submit to client confirmation dialog */}
       {!creatorMode && <AlertDialog open={submitToClientOpen} onOpenChange={setSubmitToClientOpen}>
@@ -2119,8 +2091,8 @@ function CreatorReadonlyCommentsPanel({
         </div>
       </div>
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
-        {loading && <p className="text-xs text-muted-foreground text-center py-8">読み込み中...</p>}
-        {error && <p className="text-xs text-destructive text-center py-3">{error}</p>}
+        {loading ? <p className="text-xs text-muted-foreground text-center py-8">読み込み中...</p> : null}
+        {error ? <p className="text-xs text-destructive text-center py-3">{error}</p> : null}
         {!loading && topLevel.length === 0 && (
           <p className="text-xs text-muted-foreground text-center py-8">コメントはまだありません</p>
         )}
@@ -2144,15 +2116,13 @@ function CreatorReadonlyCommentsPanel({
                   {Math.floor((c.media_timestamp || 0) / 60)}:{String(Math.floor((c.media_timestamp || 0) % 60)).padStart(2, "0")}
                 </button>
               )}
-              {c.annotation_data && (
-                <button
+              {c.annotation_data ? <button
                   type="button"
                   className="text-[10px] text-primary hover:underline"
                   onClick={() => onAnnotationClick(c.annotation_data)}
                 >
                   注釈を表示
-                </button>
-              )}
+                </button> : null}
             </div>
             {replies(c.id).map((r) => (
               <div key={r.id} className="ml-3 pl-3 border-l border-border/70">
