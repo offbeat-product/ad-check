@@ -381,16 +381,13 @@ export function CreatorInviteModal({ projectId, open, onOpenChange, onInvitesCha
                               <label htmlFor={`cr-${c.id}`} className="flex-1 min-w-0 cursor-pointer">
                                 <div className="flex flex-wrap items-center gap-1.5">
                                   <span className="font-medium">{c.name}</span>
-                                  {wasInvited && (
-                                    <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
+                                  {wasInvited ? <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
                                       招待済
-                                    </Badge>
-                                  )}
+                                    </Badge> : null}
                                 </div>
                                 <div className="text-xs text-muted-foreground truncate">{c.email}</div>
                               </label>
-                              {wasInvited && collab && (
-                                <Button
+                              {wasInvited && collab ? <Button
                                   type="button"
                                   size="sm"
                                   variant="ghost"
@@ -399,8 +396,7 @@ export function CreatorInviteModal({ projectId, open, onOpenChange, onInvitesCha
                                 >
                                   <Copy className="h-3 w-3 mr-1" />
                                   共有リンク
-                                </Button>
-                              )}
+                                </Button> : null}
                             </div>
                           );
                         })
@@ -446,7 +442,7 @@ export function CreatorInviteModal({ projectId, open, onOpenChange, onInvitesCha
                   setAddEmailError(null);
                 }}
               />
-              {addEmailError && <p className="text-xs text-destructive mt-1">{addEmailError}</p>}
+              {addEmailError ? <p className="text-xs text-destructive mt-1">{addEmailError}</p> : null}
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">メモ</Label>

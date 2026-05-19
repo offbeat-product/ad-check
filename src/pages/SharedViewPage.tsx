@@ -222,7 +222,7 @@ export default function SharedViewPage() {
           <Input type="password" placeholder="パスワードを入力" value={passwordInput}
             onChange={(e) => { setPasswordInput(e.target.value); setPasswordError(false); }}
             onKeyDown={(e) => e.key === "Enter" && handlePasswordSubmit()} />
-          {passwordError && <p className="text-xs text-destructive">パスワードが正しくありません</p>}
+          {passwordError ? <p className="text-xs text-destructive">パスワードが正しくありません</p> : null}
           <Button className="w-full" onClick={handlePasswordSubmit}>確認</Button>
         </div>
       </div>
@@ -326,8 +326,7 @@ export default function SharedViewPage() {
 
         <div className="flex-1 overflow-y-auto">
           <div className="p-4">
-            {allowDownload && (
-              <div className="flex justify-end mb-2">
+            {allowDownload ? <div className="flex justify-end mb-2">
                 {!canOfferDownload ? (
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -355,8 +354,7 @@ export default function SharedViewPage() {
                     {downloadBusy ? "ダウンロード中…" : "ダウンロード"}
                   </Button>
                 )}
-              </div>
-            )}
+              </div> : null}
             {renderPreview()}
           </div>
         </div>
@@ -369,16 +367,14 @@ export default function SharedViewPage() {
             <TabsTrigger value="ai-check" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs h-10">
               AIチェック結果
             </TabsTrigger>
-            {canReadComments && (
-              <TabsTrigger value="comments" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs h-10 gap-1">
+            {canReadComments ? <TabsTrigger value="comments" className="flex-1 rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent text-xs h-10 gap-1">
                 コメント
                 {totalCommentCount > 0 && (
                   <span className="min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
                     {totalCommentCount > 99 ? "99+" : totalCommentCount}
                   </span>
                 )}
-              </TabsTrigger>
-            )}
+              </TabsTrigger> : null}
           </TabsList>
 
           <TabsContent value="ai-check" forceMount className={cn(
@@ -407,8 +403,7 @@ export default function SharedViewPage() {
             )}
           </TabsContent>
 
-          {canReadComments && (
-            <TabsContent value="comments" forceMount className={cn(
+          {canReadComments ? <TabsContent value="comments" forceMount className={cn(
               "absolute inset-0 top-10 overflow-hidden mt-0 ring-0 focus-visible:ring-0",
               effectiveTab !== "comments" && "hidden"
             )}>
@@ -422,8 +417,7 @@ export default function SharedViewPage() {
                 onSeekMedia={handleSeekMedia}
                 refreshKey={commentRefreshKey}
               />
-            </TabsContent>
-          )}
+            </TabsContent> : null}
         </Tabs>
       </div>
     </div>

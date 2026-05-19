@@ -371,7 +371,7 @@ export function SettingsMembersSection() {
             <TableHead className="text-xs">氏名</TableHead>
             <TableHead className="text-xs">メール</TableHead>
             <TableHead className="text-xs whitespace-nowrap">最終ログイン</TableHead>
-            {isAdmin && <TableHead className="text-xs text-right w-24">操作</TableHead>}
+            {isAdmin ? <TableHead className="text-xs text-right w-24">操作</TableHead> : null}
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -390,12 +390,11 @@ export function SettingsMembersSection() {
                 </TableCell>
                 <TableCell className="text-xs font-medium">
                   {p.display_name || p.email.split("@")[0]}
-                  {isMe && <span className="text-muted-foreground font-normal ml-1">(自分)</span>}
+                  {isMe ? <span className="text-muted-foreground font-normal ml-1">(自分)</span> : null}
                 </TableCell>
                 <TableCell className="text-xs text-muted-foreground truncate max-w-[200px]">{p.email}</TableCell>
                 <TableCell className="text-xs tabular-nums">{formatDateTime(p.last_login_at)}</TableCell>
-                {isAdmin && (
-                  <TableCell className="text-right py-2">
+                {isAdmin ? <TableCell className="text-right py-2">
                     {!isMe && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -416,8 +415,7 @@ export function SettingsMembersSection() {
                         </DropdownMenuContent>
                       </DropdownMenu>
                     )}
-                  </TableCell>
-                )}
+                  </TableCell> : null}
               </TableRow>
             );
           })}
@@ -431,7 +429,7 @@ export function SettingsMembersSection() {
               <TableCell className="text-xs font-medium">{inv.display_name || inv.email.split("@")[0]}</TableCell>
               <TableCell className="text-xs text-muted-foreground">{inv.email}</TableCell>
               <TableCell className="text-xs text-muted-foreground">招待中</TableCell>
-              {isAdmin && <TableCell />}
+              {isAdmin ? <TableCell /> : null}
             </TableRow>
           ))}
           {list.length === 0 && pendingInvitesFor(tab).length === 0 && (
@@ -485,37 +483,31 @@ export function SettingsMembersSection() {
 
         <TabsContent value="admin" className="mt-0 space-y-4">
           <div className="flex justify-end">
-            {isAdmin && (
-              <Button type="button" size="sm" className="h-8 text-xs" onClick={() => openInviteStaff("admin")}>
+            {isAdmin ? <Button type="button" size="sm" className="h-8 text-xs" onClick={() => openInviteStaff("admin")}>
                 <UserPlus className="h-3.5 w-3.5 mr-1" />
                 管理者を招待
-              </Button>
-            )}
+              </Button> : null}
           </div>
           {renderStaffTable(adminProfiles, "admin")}
         </TabsContent>
 
         <TabsContent value="director" className="mt-0 space-y-4">
           <div className="flex justify-end">
-            {isAdmin && (
-              <Button type="button" size="sm" className="h-8 text-xs" onClick={() => openInviteStaff("director")}>
+            {isAdmin ? <Button type="button" size="sm" className="h-8 text-xs" onClick={() => openInviteStaff("director")}>
                 <UserPlus className="h-3.5 w-3.5 mr-1" />
                 ディレクターを招待
-              </Button>
-            )}
+              </Button> : null}
           </div>
           {renderStaffTable(directorProfiles, "director")}
         </TabsContent>
 
         <TabsContent value="creator" className="mt-0 space-y-4">
-          {isStaff && (
-            <div className="flex justify-end">
+          {isStaff ? <div className="flex justify-end">
               <Button type="button" size="sm" className="h-8 text-xs" onClick={openCreatorAdd}>
                 <UserPlus className="h-3.5 w-3.5 mr-1" />
                 クリエイターを追加
               </Button>
-            </div>
-          )}
+            </div> : null}
           <div className="glass-card overflow-hidden">
             <Table>
               <TableHeader>
@@ -524,7 +516,7 @@ export function SettingsMembersSection() {
                   <TableHead className="text-xs">メール</TableHead>
                   <TableHead className="text-xs whitespace-nowrap">最終活動日</TableHead>
                   <TableHead className="text-xs text-right">招待中の案件数</TableHead>
-                  {isStaff && <TableHead className="text-xs text-right w-24">操作</TableHead>}
+                  {isStaff ? <TableHead className="text-xs text-right w-24">操作</TableHead> : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -534,8 +526,7 @@ export function SettingsMembersSection() {
                     <TableCell className="text-xs text-muted-foreground">{c.email}</TableCell>
                     <TableCell className="text-xs tabular-nums">{formatDate(c.last_active_at)}</TableCell>
                     <TableCell className="text-xs text-right tabular-nums">{collabCountByCreator[c.id] ?? 0}</TableCell>
-                    {isStaff && (
-                      <TableCell className="text-right py-2">
+                    {isStaff ? <TableCell className="text-right py-2">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button type="button" variant="ghost" size="sm" className="h-8 w-8 p-0">
@@ -554,8 +545,7 @@ export function SettingsMembersSection() {
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
-                      </TableCell>
-                    )}
+                      </TableCell> : null}
                   </TableRow>
                 ))}
                 {activeCreators.length === 0 && (
@@ -617,8 +607,7 @@ export function SettingsMembersSection() {
           <DialogHeader>
             <DialogTitle>メンバー編集</DialogTitle>
           </DialogHeader>
-          {editStaffProfile && (
-            <div className="space-y-4">
+          {editStaffProfile ? <div className="space-y-4">
               <p className="text-xs text-muted-foreground truncate">{editStaffProfile.email}</p>
               <div>
                 <Label className="text-xs">ロール</Label>
@@ -647,8 +636,7 @@ export function SettingsMembersSection() {
                   {editStaffSaving ? "保存中..." : "保存"}
                 </Button>
               </div>
-            </div>
-          )}
+            </div> : null}
         </DialogContent>
       </Dialog>
 
@@ -665,7 +653,7 @@ export function SettingsMembersSection() {
             <div>
               <Label className="text-xs text-muted-foreground">メール *</Label>
               <Input className={cn("h-9 text-sm mt-1", creatorEmailError && "border-destructive")} value={creatorEmail} onChange={(e) => { setCreatorEmail(e.target.value); setCreatorEmailError(null); }} />
-              {creatorEmailError && <p className="text-xs text-destructive mt-1">{creatorEmailError}</p>}
+              {creatorEmailError ? <p className="text-xs text-destructive mt-1">{creatorEmailError}</p> : null}
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">メモ</Label>

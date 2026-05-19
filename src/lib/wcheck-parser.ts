@@ -63,21 +63,15 @@ export async function parseWCheckFile(file: File): Promise<WCheckParsedData> {
   return parseWCheckWorkbook(wb, XLSX);
 }
 
-export function parseWCheckFromBase64(base64Data: string): Promise<WCheckParsedData> {
-  return new Promise(async (resolve, reject) => {
-    try {
-      const XLSX = await import("@e965/xlsx");
-      // Remove data URI prefix if present
-      const raw = base64Data.replace(/^data:[^;]+;base64,/, "");
-      const binary = atob(raw);
-      const bytes = new Uint8Array(binary.length);
-      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      const wb = XLSX.read(bytes, { type: "array" });
-      resolve(parseWCheckWorkbook(wb, XLSX));
-    } catch (err) {
-      reject(err);
-    }
-  });
+export async function parseWCheckFromBase64(base64Data: string): Promise<WCheckParsedData> {
+  const XLSX = await import("@e965/xlsx");
+  // Remove data URI prefix if present
+  const raw = base64Data.replace(/^data:[^;]+;base64,/, "");
+  const binary = atob(raw);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  const wb = XLSX.read(bytes, { type: "array" });
+  return parseWCheckWorkbook(wb, XLSX);
 }
 
 function parseWCheckWorkbook(wb: any, XLSX: any): WCheckParsedData {

@@ -137,15 +137,13 @@ export default function PatternMatrix({
                     </div>
                     <Badge variant="outline" className={cn("text-[10px]", cell.colorClass)}>{cell.label}</Badge>
                   </button>
-                  {onToggleProcessCommon && (
-                    <button
+                  {onToggleProcessCommon ? <button
                       onClick={() => onToggleProcessCommon(proc.id, false)}
                       title="パターン別に移動"
                       className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted text-muted-foreground"
                     >
                       <ArrowRightLeft className="h-3 w-3" />
-                    </button>
-                  )}
+                    </button> : null}
                 </div>
               );
             })}
@@ -167,15 +165,13 @@ export default function PatternMatrix({
                       <div className="flex flex-col items-center justify-center gap-1">
                         <div className="flex items-center justify-center gap-0.5">
                           <span>{proc.process_label}</span>
-                          {onToggleProcessCommon && (
-                          <button
+                          {onToggleProcessCommon ? <button
                             onClick={() => onToggleProcessCommon(proc.id, true)}
                             title="共通素材に移動"
                             className="opacity-0 group-hover/th:opacity-100 transition-opacity p-0.5 rounded hover:bg-muted"
                           >
                             <ArrowRightLeft className="h-3 w-3" />
-                          </button>
-                        )}
+                          </button> : null}
                         </div>
                         {renderProcessHeaderExtra?.(proc.process_key)}
                       </div>
@@ -192,35 +188,27 @@ export default function PatternMatrix({
                         <div className="flex items-center gap-1">
                           <div className="flex-1 min-w-0">
                             <span>{pattern.name}</span>
-                            {pattern.description && (
-                              <span className="block text-[10px] text-muted-foreground truncate max-w-[100px]">{pattern.description}</span>
-                            )}
+                            {pattern.description ? <span className="block text-[10px] text-muted-foreground truncate max-w-[100px]">{pattern.description}</span> : null}
                           </div>
-                          {(onUpdatePattern || onDeletePattern) && (
-                            <DropdownMenu>
+                          {(onUpdatePattern || onDeletePattern) ? <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <button className="shrink-0 p-0.5 rounded hover:bg-muted/60 text-muted-foreground">
                                   <MoreHorizontal className="h-3.5 w-3.5" />
                                 </button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="start" className="w-32">
-                                {onUpdatePattern && (
-                                  <DropdownMenuItem onClick={() => {
+                                {onUpdatePattern ? <DropdownMenuItem onClick={() => {
                                     setEditPattern(pattern);
                                     setEditName(pattern.name);
                                     setEditDesc(pattern.description || "");
                                   }}>
                                     <Pencil className="h-3.5 w-3.5 mr-2" />編集
-                                  </DropdownMenuItem>
-                                )}
-                                {onDeletePattern && (
-                                  <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeletePatternTarget(pattern)}>
+                                  </DropdownMenuItem> : null}
+                                {onDeletePattern ? <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => setDeletePatternTarget(pattern)}>
                                     <Trash2 className="h-3.5 w-3.5 mr-2" />削除
-                                  </DropdownMenuItem>
-                                )}
+                                  </DropdownMenuItem> : null}
                               </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
+                            </DropdownMenu> : null}
                         </div>
                       </td>
                       {patternProcesses.map(proc => {

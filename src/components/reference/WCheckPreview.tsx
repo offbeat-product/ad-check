@@ -63,9 +63,7 @@ export default function WCheckPreview({ parsedData }: Props) {
                     lastCat = item.category;
                     return (
                       <div key={i}>
-                        {showCat && (
-                          <div className="font-semibold text-primary mt-1.5 mb-0.5">▌{item.category}</div>
-                        )}
+                        {showCat ? <div className="font-semibold text-primary mt-1.5 mb-0.5">▌{item.category}</div> : null}
                         <div className="pl-2 text-muted-foreground">
                           {item.number}. [{item.shortLabel}] {item.item}
                         </div>

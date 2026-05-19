@@ -37,11 +37,9 @@ export default function ProcessTimeline({ processes }: Props) {
                 )}>
                   {p.process_label.length > 5 ? p.process_label.slice(0, 5) + "…" : p.process_label}
                 </span>
-                {p.deadline && (
-                  <span className="text-[9px] text-muted-foreground mt-0.5">
+                {p.deadline ? <span className="text-[9px] text-muted-foreground mt-0.5">
                     {new Date(p.deadline).toLocaleDateString("ja-JP", { month: "2-digit", day: "2-digit" })}
-                  </span>
-                )}
+                  </span> : null}
               </div>
               {!isLast && (
                 <div className={cn(

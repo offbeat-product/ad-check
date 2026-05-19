@@ -120,9 +120,7 @@ export default function NotificationBell() {
                   />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium leading-snug">{n.title}</p>
-                      {n.message && (
-                        <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-line line-clamp-3">{n.message}</p>
-                      )}
+                      {n.message ? <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-line line-clamp-3">{n.message}</p> : null}
                     {(n.type === "invitation" || n.type === "workspace_invitation") && !n.is_read && (
                       <div className="flex gap-2 mt-2">
                         <button

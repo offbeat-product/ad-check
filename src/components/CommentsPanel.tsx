@@ -173,7 +173,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
     const authorName = user.email?.split("@")[0] || "User";
     // Resolve project name for richer notification
     let projectName = "";
-    let resolvedFileName = fileName || "";
+    const resolvedFileName = fileName || "";
     if (projectId) {
       const { data: proj } = await supabase.from("projects").select("name").eq("id", projectId).maybeSingle();
       projectName = proj?.name || "";
@@ -395,13 +395,10 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
       </div>
 
       <div className="border-t border-border p-3 shrink-0 space-y-2">
-        {hasMediaTimestamp && (
-          <div className="flex items-center gap-1.5 text-[10px] text-primary">
+        {hasMediaTimestamp ? <div className="flex items-center gap-1.5 text-[10px] text-primary">
             🕐 再生位置 <span className="font-mono font-medium">{formatTimestamp(mediaCurrentTime!)}</span> をコメントに自動記録します
-          </div>
-        )}
-        {attachment && (
-          <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+          </div> : null}
+        {attachment ? <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
             {attachment.preview ? (
               <img src={attachment.preview} alt="" className="w-10 h-10 rounded object-cover" />
             ) : (
@@ -409,8 +406,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
             )}
             <span className="text-xs text-muted-foreground truncate flex-1">{attachment.file.name}</span>
             <button onClick={() => setAttachment(null)}><X className="h-3 w-3 text-muted-foreground" /></button>
-          </div>
-        )}
+          </div> : null}
         <div className="flex gap-2">
           <div className="flex-1 space-y-1">
             <MentionInput
@@ -435,8 +431,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
         </div>
 
         {/* Correction log toggle */}
-        {productId && (
-          <div className="rounded-lg border border-primary/20 bg-primary/5 p-2.5 space-y-2">
+        {productId ? <div className="rounded-lg border border-primary/20 bg-primary/5 p-2.5 space-y-2">
             <div className="flex items-center gap-2">
               <Checkbox
                 id="correction-toggle"
@@ -451,8 +446,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
             <p className="text-[10px] text-muted-foreground ml-6">
               チェックすると修正指示として履歴に記録されます
             </p>
-            {isCorrectionChecked && (
-              <RadioGroup
+            {isCorrectionChecked ? <RadioGroup
                 value={correctionScope}
                 onValueChange={(v) => setCorrectionScope(v as "project" | "product")}
                 className="flex items-center gap-3 ml-6"
@@ -465,10 +459,8 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
                   <RadioGroupItem value="product" id="scope-product" className="h-3.5 w-3.5" />
                   <Label htmlFor="scope-product" className="text-[11px] text-muted-foreground cursor-pointer">この商材全体</Label>
                 </div>
-              </RadioGroup>
-            )}
-          </div>
-        )}
+              </RadioGroup> : null}
+          </div> : null}
       </div>
       <ReplicateCommentDialog
         open={replicateDialogComment !== null}
@@ -547,12 +539,10 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
         )}
         <span className="text-[10px] text-muted-foreground">{timeAgo(comment.created_at)}</span>
       </div>
-      {fileName && (
-        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+      {fileName ? <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
           <FileText className="h-3 w-3 shrink-0" />
           <span className="truncate">{fileName}</span>
-        </div>
-      )}
+        </div> : null}
 
       {isEditing ? (
         <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
@@ -570,20 +560,15 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
         <p className="text-xs whitespace-pre-wrap">{renderContent(comment.content)}</p>
       )}
 
-      {hasAnnotation && (
-        <div className="flex items-center gap-1 text-[10px] text-primary">
+      {hasAnnotation ? <div className="flex items-center gap-1 text-[10px] text-primary">
           <Pin className="h-3 w-3" />
           📌 画像上の指摘
-          {onAnnotationClick && <span className="text-muted-foreground ml-1">（クリックで表示）</span>}
-        </div>
-      )}
-      {!hasAnnotation && hasCheckItem && onCheckItemClick && (
-        <div className="flex items-center gap-1 text-[10px] text-primary">
+          {onAnnotationClick ? <span className="text-muted-foreground ml-1">（クリックで表示）</span> : null}
+        </div> : null}
+      {!hasAnnotation && hasCheckItem && onCheckItemClick ? <div className="flex items-center gap-1 text-[10px] text-primary">
           🔍 チェック項目を表示（クリック）
-        </div>
-      )}
-      {comment.attachment_url && (
-        <a href={comment.attachment_url} target="_blank" rel="noopener noreferrer" className="block" onClick={(e) => e.stopPropagation()}>
+        </div> : null}
+      {comment.attachment_url ? <a href={comment.attachment_url} target="_blank" rel="noopener noreferrer" className="block" onClick={(e) => e.stopPropagation()}>
           {comment.attachment_type?.startsWith("image/") ? (
             <img src={comment.attachment_url} alt={comment.attachment_name ?? ""} className="max-h-20 rounded border border-border" />
           ) : (
@@ -591,8 +576,7 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
               <FileText className="h-3 w-3" />{comment.attachment_name}
             </div>
           )}
-        </a>
-      )}
+        </a> : null}
       <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
         <button onClick={onToggleStatus}
           className={cn("text-[10px] px-2 py-0.5 rounded-full border font-medium",
@@ -604,27 +588,22 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
             <Reply className="h-3 w-3" />返信
           </button>
         )}
-        {!isReply && onReplicate && (
-          <button
+        {!isReply && onReplicate ? <button
             onClick={onReplicate}
             className="text-[10px] text-muted-foreground hover:text-primary flex items-center gap-1"
             title="このコメントを同じ工程の他のファイルにも反映"
           >
             📋 他のファイルにも反映
-          </button>
-        )}
-        {isOwn && !isEditing && (
-          <>
+          </button> : null}
+        {isOwn && !isEditing ? <>
             <button onClick={() => setIsEditing(true)} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1">
               <Pencil className="h-3 w-3" />編集
             </button>
             <button onClick={() => { if (onDelete) onDelete(comment.id); }} className="text-[10px] text-muted-foreground hover:text-destructive flex items-center gap-1">
               <Trash2 className="h-3 w-3" />削除
             </button>
-          </>
-        )}
-        {onRecordCorrection && !isReply && (
-          <button
+          </> : null}
+        {onRecordCorrection && !isReply ? <button
             onClick={async () => {
               setRecordingCorrection(true);
               try {
@@ -640,8 +619,7 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
             className="text-[10px] text-primary hover:text-primary/80 flex items-center gap-1 font-medium"
           >
             📝 {recordingCorrection ? "記録中..." : "修正指示として記録"}
-          </button>
-        )}
+          </button> : null}
       </div>
     </div>
   );

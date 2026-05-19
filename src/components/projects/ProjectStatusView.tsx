@@ -712,24 +712,20 @@ export function ProjectStatusView() {
         )}
       </div>
 
-      {clSubmitTarget && (
-        <CLSubmitDialog
+      {clSubmitTarget ? <CLSubmitDialog
           projectId={clSubmitTarget.project_id}
           projectName={clSubmitTarget.project_name}
           open
           onClose={() => setClSubmitTarget(null)}
           onSuccess={() => void refetch()}
-        />
-      )}
-      {fixTarget && (
-        <FixConfirmDialog
+        /> : null}
+      {fixTarget ? <FixConfirmDialog
           projectId={fixTarget.project_id}
           projectName={fixTarget.project_name}
           open
           onClose={() => setFixTarget(null)}
           onSuccess={() => void refetch()}
-        />
-      )}
+        /> : null}
     </>
   );
 }

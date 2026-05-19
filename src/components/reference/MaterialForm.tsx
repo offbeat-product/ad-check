@@ -532,16 +532,14 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
               </div>
             )}
 
-            {extractMsg && (
-              <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
-                {extracting && <Loader2 className="h-3 w-3 animate-spin" />}
+            {extractMsg ? <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                {extracting ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
                 {extractMsg}
-              </p>
-            )}
+              </p> : null}
           </div>
         )}
 
-        {wcheckParsed && method === "file_upload" && <WCheckPreview parsedData={wcheckParsed} />}
+        {wcheckParsed && method === "file_upload" ? <WCheckPreview parsedData={wcheckParsed} /> : null}
 
         {/* URL input */}
         {method === "url_reference" && (
@@ -583,8 +581,7 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
         </div>
       </div>
 
-      {showCopyDialog && savedMaterials.length > 0 && (
-        <CopyMaterialToProductDialog
+      {showCopyDialog && savedMaterials.length > 0 ? <CopyMaterialToProductDialog
           open={showCopyDialog}
           onOpenChange={(o) => {
             if (!o) {
@@ -595,8 +592,7 @@ export default function MaterialForm({ materialType, scopeType, scopeId, existin
           }}
           materials={savedMaterials}
           currentProductId={productId}
-        />
-      )}
+        /> : null}
     </>
   );
 }

@@ -202,9 +202,7 @@ export default function ClientPage() {
                       : "チェック未実施"}
                   </span>
                 </div>
-                {product.meta && (
-                  <p className="text-[11px] text-muted-foreground/60 mt-2">{product.meta}</p>
-                )}
+                {product.meta ? <p className="text-[11px] text-muted-foreground/60 mt-2">{product.meta}</p> : null}
               </button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>

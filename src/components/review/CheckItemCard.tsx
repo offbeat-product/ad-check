@@ -182,11 +182,8 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
             {item.status !== "OK" && !isApplied && (
               <Checkbox checked={isSelected} onCheckedChange={onToggleSelect} className="h-3.5 w-3.5" />
             )}
-            {isApplied && (
-              <CheckCheck className="h-4 w-4 text-status-ok" />
-            )}
-            {marker && (
-              <button
+            {isApplied ? <CheckCheck className="h-4 w-4 text-status-ok" /> : null}
+            {marker ? <button
                 onClick={(e) => { e.stopPropagation(); onMarkerClick?.(checkItemStr(item.pattern_id)); }}
                 className={cn(
                   "w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold cursor-pointer hover:scale-110 transition-transform",
@@ -195,8 +192,7 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
                 title="プレビューで該当箇所を表示"
               >
                 {marker.number}
-              </button>
-            )}
+              </button> : null}
           </div>
 
           <div className="flex-1 min-w-0">
@@ -214,20 +210,16 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
                   同様 ×{dupeCount}
                 </Badge>
               )}
-              {isApplied && (
-                <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-status-ok/30 text-status-ok bg-status-ok/10">反映済み</Badge>
-              )}
+              {isApplied ? <Badge variant="outline" className="text-[10px] h-4 px-1.5 border-status-ok/30 text-status-ok bg-status-ok/10">反映済み</Badge> : null}
             </div>
 
             <p className="text-sm font-medium">{renderWithTimestamps(item.item, onSeekMedia)}</p>
-            {item.timestamp_start && (
-              <button
+            {item.timestamp_start ? <button
                 onClick={(e) => { e.stopPropagation(); handleCardSeek(); }}
                 className="text-xs text-primary cursor-pointer hover:underline"
               >
                 🕐 {item.timestamp_end ? `${checkItemStr(item.timestamp_start)} 〜 ${checkItemStr(item.timestamp_end)}` : checkItemStr(item.timestamp_start)}
-              </button>
-            )}
+              </button> : null}
             {checkItemStr(item.location) ? (
               <p className="text-xs text-muted-foreground">📍 {renderWithTimestamps(item.location, onSeekMedia)}</p>
             ) : null}
@@ -240,8 +232,7 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
               </div>
             )}
 
-            {falsePositiveFeedback && (item.status === "NG" || item.status === "WARNING") && (
-              <div
+            {falsePositiveFeedback && (item.status === "NG" || item.status === "WARNING") ? <div
                 className="mt-3 space-y-2"
                 onClick={(e) => e.stopPropagation()}
                 onKeyDown={(e) => e.stopPropagation()}
@@ -340,8 +331,7 @@ const CheckItemCard = forwardRef<HTMLDivElement, CheckItemCardProps>(
                     )}
                   </>
                 )}
-              </div>
-            )}
+              </div> : null}
 
             {item.status !== "OK" && checkItemStr(item.pattern_id) && (
               <div className="mt-2">

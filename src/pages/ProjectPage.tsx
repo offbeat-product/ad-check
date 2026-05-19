@@ -123,7 +123,7 @@ function DeadlineDisplay({ deadline, className, isCompleted, label }: { deadline
     <span className={cn("text-xs flex items-center gap-1", className,
       past ? "text-status-ng font-medium" : soon ? "text-status-warning font-medium" : "text-muted-foreground"
     )}>
-      {(past || soon) && <AlertTriangle className="h-3 w-3" />}
+      {(past || soon) ? <AlertTriangle className="h-3 w-3" /> : null}
       {past ? `${prefix}超過 (${dateStr})` : `${prefix}: ${dateStr}`}
     </span>
   );
@@ -151,13 +151,11 @@ function DeadlinePicker({ deadline, onChange, isCompleted, label }: { deadline: 
           }}
           className="p-3 pointer-events-auto"
         />
-        {deadline && (
-          <div className="px-3 pb-3">
+        {deadline ? <div className="px-3 pb-3">
             <Button size="sm" variant="ghost" className="text-xs w-full" onClick={() => { onChange(null); setOpen(false); }}>
               {prefix}をクリア
             </Button>
-          </div>
-        )}
+          </div> : null}
       </PopoverContent>
     </Popover>
   );
@@ -581,7 +579,9 @@ export default function ProjectPage() {
             const url = new URL(f.file_data);
             const pathMatch = url.pathname.match(new RegExp(`/storage/v1/object/public/${bucket}/(.+)`));
             if (pathMatch) await supabase.storage.from(bucket).remove([decodeURIComponent(pathMatch[1])]);
-          } catch {}
+          } catch {
+            void 0;
+          }
         }
         // Manual cascade: unlink check_result, delete children, delete check_result, then delete file
         const checkResultId = f.check_result_id;
@@ -837,7 +837,7 @@ export default function ProjectPage() {
     const ext = lastDot > 0 ? name.slice(lastDot) : "";
     const base = lastDot > 0 ? name.slice(0, lastDot) : name;
     const safeName = base
-      .replace(/[^a-zA-Z0-9_\-]/g, "_")
+      .replace(/[^a-zA-Z0-9_-]/g, "_")
       .replace(/_+/g, "_")
       .replace(/^_|_$/g, "");
     return (safeName || `file_${Date.now()}`) + ext;
@@ -1214,8 +1214,7 @@ export default function ProjectPage() {
               deadline={(project as any).overall_deadline ?? null}
               onChange={handleDeadlineChange}
             />
-            {isStaff && id && (
-              <Button
+            {isStaff && id ? <Button
                 type="button"
                 size="sm"
                 variant="outline"
@@ -1224,8 +1223,7 @@ export default function ProjectPage() {
               >
                 <UserPlus className="h-3.5 w-3.5 mr-1" />
                 クリエイター招待
-              </Button>
-            )}
+              </Button> : null}
             <NotificationBell />
             <Popover>
               <PopoverTrigger asChild>
@@ -1282,8 +1280,7 @@ export default function ProjectPage() {
 
           <TabsContent value="files" className="space-y-6">
 
-            {project && (
-              <div className="glass-card p-6 text-center space-y-3">
+            {project ? <div className="glass-card p-6 text-center space-y-3">
                 <div className="mx-auto w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-950/30 flex items-center justify-center">
                   <ExternalLink className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 </div>
@@ -1306,8 +1303,7 @@ export default function ProjectPage() {
                   Ad Brain でナレッジを確認
                   <ExternalLink className="h-3.5 w-3.5" />
                 </a>
-              </div>
-            )}
+              </div> : null}
 
             {creativeType === "mixed" && (
               <Tabs
@@ -1334,9 +1330,7 @@ export default function ProjectPage() {
               </Tabs>
             )}
 
-            {isStaff && id && (
-              <ProjectCreatorCollaboratorsSection projectId={id} refreshKey={creatorCollabRefreshKey} />
-            )}
+            {isStaff && id ? <ProjectCreatorCollaboratorsSection projectId={id} refreshKey={creatorCollabRefreshKey} /> : null}
 
             {/* Pattern management header – compact */}
             <div className="flex items-center justify-between">
@@ -1520,7 +1514,7 @@ export default function ProjectPage() {
                         {/* Row 2: action buttons (only when expanded) */}
                         {!isCollapsed && (
                           <div className="mt-2 flex items-center gap-2 flex-wrap" onClick={(e) => e.stopPropagation()}>
-                           {webhookAvailable && sectionFiles.filter(f => f.file_data && !f.parent_file_id).length > 0 && (() => {
+                           {webhookAvailable && sectionFiles.filter(f => f.file_data && !f.parent_file_id).length > 0 ? (() => {
                             const allTargets = sectionFiles.filter(
                               (f) =>
                                 f.file_data &&
@@ -1611,7 +1605,7 @@ export default function ProjectPage() {
                                 {label}
                               </Button>
                             );
-                          })()}
+                          })() : null}
                           {sectionFiles.some(f => f.check_result_id && !f.parent_file_id && f.status !== "fixed") && (
                             <Button
                               size="sm"
@@ -1666,8 +1660,7 @@ export default function ProjectPage() {
                               {selectMode ? "選択解除" : "選択"}
                             </Button>
                           )}
-                          {selectMode && selectedFileIds.size > 0 && (
-                            <>
+                          {selectMode && selectedFileIds.size > 0 ? <>
                               {(() => {
                                 const selectedInProc = sectionFiles.filter(f => selectedFileIds.has(f.id));
                                 const eligibleCount = selectedInProc.filter(f => f.check_result_id && f.submission_type !== "client").length;
@@ -1684,22 +1677,19 @@ export default function ProjectPage() {
                                 <Trash2 className="h-3 w-3" />
                                 {selectedFileIds.size}件削除
                               </Button>
-                            </>
-                          )}
+                            </> : null}
                           <Button size="sm" variant="outline" className="text-xs h-7"
                             onClick={() => openUploadModal(proc.process_key)}>
                             <Plus className="h-3 w-3 mr-1" />アップロード
                           </Button>
                           </div>
                         )}
-                        {isCollapsed && fileCount === 0 && (
-                          <div className="mt-2" onClick={(e) => e.stopPropagation()}>
+                        {isCollapsed && fileCount === 0 ? <div className="mt-2" onClick={(e) => e.stopPropagation()}>
                             <Button size="sm" variant="outline" className="text-xs h-7"
                               onClick={() => openUploadModal(proc.process_key)}>
                               <Plus className="h-3 w-3 mr-1" />アップロード
                             </Button>
-                          </div>
-                        )}
+                          </div> : null}
                       </div>
                       {!isCollapsed && (
                       <div className="p-4">
@@ -1756,8 +1746,7 @@ export default function ProjectPage() {
 
                                       return (
                                         <div key={file.id} className="relative group">
-                                          {selectMode && (
-                                            <div className="absolute top-1 left-1 z-20" onClick={(e) => e.stopPropagation()}>
+                                          {selectMode ? <div className="absolute top-1 left-1 z-20" onClick={(e) => e.stopPropagation()}>
                                               <Checkbox
                                                 checked={isSelected}
                                                 onCheckedChange={(checked) => {
@@ -1768,8 +1757,7 @@ export default function ProjectPage() {
                                                   });
                                                 }}
                                               />
-                                            </div>
-                                          )}
+                                            </div> : null}
                                           <button onClick={() => {
                                               if (selectMode) {
                                                 setSelectedFileIds(prev => {
@@ -1819,11 +1807,9 @@ export default function ProjectPage() {
                                             <div className="flex items-center gap-1 mt-1 flex-wrap">
                                               <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
                                               <span className="text-[10px] text-muted-foreground">{draftLabel}</span>
-                                              {cr && file.status !== "fixed" && hasFinalOverallStatus(cr.overall_status) && (
-                                                <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-sm", getSubmitBadgeClass(cr.overall_status))}>
+                                              {cr && file.status !== "fixed" && hasFinalOverallStatus(cr.overall_status) ? <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-sm", getSubmitBadgeClass(cr.overall_status))}>
                                                   {getSubmitLabel(cr.overall_status).label}
-                                                </span>
-                                              )}
+                                                </span> : null}
                                               {cc > 0 && (
                                                 <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 ml-auto">
                                                   <MessageCircle className="h-2.5 w-2.5" />{cc}
@@ -1878,8 +1864,7 @@ export default function ProjectPage() {
 
                                     return (
                                       <div key={file.id} className="relative group">
-                                        {selectMode && (
-                                          <div className="absolute top-1 left-1 z-20" onClick={(e) => e.stopPropagation()}>
+                                        {selectMode ? <div className="absolute top-1 left-1 z-20" onClick={(e) => e.stopPropagation()}>
                                             <Checkbox
                                               checked={isSelected}
                                               onCheckedChange={(checked) => {
@@ -1890,8 +1875,7 @@ export default function ProjectPage() {
                                                 });
                                               }}
                                             />
-                                          </div>
-                                        )}
+                                          </div> : null}
                                         <button onClick={() => {
                                             if (selectMode) {
                                               setSelectedFileIds(prev => {
@@ -1941,11 +1925,9 @@ export default function ProjectPage() {
                                           <div className="flex items-center gap-1 mt-1 flex-wrap">
                                             <Badge variant="outline" className={cn("text-[10px] h-4 px-1.5", st.class)}>{st.label}</Badge>
                                             <span className="text-[10px] text-muted-foreground">{draftLabel}</span>
-                                            {cr && file.status !== "fixed" && hasFinalOverallStatus(cr.overall_status) && (
-                                              <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-sm", getSubmitBadgeClass(cr.overall_status))}>
+                                            {cr && file.status !== "fixed" && hasFinalOverallStatus(cr.overall_status) ? <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-sm", getSubmitBadgeClass(cr.overall_status))}>
                                                 {getSubmitLabel(cr.overall_status).label}
-                                              </span>
-                                            )}
+                                              </span> : null}
                                             {cc > 0 && (
                                               <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 ml-auto">
                                                 <MessageCircle className="h-2.5 w-2.5" />{cc}
@@ -2007,7 +1989,7 @@ export default function ProjectPage() {
           </TabsContent>
 
           <TabsContent value="rules">
-            {product && <CheckRulesTab productId={product.id} />}
+            {product ? <CheckRulesTab productId={product.id} /> : null}
           </TabsContent>
 
         </Tabs>
@@ -2020,11 +2002,9 @@ export default function ProjectPage() {
             <AlertDialogTitle>ファイルを削除</AlertDialogTitle>
             <AlertDialogDescription>
               「{deleteTarget?.file.file_name}」を削除します。この操作は元に戻せません。
-              {deleteTarget?.hasCheck && (
-                <span className="block mt-2 text-status-warning font-medium">
+              {deleteTarget?.hasCheck ? <span className="block mt-2 text-status-warning font-medium">
                   ⚠️ チェック結果も同時に削除されます。
-                </span>
-              )}
+                </span> : null}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -2044,7 +2024,9 @@ export default function ProjectPage() {
                       if (pathMatch) {
                         await supabase.storage.from(bucket).remove([decodeURIComponent(pathMatch[1])]);
                       }
-                    } catch {}
+                    } catch {
+            void 0;
+          }
                   }
                   // Manual cascade: unlink check_result, delete children, then delete file
                   const checkResultId = f.check_result_id;
@@ -2079,8 +2061,7 @@ export default function ProjectPage() {
       <Dialog open={!!changePatternTarget} onOpenChange={(o) => !o && setChangePatternTarget(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>パターン変更</DialogTitle></DialogHeader>
-          {changePatternTarget && (
-            <div className="space-y-3">
+          {changePatternTarget ? <div className="space-y-3">
               <p className="text-xs text-muted-foreground">
                 「{changePatternTarget.file_name}」の所属パターンを変更します
               </p>
@@ -2107,8 +2088,7 @@ export default function ProjectPage() {
                   </Button>
                 ))}
               </div>
-            </div>
-          )}
+            </div> : null}
         </DialogContent>
       </Dialog>
       <AlertDialog open={!!submissionChangeTarget} onOpenChange={(o) => !o && setSubmissionChangeTarget(null)}>
@@ -2239,12 +2219,10 @@ export default function ProjectPage() {
               </div>
             )}
 
-            {getProcessFileUploadConfig(uploadModal || "").allowTextInput && (
-              <div className="flex gap-2">
+            {getProcessFileUploadConfig(uploadModal || "").allowTextInput ? <div className="flex gap-2">
                 <Button size="sm" variant={useTextInput ? "outline" : "default"} onClick={() => setUseTextInput(false)} className="text-xs">ファイル選択</Button>
                 <Button size="sm" variant={useTextInput ? "default" : "outline"} onClick={() => setUseTextInput(true)} className="text-xs">テキスト直接入力</Button>
-              </div>
-            )}
+              </div> : null}
             {useTextInput && getProcessFileUploadConfig(uploadModal || "").allowTextInput ? (
               <Textarea value={uploadTextInput} onChange={(e) => setUploadTextInput(e.target.value)}
                 placeholder="テキストを入力..." className="min-h-[150px] text-sm font-mono" />
@@ -2281,15 +2259,13 @@ export default function ProjectPage() {
                   }} />
               </div>
             )}
-            {uploading && uploadProgress !== null && (
-              <div className="space-y-1">
+            {uploading && uploadProgress !== null ? <div className="space-y-1">
                 <div className="flex justify-between text-xs text-muted-foreground">
                   <span>アップロード中...</span>
                   <span>{uploadProgress}%</span>
                 </div>
                 <Progress value={uploadProgress} className="h-2" />
-              </div>
-            )}
+              </div> : null}
             <Button onClick={handleFileUpload} disabled={uploading || (selectedFiles.length === 0 && !uploadTextInput.trim())} className="w-full">
               {uploading ? "アップロード中..." : "アップロード"}
             </Button>
@@ -2314,8 +2290,7 @@ export default function ProjectPage() {
       />
 
       {/* Copy to other patterns dialog */}
-      {copyToPatternInfo && (
-        <CopyToPatternDialog
+      {copyToPatternInfo ? <CopyToPatternDialog
           open={!!copyToPatternInfo}
           onOpenChange={(o) => { if (!o) setCopyToPatternInfo(null); }}
           sourcePattern={patterns.find(p => p.id === copyToPatternInfo.sourcePatternId)!}
@@ -2344,17 +2319,14 @@ export default function ProjectPage() {
             }
             setCopyToPatternInfo(null);
           }}
-        />
-      )}
+        /> : null}
 
-      {isStaff && id && (
-        <CreatorInviteModal
+      {isStaff && id ? <CreatorInviteModal
           projectId={id}
           open={creatorInviteOpen}
           onOpenChange={setCreatorInviteOpen}
           onInvitesChanged={() => setCreatorCollabRefreshKey((k) => k + 1)}
-        />
-      )}
+        /> : null}
     </div>
   );
 }

@@ -402,25 +402,21 @@ export default function CheckRulesTab({ productId, readOnly = false }: Props) {
       )}
 
       {/* Loading */}
-      {loading && (
-        <div className="space-y-2">
+      {loading ? <div className="space-y-2">
           {Array.from({ length: 8 }).map((_, i) => (
             <Skeleton key={i} className="h-10 w-full" />
           ))}
-        </div>
-      )}
+        </div> : null}
 
       {/* Error */}
-      {error && (
-        <div className="border border-destructive/30 rounded-lg p-6 text-center space-y-3">
+      {error ? <div className="border border-destructive/30 rounded-lg p-6 text-center space-y-3">
           <AlertTriangle className="h-6 w-6 text-destructive mx-auto" />
           <p className="text-sm text-destructive">{error}</p>
           <Button size="sm" variant="outline" onClick={fetchRules}>
             <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
             リトライ
           </Button>
-        </div>
-      )}
+        </div> : null}
 
       {/* Table */}
       {!loading && !error && (
@@ -531,8 +527,7 @@ export default function CheckRulesTab({ productId, readOnly = false }: Props) {
           <DialogHeader>
             <DialogTitle className="font-mono text-sm">{selectedRule?.rule_id}</DialogTitle>
           </DialogHeader>
-          {selectedRule && (
-            <div className="space-y-3 text-sm">
+          {selectedRule ? <div className="space-y-3 text-sm">
               <div>
                 <label className="text-xs font-medium text-muted-foreground">タイトル</label>
                 <p>{selectedRule.title || "—"}</p>
@@ -565,8 +560,7 @@ export default function CheckRulesTab({ productId, readOnly = false }: Props) {
                   </div>
                 </div>
               </div>
-            </div>
-          )}
+            </div> : null}
         </DialogContent>
       </Dialog>
 

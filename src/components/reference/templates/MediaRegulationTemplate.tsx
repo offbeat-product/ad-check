@@ -112,16 +112,14 @@ export default function MediaRegulationTemplate({ initialData, suggestedPlatform
   return (
     <div className="space-y-4">
       {/* Suggestion banner */}
-      {showSuggestion && autoSuggestedPlatforms.length > 0 && (
-        <div className="flex items-start gap-2 p-2.5 rounded-lg bg-accent/50 border border-accent text-xs">
+      {showSuggestion && autoSuggestedPlatforms.length > 0 ? <div className="flex items-start gap-2 p-2.5 rounded-lg bg-accent/50 border border-accent text-xs">
           <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="font-medium">オリエンシートの配信媒体設定に基づき、{suggestedLabels}を自動選択しました。</p>
             <p className="text-muted-foreground mt-0.5">手動でON/OFFを変更できます。</p>
           </div>
           <button onClick={() => setShowSuggestion(false)} className="text-muted-foreground hover:text-foreground shrink-0">✕</button>
-        </div>
-      )}
+        </div> : null}
 
       {/* Step 1: Platform selection */}
       <div>

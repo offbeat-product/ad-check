@@ -149,8 +149,7 @@ export default function ScriptDisplay({ text, items, markers, onItemClick }: Scr
             )}
           >
             {/* Section-level marker badge */}
-            {sectionMarker && !hasInline && (
-              <span
+            {sectionMarker && !hasInline ? <span
                 className={cn(
                   "w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 cursor-pointer mt-0.5",
                   sectionMatch?.status === "NG" ? "bg-[hsl(var(--status-ng))]" : "bg-[hsl(var(--status-warning))]"
@@ -158,8 +157,7 @@ export default function ScriptDisplay({ text, items, markers, onItemClick }: Scr
                 onClick={() => sectionMatch && onItemClick(sectionMatch.pattern_id)}
               >
                 {sectionMarker.number}
-              </span>
-            )}
+              </span> : null}
             {/* Render line with inline highlights */}
             {hasInline ? (
               <span className="flex-1 flex flex-wrap items-center gap-0">

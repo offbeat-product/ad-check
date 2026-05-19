@@ -120,9 +120,7 @@ export function ReplicateCommentDialog({
               )}
             </div>
 
-            {isLoading && (
-              <div className="text-center py-8 text-sm text-muted-foreground">読み込み中...</div>
-            )}
+            {isLoading ? <div className="text-center py-8 text-sm text-muted-foreground">読み込み中...</div> : null}
 
             {!isLoading && targets.length === 0 && (
               <div className="text-center py-8 text-sm text-muted-foreground">
@@ -150,10 +148,8 @@ export function ReplicateCommentDialog({
                         <p className="text-sm font-medium truncate">{target.product_name}</p>
                         <p className="text-xs text-muted-foreground">
                           {target.process_type}
-                          {target.created_at && (
-                            <> · {new Date(target.created_at).toLocaleDateString("ja-JP")}</>
-                          )}
-                          {target.overall_status && <> · {target.overall_status}</>}
+                          {target.created_at ? <> · {new Date(target.created_at).toLocaleDateString("ja-JP")}</> : null}
+                          {target.overall_status ? <> · {target.overall_status}</> : null}
                         </p>
                       </div>
                     </label>

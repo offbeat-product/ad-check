@@ -81,7 +81,7 @@ export default function BrandGuidelineTemplate({ initialData, onChange }: Props)
 
   const FieldLabel = ({ children, optional }: { children: React.ReactNode; optional?: boolean }) => (
     <label className="text-xs font-medium text-muted-foreground mb-0.5 block">
-      {children}{optional && <span className="text-muted-foreground/50 ml-1">（任意）</span>}
+      {children}{optional ? <span className="text-muted-foreground/50 ml-1">（任意）</span> : null}
     </label>
   );
 

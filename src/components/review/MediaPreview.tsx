@@ -78,13 +78,11 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
   return (
     <div className="relative">
       <div className="flex items-center justify-between mb-2">
-        {label && <span className="text-xs text-muted-foreground">{label}</span>}
-        {hasPaintSupport && (
-          <Button size="sm" variant={paintMode ? "default" : "outline"} onClick={onPaintModeToggle} className="text-xs h-7">
+        {label ? <span className="text-xs text-muted-foreground">{label}</span> : null}
+        {hasPaintSupport ? <Button size="sm" variant={paintMode ? "default" : "outline"} onClick={onPaintModeToggle} className="text-xs h-7">
             <Pin className="h-3 w-3 mr-1" />
             ペイントモード
-          </Button>
-        )}
+          </Button> : null}
       </div>
 
       <div ref={containerRef} className={cn(
@@ -126,49 +124,39 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
           </div>
         )}
 
-        {paintMode && savedAnnotations && savedAnnotations.length > 0 && containerSize.width > 0 && (
-          <svg className="absolute inset-0 w-full h-full pointer-events-none z-[15]" viewBox={`0 0 ${containerSize.width} ${containerSize.height}`} preserveAspectRatio="none">
+        {paintMode && savedAnnotations && savedAnnotations.length > 0 && containerSize.width > 0 ? <svg className="absolute inset-0 w-full h-full pointer-events-none z-[15]" viewBox={`0 0 ${containerSize.width} ${containerSize.height}`} preserveAspectRatio="none">
             {savedAnnotations.map((ann, i) => (
               <SavedAnnotationSvg key={i} ann={ann} containerWidth={containerSize.width} containerHeight={containerSize.height} />
             ))}
-          </svg>
-        )}
+          </svg> : null}
 
-        {highlightAnnotation?.imagePosition && containerSize.width > 0 && (
-          <svg className="absolute inset-0 w-full h-full pointer-events-none z-[25] animate-pulse" viewBox={`0 0 ${containerSize.width} ${containerSize.height}`} preserveAspectRatio="none">
+        {highlightAnnotation?.imagePosition && containerSize.width > 0 ? <svg className="absolute inset-0 w-full h-full pointer-events-none z-[25] animate-pulse" viewBox={`0 0 ${containerSize.width} ${containerSize.height}`} preserveAspectRatio="none">
             {renderHighlightAnnotation(highlightAnnotation, containerSize.width, containerSize.height)}
-          </svg>
-        )}
+          </svg> : null}
 
-        {boundingBox && mediaType === "video" && containerSize.width > 0 && containerSize.height > 0 && (
-          <BoundingBoxOverlay
+        {boundingBox && mediaType === "video" && containerSize.width > 0 && containerSize.height > 0 ? <BoundingBoxOverlay
             boundingBox={boundingBox}
             containerWidth={containerSize.width}
             containerHeight={containerSize.height}
             label={boundingBoxLabel}
-          />
-        )}
+          /> : null}
 
-        {hasPaintSupport && (
-          <AnnotationCanvas
+        {hasPaintSupport ? <AnnotationCanvas
             active={!!paintMode}
             width={containerSize.width || 800}
             height={containerSize.height || 400}
             onSaveAnnotations={onAnnotationSave}
             members={members}
             getMediaCurrentTime={mediaType === "video" ? () => mediaRef.current?.currentTime ?? 0 : undefined}
-          />
-        )}
+          /> : null}
       </div>
 
-      {scriptText && (
-        <div className="space-y-1 mt-4">
+      {scriptText ? <div className="space-y-1 mt-4">
           <span className="text-xs text-muted-foreground font-medium">テキスト入力</span>
           <div className="font-mono text-sm border border-border rounded-lg p-3 bg-card whitespace-pre-wrap">
             {scriptText}
           </div>
-        </div>
-      )}
+        </div> : null}
     </div>
   );
 });
@@ -207,14 +195,12 @@ function BoundingBoxOverlay({
         transition: "all 0.3s ease",
       }}
     >
-      {label && (
-        <span
+      {label ? <span
           className="absolute -top-5 left-0 text-[10px] font-medium px-1.5 py-0.5 rounded"
           style={{ backgroundColor: "#EF4444", color: "white" }}
         >
           {label}
-        </span>
-      )}
+        </span> : null}
     </div>
   );
 }
