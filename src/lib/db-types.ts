@@ -19,6 +19,11 @@ export type Project = Tables<"projects">;
 export type ProjectFile = Tables<"project_files">;
 export type CheckResultRow = Tables<"check_results">;
 export type CommentRow = Tables<"comments">;
+export type CommentWithDraftInfo = CommentRow & {
+  draft_round: number;
+  draft_label: string;
+  is_current_draft: boolean;
+};
 export type CorrectionPatternRow = Tables<"correction_patterns">;
 
 export type ShareLinkRow = Tables<"share_links">;
