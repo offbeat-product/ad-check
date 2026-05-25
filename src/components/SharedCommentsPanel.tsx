@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import type { CommentRow } from "@/lib/db-types";
+import type { CommentWithDraftInfo } from "@/lib/db-types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,11 +19,16 @@ interface SharedCommentsPanelProps {
   refreshKey?: number;
 }
 
+type SharedCommentsRpc = (
+  fn: "get_shared_comments_with_draft_info",
+  args: { p_check_result_id: string; p_share_token: string },
+) => Promise<{ data: CommentWithDraftInfo[] | null; error: { message: string } | null }>;
+
 export default function SharedCommentsPanel({
   checkResultId, shareToken, allowWrite, filterItemId,
   onAnnotationClick, mediaCurrentTime, onSeekMedia, refreshKey,
 }: SharedCommentsPanelProps) {
-  const [comments, setComments] = useState<CommentRow[]>([]);
+  const [comments, setComments] = useState<CommentWithDraftInfo[]>([]);
   const [guestName, setGuestName] = useState(() => localStorage.getItem("shared_guest_name") || "");
   const [guestEmail, setGuestEmail] = useState(() => localStorage.getItem("shared_guest_email") || "");
   const [showGuestForm, setShowGuestForm] = useState(() => !localStorage.getItem("shared_guest_name"));
@@ -34,11 +39,16 @@ export default function SharedCommentsPanel({
   const [posting, setPosting] = useState(false);
 
   const fetchComments = async () => {
-    const { data } = await (supabase.rpc as any)("get_shared_comments", {
+    const rpc = supabase.rpc as unknown as SharedCommentsRpc;
+    const { data, error } = await rpc("get_shared_comments_with_draft_info", {
       p_check_result_id: checkResultId,
       p_share_token: shareToken,
     });
-    setComments((data as CommentRow[]) ?? []);
+    if (error) {
+      console.error("[get_shared_comments_with_draft_info]", error.message);
+      return;
+    }
+    setComments((data ?? []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at)));
   };
 
   useEffect(() => { fetchComments(); }, [checkResultId, refreshKey]);
@@ -210,7 +220,7 @@ export default function SharedCommentsPanel({
 }
 
 function SharedCommentCard({ comment, timeAgo, onAnnotationClick, onSeekMedia, onReply, isReply }: {
-  comment: CommentRow;
+  comment: CommentWithDraftInfo;
   timeAgo: (d: string) => string;
   onAnnotationClick?: (data: unknown) => void;
   onSeekMedia?: (seconds: number) => void;
@@ -218,12 +228,32 @@ function SharedCommentCard({ comment, timeAgo, onAnnotationClick, onSeekMedia, o
   isReply?: boolean;
 }) {
   const hasAnnotation = !!comment.annotation_data;
+  const showDraftBadge = !comment.is_current_draft && !!comment.draft_label;
+  const isInitialDraft = comment.draft_round === 0;
 
   return (
-    <div className={cn("rounded-lg border border-border p-3 space-y-1.5", isReply && "bg-muted/30")}>
+    <div
+      className={cn(
+        "rounded-lg border border-border p-3 space-y-1.5",
+        isReply && "bg-muted/30",
+        !comment.is_current_draft && "opacity-75"
+      )}
+    >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold">{comment.author_name}</span>
+          {showDraftBadge ? (
+            <span
+              className={cn(
+                "rounded-full border px-1.5 py-0.5 text-[10px] font-medium",
+                isInitialDraft
+                  ? "border-muted-foreground/20 bg-muted text-muted-foreground"
+                  : "border-blue-200 bg-blue-50 text-blue-700"
+              )}
+            >
+              {comment.draft_label}
+            </span>
+          ) : null}
           {comment.media_timestamp != null && (
             <TimestampBadge seconds={comment.media_timestamp} onClick={() => onSeekMedia?.(comment.media_timestamp!)} />
           )}

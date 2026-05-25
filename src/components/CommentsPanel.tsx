@@ -3,7 +3,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { tusUpload } from "@/lib/tus-upload";
 import { useAuth } from "@/hooks/useAuth";
-import type { CommentRow } from "@/lib/db-types";
+import type { CommentWithDraftInfo } from "@/lib/db-types";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -54,9 +54,14 @@ interface CommentsPanelProps {
   refreshKey?: number;
 }
 
+type CommentsWithDraftInfoRpc = (
+  fn: "get_comments_with_draft_info",
+  args: { p_check_result_id: string },
+) => Promise<{ data: CommentWithDraftInfo[] | null; error: { message: string } | null }>;
+
 export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia, onCommentDeleted, productId, projectId, processType, productCode, patternId, fileId, onCommentCountChange, fileName, refreshKey }: CommentsPanelProps) {
   const { user } = useAuth();
-  const [comments, setComments] = useState<CommentRow[]>([]);
+  const [comments, setComments] = useState<CommentWithDraftInfo[]>([]);
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
   const [newComment, setNewComment] = useState("");
   const [replyTo, setReplyTo] = useState<string | null>(null);
@@ -111,13 +116,12 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   }, []);
 
   const fetchComments = async () => {
-    const { data, error } = await supabase
-      .from("comments")
-      .select("*")
-      .eq("check_result_id", checkResultId)
-      .order("created_at", { ascending: true });
+    const rpc = supabase.rpc as unknown as CommentsWithDraftInfoRpc;
+    const { data, error } = await rpc("get_comments_with_draft_info", {
+      p_check_result_id: checkResultId,
+    });
     if (handleSupabaseError(error, "comments")) return;
-    const result = data ?? [];
+    const result = (data ?? []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
     setComments(result);
     onCommentCountChange?.(result.length);
   };
@@ -475,7 +479,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
 }
 
 function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdit, onDelete, timeAgo, isReply, onAnnotationClick, onCheckItemClick, onSeekMedia, fileName, onRecordCorrection, onReplicate }: {
-  comment: CommentRow; currentUserEmail: string; onToggleStatus: () => void; onReply: () => void; onEdit?: (id: string, content: string) => void; onDelete?: (id: string) => void; timeAgo: (d: string) => string; isReply?: boolean; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void; fileName?: string; onRecordCorrection?: (id: string, content: string) => Promise<void>; onReplicate?: () => void;
+  comment: CommentWithDraftInfo; currentUserEmail: string; onToggleStatus: () => void; onReply: () => void; onEdit?: (id: string, content: string) => void; onDelete?: (id: string) => void; timeAgo: (d: string) => string; isReply?: boolean; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void; fileName?: string; onRecordCorrection?: (id: string, content: string) => Promise<void>; onReplicate?: () => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.content);
@@ -489,7 +493,9 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
   const colorIdx = comment.author_name.charCodeAt(0) % colors.length;
   const hasAnnotation = !!comment.annotation_data;
   const hasCheckItem = !!comment.check_item_id;
-  const mediaTimestamp = (comment as any).media_timestamp as number | null;
+  const mediaTimestamp = comment.media_timestamp;
+  const showDraftBadge = !comment.is_current_draft && !!comment.draft_label;
+  const isInitialDraft = comment.draft_round === 0;
 
   const handleCardClick = () => {
     // Auto-seek video to annotation timestamp
@@ -527,13 +533,26 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
     <div
       className={cn(
         "border border-border rounded-lg p-2.5 space-y-1.5 bg-card transition-colors",
-        isClickable && "cursor-pointer hover:border-primary/40 hover:bg-primary/5"
+        isClickable && "cursor-pointer hover:border-primary/40 hover:bg-primary/5",
+        !comment.is_current_draft && "opacity-75"
       )}
       onClick={isClickable ? handleCardClick : undefined}
     >
       <div className="flex items-center gap-2">
         <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white", colors[colorIdx])}>{initial}</div>
         <span className="text-xs font-medium flex-1">{comment.author_name}</span>
+        {showDraftBadge ? (
+          <span
+            className={cn(
+              "rounded-full border px-1.5 py-0.5 text-[10px] font-medium",
+              isInitialDraft
+                ? "border-muted-foreground/20 bg-muted text-muted-foreground"
+                : "border-blue-200 bg-blue-50 text-blue-700"
+            )}
+          >
+            {comment.draft_label}
+          </span>
+        ) : null}
         {mediaTimestamp != null && mediaTimestamp > 0 && (
           <TimestampBadge seconds={mediaTimestamp} onClick={onSeekMedia ? () => onSeekMedia(mediaTimestamp) : undefined} />
         )}
