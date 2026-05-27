@@ -204,7 +204,10 @@ export function AutoCheckProvider({ children }: ProviderProps) {
           .eq("id", row.check_result_id)
           .maybeSingle();
         if (cr && Array.isArray(cr.check_items) && (cr.check_items as unknown[]).length > 0) {
-          await supabase.from("project_files").update({ status: "checked" }).eq("id", row.id);
+          await supabase
+            .from("project_files")
+            .update({ status: "checked", checking_by: null, checking_started_at: null } as Record<string, unknown>)
+            .eq("id", row.id);
           void maybeToastProjectCompleteRef.current(row.project_id);
         }
       }
