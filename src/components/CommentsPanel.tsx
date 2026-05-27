@@ -3,7 +3,8 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { tusUpload } from "@/lib/tus-upload";
 import { useAuth } from "@/hooks/useAuth";
-import type { CommentWithDraftInfo } from "@/lib/db-types";
+import type { CommentRow, CommentWithDraftInfo } from "@/lib/db-types";
+import { matchesCommentItemFilter, withDefaultDraftInfo } from "@/lib/comment-draft-info";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -116,12 +117,29 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   }, []);
 
   const fetchComments = async () => {
-    const rpc = supabase.rpc as unknown as CommentsWithDraftInfoRpc;
-    const { data, error } = await rpc("get_comments_with_draft_info", {
-      p_check_result_id: checkResultId,
-    });
+    const { data, error } = await supabase
+      .from("comments")
+      .select("*")
+      .eq("check_result_id", checkResultId)
+      .order("created_at", { ascending: true });
     if (handleSupabaseError(error, "comments")) return;
-    const result = (data ?? []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
+
+    let result: CommentWithDraftInfo[] = withDefaultDraftInfo((data ?? []) as CommentRow[]);
+
+    try {
+      const rpc = supabase.rpc as unknown as CommentsWithDraftInfoRpc;
+      const { data: draftData, error: rpcError } = await rpc("get_comments_with_draft_info", {
+        p_check_result_id: checkResultId,
+      });
+      if (!rpcError && draftData && draftData.length > 0) {
+        result = draftData.slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
+      } else if (rpcError) {
+        console.warn("[get_comments_with_draft_info] using direct select fallback:", rpcError.message);
+      }
+    } catch (err) {
+      console.warn("[get_comments_with_draft_info] using direct select fallback:", err);
+    }
+
     setComments(result);
     onCommentCountChange?.(result.length);
   };
@@ -142,7 +160,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   }, [checkResultId]);
 
   const filtered = comments.filter((c) => {
-    if (filterItemId && c.check_item_id !== filterItemId) return false;
+    if (!matchesCommentItemFilter(c, filterItemId)) return false;
     if (tab === "open") return c.status === "open";
     if (tab === "resolved") return c.status === "resolved";
     return true;
@@ -152,7 +170,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   const replies = (parentId: string) => filtered.filter((c) => c.parent_id === parentId);
 
   const countByTab = (t: "all" | "open" | "resolved") => {
-    const base = comments.filter((c) => !filterItemId || c.check_item_id === filterItemId);
+    const base = comments.filter((c) => matchesCommentItemFilter(c, filterItemId));
     if (t === "open") return base.filter((c) => c.status === "open").length;
     if (t === "resolved") return base.filter((c) => c.status === "resolved").length;
     return base.length;
