@@ -56,8 +56,20 @@ export async function waitForAiCheckCompletion(params: {
 
     if (cr) {
       const items = cr.check_items;
-      if (Array.isArray(items) && items.length > 0) return "done";
-      if (cr.status === "completed") return "done";
+      if (Array.isArray(items) && items.length > 0) {
+        await supabase
+          .from("project_files")
+          .update({ status: "checked", checking_by: null, checking_started_at: null } as Record<string, unknown>)
+          .eq("id", fileId);
+        return "done";
+      }
+      if (cr.status === "completed") {
+        await supabase
+          .from("project_files")
+          .update({ status: "checked", checking_by: null, checking_started_at: null } as Record<string, unknown>)
+          .eq("id", fileId);
+        return "done";
+      }
       if (cr.status === "failed" || cr.status === "abandoned") return "failed";
     }
 

@@ -57,10 +57,16 @@ export async function runSingleFileAiCheck(
     return { success: false, skipped: true };
   }
 
+  const checkingStartedAt = new Date().toISOString();
+
   if (claimUploaded) {
     const { data: claimed } = await supabase
       .from("project_files")
-      .update({ status: "checking" })
+      .update({
+        status: "checking",
+        checking_by: user.id,
+        checking_started_at: checkingStartedAt,
+      } as Record<string, unknown>)
       .eq("id", file.id)
       .eq("status", "uploaded")
       .select("id");
@@ -68,7 +74,11 @@ export async function runSingleFileAiCheck(
       return { success: false, skipped: true };
     }
   } else {
-    const { error } = await supabase.from("project_files").update({ status: "checking" }).eq("id", file.id);
+    const { error } = await supabase.from("project_files").update({
+      status: "checking",
+      checking_by: user.id,
+      checking_started_at: checkingStartedAt,
+    } as Record<string, unknown>).eq("id", file.id);
     if (error) {
       return { success: false, error: error.message };
     }
@@ -207,7 +217,9 @@ export async function runSingleFileAiCheck(
           .update({
             status: "checking",
             check_result_id: body.record_id as string,
-          })
+            checking_by: user.id,
+            checking_started_at: checkingStartedAt,
+          } as Record<string, unknown>)
           .eq("id", file.id);
 
         dispatchWebhookInBackground(webhookUrl, body);
@@ -260,7 +272,9 @@ export async function runSingleFileAiCheck(
       .update({
         status: "checked",
         check_result_id: crData.id,
-      })
+        checking_by: null,
+        checking_started_at: null,
+      } as Record<string, unknown>)
       .eq("id", file.id);
 
     return { success: true, checkResultId: crData.id };

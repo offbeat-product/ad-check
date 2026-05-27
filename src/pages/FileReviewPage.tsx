@@ -71,6 +71,33 @@ interface FileReviewPageProps {
   };
 }
 
+const STALE_CHECKING_MS = 15 * 60 * 1000;
+
+function timestampMs(value: string | null | undefined): number {
+  if (!value) return 0;
+  const ms = new Date(value).getTime();
+  return Number.isNaN(ms) ? 0 : ms;
+}
+
+function checkingStartedMs(
+  file: Pick<ProjectFile, "checking_started_at" | "updated_at">,
+  checkResult?: Pick<CheckResultRow, "created_at"> | null,
+): number {
+  return (
+    timestampMs(file.checking_started_at) ||
+    timestampMs(checkResult?.created_at) ||
+    timestampMs(file.updated_at)
+  );
+}
+
+function isStaleChecking(
+  file: Pick<ProjectFile, "checking_started_at" | "updated_at">,
+  checkResult?: Pick<CheckResultRow, "created_at"> | null,
+): boolean {
+  const startedAt = checkingStartedMs(file, checkResult);
+  return startedAt === 0 || Date.now() - startedAt > STALE_CHECKING_MS;
+}
+
 export default function FileReviewPage({
   isCreatorMode = false,
   shareToken,
@@ -409,8 +436,7 @@ export default function FileReviewPage({
         // If file is in "checking" state (e.g. batch check in progress), resume checking UI
         if (f.status === "checking" && (!cr || !cr.check_items || !(cr.check_items as unknown[]).length)) {
           // Check if the checking state is stale (> 15 minutes old)
-          const checkingStarted = f.checking_started_at ? new Date(f.checking_started_at).getTime() : 0;
-          const isStale = checkingStarted > 0 && (Date.now() - checkingStarted > 15 * 60 * 1000);
+          const isStale = isStaleChecking(f, cr);
           if (isStale) {
             // Stale check — reset status so user can retry
             console.warn("[FileReview] Stale checking state detected, resetting file status");
@@ -462,8 +488,7 @@ export default function FileReviewPage({
       } else if (f.status === "checking") {
         // File marked as checking but no check_result_id yet
         // Check if the checking state is stale (> 15 minutes old)
-        const checkingStarted = f.checking_started_at ? new Date(f.checking_started_at).getTime() : 0;
-        const isStale = checkingStarted > 0 && (Date.now() - checkingStarted > 15 * 60 * 1000);
+        const isStale = isStaleChecking(f);
         if (isStale) {
           console.warn("[FileReview] Stale checking state (no result), resetting");
           await supabase.from("project_files").update({ 
@@ -578,8 +603,8 @@ export default function FileReviewPage({
           setChecking(false);
           // Update file status if still "checking"
           if (freshFile.status === "checking") {
-            await supabase.from("project_files").update({ status: "checked" }).eq("id", fileId);
-            setFile(prev => prev ? { ...prev, status: "checked" } : prev);
+            await supabase.from("project_files").update({ status: "checked", checking_by: null, checking_started_at: null } as Record<string, unknown>).eq("id", fileId);
+            setFile(prev => prev ? { ...prev, status: "checked", checking_by: null, checking_started_at: null } : prev);
           }
           toast({ title: "チェック完了", description: `Grade: ${cr.overall_status}` });
           return;
@@ -618,8 +643,8 @@ export default function FileReviewPage({
         setChecking(false);
         pollingStartRef.current = 0;
         // Update file status in DB to "checked"
-        await supabase.from("project_files").update({ status: "checked" }).eq("id", fileId);
-        setFile(prev => prev ? { ...prev, status: "checked" } : prev);
+        await supabase.from("project_files").update({ status: "checked", checking_by: null, checking_started_at: null } as Record<string, unknown>).eq("id", fileId);
+        setFile(prev => prev ? { ...prev, status: "checked", checking_by: null, checking_started_at: null } : prev);
         toast({ title: "チェック完了", description: `Grade: ${cr.overall_status}` });
       }
     }, 5000);
@@ -713,8 +738,13 @@ export default function FileReviewPage({
     const processKey = file.process_type || "script";
 
     // Immediately mark file as "checking" in DB so ProjectPage can show the status
-    await supabase.from("project_files").update({ status: "checking" }).eq("id", file.id);
-    setFile(prev => prev ? { ...prev, status: "checking" } : prev);
+    const checkingStartedAt = new Date().toISOString();
+    await supabase.from("project_files").update({
+      status: "checking",
+      checking_by: user.id,
+      checking_started_at: checkingStartedAt,
+    } as Record<string, unknown>).eq("id", file.id);
+    setFile(prev => prev ? { ...prev, status: "checking", checking_by: user.id, checking_started_at: checkingStartedAt } : prev);
 
     try {
       const aiCfg = AI_CHECK_CONFIG[processKey];
@@ -865,8 +895,10 @@ export default function FileReviewPage({
             await supabase.from("project_files").update({
               status: "checking",
               check_result_id: pendingRecordId,
-            }).eq("id", file.id);
-            setFile({ ...file, status: "checking", check_result_id: pendingRecordId });
+              checking_by: user.id,
+              checking_started_at: checkingStartedAt,
+            } as Record<string, unknown>).eq("id", file.id);
+            setFile({ ...file, status: "checking", check_result_id: pendingRecordId, checking_by: user.id, checking_started_at: checkingStartedAt });
           }
           const polled = await videoPolling.startPolling(product.code, processKey, webhookSentAt);
           if (!polled) {
@@ -876,8 +908,8 @@ export default function FileReviewPage({
               const { data: updatedCr } = await supabase.from("check_results").select("*").eq("id", pendingRecordId).maybeSingle();
               if (updatedCr && updatedCr.status === "completed" && updatedCr.check_items) {
                 applyRecord(updatedCr);
-                await supabase.from("project_files").update({ status: "checked", check_result_id: updatedCr.id }).eq("id", file.id);
-                setFile({ ...file, status: "checked", check_result_id: updatedCr.id });
+                await supabase.from("project_files").update({ status: "checked", check_result_id: updatedCr.id, checking_by: null, checking_started_at: null } as Record<string, unknown>).eq("id", file.id);
+                setFile({ ...file, status: "checked", check_result_id: updatedCr.id, checking_by: null, checking_started_at: null });
                 checkProgress.complete();
                 toast({ title: "チェック完了", description: `Grade: ${updatedCr.overall_status}` });
                 return;
@@ -894,7 +926,7 @@ export default function FileReviewPage({
                   checking_by: null,
                   checking_started_at: null,
                 } as any).eq("id", file.id);
-                setFile({ ...file, status: "checked", check_result_id: prevCr.id });
+                setFile({ ...file, status: "checked", check_result_id: prevCr.id, checking_by: null, checking_started_at: null });
               }
             } else {
               // No previous result — reset to uploadable state
@@ -914,9 +946,11 @@ export default function FileReviewPage({
           const { error: updateErr } = await supabase.from("project_files").update({
             status: "checked",
             check_result_id: polled.id,
-          }).eq("id", file.id);
+            checking_by: null,
+            checking_started_at: null,
+          } as Record<string, unknown>).eq("id", file.id);
           handleSupabaseError(updateErr, "project_files update");
-          setFile({ ...file, status: "checked", check_result_id: polled.id });
+          setFile({ ...file, status: "checked", check_result_id: polled.id, checking_by: null, checking_started_at: null });
           checkProgress.complete();
           toast({ title: "チェック完了", description: `Grade: ${polled.overall_status}` });
           return;
@@ -949,10 +983,12 @@ export default function FileReviewPage({
       const { error: updateErr } = await supabase.from("project_files").update({
         status: "checked",
         check_result_id: crData.id,
-      }).eq("id", file.id);
+        checking_by: null,
+        checking_started_at: null,
+      } as Record<string, unknown>).eq("id", file.id);
       handleSupabaseError(updateErr, "project_files update");
 
-      setFile({ ...file, status: "checked", check_result_id: crData.id });
+      setFile({ ...file, status: "checked", check_result_id: crData.id, checking_by: null, checking_started_at: null });
 
       const { data: fullCr } = await supabase.from("check_results").select("*").eq("id", crData.id).maybeSingle();
       applyRecord(fullCr);
@@ -986,8 +1022,8 @@ export default function FileReviewPage({
 
           if (cr && cr.status === "completed" && cr.check_items) {
             applyRecord(cr);
-            await supabase.from("project_files").update({ status: "checked", check_result_id: cr.id }).eq("id", file.id);
-            setFile({ ...file, status: "checked", check_result_id: cr.id });
+            await supabase.from("project_files").update({ status: "checked", check_result_id: cr.id, checking_by: null, checking_started_at: null } as Record<string, unknown>).eq("id", file.id);
+            setFile({ ...file, status: "checked", check_result_id: cr.id, checking_by: null, checking_started_at: null });
             checkProgress.complete();
             setChecking(false);
             toast({ title: "チェック完了", description: `Grade: ${cr.overall_status}` });
@@ -1012,7 +1048,7 @@ export default function FileReviewPage({
             checking_by: null,
             checking_started_at: null,
           } as any).eq("id", file.id);
-          setFile({ ...file, status: "checked", check_result_id: prevCr.id });
+          setFile({ ...file, status: "checked", check_result_id: prevCr.id, checking_by: null, checking_started_at: null });
         }
       } else {
         // No previous result — reset to uploadable state so user can retry
