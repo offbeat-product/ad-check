@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import type { CommentWithDraftInfo } from "@/lib/db-types";
+import type { CommentRow, CommentWithDraftInfo } from "@/lib/db-types";
+import { matchesCommentItemFilter, withDefaultDraftInfo } from "@/lib/comment-draft-info";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -19,10 +20,15 @@ interface SharedCommentsPanelProps {
   refreshKey?: number;
 }
 
-type SharedCommentsRpc = (
+type SharedCommentsWithDraftRpc = (
   fn: "get_shared_comments_with_draft_info",
   args: { p_check_result_id: string; p_share_token: string },
 ) => Promise<{ data: CommentWithDraftInfo[] | null; error: { message: string } | null }>;
+
+type SharedCommentsRpc = (
+  fn: "get_shared_comments",
+  args: { p_check_result_id: string; p_share_token: string },
+) => Promise<{ data: CommentRow[] | null; error: { message: string } | null }>;
 
 export default function SharedCommentsPanel({
   checkResultId, shareToken, allowWrite, filterItemId,
@@ -39,16 +45,37 @@ export default function SharedCommentsPanel({
   const [posting, setPosting] = useState(false);
 
   const fetchComments = async () => {
-    const rpc = supabase.rpc as unknown as SharedCommentsRpc;
-    const { data, error } = await rpc("get_shared_comments_with_draft_info", {
-      p_check_result_id: checkResultId,
-      p_share_token: shareToken,
-    });
-    if (error) {
-      console.error("[get_shared_comments_with_draft_info]", error.message);
+    let result: CommentWithDraftInfo[] = [];
+
+    try {
+      const draftRpc = supabase.rpc as unknown as SharedCommentsWithDraftRpc;
+      const { data: draftData, error: draftError } = await draftRpc("get_shared_comments_with_draft_info", {
+        p_check_result_id: checkResultId,
+        p_share_token: shareToken,
+      });
+      if (!draftError && draftData && draftData.length > 0) {
+        result = draftData;
+      } else {
+        if (draftError) {
+          console.warn("[get_shared_comments_with_draft_info] using legacy RPC fallback:", draftError.message);
+        }
+        const legacyRpc = supabase.rpc as unknown as SharedCommentsRpc;
+        const { data, error } = await legacyRpc("get_shared_comments", {
+          p_check_result_id: checkResultId,
+          p_share_token: shareToken,
+        });
+        if (error) {
+          console.error("[get_shared_comments]", error.message);
+          return;
+        }
+        result = withDefaultDraftInfo((data ?? []) as CommentRow[]);
+      }
+    } catch (err) {
+      console.error("[shared comments fetch]", err);
       return;
     }
-    setComments((data ?? []).slice().sort((a, b) => a.created_at.localeCompare(b.created_at)));
+
+    setComments(result.slice().sort((a, b) => a.created_at.localeCompare(b.created_at)));
   };
 
   useEffect(() => { fetchComments(); }, [checkResultId, refreshKey]);
@@ -60,7 +87,7 @@ export default function SharedCommentsPanel({
   }, [checkResultId, shareToken]);
 
   const filtered = comments.filter((c) => {
-    if (filterItemId && c.check_item_id !== filterItemId) return false;
+    if (!matchesCommentItemFilter(c, filterItemId)) return false;
     if (tab === "open") return c.status === "open";
     if (tab === "resolved") return c.status === "resolved";
     return true;
@@ -70,7 +97,7 @@ export default function SharedCommentsPanel({
   const getReplies = (parentId: string) => filtered.filter((c) => c.parent_id === parentId);
 
   const countByTab = (t: "all" | "open" | "resolved") => {
-    const base = comments.filter((c) => !filterItemId || c.check_item_id === filterItemId);
+    const base = comments.filter((c) => matchesCommentItemFilter(c, filterItemId));
     if (t === "open") return base.filter((c) => c.status === "open").length;
     if (t === "resolved") return base.filter((c) => c.status === "resolved").length;
     return base.length;
