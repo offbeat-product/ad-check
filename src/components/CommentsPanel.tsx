@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Send, Pin, Reply, Paperclip, X, FileText, Pencil, Trash2, Check } from "lucide-react";
+import { Send, Pin, Reply, Paperclip, X, FileText, Pencil, Trash2, Check, Copy, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import MentionInput, { type MentionMember } from "@/components/comments/MentionInput";
 import TimestampBadge, { formatTimestamp } from "@/components/comments/TimestampBadge";
@@ -367,9 +367,6 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
               onCheckItemClick={onCheckItemClick}
               onSeekMedia={onSeekMedia}
               fileName={fileName}
-              onRecordCorrection={productId ? async (id, content) => {
-                await saveCorrectionRecord(id, content);
-              } : undefined}
               onReplicate={() => setReplicateDialogComment({
                 id: c.id,
                 content: c.content,
@@ -496,14 +493,13 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   );
 }
 
-function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdit, onDelete, timeAgo, isReply, onAnnotationClick, onCheckItemClick, onSeekMedia, fileName, onRecordCorrection, onReplicate }: {
-  comment: CommentWithDraftInfo; currentUserEmail: string; onToggleStatus: () => void; onReply: () => void; onEdit?: (id: string, content: string) => void; onDelete?: (id: string) => void; timeAgo: (d: string) => string; isReply?: boolean; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void; fileName?: string; onRecordCorrection?: (id: string, content: string) => Promise<void>; onReplicate?: () => void;
+function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdit, onDelete, timeAgo, isReply, onAnnotationClick, onCheckItemClick, onSeekMedia, fileName, onReplicate }: {
+  comment: CommentWithDraftInfo; currentUserEmail: string; onToggleStatus: () => void; onReply: () => void; onEdit?: (id: string, content: string) => void; onDelete?: (id: string) => void; timeAgo: (d: string) => string; isReply?: boolean; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void; fileName?: string; onReplicate?: () => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.content);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [recordingCorrection, setRecordingCorrection] = useState(false);
-  const { toast } = useToast();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   const isOwn = currentUserEmail === comment.author_email;
   const initial = comment.author_name.charAt(0).toUpperCase();
@@ -546,6 +542,17 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
       setIsEditing(false);
     }
   };
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDocumentMouseDown = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocumentMouseDown);
+    return () => document.removeEventListener("mousedown", onDocumentMouseDown);
+  }, [menuOpen]);
 
   return (
     <div
@@ -614,49 +621,66 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
             </div>
           )}
         </a> : null}
-      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
         <button onClick={onToggleStatus}
-          className={cn("text-[10px] px-2 py-0.5 rounded-full border font-medium",
+          className={cn("text-[10px] px-2 py-0.5 rounded-full border font-medium shrink-0",
             comment.status === "open" ? "border-status-warning/30 text-status-warning bg-status-warning/10" : "border-status-ok/30 text-status-ok bg-status-ok/10")}>
           {comment.status === "open" ? "未対応" : "対応済"}
         </button>
         {!isReply && (
-          <button onClick={onReply} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1">
+          <button onClick={onReply} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 shrink-0">
             <Reply className="h-3 w-3" />返信
           </button>
         )}
-        {!isReply && onReplicate ? <button
-            onClick={onReplicate}
-            className="text-[10px] text-muted-foreground hover:text-primary flex items-center gap-1"
-            title="このコメントを同じ工程の他のファイルにも反映"
-          >
-            📋 他のファイルにも反映
-          </button> : null}
-        {isOwn && !isEditing ? <>
-            <button onClick={() => setIsEditing(true)} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1">
-              <Pencil className="h-3 w-3" />編集
+        <div className="flex-1" />
+        {!isReply && (onReplicate || (isOwn && !isEditing)) ? (
+          <div className="relative shrink-0" ref={menuRef}>
+            <button
+              onClick={() => setMenuOpen((open) => !open)}
+              aria-label="その他の操作"
+              className="text-muted-foreground hover:text-foreground p-1 rounded hover:bg-muted/50"
+            >
+              <MoreHorizontal className="h-4 w-4" />
             </button>
-            <button onClick={() => { if (onDelete) onDelete(comment.id); }} className="text-[10px] text-muted-foreground hover:text-destructive flex items-center gap-1">
-              <Trash2 className="h-3 w-3" />削除
-            </button>
-          </> : null}
-        {onRecordCorrection && !isReply ? <button
-            onClick={async () => {
-              setRecordingCorrection(true);
-              try {
-                await onRecordCorrection(comment.id, comment.content);
-                toast({ title: "📝 修正指示として記録しました" });
-              } catch {
-                toast({ title: "記録に失敗しました", variant: "destructive" });
-              } finally {
-                setRecordingCorrection(false);
-              }
-            }}
-            disabled={recordingCorrection}
-            className="text-[10px] text-primary hover:text-primary/80 flex items-center gap-1 font-medium"
-          >
-            📝 {recordingCorrection ? "記録中..." : "修正指示として記録"}
-          </button> : null}
+            {menuOpen ? (
+              <div className="absolute right-0 top-7 z-20 w-48 rounded-md border border-border bg-popover shadow-md p-1">
+                {onReplicate ? (
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onReplicate();
+                    }}
+                    className="w-full text-left text-xs px-2.5 py-1.5 rounded flex items-center gap-2 hover:bg-muted"
+                  >
+                    <Copy className="h-3.5 w-3.5" />他のファイルにも反映
+                  </button>
+                ) : null}
+                {isOwn && !isEditing ? (
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setIsEditing(true);
+                    }}
+                    className="w-full text-left text-xs px-2.5 py-1.5 rounded flex items-center gap-2 hover:bg-muted"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />編集
+                  </button>
+                ) : null}
+                {isOwn && !isEditing ? (
+                  <button
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onDelete?.(comment.id);
+                    }}
+                    className="w-full text-left text-xs px-2.5 py-1.5 rounded flex items-center gap-2 hover:bg-muted text-destructive"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />削除
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </div>
   );
