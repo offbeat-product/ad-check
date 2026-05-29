@@ -3,16 +3,8 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import AnnotationCanvas from "@/components/AnnotationCanvas";
 import type { MentionMember } from "@/components/comments/MentionInput";
+import type { CommentAnnotationData } from "@/lib/comment-annotations";
 import { Pin } from "lucide-react";
-
-interface AnnotationData {
-  type: string;
-  points: { x: number; y: number }[];
-  color: string;
-  strokeWidth: number;
-  text?: string;
-  imagePosition?: { x: number; y: number; width: number; height: number };
-}
 
 export interface MediaPreviewHandle {
   getCurrentTime: () => number;
@@ -28,8 +20,8 @@ interface MediaPreviewProps {
   paintMode?: boolean;
   onPaintModeToggle?: () => void;
   onAnnotationSave?: (annotations: unknown[], comment: string, mentionedUserIds?: string[], isCorrection?: boolean) => void;
-  savedAnnotations?: AnnotationData[];
-  highlightAnnotation?: AnnotationData | null;
+  savedAnnotations?: CommentAnnotationData[];
+  highlightAnnotation?: CommentAnnotationData | null;
   members?: MentionMember[];
   boundingBox?: [number, number, number, number] | null;
   boundingBoxLabel?: string;
@@ -124,7 +116,7 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
           </div>
         )}
 
-        {paintMode && savedAnnotations && savedAnnotations.length > 0 && containerSize.width > 0 ? <svg className="absolute inset-0 w-full h-full pointer-events-none z-[15]" viewBox={`0 0 ${containerSize.width} ${containerSize.height}`} preserveAspectRatio="none">
+        {savedAnnotations && savedAnnotations.length > 0 && containerSize.width > 0 ? <svg className="absolute inset-0 w-full h-full pointer-events-none z-[15]" viewBox={`0 0 ${containerSize.width} ${containerSize.height}`} preserveAspectRatio="none">
             {savedAnnotations.map((ann, i) => (
               <SavedAnnotationSvg key={i} ann={ann} containerWidth={containerSize.width} containerHeight={containerSize.height} />
             ))}
@@ -225,7 +217,7 @@ function SavedAnnotationSvg({ ann, containerWidth, containerHeight }: { ann: { t
   return <rect x={px} y={py} width={Math.max(pw, 10)} height={Math.max(ph, 10)} fill="none" stroke={ann.color} strokeWidth={ann.strokeWidth} strokeDasharray="6 4" opacity={0.5} />;
 }
 
-function renderHighlightAnnotation(ann: AnnotationData, containerWidth: number, containerHeight: number) {
+function renderHighlightAnnotation(ann: CommentAnnotationData, containerWidth: number, containerHeight: number) {
   if (!ann.imagePosition) return null;
   const { x, y, width, height } = ann.imagePosition;
   const px = (x / 100) * containerWidth;

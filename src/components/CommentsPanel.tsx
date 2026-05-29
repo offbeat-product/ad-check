@@ -23,11 +23,12 @@ import {
   normalizeAttachmentRows,
   type CommentAttachmentView,
 } from "@/lib/comment-attachments";
+import { isValidMediaTimestamp } from "@/lib/comment-annotations";
 
 interface CommentsPanelProps {
   checkResultId: string;
   filterItemId?: string | null;
-  onAnnotationClick?: (annotationData: unknown) => void;
+  onAnnotationClick?: (annotationData: unknown, commentId: string, mediaTimestamp?: number | null) => void;
   onCheckItemClick?: (patternId: string) => void;
   mediaCurrentTime?: number | null;
   onSeekMedia?: (seconds: number) => void;
@@ -77,6 +78,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   const [newComment, setNewComment] = useState("");
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
   const [openThreads, setOpenThreads] = useState<Set<string>>(new Set());
   const [attachments, setAttachments] = useState<File[]>([]);
   const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
@@ -341,7 +343,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
     if ((!newComment.trim() && attachments.length === 0) || !user || uploading) return;
     setUploading(true);
 
-    const timestampValue = (mediaCurrentTime != null && mediaCurrentTime > 0) ? mediaCurrentTime : null;
+    const timestampValue = isValidMediaTimestamp(mediaCurrentTime) ? mediaCurrentTime : null;
 
     try {
       const { data: insertedComment, error } = await supabase.from("comments").insert({
@@ -440,7 +442,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
     { key: "resolved" as const, label: "対応済" },
   ];
 
-  const hasMediaTimestamp = mediaCurrentTime != null && mediaCurrentTime > 0;
+  const hasMediaTimestamp = isValidMediaTimestamp(mediaCurrentTime);
 
   return (
     <div className="flex flex-col h-full bg-card">
@@ -487,6 +489,8 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
               onCheckItemClick={onCheckItemClick}
               onSeekMedia={onSeekMedia}
               fileName={fileName}
+              selectedCommentId={selectedCommentId}
+              onSelectComment={setSelectedCommentId}
               reactions={reactionsByCommentId[c.id]}
               onToggleReaction={(emoji) => void toggleReaction(c.id, emoji)}
               attachments={attachmentsByCommentId[c.id]}
@@ -534,6 +538,8 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
                         onCommentDeleted?.();
                       }}
                       isReply
+                      selectedCommentId={selectedCommentId}
+                      onSelectComment={setSelectedCommentId}
                       onSeekMedia={onSeekMedia}
                       reactions={reactionsByCommentId[r.id]}
                       onToggleReaction={(emoji) => void toggleReaction(r.id, emoji)}
@@ -605,8 +611,8 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   );
 }
 
-function CommentCard({ comment, onToggleStatus, onReply, onEdit, onDelete, isReply, replyingToName, onAnnotationClick, onCheckItemClick, onSeekMedia, fileName, onReplicate, reactions, onToggleReaction, attachments }: {
-  comment: CommentWithDraftInfo; onToggleStatus: () => void; onReply: () => void; onEdit?: (id: string, content: string) => void; onDelete?: (id: string) => void; isReply?: boolean; replyingToName?: string; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void; fileName?: string; onReplicate?: () => void; reactions?: ReactionSummary[]; onToggleReaction?: (emoji: string) => void; attachments?: CommentAttachmentView[];
+function CommentCard({ comment, onToggleStatus, onReply, onEdit, onDelete, isReply, replyingToName, onAnnotationClick, onCheckItemClick, onSeekMedia, fileName, onReplicate, reactions, onToggleReaction, attachments, selectedCommentId, onSelectComment }: {
+  comment: CommentWithDraftInfo; onToggleStatus: () => void; onReply: () => void; onEdit?: (id: string, content: string) => void; onDelete?: (id: string) => void; isReply?: boolean; replyingToName?: string; onAnnotationClick?: (data: unknown, commentId: string, mediaTimestamp?: number | null) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void; fileName?: string; onReplicate?: () => void; reactions?: ReactionSummary[]; onToggleReaction?: (emoji: string) => void; attachments?: CommentAttachmentView[]; selectedCommentId?: string | null; onSelectComment?: (commentId: string) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.content);
@@ -630,18 +636,27 @@ function CommentCard({ comment, onToggleStatus, onReply, onEdit, onDelete, isRep
         : [];
 
   const handleCardClick = () => {
+    onSelectComment?.(comment.id);
     // Auto-seek video to annotation timestamp
-    if (mediaTimestamp != null && mediaTimestamp > 0 && onSeekMedia) {
+    if (isValidMediaTimestamp(mediaTimestamp) && onSeekMedia) {
       onSeekMedia(mediaTimestamp);
     }
     if (hasAnnotation && onAnnotationClick) {
-      onAnnotationClick(comment.annotation_data);
+      onAnnotationClick(comment.annotation_data, comment.id, mediaTimestamp);
+    } else if (isValidMediaTimestamp(mediaTimestamp)) {
+      onAnnotationClick?.(comment.annotation_data, comment.id, mediaTimestamp);
     } else if (hasCheckItem && onCheckItemClick) {
       onCheckItemClick(comment.check_item_id!);
     }
   };
 
-  const isClickable = (hasAnnotation && onAnnotationClick) || (hasCheckItem && onCheckItemClick) || (mediaTimestamp != null && mediaTimestamp > 0 && onSeekMedia);
+  const isClickable = (hasAnnotation && onAnnotationClick) || (hasCheckItem && onCheckItemClick) || (isValidMediaTimestamp(mediaTimestamp) && onSeekMedia);
+
+  const handleSeekMedia = (seconds: number) => {
+    onSelectComment?.(comment.id);
+    onSeekMedia?.(seconds);
+    onAnnotationClick?.(comment.annotation_data, comment.id, mediaTimestamp);
+  };
 
   const handleSaveEdit = () => {
     if (editText.trim() && onEdit) {
@@ -660,7 +675,7 @@ function CommentCard({ comment, onToggleStatus, onReply, onEdit, onDelete, isRep
       content={comment.content}
       commentNumber={!isReply ? comment.comment_number : null}
       mediaTimestamp={mediaTimestamp}
-      onSeekMedia={onSeekMedia}
+      onSeekMedia={handleSeekMedia}
       attachments={cardAttachments}
       reactions={reactions}
       onToggleReaction={onToggleReaction}
@@ -675,6 +690,7 @@ function CommentCard({ comment, onToggleStatus, onReply, onEdit, onDelete, isRep
       onCancelEdit={() => { setIsEditing(false); setEditText(comment.content); }}
       isReply={isReply}
       replyingToName={replyingToName}
+      isSelected={selectedCommentId === comment.id}
       isDimmed={!comment.is_current_draft}
       onCardClick={isClickable ? handleCardClick : undefined}
       headerSlot={showDraftBadge ? (
@@ -694,11 +710,15 @@ function CommentCard({ comment, onToggleStatus, onReply, onEdit, onDelete, isRep
           <span className="truncate">{fileName}</span>
         </div> : null}
       contentSlot={<>
-        {hasAnnotation ? <div className="flex items-center gap-1 text-[10px] text-primary">
+        {hasAnnotation ? <button type="button" onClick={(event) => {
+          event.stopPropagation();
+          onSelectComment?.(comment.id);
+          onAnnotationClick?.(comment.annotation_data, comment.id, mediaTimestamp);
+        }} className="flex items-center gap-1 text-[10px] text-primary hover:underline">
           <Pin className="h-3 w-3" />
           📌 画像上の指摘
           {onAnnotationClick ? <span className="text-muted-foreground ml-1">（クリックで表示）</span> : null}
-        </div> : null}
+        </button> : null}
         {!hasAnnotation && hasCheckItem && onCheckItemClick ? <div className="flex items-center gap-1 text-[10px] text-primary">
           🔍 チェック項目を表示（クリック）
         </div> : null}

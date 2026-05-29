@@ -22,6 +22,7 @@ import { formatTimestamp } from "@/components/comments/TimestampBadge";
 import { downloadProjectFile, getSharedCheckDownloadPayload } from "@/lib/download-project-file";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { isValidMediaTimestamp, normalizeAnnotations, type CommentAnnotationData } from "@/lib/comment-annotations";
 
 export default function SharedViewPage() {
   const { token } = useParams<{ token: string }>();
@@ -35,6 +36,7 @@ export default function SharedViewPage() {
   const [passwordError, setPasswordError] = useState(false);
   const [paintMode, setPaintMode] = useState(false);
   const [mediaCurrentTime, setMediaCurrentTime] = useState<number | null>(null);
+  const [selectedAnnotations, setSelectedAnnotations] = useState<CommentAnnotationData[]>([]);
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [totalCommentCount, setTotalCommentCount] = useState(0);
   const mediaRef = useRef<MediaPreviewHandle>(null);
@@ -145,11 +147,13 @@ export default function SharedViewPage() {
     let content = comment;
     if (mediaRef.current) {
       const time = mediaRef.current.getCurrentTime();
-      if (time > 0) {
+      if (isValidMediaTimestamp(time)) {
         const ts = formatTimestamp(time);
         content = `[${ts}] ${comment}`;
       }
     }
+
+    const mediaTimestamp = mediaRef.current?.getCurrentTime();
 
     try {
       await supabase.functions.invoke("shared-comments", {
@@ -160,9 +164,10 @@ export default function SharedViewPage() {
           author_email: localStorage.getItem("shared_guest_email") || "shared@guest",
           content,
           annotation_data: annotations.length > 0 ? annotations[0] : null,
-          media_timestamp: mediaRef.current?.getCurrentTime() ?? null,
+          media_timestamp: isValidMediaTimestamp(mediaTimestamp) ? mediaTimestamp : null,
         },
       });
+      setSelectedAnnotations(normalizeAnnotations(annotations.length > 0 ? annotations[0] : null));
       setCommentRefreshKey((k) => k + 1);
       setPaintMode(false);
     } catch (err) {
@@ -170,11 +175,11 @@ export default function SharedViewPage() {
     }
   }, [record, token, setRightTab]);
 
-  // --- Highlight annotation from comment click ---
-  const [highlightAnnotation, setHighlightAnnotation] = useState<any>(null);
-  const handleAnnotationClick = useCallback((data: unknown) => {
-    setHighlightAnnotation(data as any);
-    setTimeout(() => setHighlightAnnotation(null), 3000);
+  const handleAnnotationClick = useCallback((data: unknown, _commentId?: string, mediaTimestamp?: number | null) => {
+    if (isValidMediaTimestamp(mediaTimestamp)) {
+      mediaRef.current?.seekTo(mediaTimestamp);
+    }
+    setSelectedAnnotations(normalizeAnnotations(data));
   }, []);
 
   const [downloadBusy, setDownloadBusy] = useState(false);
@@ -265,7 +270,7 @@ export default function SharedViewPage() {
             label={previewLabel}
             noDataMessage="プレビュー不可"
             onAnnotationSave={canWriteComments ? handleAnnotationSave : undefined}
-            highlightAnnotation={highlightAnnotation}
+            savedAnnotations={selectedAnnotations}
           />
         );
       case "video":
@@ -280,7 +285,7 @@ export default function SharedViewPage() {
             paintMode={paintMode}
             onPaintModeToggle={canWriteComments ? () => setPaintMode(!paintMode) : undefined}
             onAnnotationSave={canWriteComments ? handleAnnotationSave : undefined}
-            highlightAnnotation={highlightAnnotation}
+            savedAnnotations={selectedAnnotations}
           />
         );
       case "audio":

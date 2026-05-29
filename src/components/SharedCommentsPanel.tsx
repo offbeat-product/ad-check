@@ -17,6 +17,7 @@ import {
   normalizeAttachmentRows,
   type CommentAttachmentView,
 } from "@/lib/comment-attachments";
+import { isValidMediaTimestamp } from "@/lib/comment-annotations";
 
 const GUEST_TOKEN_KEY = "ad_check_shared_guest_token";
 
@@ -37,7 +38,7 @@ interface SharedCommentsPanelProps {
   checkResultId: string;
   shareToken: string;
   allowWrite: boolean;
-  onAnnotationClick?: (data: unknown) => void;
+  onAnnotationClick?: (data: unknown, commentId: string, mediaTimestamp?: number | null) => void;
   mediaCurrentTime?: number | null;
   onSeekMedia?: (seconds: number) => void;
   refreshKey?: number;
@@ -76,6 +77,7 @@ export default function SharedCommentsPanel({
   const [newComment, setNewComment] = useState("");
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
   const [openThreads, setOpenThreads] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
   const [posting, setPosting] = useState(false);
@@ -237,7 +239,7 @@ export default function SharedCommentsPanel({
           author_email: guestEmail.trim() || "shared@guest",
           content,
           check_item_id: null,
-          media_timestamp: (!parentId && mediaCurrentTime != null && mediaCurrentTime > 0) ? mediaCurrentTime : null,
+          media_timestamp: (!parentId && isValidMediaTimestamp(mediaCurrentTime)) ? mediaCurrentTime : null,
           parent_id: parentId || null,
           guest_token: guestToken,
           attachments: uploadAttachments,
@@ -378,6 +380,8 @@ export default function SharedCommentsPanel({
                 comment={c}
                 onAnnotationClick={onAnnotationClick}
                 onSeekMedia={onSeekMedia}
+                selectedCommentId={selectedCommentId}
+                onSelectComment={setSelectedCommentId}
                 onReply={allowWrite ? () => startReply(c.id, c.id, c.author_name) : undefined}
               isOwn={c.guest_token != null && c.guest_token === guestToken}
               isEditing={editingId === c.id}
@@ -409,6 +413,8 @@ export default function SharedCommentsPanel({
                     <SharedCommentCard
                       comment={r}
                       onSeekMedia={onSeekMedia}
+                      selectedCommentId={selectedCommentId}
+                      onSelectComment={setSelectedCommentId}
                       onReply={allowWrite ? () => startReply(c.id, r.id, r.author_name) : undefined}
                       isReply
                       isOwn={r.guest_token != null && r.guest_token === guestToken}
@@ -467,7 +473,7 @@ export default function SharedCommentsPanel({
                 <User className="h-3 w-3" />{guestName}
                 <button onClick={() => setShowGuestForm(true)} className="text-primary underline">変更</button>
               </div>
-              {mediaCurrentTime != null && mediaCurrentTime > 0 && (
+              {isValidMediaTimestamp(mediaCurrentTime) && (
                 <div className="flex items-center gap-1.5 text-[10px] text-primary">
                   🕐 再生位置をコメントに自動記録します
                 </div>
@@ -502,10 +508,10 @@ export default function SharedCommentsPanel({
 
 function SharedCommentCard({
   comment, onAnnotationClick, onSeekMedia, onReply, isReply,
-  replyingToName, isOwn, isEditing, editingText, setEditingText, onStartEdit, onCancelEdit, onEdit, onDelete, reactions, onToggleReaction, attachments,
+  replyingToName, isOwn, isEditing, editingText, setEditingText, onStartEdit, onCancelEdit, onEdit, onDelete, reactions, onToggleReaction, attachments, selectedCommentId, onSelectComment,
 }: {
   comment: CommentWithDraftInfo;
-  onAnnotationClick?: (data: unknown) => void;
+  onAnnotationClick?: (data: unknown, commentId: string, mediaTimestamp?: number | null) => void;
   onSeekMedia?: (seconds: number) => void;
   onReply?: () => void;
   isReply?: boolean;
@@ -521,6 +527,8 @@ function SharedCommentCard({
   reactions?: ReactionSummary[];
   onToggleReaction?: (emoji: string) => void;
   attachments?: CommentAttachmentView[];
+  selectedCommentId?: string | null;
+  onSelectComment?: (commentId: string) => void;
 }) {
   const hasAnnotation = !!comment.annotation_data;
   const showDraftBadge = !comment.is_current_draft && !!comment.draft_label;
@@ -536,7 +544,11 @@ function SharedCommentCard({
       content={comment.content}
       commentNumber={!isReply ? comment.comment_number : null}
       mediaTimestamp={comment.media_timestamp}
-      onSeekMedia={onSeekMedia}
+      onSeekMedia={(seconds) => {
+        onSelectComment?.(comment.id);
+        onSeekMedia?.(seconds);
+        onAnnotationClick?.(comment.annotation_data, comment.id, comment.media_timestamp);
+      }}
       attachments={attachments}
       reactions={reactions}
       onToggleReaction={onToggleReaction}
@@ -550,6 +562,7 @@ function SharedCommentCard({
       onCancelEdit={onCancelEdit}
       isReply={isReply}
       replyingToName={replyingToName}
+      isSelected={selectedCommentId === comment.id}
       isDimmed={!comment.is_current_draft}
       headerSlot={showDraftBadge ? (
             <span
@@ -563,7 +576,20 @@ function SharedCommentCard({
               {comment.draft_label}
             </span>
           ) : null}
-      contentSlot={hasAnnotation ? <button onClick={() => onAnnotationClick?.(comment.annotation_data)} className="text-[10px] text-primary hover:underline">
+      onCardClick={
+        hasAnnotation || isValidMediaTimestamp(comment.media_timestamp)
+          ? () => {
+              onSelectComment?.(comment.id);
+              if (isValidMediaTimestamp(comment.media_timestamp)) onSeekMedia?.(comment.media_timestamp);
+              if (hasAnnotation) onAnnotationClick?.(comment.annotation_data, comment.id, comment.media_timestamp);
+            }
+          : undefined
+      }
+      contentSlot={hasAnnotation ? <button onClick={(event) => {
+          event.stopPropagation();
+          onSelectComment?.(comment.id);
+          onAnnotationClick?.(comment.annotation_data, comment.id, comment.media_timestamp);
+        }} className="text-[10px] text-primary hover:underline">
           📌 アノテーションを表示
         </button> : null}
     />

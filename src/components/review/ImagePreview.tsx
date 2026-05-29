@@ -5,17 +5,9 @@ import AnnotationCanvas from "@/components/AnnotationCanvas";
 import type { MentionMember } from "@/components/comments/MentionInput";
 import { Pin } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { CommentAnnotationData } from "@/lib/comment-annotations";
 import type { CheckMarker } from "@/lib/marker-positions";
 import { checkItemStr } from "@/lib/check-display";
-
-interface AnnotationData {
-  type: string;
-  points: { x: number; y: number }[];
-  color: string;
-  strokeWidth: number;
-  text?: string;
-  imagePosition?: { x: number; y: number; width: number; height: number };
-}
 
 interface ImagePreviewProps {
   imageSrc: string | null | undefined;
@@ -27,8 +19,8 @@ interface ImagePreviewProps {
   label?: string;
   noDataMessage?: string;
   overlay?: React.ReactNode;
-  savedAnnotations?: AnnotationData[];
-  highlightAnnotation?: AnnotationData | null;
+  savedAnnotations?: CommentAnnotationData[];
+  highlightAnnotation?: CommentAnnotationData | null;
   members?: MentionMember[];
 }
 
@@ -85,8 +77,8 @@ export default function ImagePreview({
           ))}
         </TooltipProvider>
 
-        {/* Saved annotation overlays (from comments) - only visible in paint mode */}
-        {paintMode && savedAnnotations && savedAnnotations.length > 0 ? <svg className="absolute inset-0 w-full h-full pointer-events-none z-[15]" viewBox={`0 0 ${imageSize.width || 800} ${imageSize.height || 400}`} preserveAspectRatio="none">
+        {/* Saved annotation overlays (from selected comment only) */}
+        {savedAnnotations && savedAnnotations.length > 0 ? <svg className="absolute inset-0 w-full h-full pointer-events-none z-[15]" viewBox={`0 0 ${imageSize.width || 800} ${imageSize.height || 400}`} preserveAspectRatio="none">
             {savedAnnotations.map((ann, i) => (
               <SavedAnnotationSvg key={i} ann={ann} containerWidth={imageSize.width || 800} containerHeight={imageSize.height || 400} />
             ))}
@@ -105,7 +97,7 @@ export default function ImagePreview({
   );
 }
 
-function SavedAnnotationSvg({ ann, containerWidth, containerHeight, highlight }: { ann: AnnotationData; containerWidth: number; containerHeight: number; highlight?: boolean }) {
+function SavedAnnotationSvg({ ann, containerWidth, containerHeight, highlight }: { ann: CommentAnnotationData; containerWidth: number; containerHeight: number; highlight?: boolean }) {
   if (!ann.imagePosition) return null;
   const { x, y, width, height } = ann.imagePosition;
   const px = (x / 100) * containerWidth;

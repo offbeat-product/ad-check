@@ -60,15 +60,7 @@ import { useToast } from "@/hooks/use-toast";
 import { FILE_STATUS_CONFIG } from "@/lib/db-types";
 import { useCheckProgress, ESTIMATED_DURATION } from "@/hooks/useCheckProgress";
 import { Progress } from "@/components/ui/progress";
-
-interface AnnotationData {
-  type: string;
-  points: { x: number; y: number }[];
-  color: string;
-  strokeWidth: number;
-  text?: string;
-  imagePosition?: { x: number; y: number; width: number; height: number };
-}
+import { isValidMediaTimestamp, normalizeAnnotations, type CommentAnnotationData } from "@/lib/comment-annotations";
 
 interface FileReviewPageProps {
   isCreatorMode?: boolean;
@@ -142,8 +134,7 @@ export default function FileReviewPage({
   const [shareOpen, setShareOpen] = useState(false);
   const [uploadRevisionOpen, setUploadRevisionOpen] = useState(false);
   const [versions, setVersions] = useState<ProjectFile[]>([]);
-  const [savedAnnotations, setSavedAnnotations] = useState<AnnotationData[]>([]);
-  const [highlightAnnotation, setHighlightAnnotation] = useState<AnnotationData | null>(null);
+  const [selectedAnnotations, setSelectedAnnotations] = useState<CommentAnnotationData[]>([]);
   const [siblingFiles, setSiblingFiles] = useState<ProjectFile[]>([]);
   const [editingName, setEditingName] = useState(false);
   const [editName, setEditName] = useState("");
@@ -236,7 +227,7 @@ export default function FileReviewPage({
     if (!isMedia || rightTab !== "comments") { setMediaCurrentTime(null); return; }
     const interval = setInterval(() => {
       const t = mediaPreviewRef.current?.getCurrentTime() ?? 0;
-      setMediaCurrentTime(t > 0 ? t : null);
+      setMediaCurrentTime(isValidMediaTimestamp(t) ? t : null);
     }, 500);
     return () => clearInterval(interval);
   }, [rightTab, file?.process_type]);
@@ -1117,42 +1108,6 @@ export default function FileReviewPage({
     exportCsv(items, `checkmate_${file?.file_name}_${Date.now()}.csv`);
   };
 
-  // Fetch saved annotations from comments
-  const fetchSavedAnnotations = useCallback(async () => {
-    if (creatorMode) {
-      const anns: AnnotationData[] = [];
-      creatorComments.forEach((c) => {
-        const ad = c.annotation_data as Record<string, unknown> | null;
-        if (ad && Array.isArray(ad.annotations)) {
-          ad.annotations.forEach((a: unknown) => anns.push(a as AnnotationData));
-        } else if (ad && ad.type) {
-          anns.push(ad as unknown as AnnotationData);
-        }
-      });
-      setSavedAnnotations(anns);
-      return;
-    }
-    if (!record?.id) return;
-    const { data, error } = await supabase
-      .from("comments")
-      .select("annotation_data")
-      .eq("check_result_id", record.id)
-      .not("annotation_data", "is", null);
-    if (handleSupabaseError(error, "saved annotations")) return;
-    const anns: AnnotationData[] = [];
-    (data ?? []).forEach((c) => {
-      const ad = c.annotation_data as Record<string, unknown> | null;
-      if (ad && Array.isArray(ad.annotations)) {
-        ad.annotations.forEach((a: unknown) => anns.push(a as AnnotationData));
-      } else if (ad && ad.type) {
-        anns.push(ad as unknown as AnnotationData);
-      }
-    });
-    setSavedAnnotations(anns);
-  }, [record?.id, creatorMode, creatorComments]);
-
-  useEffect(() => { fetchSavedAnnotations(); }, [fetchSavedAnnotations]);
-
   // Fetch workspace members for mention in paint mode
   useEffect(() => {
     if (creatorMode) {
@@ -1194,11 +1149,11 @@ export default function FileReviewPage({
       annotation_data: { annotations } as unknown as Json,
       status: "open",
       mentions: mentionedUserIds && mentionedUserIds.length > 0 ? mentionedUserIds : null,
-      media_timestamp: isMedia && currentMediaTime && currentMediaTime > 0 ? currentMediaTime : null,
+      media_timestamp: isMedia && isValidMediaTimestamp(currentMediaTime) ? currentMediaTime : null,
     }]).select("id").single();
     if (!handleSupabaseError(error, "annotation save")) {
       toast({ title: "コメントを保存しました" });
-      fetchSavedAnnotations();
+      setSelectedAnnotations(normalizeAnnotations({ annotations }));
       setCommentRefreshKey((k) => k + 1);
 
       // Save correction log if requested
@@ -1259,19 +1214,11 @@ export default function FileReviewPage({
     }
   };
 
-  const handleAnnotationClick = useCallback((annotationData: unknown) => {
-    const ad = annotationData as Record<string, unknown> | null;
-    if (!ad) return;
-    let ann: AnnotationData | null = null;
-    if (Array.isArray(ad.annotations) && ad.annotations.length > 0) {
-      ann = ad.annotations[0] as AnnotationData;
-    } else if (ad.type) {
-      ann = ad as unknown as AnnotationData;
+  const handleAnnotationClick = useCallback((annotationData: unknown, _commentId?: string, mediaTimestamp?: number | null) => {
+    if (isValidMediaTimestamp(mediaTimestamp)) {
+      mediaPreviewRef.current?.seekTo(mediaTimestamp);
     }
-    if (ann) {
-      setHighlightAnnotation(ann);
-      setTimeout(() => setHighlightAnnotation(null), 2500);
-    }
+    setSelectedAnnotations(normalizeAnnotations(annotationData));
   }, []);
 
   // Handle right panel marker click → jump to left panel location
@@ -1674,8 +1621,7 @@ export default function FileReviewPage({
                 setPaintMode(!paintMode);
               }}
               onAnnotationSave={handleAnnotationSave}
-              savedAnnotations={savedAnnotations}
-              highlightAnnotation={highlightAnnotation}
+              savedAnnotations={selectedAnnotations}
               members={mentionMembers}
               submissionType={file.submission_type}
               onSubmitToClient={validateAndOpenSubmit}
@@ -1701,8 +1647,7 @@ export default function FileReviewPage({
                 onAnnotationSave={handleAnnotationSave}
                 label={`${client?.name} / ${product?.name} / スタイルフレーム`}
                 noDataMessage="プレビューなし"
-                savedAnnotations={savedAnnotations}
-                highlightAnnotation={highlightAnnotation}
+                savedAnnotations={selectedAnnotations}
                 members={mentionMembers}
                 overlay={!hasCheckResult && !checking && canCheck ? (
                   <div className="absolute inset-0 flex items-center justify-center bg-background/60">
@@ -1728,8 +1673,7 @@ export default function FileReviewPage({
                     setPaintMode(!paintMode);
                   }}
                   onAnnotationSave={handleAnnotationSave}
-                  savedAnnotations={savedAnnotations}
-                  highlightAnnotation={highlightAnnotation}
+                  savedAnnotations={selectedAnnotations}
                   members={mentionMembers}
                   boundingBox={activeCheckItem?.bounding_box ?? null}
                   boundingBoxLabel={activeCheckItem?.item}
@@ -1857,7 +1801,7 @@ export default function FileReviewPage({
             seekToCheckItem(item);
           }
         }}
-        onCommentDeleted={fetchSavedAnnotations}
+        onCommentDeleted={() => setSelectedAnnotations([])}
         commentRefreshKey={commentRefreshKey}
         comparisonMode={comparisonMode}
         comparisonBeforeData={comparisonDrafts[comparisonActivePairIndex]?.data ?? null}
@@ -2103,6 +2047,7 @@ function CreatorReadonlyCommentsPanel({
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
   const [replyingTo, setReplyingTo] = useState<CreatorReplyTarget | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
   const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
   const [openThreads, setOpenThreads] = useState<Set<string>>(new Set());
   const [attachmentsByCommentId, setAttachmentsByCommentId] = useState<Record<string, CommentAttachmentView[]>>({});
@@ -2321,6 +2266,8 @@ function CreatorReadonlyCommentsPanel({
                 isOwn={parent.creator_id != null && parent.creator_id === myCreatorId}
                 onAnnotationClick={onAnnotationClick}
                 onSeekMedia={onSeekMedia}
+                selectedCommentId={selectedCommentId}
+                onSelectComment={setSelectedCommentId}
                 onStartReply={() => startReply(parent.id, parent.id, parent.author_name)}
               onStartEdit={() => startEdit(parent)}
               onDelete={() => handleDelete(parent.id)}
@@ -2354,6 +2301,8 @@ function CreatorReadonlyCommentsPanel({
                       isOwn={reply.creator_id != null && reply.creator_id === myCreatorId}
                       onAnnotationClick={onAnnotationClick}
                       onSeekMedia={onSeekMedia}
+                      selectedCommentId={selectedCommentId}
+                      onSelectComment={setSelectedCommentId}
                       onStartReply={() => startReply(parent.id, reply.id, reply.author_name)}
                       onStartEdit={() => startEdit(reply)}
                       onDelete={() => handleDelete(reply.id)}
@@ -2421,6 +2370,8 @@ function CreatorCommentItem({
   isOwn,
   onAnnotationClick,
   onSeekMedia,
+  selectedCommentId,
+  onSelectComment,
   onStartReply,
   onStartEdit,
   onDelete,
@@ -2437,8 +2388,10 @@ function CreatorCommentItem({
   isReply?: boolean;
   replyingToName?: string;
   isOwn: boolean;
-  onAnnotationClick: (annotationData: unknown) => void;
+  onAnnotationClick: (annotationData: unknown, commentId: string, mediaTimestamp?: number | null) => void;
   onSeekMedia: (seconds: number) => void;
+  selectedCommentId?: string | null;
+  onSelectComment?: (commentId: string) => void;
   onStartReply?: () => void;
   onStartEdit: () => void;
   onDelete: () => void;
@@ -2462,7 +2415,11 @@ function CreatorCommentItem({
       content={comment.content}
       commentNumber={!isReply ? comment.comment_number : null}
       mediaTimestamp={comment.media_timestamp}
-      onSeekMedia={onSeekMedia}
+      onSeekMedia={(seconds) => {
+        onSelectComment?.(comment.id);
+        onSeekMedia(seconds);
+        onAnnotationClick(comment.annotation_data, comment.id, comment.media_timestamp);
+      }}
       attachments={attachments}
       reactions={reactions}
       onToggleReaction={onToggleReaction}
@@ -2476,10 +2433,15 @@ function CreatorCommentItem({
       onCancelEdit={onCancelEdit}
       isReply={isReply}
       replyingToName={replyingToName}
+      isSelected={selectedCommentId === comment.id}
       contentSlot={comment.annotation_data ? <button
             type="button"
             className="text-[10px] text-primary hover:underline"
-            onClick={() => onAnnotationClick(comment.annotation_data)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onSelectComment?.(comment.id);
+              onAnnotationClick(comment.annotation_data, comment.id, comment.media_timestamp);
+            }}
           >
             注釈を表示
           </button> : null}
