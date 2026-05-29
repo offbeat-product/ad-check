@@ -17,6 +17,14 @@ import { getEffectiveSubmitLabel } from "@/lib/check-display";
 import type { MentionMember } from "@/components/comments/MentionInput";
 import { RichCommentCard, type CommentRole, type ReactionSummary } from "@/components/comments/RichCommentCard";
 import { useCommentReactions } from "@/hooks/useCommentReactions";
+import {
+  assertAttachmentSize,
+  filesToUploads,
+  humanSize,
+  isImage,
+  normalizeAttachmentRows,
+  type CommentAttachmentView,
+} from "@/lib/comment-attachments";
 import type { Json } from "@/integrations/supabase/types";
 import type { ProjectFile, Product, Project, Client, CheckResultRow } from "@/lib/db-types";
 import { parseCheckResultRow, type CheckResultWithParsedItems } from "@/lib/parse-check-result";
@@ -42,7 +50,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, ArrowDown, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight, Lock, Unlock, Trash2, Pencil, CalendarDays, User, MoreHorizontal, CircleCheckBig } from "lucide-react";
+import { ArrowLeft, ArrowDown, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight, Lock, Unlock, Trash2, Pencil, CalendarDays, User, MoreHorizontal, CircleCheckBig, FileText, Paperclip, X } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
@@ -2082,8 +2090,21 @@ function CreatorReadonlyCommentsPanel({
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
+  const [attachmentsByCommentId, setAttachmentsByCommentId] = useState<Record<string, CommentAttachmentView[]>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
+  const replyFileInputRef = useRef<HTMLInputElement>(null);
+
+  const callCreatorComments = useCallback(async (payload: Record<string, unknown>) => {
+    const { data, error: invokeError } = await supabase.functions.invoke.bind(supabase.functions)("creator-comments", {
+      body: { share_token: shareToken, ...payload },
+    });
+    if (invokeError) throw invokeError;
+    const response = data as { error?: string } | null;
+    if (response?.error) throw new Error(response.error);
+    return data;
+  }, [shareToken]);
 
   const filtered = comments.filter((c) => {
     if (tab === "open") return c.status === "open";
@@ -2124,27 +2145,65 @@ function CreatorReadonlyCommentsPanel({
     { key: "resolved" as const, label: "対応済" },
   ];
 
-  const callCreatorComments = async (payload: Record<string, unknown>) => {
-    const { data, error: invokeError } = await supabase.functions.invoke.bind(supabase.functions)("creator-comments", {
-      body: { share_token: shareToken, ...payload },
-    });
-    if (invokeError) throw invokeError;
-    const response = data as { error?: string } | null;
-    if (response?.error) throw new Error(response.error);
-    return data;
-  };
+  useEffect(() => {
+    const commentIds = comments.map((comment) => comment.id);
+    if (commentIds.length === 0) {
+      setAttachmentsByCommentId({});
+      return;
+    }
+
+    let cancelled = false;
+    void (async () => {
+      try {
+        const data = await callCreatorComments({
+          action: "get_attachment_urls",
+          comment_ids: commentIds,
+        });
+        if (cancelled) return;
+        const rows = normalizeAttachmentRows(Array.isArray(data) ? data : (data as { attachments?: unknown[] } | null)?.attachments);
+        const grouped: Record<string, CommentAttachmentView[]> = {};
+        for (const row of rows) {
+          if (!row.comment_id) continue;
+          (grouped[row.comment_id] ??= []).push(row);
+        }
+        setAttachmentsByCommentId(grouped);
+      } catch (err) {
+        if (!cancelled) {
+          console.error("[creator attachment urls]", err);
+          setAttachmentsByCommentId({});
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [callCreatorComments, comments]);
 
   const handleReply = async (parentId: string) => {
     const content = replyText.trim();
-    if (!content) return;
+    if (!content && replyAttachments.length === 0) return;
     try {
-      await callCreatorComments({ action: "create_reply", parent_id: parentId, content });
+      const uploadAttachments = replyAttachments.length > 0 ? await filesToUploads(replyAttachments) : [];
+      await callCreatorComments({ action: "create_reply", parent_id: parentId, content, attachments: uploadAttachments });
       setReplyingTo(null);
       setReplyText("");
+      setReplyAttachments([]);
       await onRefetch();
     } catch (err) {
       console.error("[creator reply]", err);
       window.alert("返信の投稿に失敗しました。");
+    }
+  };
+
+  const selectReplyFiles = (files: FileList | null) => {
+    if (!files) return;
+    const nextFiles = Array.from(files);
+    try {
+      nextFiles.forEach(assertAttachmentSize);
+      setReplyAttachments((current) => [...current, ...nextFiles]);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "添付ファイルの選択に失敗しました");
     }
   };
 
@@ -2217,6 +2276,7 @@ function CreatorReadonlyCommentsPanel({
               onStartReply={() => {
                 setReplyingTo(replyingTo === parent.id ? null : parent.id);
                 setReplyText("");
+                setReplyAttachments([]);
               }}
               onStartEdit={() => startEdit(parent)}
               onDelete={() => handleDelete(parent.id)}
@@ -2227,6 +2287,7 @@ function CreatorReadonlyCommentsPanel({
               onCancelEdit={cancelEdit}
               reactions={reactionsByCommentId[parent.id]}
               onToggleReaction={(emoji) => void toggleReaction(parent.id, emoji)}
+              attachments={attachmentsByCommentId[parent.id]}
             />
             {(repliesByParent[parent.id] ?? []).length > 0 ? (
               <div className="ml-5 mt-2 space-y-2 border-l border-border/70 pl-3">
@@ -2247,6 +2308,7 @@ function CreatorReadonlyCommentsPanel({
                     onCancelEdit={cancelEdit}
                     reactions={reactionsByCommentId[reply.id]}
                     onToggleReaction={(emoji) => void toggleReaction(reply.id, emoji)}
+                    attachments={attachmentsByCommentId[reply.id]}
                   />
                 ))}
               </div>
@@ -2260,12 +2322,28 @@ function CreatorReadonlyCommentsPanel({
                   className="min-h-[50px] text-xs"
                 />
                 <div className="flex gap-1.5">
-                  <Button size="sm" onClick={() => handleReply(parent.id)} disabled={!replyText.trim()} className="h-6 text-[10px] px-2">
+                  <Button size="sm" onClick={() => handleReply(parent.id)} disabled={!replyText.trim() && replyAttachments.length === 0} className="h-6 text-[10px] px-2">
                     返信する
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => { setReplyingTo(null); setReplyText(""); }} className="h-6 text-[10px] px-2">
+                  <Button size="sm" variant="ghost" onClick={() => { setReplyingTo(null); setReplyText(""); setReplyAttachments([]); }} className="h-6 text-[10px] px-2">
                     キャンセル
                   </Button>
+                </div>
+                <CreatorAttachmentPreview files={replyAttachments} onRemove={(index) => setReplyAttachments((current) => current.filter((_, i) => i !== index))} />
+                <div className="flex items-center gap-1">
+                  <button type="button" onClick={() => replyFileInputRef.current?.click()} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
+                    <Paperclip className="h-3.5 w-3.5" />
+                  </button>
+                  <input
+                    ref={replyFileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={(event) => {
+                      selectReplyFiles(event.target.files);
+                      event.target.value = "";
+                    }}
+                  />
                 </div>
               </div>
             ) : null}
@@ -2292,6 +2370,7 @@ function CreatorCommentItem({
   onCancelEdit,
   reactions,
   onToggleReaction,
+  attachments,
 }: {
   comment: CreatorFileComment;
   isReply?: boolean;
@@ -2308,6 +2387,7 @@ function CreatorCommentItem({
   onCancelEdit: () => void;
   reactions?: ReactionSummary[];
   onToggleReaction?: (emoji: string) => void;
+  attachments?: CommentAttachmentView[];
 }) {
   const role: CommentRole = comment.creator_id ? "creator" : "internal";
 
@@ -2320,6 +2400,7 @@ function CreatorCommentItem({
       content={comment.content}
       mediaTimestamp={comment.media_timestamp}
       onSeekMedia={onSeekMedia}
+      attachments={attachments}
       reactions={reactions}
       onToggleReaction={onToggleReaction}
       onReply={!isReply ? onStartReply : undefined}
@@ -2339,6 +2420,34 @@ function CreatorCommentItem({
             注釈を表示
           </button> : null}
     />
+  );
+}
+
+function CreatorAttachmentPreview({ files, onRemove }: { files: File[]; onRemove: (index: number) => void }) {
+  if (files.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {files.map((file, index) => {
+        const previewUrl = isImage(file.type) ? URL.createObjectURL(file) : null;
+        return (
+          <div key={`${file.name}-${file.size}-${index}`} className="flex max-w-full items-center gap-2 rounded-md bg-muted p-2">
+            {previewUrl ? (
+              <img src={previewUrl} alt="" className="h-10 w-10 rounded object-cover" onLoad={() => URL.revokeObjectURL(previewUrl)} />
+            ) : (
+              <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
+            )}
+            <div className="min-w-0">
+              <p className="truncate text-xs text-foreground">{file.name}</p>
+              <p className="text-[10px] text-muted-foreground">{humanSize(file.size)}</p>
+            </div>
+            <button type="button" onClick={() => onRemove(index)} className="shrink-0">
+              <X className="h-3 w-3 text-muted-foreground" />
+            </button>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 

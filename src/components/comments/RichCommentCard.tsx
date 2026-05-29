@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { Check, Clock3, Copy, MessageCircleReply, MoreHorizontal, Pencil, SmilePlus, Trash2 } from "lucide-react";
+import { Check, Clock3, Copy, FileText, MessageCircleReply, MoreHorizontal, Pencil, SmilePlus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { humanSize, isImage, type CommentAttachmentView } from "@/lib/comment-attachments";
 import { COMMENT_REACTION_CHOICES } from "@/lib/comment-reactions";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +23,7 @@ export interface RichCommentCardProps {
   content: string;
   mediaTimestamp?: number | null;
   onSeekMedia?: (seconds: number) => void;
+  attachments?: CommentAttachmentView[];
   reactions?: ReactionSummary[];
   onToggleReaction?: (emoji: string) => void;
   onReply?: () => void;
@@ -127,6 +129,7 @@ export function RichCommentCard({
   content,
   mediaTimestamp,
   onSeekMedia,
+  attachments = [],
   reactions = [],
   onToggleReaction,
   onReply,
@@ -261,6 +264,47 @@ export function RichCommentCard({
           )}
 
           {contentSlot}
+
+          {attachments.length > 0 ? (
+            <div className="flex flex-wrap gap-2" onClick={(event) => event.stopPropagation()}>
+              {attachments.map((attachment) => (
+                <a
+                  key={attachment.id ?? `${attachment.file_name}-${attachment.signed_url}`}
+                  href={attachment.signed_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  download={attachment.file_name}
+                  className={cn(
+                    "group overflow-hidden rounded-md border border-border/70 bg-muted/30 hover:border-primary/40 hover:bg-primary/5",
+                    isImage(attachment.mime_type) ? "block w-24" : "inline-flex max-w-full items-center gap-2 px-2 py-1.5"
+                  )}
+                  title={attachment.file_name}
+                >
+                  {isImage(attachment.mime_type) ? (
+                    <>
+                      <img
+                        src={attachment.signed_url}
+                        alt={attachment.file_name}
+                        className="h-20 w-24 object-cover"
+                        loading="lazy"
+                      />
+                      <span className="block truncate px-1.5 py-1 text-[10px] text-muted-foreground group-hover:text-foreground">
+                        {attachment.file_name}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate text-xs text-foreground">{attachment.file_name}</span>
+                      {humanSize(attachment.size_bytes) ? (
+                        <span className="shrink-0 text-[10px] text-muted-foreground">{humanSize(attachment.size_bytes)}</span>
+                      ) : null}
+                    </>
+                  )}
+                </a>
+              ))}
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap items-center gap-1.5" onClick={(event) => event.stopPropagation()}>
             {visibleReactions.map((reaction) => (
