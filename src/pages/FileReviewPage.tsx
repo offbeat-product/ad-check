@@ -60,7 +60,7 @@ import { useToast } from "@/hooks/use-toast";
 import { FILE_STATUS_CONFIG } from "@/lib/db-types";
 import { useCheckProgress, ESTIMATED_DURATION } from "@/hooks/useCheckProgress";
 import { Progress } from "@/components/ui/progress";
-import { isValidMediaTimestamp, normalizeAnnotations, resolveSeekSeconds, type CommentAnnotationData } from "@/lib/comment-annotations";
+import { isValidMediaTimestamp, normalizeAnnotations, resolveSeekSeconds, shouldShowTimedAnnotation, type CommentAnnotationData } from "@/lib/comment-annotations";
 
 interface FileReviewPageProps {
   isCreatorMode?: boolean;
@@ -136,6 +136,7 @@ export default function FileReviewPage({
   const [versions, setVersions] = useState<ProjectFile[]>([]);
   const [selectedAnnotations, setSelectedAnnotations] = useState<CommentAnnotationData[]>([]);
   const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
+  const [selectedAnnotationTimestamp, setSelectedAnnotationTimestamp] = useState<number | null>(null);
   const [siblingFiles, setSiblingFiles] = useState<ProjectFile[]>([]);
   const [editingName, setEditingName] = useState(false);
   const [editName, setEditName] = useState("");
@@ -187,6 +188,12 @@ export default function FileReviewPage({
   const rootCheckResultId = record?.parent_check_result_id || record?.id || null;
   const { items, markers, commentCounts, paintMode, setPaintMode, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
     useReviewState(rootCheckResultId, checkItems);
+  const aiInputMode = file ? AI_CHECK_CONFIG[file.process_type]?.inputMode : null;
+  const isTimedMedia = aiInputMode === "audio" || aiInputMode === "video";
+  const visibleSelectedAnnotations = useMemo(() => {
+    if (!isTimedMedia) return selectedAnnotations;
+    return shouldShowTimedAnnotation(mediaCurrentTime, selectedAnnotationTimestamp) ? selectedAnnotations : [];
+  }, [isTimedMedia, mediaCurrentTime, selectedAnnotationTimestamp, selectedAnnotations]);
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent("ad-check-comment-panel-state", { detail: { open: rightTab === "comments" } }));
@@ -1155,6 +1162,10 @@ export default function FileReviewPage({
     if (!handleSupabaseError(error, "annotation save")) {
       toast({ title: "コメントを保存しました" });
       setSelectedAnnotations(normalizeAnnotations({ annotations }));
+      setSelectedAnnotationTimestamp(isValidMediaTimestamp(currentMediaTime) ? currentMediaTime : null);
+      if (isValidMediaTimestamp(currentMediaTime)) {
+        setMediaCurrentTime(currentMediaTime);
+      }
       setCommentRefreshKey((k) => k + 1);
 
       // Save correction log if requested
@@ -1219,8 +1230,10 @@ export default function FileReviewPage({
     if (commentId) {
       setSelectedCommentId(commentId);
     }
+    setSelectedAnnotationTimestamp(isValidMediaTimestamp(mediaTimestamp) ? mediaTimestamp : null);
     if (isValidMediaTimestamp(mediaTimestamp)) {
       mediaPreviewRef.current?.seekTo(mediaTimestamp);
+      setMediaCurrentTime(mediaTimestamp);
     }
     setSelectedAnnotations(normalizeAnnotations(annotationData));
   }, []);
@@ -1229,12 +1242,14 @@ export default function FileReviewPage({
     setSelectedCommentId(commentId);
     if (!commentId) {
       setSelectedAnnotations([]);
+      setSelectedAnnotationTimestamp(null);
     }
   }, []);
 
   const handleCommentDeleted = useCallback(() => {
     setSelectedCommentId(null);
     setSelectedAnnotations([]);
+    setSelectedAnnotationTimestamp(null);
   }, []);
 
   // Handle right panel marker click → jump to left panel location
@@ -1637,7 +1652,7 @@ export default function FileReviewPage({
                 setPaintMode(!paintMode);
               }}
               onAnnotationSave={handleAnnotationSave}
-              savedAnnotations={selectedAnnotations}
+              savedAnnotations={visibleSelectedAnnotations}
               members={mentionMembers}
               submissionType={file.submission_type}
               onSubmitToClient={validateAndOpenSubmit}
@@ -1663,7 +1678,7 @@ export default function FileReviewPage({
                 onAnnotationSave={handleAnnotationSave}
                 label={`${client?.name} / ${product?.name} / スタイルフレーム`}
                 noDataMessage="プレビューなし"
-                savedAnnotations={selectedAnnotations}
+                savedAnnotations={visibleSelectedAnnotations}
                 members={mentionMembers}
                 overlay={!hasCheckResult && !checking && canCheck ? (
                   <div className="absolute inset-0 flex items-center justify-center bg-background/60">
@@ -1689,7 +1704,7 @@ export default function FileReviewPage({
                     setPaintMode(!paintMode);
                   }}
                   onAnnotationSave={handleAnnotationSave}
-                  savedAnnotations={selectedAnnotations}
+                  savedAnnotations={visibleSelectedAnnotations}
                   members={mentionMembers}
                   boundingBox={activeCheckItem?.bounding_box ?? null}
                   boundingBoxLabel={activeCheckItem?.item}

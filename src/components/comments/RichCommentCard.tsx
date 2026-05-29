@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { Check, Clock3, Copy, FileText, MessageCircleReply, Pencil, SmilePlus, Trash2 } from "lucide-react";
+import { Check, Copy, FileText, MessageCircleReply, Pencil, SmilePlus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { humanSize, isImage, type CommentAttachmentView } from "@/lib/comment-attachments";
@@ -96,13 +96,6 @@ function getFullTime(iso: string) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
-}
-
-function formatTimestamp(seconds: number) {
-  const safeSeconds = Math.max(0, Math.floor(seconds));
-  const minutes = Math.floor(safeSeconds / 60);
-  const remainingSeconds = safeSeconds % 60;
-  return `${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
 }
 
 const COMMENT_CONTENT_TOKEN_RE = /(@[^\s@]+)|(\[\d+:\d{2}\.\d{3}\])/g;
@@ -298,18 +291,6 @@ export function RichCommentCard({
               <MessageCircleReply className="h-3 w-3" />
               {replyingToName}さんへの返信
             </div>
-          ) : null}
-
-          {mediaTimestamp != null ? (
-            <button
-              type="button"
-              onClick={stopPropagation(() => onSeekMedia?.(mediaTimestamp))}
-              className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:text-foreground"
-              title="クリックで動画の該当位置へ移動"
-            >
-              <Clock3 className="h-3 w-3" />
-              {formatTimestamp(mediaTimestamp)}
-            </button>
           ) : null}
 
           {isEditing ? (
