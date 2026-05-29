@@ -7,7 +7,7 @@ import { matchesCommentItemFilter, withDefaultDraftInfo } from "@/lib/comment-dr
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Pin, Paperclip, X, FileText, Copy, MoreHorizontal } from "lucide-react";
+import { Send, Pin, Paperclip, X, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import MentionInput, { type MentionMember } from "@/components/comments/MentionInput";
 import { formatTimestamp } from "@/components/comments/TimestampBadge";
@@ -284,7 +284,6 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
           <div key={c.id} className="space-y-2">
             <CommentCard
               comment={c}
-              currentUserEmail={user?.email || ""}
               onToggleStatus={() => toggleStatus(c.id, c.status)}
               onReply={() => setReplyTo(replyTo === c.id ? null : c.id)}
               onEdit={async (id, content) => {
@@ -320,7 +319,6 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
               <div key={r.id} className="ml-5">
                 <CommentCard
                   comment={r}
-                  currentUserEmail={user?.email || ""}
                   onToggleStatus={() => toggleStatus(r.id, r.status)}
                   onReply={() => {}}
                   onEdit={async (id, content) => {
@@ -399,15 +397,12 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   );
 }
 
-function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdit, onDelete, isReply, onAnnotationClick, onCheckItemClick, onSeekMedia, fileName, onReplicate, reactions, onToggleReaction }: {
-  comment: CommentWithDraftInfo; currentUserEmail: string; onToggleStatus: () => void; onReply: () => void; onEdit?: (id: string, content: string) => void; onDelete?: (id: string) => void; isReply?: boolean; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void; fileName?: string; onReplicate?: () => void; reactions?: ReactionSummary[]; onToggleReaction?: (emoji: string) => void;
+function CommentCard({ comment, onToggleStatus, onReply, onEdit, onDelete, isReply, onAnnotationClick, onCheckItemClick, onSeekMedia, fileName, onReplicate, reactions, onToggleReaction }: {
+  comment: CommentWithDraftInfo; onToggleStatus: () => void; onReply: () => void; onEdit?: (id: string, content: string) => void; onDelete?: (id: string) => void; isReply?: boolean; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void; fileName?: string; onReplicate?: () => void; reactions?: ReactionSummary[]; onToggleReaction?: (emoji: string) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.content);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
 
-  const isOwn = currentUserEmail === comment.author_email;
   const hasAnnotation = !!comment.annotation_data;
   const hasCheckItem = !!comment.check_item_id;
   const mediaTimestamp = comment.media_timestamp;
@@ -436,17 +431,6 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
     }
   };
 
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onDocumentMouseDown = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDocumentMouseDown);
-    return () => document.removeEventListener("mousedown", onDocumentMouseDown);
-  }, [menuOpen]);
-
   return (
     <RichCommentCard
       authorName={comment.author_name}
@@ -460,8 +444,9 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
       reactions={reactions}
       onToggleReaction={onToggleReaction}
       onReply={!isReply ? onReply : undefined}
-      onEdit={isOwn && !isEditing ? () => setIsEditing(true) : undefined}
-      onDelete={isOwn ? () => onDelete?.(comment.id) : undefined}
+      onEdit={!isEditing ? () => setIsEditing(true) : undefined}
+      onDelete={() => onDelete?.(comment.id)}
+      onCopyToOtherFiles={!isReply ? onReplicate : undefined}
       isEditing={isEditing}
       editingText={editText}
       setEditingText={setEditText}
@@ -505,30 +490,6 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
           )}
         </a> : null}
       </>}
-      actionSlot={!isReply && onReplicate ? (
-          <div className="relative shrink-0" ref={menuRef}>
-            <button
-              onClick={() => setMenuOpen((open) => !open)}
-              aria-label="その他の操作"
-              className="text-muted-foreground hover:text-foreground p-1 rounded hover:bg-muted/50"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </button>
-            {menuOpen ? (
-              <div className="absolute right-0 top-7 z-20 w-48 rounded-md border border-border bg-popover shadow-md p-1">
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onReplicate();
-                  }}
-                  className="w-full text-left text-xs px-2.5 py-1.5 rounded flex items-center gap-2 hover:bg-muted"
-                >
-                  <Copy className="h-3.5 w-3.5" />他のファイルにも反映
-                </button>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
     />
   );
 }

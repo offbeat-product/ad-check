@@ -1,5 +1,5 @@
-import type { MouseEvent, ReactNode } from "react";
-import { Check, Clock3, Heart, MessageCircleReply, Pencil, SmilePlus, Trash2 } from "lucide-react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { Check, Clock3, Copy, MessageCircleReply, MoreHorizontal, Pencil, SmilePlus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { COMMENT_REACTION_CHOICES } from "@/lib/comment-reactions";
@@ -27,6 +27,7 @@ export interface RichCommentCardProps {
   onReply?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  onCopyToOtherFiles?: () => void;
   isEditing?: boolean;
   editingText?: string;
   setEditingText?: (value: string) => void;
@@ -131,6 +132,7 @@ export function RichCommentCard({
   onReply,
   onEdit,
   onDelete,
+  onCopyToOtherFiles,
   isEditing,
   editingText,
   setEditingText,
@@ -148,6 +150,27 @@ export function RichCommentCard({
   const roleStyle = ROLE_STYLE[role];
   const visibleReactions = reactions.filter((reaction) => reaction.count > 0 || reaction.reactedByMe);
   const isClickable = Boolean(onCardClick);
+  const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const reactionPickerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!reactionPickerOpen && !menuOpen) return;
+
+    const onDocumentMouseDown = (event: globalThis.MouseEvent) => {
+      const target = event.target as Node;
+      if (reactionPickerOpen && reactionPickerRef.current && !reactionPickerRef.current.contains(target)) {
+        setReactionPickerOpen(false);
+      }
+      if (menuOpen && menuRef.current && !menuRef.current.contains(target)) {
+        setMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", onDocumentMouseDown);
+    return () => document.removeEventListener("mousedown", onDocumentMouseDown);
+  }, [menuOpen, reactionPickerOpen]);
 
   return (
     <div
@@ -286,27 +309,62 @@ export function RichCommentCard({
                 削除
               </button>
             ) : null}
-            {onToggleReaction ? (
-              <div className="group relative ml-auto">
+            {onCopyToOtherFiles ? (
+              <div className="relative shrink-0" ref={menuRef}>
                 <button
                   type="button"
+                  onClick={() => setMenuOpen((open) => !open)}
+                  aria-label="その他の操作"
+                  aria-expanded={menuOpen}
+                  className="inline-flex items-center rounded px-1.5 py-0.5 text-muted-foreground hover:text-foreground"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+                {menuOpen ? (
+                  <div className="absolute bottom-full left-0 z-20 mb-1 w-48 rounded-md border border-border/70 bg-popover p-1 shadow-md">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onCopyToOtherFiles();
+                      }}
+                      className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left text-xs hover:bg-muted"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      他のファイルにもコピー
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+            {onToggleReaction ? (
+              <div className="relative ml-auto" ref={reactionPickerRef}>
+                <button
+                  type="button"
+                  onClick={() => setReactionPickerOpen((open) => !open)}
+                  aria-expanded={reactionPickerOpen}
                   className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground hover:text-foreground"
                 >
                   <SmilePlus className="h-3 w-3" />
                   リアクション
                 </button>
-                <div className="absolute bottom-full right-0 z-20 mb-1 hidden gap-1 rounded-lg border border-border/70 bg-popover p-1 shadow-md group-hover:flex">
-                  {COMMENT_REACTION_CHOICES.map((emoji) => (
-                    <button
-                      key={emoji}
-                      type="button"
-                      onClick={() => onToggleReaction(emoji)}
-                      className="rounded px-1.5 py-1 text-base transition-transform hover:scale-110 hover:bg-muted"
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
+                {reactionPickerOpen ? (
+                  <div className="absolute bottom-full right-0 z-20 mb-1 flex gap-1 rounded-lg border border-border/70 bg-popover p-1 shadow-md">
+                    {COMMENT_REACTION_CHOICES.map((emoji) => (
+                      <button
+                        key={emoji}
+                        type="button"
+                        onClick={() => {
+                          onToggleReaction(emoji);
+                          setReactionPickerOpen(false);
+                        }}
+                        className="rounded px-1.5 py-1 text-base transition-colors hover:bg-muted"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             ) : null}
             {actionSlot}
