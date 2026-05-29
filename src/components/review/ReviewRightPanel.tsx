@@ -39,6 +39,8 @@ interface ReviewRightPanelProps {
   fileId?: string;
   /** Called after a comment is deleted */
   onCommentDeleted?: () => void;
+  selectedCommentId?: string | null;
+  onSelectComment?: (commentId: string | null) => void;
   /** Comparison mode props */
   comparisonMode?: boolean;
   comparisonBeforeData?: string | null;
@@ -67,6 +69,7 @@ export default function ReviewRightPanel({
   overallStatus, checkedAt, file, productId, projectId,
   mediaCurrentTime, onSeekMedia, fileId, onCommentDeleted,
   onActiveCheckItemChange,
+  selectedCommentId, onSelectComment,
   comparisonMode, comparisonBeforeData, comparisonAfterData, comparisonAfterText, comparisonRoundLabel,
   onOpenComparisonMode, onComparisonCheckComplete, onComparisonSaved, onClearAfterData,
   clientName, productName, lockedByUser, onAcquireLock, onReleaseLock,
@@ -173,7 +176,7 @@ export default function ReviewRightPanel({
 
         <TabsContent value="comments" forceMount className={cn("absolute inset-0 top-10 overflow-hidden mt-0 ring-0 focus-visible:ring-0", effectiveTab !== "comments" && "hidden")}>
           {checkResultId ? (
-            <CommentsPanel checkResultId={checkResultId} filterItemId={commentFilter} onAnnotationClick={onAnnotationClick} onCheckItemClick={onCheckItemClick} mediaCurrentTime={mediaCurrentTime} onSeekMedia={onSeekMedia} projectId={projectId} processType={file?.process_type} productCode={productCode} fileId={fileId} onCommentDeleted={onCommentDeleted} onCommentCountChange={setTotalCommentCount} fileName={file?.file_name} refreshKey={commentRefreshKey} />
+            <CommentsPanel checkResultId={checkResultId} filterItemId={commentFilter} onAnnotationClick={onAnnotationClick} onCheckItemClick={onCheckItemClick} mediaCurrentTime={mediaCurrentTime} onSeekMedia={onSeekMedia} projectId={projectId} processType={file?.process_type} productCode={productCode} fileId={fileId} onCommentDeleted={onCommentDeleted} onCommentCountChange={setTotalCommentCount} fileName={file?.file_name} refreshKey={commentRefreshKey} selectedCommentId={selectedCommentId} onSelectComment={onSelectComment} />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
               <MessageCircle className="h-10 w-10 mb-3 opacity-30" />

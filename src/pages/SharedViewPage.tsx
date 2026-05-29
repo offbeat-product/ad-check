@@ -37,6 +37,7 @@ export default function SharedViewPage() {
   const [paintMode, setPaintMode] = useState(false);
   const [mediaCurrentTime, setMediaCurrentTime] = useState<number | null>(null);
   const [selectedAnnotations, setSelectedAnnotations] = useState<CommentAnnotationData[]>([]);
+  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [totalCommentCount, setTotalCommentCount] = useState(0);
   const mediaRef = useRef<MediaPreviewHandle>(null);
@@ -175,11 +176,21 @@ export default function SharedViewPage() {
     }
   }, [record, token, setRightTab]);
 
-  const handleAnnotationClick = useCallback((data: unknown, _commentId?: string, mediaTimestamp?: number | null) => {
+  const handleAnnotationClick = useCallback((data: unknown, commentId?: string, mediaTimestamp?: number | null) => {
+    if (commentId) {
+      setSelectedCommentId(commentId);
+    }
     if (isValidMediaTimestamp(mediaTimestamp)) {
       mediaRef.current?.seekTo(mediaTimestamp);
     }
     setSelectedAnnotations(normalizeAnnotations(data));
+  }, []);
+
+  const handleSelectComment = useCallback((commentId: string | null) => {
+    setSelectedCommentId(commentId);
+    if (!commentId) {
+      setSelectedAnnotations([]);
+    }
   }, []);
 
   const [downloadBusy, setDownloadBusy] = useState(false);
@@ -421,6 +432,8 @@ export default function SharedViewPage() {
                 onSeekMedia={handleSeekMedia}
                 refreshKey={commentRefreshKey}
                 onCommentCountChange={setTotalCommentCount}
+                selectedCommentId={selectedCommentId}
+                onSelectComment={handleSelectComment}
               />
             </TabsContent> : null}
         </Tabs>

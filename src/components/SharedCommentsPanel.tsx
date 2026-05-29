@@ -17,7 +17,7 @@ import {
   normalizeAttachmentRows,
   type CommentAttachmentView,
 } from "@/lib/comment-attachments";
-import { isValidMediaTimestamp } from "@/lib/comment-annotations";
+import { isValidMediaTimestamp, resolveSeekSeconds } from "@/lib/comment-annotations";
 
 const GUEST_TOKEN_KEY = "ad_check_shared_guest_token";
 
@@ -43,6 +43,8 @@ interface SharedCommentsPanelProps {
   onSeekMedia?: (seconds: number) => void;
   refreshKey?: number;
   onCommentCountChange?: (count: number) => void;
+  selectedCommentId?: string | null;
+  onSelectComment?: (commentId: string | null) => void;
 }
 
 type SharedCommentsWithDraftRpc = (
@@ -69,6 +71,7 @@ interface ReplyTarget {
 export default function SharedCommentsPanel({
   checkResultId, shareToken, allowWrite,
   onAnnotationClick, mediaCurrentTime, onSeekMedia, refreshKey, onCommentCountChange,
+  selectedCommentId: selectedCommentIdProp, onSelectComment: onSelectCommentProp,
 }: SharedCommentsPanelProps) {
   const [comments, setComments] = useState<CommentWithDraftInfo[]>([]);
   const [guestName, setGuestName] = useState(() => localStorage.getItem("shared_guest_name") || "");
@@ -77,7 +80,9 @@ export default function SharedCommentsPanel({
   const [newComment, setNewComment] = useState("");
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const [replyText, setReplyText] = useState("");
-  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
+  const [internalSelectedCommentId, setInternalSelectedCommentId] = useState<string | null>(null);
+  const selectedCommentId = selectedCommentIdProp ?? internalSelectedCommentId;
+  const setSelectedCommentId = onSelectCommentProp ?? setInternalSelectedCommentId;
   const [openThreads, setOpenThreads] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
   const [posting, setPosting] = useState(false);
@@ -546,8 +551,9 @@ function SharedCommentCard({
       mediaTimestamp={comment.media_timestamp}
       onSeekMedia={(seconds) => {
         onSelectComment?.(comment.id);
-        onSeekMedia?.(seconds);
-        onAnnotationClick?.(comment.annotation_data, comment.id, comment.media_timestamp);
+        const seekSeconds = resolveSeekSeconds(comment.content, comment.media_timestamp) ?? seconds;
+        onSeekMedia?.(seekSeconds);
+        onAnnotationClick?.(comment.annotation_data, comment.id, seekSeconds);
       }}
       attachments={attachments}
       reactions={reactions}
@@ -577,11 +583,13 @@ function SharedCommentCard({
             </span>
           ) : null}
       onCardClick={
-        hasAnnotation || isValidMediaTimestamp(comment.media_timestamp)
+        hasAnnotation || isValidMediaTimestamp(comment.media_timestamp) || resolveSeekSeconds(comment.content, comment.media_timestamp) != null
           ? () => {
               onSelectComment?.(comment.id);
-              if (isValidMediaTimestamp(comment.media_timestamp)) onSeekMedia?.(comment.media_timestamp);
-              if (hasAnnotation) onAnnotationClick?.(comment.annotation_data, comment.id, comment.media_timestamp);
+              const seekSeconds = resolveSeekSeconds(comment.content, comment.media_timestamp);
+              if (seekSeconds != null) onSeekMedia?.(seekSeconds);
+              if (hasAnnotation) onAnnotationClick?.(comment.annotation_data, comment.id, seekSeconds);
+              else if (seekSeconds != null) onAnnotationClick?.(comment.annotation_data, comment.id, seekSeconds);
             }
           : undefined
       }

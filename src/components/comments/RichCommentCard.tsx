@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { humanSize, isImage, type CommentAttachmentView } from "@/lib/comment-attachments";
 import { COMMENT_REACTION_CHOICES } from "@/lib/comment-reactions";
+import { parseTimestampFromText, isValidMediaTimestamp } from "@/lib/comment-annotations";
 import { cn } from "@/lib/utils";
 
 export type CommentRole = "internal" | "creator" | "client";
@@ -104,16 +105,58 @@ function formatTimestamp(seconds: number) {
   return `${String(minutes).padStart(2, "0")}:${String(remainingSeconds).padStart(2, "0")}`;
 }
 
-function renderContentWithMentions(content: string) {
-  return content.split(/(@[^\s@]+)/g).map((part, index) =>
-    part.startsWith("@") ? (
-      <span key={`${part}-${index}`} className="font-semibold text-primary">
-        {part}
-      </span>
-    ) : (
-      <span key={`${part}-${index}`}>{part}</span>
-    )
-  );
+const COMMENT_CONTENT_TOKEN_RE = /(@[^\s@]+)|(\[\d+:\d{2}\.\d{3}\])/g;
+
+function renderCommentContent(
+  content: string,
+  mediaTimestamp: number | null | undefined,
+  onSeekMedia?: (seconds: number) => void
+) {
+  const parts: React.ReactNode[] = [];
+  let lastIndex = 0;
+
+  for (const match of content.matchAll(COMMENT_CONTENT_TOKEN_RE)) {
+    const index = match.index ?? 0;
+    if (index > lastIndex) {
+      parts.push(<span key={`text-${lastIndex}`}>{content.slice(lastIndex, index)}</span>);
+    }
+
+    const [fullMatch, mention, timestampText] = match;
+    if (mention) {
+      parts.push(
+        <span key={`mention-${index}`} className="font-semibold text-primary">
+          {mention}
+        </span>
+      );
+    } else if (timestampText && onSeekMedia) {
+      const seconds =
+        parseTimestampFromText(timestampText) ??
+        (isValidMediaTimestamp(mediaTimestamp) ? mediaTimestamp : null);
+      parts.push(
+        <button
+          key={`timestamp-${index}`}
+          type="button"
+          onClick={stopPropagation(() => {
+            if (seconds != null) onSeekMedia(seconds);
+          })}
+          className="font-medium text-primary hover:underline"
+          title="この時間にジャンプ"
+        >
+          {timestampText}
+        </button>
+      );
+    } else {
+      parts.push(<span key={`plain-${index}`}>{fullMatch}</span>);
+    }
+
+    lastIndex = index + fullMatch.length;
+  }
+
+  if (lastIndex < content.length) {
+    parts.push(<span key={`text-${lastIndex}`}>{content.slice(lastIndex)}</span>);
+  }
+
+  return parts.length > 0 ? parts : content;
 }
 
 function stopPropagation(handler?: () => void) {
@@ -288,7 +331,9 @@ export function RichCommentCard({
               </div>
             </div>
           ) : (
-            <p className="whitespace-pre-wrap text-sm leading-relaxed">{renderContentWithMentions(content)}</p>
+            <p className="whitespace-pre-wrap text-sm leading-relaxed">
+              {renderCommentContent(content, mediaTimestamp, onSeekMedia)}
+            </p>
           )}
 
           {contentSlot}
