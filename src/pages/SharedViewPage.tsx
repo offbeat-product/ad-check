@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import type { CheckResultRow, ShareLinkRow } from "@/lib/db-types";
@@ -22,7 +22,7 @@ import { formatTimestamp } from "@/components/comments/TimestampBadge";
 import { downloadProjectFile, getSharedCheckDownloadPayload } from "@/lib/download-project-file";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { isValidMediaTimestamp, normalizeAnnotations, type CommentAnnotationData } from "@/lib/comment-annotations";
+import { isValidMediaTimestamp, normalizeAnnotations, shouldShowTimedAnnotation, type CommentAnnotationData } from "@/lib/comment-annotations";
 
 export default function SharedViewPage() {
   const { token } = useParams<{ token: string }>();
@@ -38,6 +38,7 @@ export default function SharedViewPage() {
   const [mediaCurrentTime, setMediaCurrentTime] = useState<number | null>(null);
   const [selectedAnnotations, setSelectedAnnotations] = useState<CommentAnnotationData[]>([]);
   const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
+  const [selectedAnnotationTimestamp, setSelectedAnnotationTimestamp] = useState<number | null>(null);
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [totalCommentCount, setTotalCommentCount] = useState(0);
   const mediaRef = useRef<MediaPreviewHandle>(null);
@@ -45,6 +46,12 @@ export default function SharedViewPage() {
   const checkItems = record?.check_items ?? null;
   const { items, markers, commentCounts, highlightCard, rightTab, setRightTab, scrollToCard, handleCommentClick } =
     useReviewState(record?.id, checkItems);
+  const aiInputMode = record ? AI_CHECK_CONFIG[record.process_type]?.inputMode : null;
+  const isTimedMedia = aiInputMode === "audio" || aiInputMode === "video";
+  const visibleSelectedAnnotations = useMemo(() => {
+    if (!isTimedMedia) return selectedAnnotations;
+    return shouldShowTimedAnnotation(mediaCurrentTime, selectedAnnotationTimestamp) ? selectedAnnotations : [];
+  }, [isTimedMedia, mediaCurrentTime, selectedAnnotationTimestamp, selectedAnnotations]);
 
   // --- Data Loading ---
   useEffect(() => {
@@ -169,6 +176,10 @@ export default function SharedViewPage() {
         },
       });
       setSelectedAnnotations(normalizeAnnotations(annotations.length > 0 ? annotations[0] : null));
+      setSelectedAnnotationTimestamp(isValidMediaTimestamp(mediaTimestamp) ? mediaTimestamp : null);
+      if (isValidMediaTimestamp(mediaTimestamp)) {
+        setMediaCurrentTime(mediaTimestamp);
+      }
       setCommentRefreshKey((k) => k + 1);
       setPaintMode(false);
     } catch (err) {
@@ -180,8 +191,10 @@ export default function SharedViewPage() {
     if (commentId) {
       setSelectedCommentId(commentId);
     }
+    setSelectedAnnotationTimestamp(isValidMediaTimestamp(mediaTimestamp) ? mediaTimestamp : null);
     if (isValidMediaTimestamp(mediaTimestamp)) {
       mediaRef.current?.seekTo(mediaTimestamp);
+      setMediaCurrentTime(mediaTimestamp);
     }
     setSelectedAnnotations(normalizeAnnotations(data));
   }, []);
@@ -190,6 +203,7 @@ export default function SharedViewPage() {
     setSelectedCommentId(commentId);
     if (!commentId) {
       setSelectedAnnotations([]);
+      setSelectedAnnotationTimestamp(null);
     }
   }, []);
 
@@ -281,7 +295,7 @@ export default function SharedViewPage() {
             label={previewLabel}
             noDataMessage="プレビュー不可"
             onAnnotationSave={canWriteComments ? handleAnnotationSave : undefined}
-            savedAnnotations={selectedAnnotations}
+            savedAnnotations={visibleSelectedAnnotations}
           />
         );
       case "video":
@@ -296,7 +310,7 @@ export default function SharedViewPage() {
             paintMode={paintMode}
             onPaintModeToggle={canWriteComments ? () => setPaintMode(!paintMode) : undefined}
             onAnnotationSave={canWriteComments ? handleAnnotationSave : undefined}
-            savedAnnotations={selectedAnnotations}
+            savedAnnotations={visibleSelectedAnnotations}
           />
         );
       case "audio":

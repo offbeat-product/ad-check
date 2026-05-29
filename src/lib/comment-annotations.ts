@@ -45,3 +45,16 @@ export function resolveSeekSeconds(content: string, mediaTimestamp: unknown): nu
   if (isValidMediaTimestamp(mediaTimestamp)) return mediaTimestamp;
   return parseTimestampFromText(content);
 }
+
+const ANNOTATION_VISIBLE_WINDOW_SECONDS = 0.25;
+
+export function shouldShowTimedAnnotation(
+  mediaCurrentTime: unknown,
+  annotationTimestamp: unknown
+): boolean {
+  if (!isValidMediaTimestamp(mediaCurrentTime) || !isValidMediaTimestamp(annotationTimestamp)) {
+    return false;
+  }
+
+  return Math.abs(mediaCurrentTime - annotationTimestamp) <= ANNOTATION_VISIBLE_WINDOW_SECONDS;
+}
