@@ -35,11 +35,41 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
   const containerRef = useRef<HTMLDivElement>(null);
   const mediaRef = useRef<HTMLVideoElement | HTMLAudioElement | null>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const [playback, setPlayback] = useState({ currentTime: 0, duration: 0 });
   const [seekFlash, setSeekFlash] = useState(false);
 
   const hasSource = !!src && src.trim().length > 0;
   const isRawBase64Text = hasSource && !src!.startsWith("data:") && !src!.startsWith("http") && !src!.startsWith("blob:");
   const hasPaintSupport = onPaintModeToggle !== undefined;
+  const isTimedMedia = mediaType === "audio" || mediaType === "video";
+  const hideNativeControls = !!(paintMode && hasPaintSupport && isTimedMedia);
+
+  const syncPlayback = useCallback(() => {
+    const el = mediaRef.current;
+    if (!el) return;
+    setPlayback({
+      currentTime: el.currentTime,
+      duration: Number.isFinite(el.duration) ? el.duration : 0,
+    });
+  }, []);
+
+  const syncContainerSize = useCallback(() => {
+    const el = mediaRef.current;
+    if (!el || mediaType !== "video") return;
+    setContainerSize({ width: el.clientWidth, height: el.clientHeight });
+  }, [mediaType]);
+
+  const handleSeekMedia = useCallback((seconds: number) => {
+    const el = mediaRef.current;
+    if (!el) return;
+    const duration = Number.isFinite(el.duration) ? el.duration : seconds;
+    el.currentTime = Math.max(0, Math.min(duration, seconds));
+    syncPlayback();
+  }, [syncPlayback]);
+
+  const handleStepMedia = useCallback((deltaSeconds: number) => {
+    handleSeekMedia((mediaRef.current?.currentTime ?? 0) + deltaSeconds);
+  }, [handleSeekMedia]);
 
   useImperativeHandle(ref, () => ({
     getCurrentTime: () => mediaRef.current?.currentTime ?? 0,
@@ -55,7 +85,8 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
 
   const handleVideoLoad = useCallback((e: React.SyntheticEvent<HTMLVideoElement>) => {
     setContainerSize({ width: e.currentTarget.clientWidth, height: e.currentTarget.clientHeight });
-  }, []);
+    syncPlayback();
+  }, [syncPlayback]);
 
   useEffect(() => {
     if (containerRef.current) {
@@ -65,6 +96,31 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
       }
     }
   }, [hasSource]);
+
+  useEffect(() => {
+    const el = mediaRef.current;
+    if (!el || !isTimedMedia) return;
+
+    syncPlayback();
+    el.addEventListener("timeupdate", syncPlayback);
+    el.addEventListener("loadedmetadata", syncPlayback);
+    el.addEventListener("durationchange", syncPlayback);
+    el.addEventListener("seeked", syncPlayback);
+
+    return () => {
+      el.removeEventListener("timeupdate", syncPlayback);
+      el.removeEventListener("loadedmetadata", syncPlayback);
+      el.removeEventListener("durationchange", syncPlayback);
+      el.removeEventListener("seeked", syncPlayback);
+    };
+  }, [hasSource, isTimedMedia, src, syncPlayback]);
+
+  useEffect(() => {
+    if (mediaType !== "video") return;
+    syncContainerSize();
+    const timer = window.setTimeout(syncContainerSize, 0);
+    return () => window.clearTimeout(timer);
+  }, [hideNativeControls, hasSource, mediaType, syncContainerSize]);
 
   return (
     <div className="relative">
@@ -87,7 +143,7 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
             <video
               ref={(el) => { mediaRef.current = el; }}
               src={src!}
-              controls
+              controls={!hideNativeControls}
               controlsList="nodownload"
               className="w-full max-h-[70vh] rounded-md bg-black"
               preload="metadata"
@@ -100,10 +156,11 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
               <audio
                 ref={(el) => { mediaRef.current = el; }}
                 src={src!}
-                controls
+                controls={!hideNativeControls}
                 controlsList="nodownload"
                 className="w-full max-w-md"
                 preload="metadata"
+                onLoadedMetadata={syncPlayback}
               >
                 お使いのブラウザは音声再生に対応していません。
               </audio>
@@ -134,7 +191,13 @@ const MediaPreview = forwardRef<MediaPreviewHandle, MediaPreviewProps>(function 
             height={containerSize.height || 400}
             onSaveAnnotations={onAnnotationSave}
             members={members}
-            getMediaCurrentTime={mediaType === "video" ? () => mediaRef.current?.currentTime ?? 0 : undefined}
+            getMediaCurrentTime={isTimedMedia ? () => mediaRef.current?.currentTime ?? 0 : undefined}
+            mediaPlayback={hideNativeControls ? {
+              currentTime: playback.currentTime,
+              duration: playback.duration,
+              onSeek: handleSeekMedia,
+              onStep: handleStepMedia,
+            } : undefined}
           /> : null}
       </div>
 
