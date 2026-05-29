@@ -5,9 +5,10 @@ import { withDefaultDraftInfo } from "@/lib/comment-draft-info";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, User, Reply, Pencil, Trash2 } from "lucide-react";
+import { Send, User } from "lucide-react";
 import { cn } from "@/lib/utils";
-import TimestampBadge from "@/components/comments/TimestampBadge";
+import { RichCommentCard, type CommentRole, type ReactionSummary } from "@/components/comments/RichCommentCard";
+import { useCommentReactions } from "@/hooks/useCommentReactions";
 
 const GUEST_TOKEN_KEY = "ad_check_shared_guest_token";
 
@@ -45,6 +46,11 @@ type SharedCommentsRpc = (
   args: { p_check_result_id: string; p_share_token: string },
 ) => Promise<{ data: CommentRow[] | null; error: { message: string } | null }>;
 
+type SharedCommentsInvoke = (
+  fn: "shared-comments",
+  options: { body: Record<string, unknown> }
+) => Promise<{ data: unknown; error: { message?: string } | null }>;
+
 export default function SharedCommentsPanel({
   checkResultId, shareToken, allowWrite,
   onAnnotationClick, mediaCurrentTime, onSeekMedia, refreshKey, onCommentCountChange,
@@ -61,6 +67,10 @@ export default function SharedCommentsPanel({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
   const guestToken = useMemo(() => getOrCreateGuestToken(), []);
+  const invokeSharedComments = useMemo(
+    () => supabase.functions.invoke.bind(supabase.functions) as unknown as SharedCommentsInvoke,
+    []
+  );
 
   const fetchComments = useCallback(async () => {
     let result: CommentWithDraftInfo[] = [];
@@ -116,6 +126,13 @@ export default function SharedCommentsPanel({
 
   const topLevel = filtered.filter((c) => !c.parent_id);
   const getReplies = (parentId: string) => filtered.filter((c) => c.parent_id === parentId);
+  const { reactionsByCommentId, toggleReaction } = useCommentReactions({
+    commentIds: filtered.map((c) => c.id),
+    surface: "shared",
+    shareToken,
+    guestToken,
+    reactorName: guestName.trim() || "ゲスト",
+  });
 
   const countByTab = (t: "all" | "open" | "resolved") => {
     if (t === "open") return comments.filter((c) => c.status === "open").length;
@@ -133,7 +150,7 @@ export default function SharedCommentsPanel({
   const postComment = async (content: string, parentId?: string) => {
     setPosting(true);
     try {
-      const res = await supabase.functions.invoke("shared-comments", {
+      const res = await invokeSharedComments("shared-comments", {
         body: {
           action: "create",
           share_token: shareToken,
@@ -169,7 +186,7 @@ export default function SharedCommentsPanel({
     const trimmed = content.trim();
     if (!trimmed) return;
     try {
-      const { error } = await supabase.functions.invoke("shared-comments", {
+      const { error } = await invokeSharedComments("shared-comments", {
         body: {
           action: "update",
           share_token: shareToken,
@@ -190,7 +207,7 @@ export default function SharedCommentsPanel({
   const handleDelete = async (commentId: string) => {
     if (!window.confirm("このコメントを削除しますか？")) return;
     try {
-      const { error } = await supabase.functions.invoke("shared-comments", {
+      const { error } = await invokeSharedComments("shared-comments", {
         body: {
           action: "delete",
           share_token: shareToken,
@@ -217,16 +234,6 @@ export default function SharedCommentsPanel({
     await postComment(replyText.trim(), parentId);
     setReplyTo(null);
     setReplyText("");
-  };
-
-  const timeAgo = (dateStr: string) => {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return "たった今";
-    if (mins < 60) return `${mins}分前`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}時間前`;
-    return `${Math.floor(hrs / 24)}日前`;
   };
 
   const tabs: { key: "all" | "open" | "resolved"; label: string }[] = [
@@ -257,7 +264,6 @@ export default function SharedCommentsPanel({
           <div key={c.id} className="space-y-2">
             <SharedCommentCard
               comment={c}
-              timeAgo={timeAgo}
               onAnnotationClick={onAnnotationClick}
               onSeekMedia={onSeekMedia}
               onReply={allowWrite ? () => setReplyTo(replyTo === c.id ? null : c.id) : undefined}
@@ -269,12 +275,13 @@ export default function SharedCommentsPanel({
               onCancelEdit={cancelEdit}
               onEdit={() => handleEdit(c.id, editingText)}
               onDelete={() => handleDelete(c.id)}
+              reactions={reactionsByCommentId[c.id]}
+              onToggleReaction={(emoji) => void toggleReaction(c.id, emoji)}
             />
             {getReplies(c.id).map((r) => (
               <div key={r.id} className="ml-5">
                 <SharedCommentCard
                   comment={r}
-                  timeAgo={timeAgo}
                   onSeekMedia={onSeekMedia}
                   isReply
                   isOwn={r.guest_token != null && r.guest_token === guestToken}
@@ -285,6 +292,8 @@ export default function SharedCommentsPanel({
                   onCancelEdit={cancelEdit}
                   onEdit={() => handleEdit(r.id, editingText)}
                   onDelete={() => handleDelete(r.id)}
+                  reactions={reactionsByCommentId[r.id]}
+                  onToggleReaction={(emoji) => void toggleReaction(r.id, emoji)}
                 />
               </div>
             ))}
@@ -341,11 +350,10 @@ export default function SharedCommentsPanel({
 }
 
 function SharedCommentCard({
-  comment, timeAgo, onAnnotationClick, onSeekMedia, onReply, isReply,
-  isOwn, isEditing, editingText, setEditingText, onStartEdit, onCancelEdit, onEdit, onDelete,
+  comment, onAnnotationClick, onSeekMedia, onReply, isReply,
+  isOwn, isEditing, editingText, setEditingText, onStartEdit, onCancelEdit, onEdit, onDelete, reactions, onToggleReaction,
 }: {
   comment: CommentWithDraftInfo;
-  timeAgo: (d: string) => string;
   onAnnotationClick?: (data: unknown) => void;
   onSeekMedia?: (seconds: number) => void;
   onReply?: () => void;
@@ -358,23 +366,36 @@ function SharedCommentCard({
   onCancelEdit?: () => void;
   onEdit?: () => void;
   onDelete?: () => void;
+  reactions?: ReactionSummary[];
+  onToggleReaction?: (emoji: string) => void;
 }) {
   const hasAnnotation = !!comment.annotation_data;
   const showDraftBadge = !comment.is_current_draft && !!comment.draft_label;
   const isInitialDraft = comment.draft_round === 0;
+  const role: CommentRole = comment.creator_id ? "creator" : comment.guest_token ? "client" : "internal";
 
   return (
-    <div
-      className={cn(
-        "rounded-lg border border-border p-3 space-y-1.5",
-        isReply && "bg-muted/30",
-        !comment.is_current_draft && "opacity-75"
-      )}
-    >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold">{comment.author_name}</span>
-          {showDraftBadge ? (
+    <RichCommentCard
+      authorName={comment.author_name}
+      role={role}
+      createdAt={comment.created_at}
+      status={comment.status}
+      content={comment.content}
+      mediaTimestamp={comment.media_timestamp}
+      onSeekMedia={onSeekMedia}
+      reactions={reactions}
+      onToggleReaction={onToggleReaction}
+      onReply={onReply}
+      onEdit={isOwn && !isEditing ? onStartEdit : undefined}
+      onDelete={isOwn ? onDelete : undefined}
+      isEditing={isEditing}
+      editingText={editingText}
+      setEditingText={setEditingText}
+      onSubmitEdit={onEdit}
+      onCancelEdit={onCancelEdit}
+      isReply={isReply}
+      isDimmed={!comment.is_current_draft}
+      headerSlot={showDraftBadge ? (
             <span
               className={cn(
                 "rounded-full border px-1.5 py-0.5 text-[10px] font-medium",
@@ -386,54 +407,9 @@ function SharedCommentCard({
               {comment.draft_label}
             </span>
           ) : null}
-          {comment.media_timestamp != null && (
-            <TimestampBadge seconds={comment.media_timestamp} onClick={() => onSeekMedia?.(comment.media_timestamp!)} />
-          )}
-        </div>
-        <span className="text-[10px] text-muted-foreground">{timeAgo(comment.created_at)}</span>
-      </div>
-      {isEditing ? (
-        <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
-          <Textarea
-            value={editingText ?? ""}
-            onChange={(e) => setEditingText?.(e.target.value)}
-            className="min-h-[50px] text-xs"
-            autoFocus
-          />
-          <div className="flex gap-1.5">
-            <Button size="sm" variant="default" onClick={onEdit} className="h-6 text-[10px] px-2">
-              保存
-            </Button>
-            <Button size="sm" variant="ghost" onClick={onCancelEdit} className="h-6 text-[10px] px-2">
-              キャンセル
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <p className="text-xs whitespace-pre-wrap">{comment.content}</p>
-      )}
-      {hasAnnotation ? <button onClick={() => onAnnotationClick?.(comment.annotation_data)} className="text-[10px] text-primary hover:underline">
+      contentSlot={hasAnnotation ? <button onClick={() => onAnnotationClick?.(comment.annotation_data)} className="text-[10px] text-primary hover:underline">
           📌 アノテーションを表示
         </button> : null}
-      <div className="flex items-center gap-2">
-        <span className={cn("text-[10px] px-1.5 py-0.5 rounded-full",
-          comment.status === "open" ? "bg-status-warning/10 text-status-warning" : "bg-status-ok/10 text-status-ok")}>
-          {comment.status === "open" ? "未対応" : "対応済"}
-        </span>
-        {onReply ? <button onClick={onReply} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
-            <Reply className="h-3 w-3" />返信
-          </button> : null}
-        {isOwn && !isEditing ? (
-          <>
-            <button onClick={onStartEdit} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
-              <Pencil className="h-3 w-3" />編集
-            </button>
-            <button onClick={onDelete} className="text-[10px] text-muted-foreground hover:text-destructive flex items-center gap-0.5">
-              <Trash2 className="h-3 w-3" />削除
-            </button>
-          </>
-        ) : null}
-      </div>
-    </div>
+    />
   );
 }

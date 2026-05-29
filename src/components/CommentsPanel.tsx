@@ -7,10 +7,12 @@ import { matchesCommentItemFilter, withDefaultDraftInfo } from "@/lib/comment-dr
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Pin, Reply, Paperclip, X, FileText, Pencil, Trash2, Check, Copy, MoreHorizontal } from "lucide-react";
+import { Send, Pin, Paperclip, X, FileText, Copy, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import MentionInput, { type MentionMember } from "@/components/comments/MentionInput";
-import TimestampBadge, { formatTimestamp } from "@/components/comments/TimestampBadge";
+import { formatTimestamp } from "@/components/comments/TimestampBadge";
+import { RichCommentCard, type CommentRole, type ReactionSummary } from "@/components/comments/RichCommentCard";
+import { useCommentReactions } from "@/hooks/useCommentReactions";
 import { ReplicateCommentDialog, type ReplicateCommentData } from "@/components/ReplicateCommentDialog";
 
 interface CommentsPanelProps {
@@ -136,6 +138,11 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
 
   const topLevel = filtered.filter((c) => !c.parent_id);
   const replies = (parentId: string) => filtered.filter((c) => c.parent_id === parentId);
+  const { reactionsByCommentId, toggleReaction } = useCommentReactions({
+    commentIds: filtered.map((c) => c.id),
+    surface: "internal",
+    reactorName: user?.email?.split("@")[0] || undefined,
+  });
 
   const countByTab = (t: "all" | "open" | "resolved") => {
     const base = comments.filter((c) => matchesCommentItemFilter(c, filterItemId));
@@ -247,16 +254,6 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
     setAttachment({ file, preview });
   };
 
-  const timeAgo = (dateStr: string) => {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return "たった今";
-    if (mins < 60) return `${mins}分前`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}時間前`;
-    return `${Math.floor(hrs / 24)}日前`;
-  };
-
   const tabs = [
     { key: "all" as const, label: "全て" },
     { key: "open" as const, label: "未対応" },
@@ -301,11 +298,12 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
                 await fetchComments();
                 onCommentDeleted?.();
               }}
-              timeAgo={timeAgo}
               onAnnotationClick={onAnnotationClick}
               onCheckItemClick={onCheckItemClick}
               onSeekMedia={onSeekMedia}
               fileName={fileName}
+              reactions={reactionsByCommentId[c.id]}
+              onToggleReaction={(emoji) => void toggleReaction(c.id, emoji)}
               onReplicate={() => setReplicateDialogComment({
                 id: c.id,
                 content: c.content,
@@ -336,9 +334,10 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
                     await fetchComments();
                     onCommentDeleted?.();
                   }}
-                  timeAgo={timeAgo}
                   isReply
                   onSeekMedia={onSeekMedia}
+                  reactions={reactionsByCommentId[r.id]}
+                  onToggleReaction={(emoji) => void toggleReaction(r.id, emoji)}
                 />
               </div>
             ))}
@@ -400,8 +399,8 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   );
 }
 
-function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdit, onDelete, timeAgo, isReply, onAnnotationClick, onCheckItemClick, onSeekMedia, fileName, onReplicate }: {
-  comment: CommentWithDraftInfo; currentUserEmail: string; onToggleStatus: () => void; onReply: () => void; onEdit?: (id: string, content: string) => void; onDelete?: (id: string) => void; timeAgo: (d: string) => string; isReply?: boolean; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void; fileName?: string; onReplicate?: () => void;
+function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdit, onDelete, isReply, onAnnotationClick, onCheckItemClick, onSeekMedia, fileName, onReplicate, reactions, onToggleReaction }: {
+  comment: CommentWithDraftInfo; currentUserEmail: string; onToggleStatus: () => void; onReply: () => void; onEdit?: (id: string, content: string) => void; onDelete?: (id: string) => void; isReply?: boolean; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void; fileName?: string; onReplicate?: () => void; reactions?: ReactionSummary[]; onToggleReaction?: (emoji: string) => void;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.content);
@@ -409,14 +408,12 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
   const menuRef = useRef<HTMLDivElement>(null);
 
   const isOwn = currentUserEmail === comment.author_email;
-  const initial = comment.author_name.charAt(0).toUpperCase();
-  const colors = ["bg-primary", "bg-status-ok", "bg-context-client", "bg-product-cta"];
-  const colorIdx = comment.author_name.charCodeAt(0) % colors.length;
   const hasAnnotation = !!comment.annotation_data;
   const hasCheckItem = !!comment.check_item_id;
   const mediaTimestamp = comment.media_timestamp;
   const showDraftBadge = !comment.is_current_draft && !!comment.draft_label;
   const isInitialDraft = comment.draft_round === 0;
+  const role: CommentRole = comment.creator_id ? "creator" : comment.guest_token ? "client" : "internal";
 
   const handleCardClick = () => {
     // Auto-seek video to annotation timestamp
@@ -431,17 +428,6 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
   };
 
   const isClickable = (hasAnnotation && onAnnotationClick) || (hasCheckItem && onCheckItemClick) || (mediaTimestamp != null && mediaTimestamp > 0 && onSeekMedia);
-
-  const renderContent = (text: string) => {
-    const parts = text.split(/(@\S+)/g);
-    return parts.map((part, i) =>
-      part.startsWith("@") ? (
-        <span key={i} className="text-primary font-semibold underline decoration-primary/40 cursor-default">{part}</span>
-      ) : (
-        <span key={i}>{part}</span>
-      )
-    );
-  };
 
   const handleSaveEdit = () => {
     if (editText.trim() && onEdit) {
@@ -462,18 +448,29 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
   }, [menuOpen]);
 
   return (
-    <div
-      className={cn(
-        "border border-border rounded-lg p-2.5 space-y-1.5 bg-card transition-colors",
-        isClickable && "cursor-pointer hover:border-primary/40 hover:bg-primary/5",
-        !comment.is_current_draft && "opacity-75"
-      )}
-      onClick={isClickable ? handleCardClick : undefined}
-    >
-      <div className="flex items-center gap-2">
-        <div className={cn("w-5 h-5 rounded-full flex items-center justify-center text-[9px] font-bold text-white", colors[colorIdx])}>{initial}</div>
-        <span className="text-xs font-medium flex-1">{comment.author_name}</span>
-        {showDraftBadge ? (
+    <RichCommentCard
+      authorName={comment.author_name}
+      role={role}
+      createdAt={comment.created_at}
+      status={comment.status}
+      onToggleStatus={onToggleStatus}
+      content={comment.content}
+      mediaTimestamp={mediaTimestamp}
+      onSeekMedia={onSeekMedia}
+      reactions={reactions}
+      onToggleReaction={onToggleReaction}
+      onReply={!isReply ? onReply : undefined}
+      onEdit={isOwn && !isEditing ? () => setIsEditing(true) : undefined}
+      onDelete={isOwn ? () => onDelete?.(comment.id) : undefined}
+      isEditing={isEditing}
+      editingText={editText}
+      setEditingText={setEditText}
+      onSubmitEdit={handleSaveEdit}
+      onCancelEdit={() => { setIsEditing(false); setEditText(comment.content); }}
+      isReply={isReply}
+      isDimmed={!comment.is_current_draft}
+      onCardClick={isClickable ? handleCardClick : undefined}
+      headerSlot={showDraftBadge ? (
           <span
             className={cn(
               "rounded-full border px-1.5 py-0.5 text-[10px] font-medium",
@@ -485,41 +482,20 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
             {comment.draft_label}
           </span>
         ) : null}
-        {mediaTimestamp != null && mediaTimestamp > 0 && (
-          <TimestampBadge seconds={mediaTimestamp} onClick={onSeekMedia ? () => onSeekMedia(mediaTimestamp) : undefined} />
-        )}
-        <span className="text-[10px] text-muted-foreground">{timeAgo(comment.created_at)}</span>
-      </div>
-      {fileName ? <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+      metaSlot={fileName ? <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
           <FileText className="h-3 w-3 shrink-0" />
           <span className="truncate">{fileName}</span>
         </div> : null}
-
-      {isEditing ? (
-        <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
-          <Textarea value={editText} onChange={(e) => setEditText(e.target.value)} className="min-h-[50px] text-xs" autoFocus />
-          <div className="flex gap-1.5">
-            <Button size="sm" variant="default" onClick={handleSaveEdit} className="h-6 text-[10px] px-2">
-              <Check className="h-3 w-3 mr-1" />保存
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => { setIsEditing(false); setEditText(comment.content); }} className="h-6 text-[10px] px-2">
-              キャンセル
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <p className="text-xs whitespace-pre-wrap">{renderContent(comment.content)}</p>
-      )}
-
-      {hasAnnotation ? <div className="flex items-center gap-1 text-[10px] text-primary">
+      contentSlot={<>
+        {hasAnnotation ? <div className="flex items-center gap-1 text-[10px] text-primary">
           <Pin className="h-3 w-3" />
           📌 画像上の指摘
           {onAnnotationClick ? <span className="text-muted-foreground ml-1">（クリックで表示）</span> : null}
         </div> : null}
-      {!hasAnnotation && hasCheckItem && onCheckItemClick ? <div className="flex items-center gap-1 text-[10px] text-primary">
+        {!hasAnnotation && hasCheckItem && onCheckItemClick ? <div className="flex items-center gap-1 text-[10px] text-primary">
           🔍 チェック項目を表示（クリック）
         </div> : null}
-      {comment.attachment_url ? <a href={comment.attachment_url} target="_blank" rel="noopener noreferrer" className="block" onClick={(e) => e.stopPropagation()}>
+        {comment.attachment_url ? <a href={comment.attachment_url} target="_blank" rel="noopener noreferrer" className="block" onClick={(e) => e.stopPropagation()}>
           {comment.attachment_type?.startsWith("image/") ? (
             <img src={comment.attachment_url} alt={comment.attachment_name ?? ""} className="max-h-20 rounded border border-border" />
           ) : (
@@ -528,35 +504,8 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
             </div>
           )}
         </a> : null}
-      <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-        <button onClick={onToggleStatus}
-          className={cn("text-[10px] px-2 py-0.5 rounded-full border font-medium shrink-0",
-            comment.status === "open" ? "border-status-warning/30 text-status-warning bg-status-warning/10" : "border-status-ok/30 text-status-ok bg-status-ok/10")}>
-          {comment.status === "open" ? "未対応" : "対応済"}
-        </button>
-        {!isReply && (
-          <button onClick={onReply} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 shrink-0">
-            <Reply className="h-3 w-3" />返信
-          </button>
-        )}
-        {isOwn && !isEditing ? (
-          <>
-            <button
-              onClick={() => setIsEditing(true)}
-              className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 shrink-0"
-            >
-              <Pencil className="h-3 w-3" />編集
-            </button>
-            <button
-              onClick={() => onDelete?.(comment.id)}
-              className="text-[10px] text-muted-foreground hover:text-destructive flex items-center gap-1 shrink-0"
-            >
-              <Trash2 className="h-3 w-3" />削除
-            </button>
-          </>
-        ) : null}
-        <div className="flex-1" />
-        {!isReply && onReplicate ? (
+      </>}
+      actionSlot={!isReply && onReplicate ? (
           <div className="relative shrink-0" ref={menuRef}>
             <button
               onClick={() => setMenuOpen((open) => !open)}
@@ -580,7 +529,6 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
             ) : null}
           </div>
         ) : null}
-      </div>
-    </div>
+    />
   );
 }

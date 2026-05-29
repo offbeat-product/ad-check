@@ -24,6 +24,7 @@ export type CommentWithDraftInfo = CommentRow & {
   draft_label: string;
   is_current_draft: boolean;
   guest_token?: string | null;
+  creator_id?: string | null;
 };
 export type CorrectionPatternRow = Tables<"correction_patterns">;
 

@@ -3,7 +3,7 @@ import { format } from "date-fns";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useCreatorFileComments } from "@/hooks/useCreatorFileDetail";
+import { useCreatorFileComments, type CreatorFileComment } from "@/hooks/useCreatorFileDetail";
 import { parseCreatorProjectFilesPayload, parseCreatorProjectPayload } from "@/lib/creator-project-rpc";
 import { CreatorUploadModal, type CreatorUploadParentCandidate } from "@/components/creator/CreatorUploadModal";
 import { runScriptCheck, getWebhookUrl, webhookFetch, getRelatedProcessData, VIDEO_ASYNC_ACCEPTED } from "@/lib/webhook";
@@ -15,6 +15,8 @@ import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import type { CheckItem } from "@/lib/types";
 import { getEffectiveSubmitLabel } from "@/lib/check-display";
 import type { MentionMember } from "@/components/comments/MentionInput";
+import { RichCommentCard, type CommentRole, type ReactionSummary } from "@/components/comments/RichCommentCard";
+import { useCommentReactions } from "@/hooks/useCommentReactions";
 import type { Json } from "@/integrations/supabase/types";
 import type { ProjectFile, Product, Project, Client, CheckResultRow } from "@/lib/db-types";
 import { parseCheckResultRow, type CheckResultWithParsedItems } from "@/lib/parse-check-result";
@@ -154,6 +156,7 @@ export default function FileReviewPage({
   const [mobilePanel, setMobilePanel] = useState<"preview" | "check">("preview");
   const [activeCheckItem, setActiveCheckItem] = useState<CheckItem | null>(null);
   const [creatorAllFiles, setCreatorAllFiles] = useState<ProjectFile[]>([]);
+  const [myCreatorId, setMyCreatorId] = useState<string | null>(null);
   const creatorParentCandidates = useMemo<CreatorUploadParentCandidate[]>(() => {
     if (!creatorMode || !file) return [];
     const inProcess = creatorAllFiles.filter((f) => f.process_type === file.process_type);
@@ -177,6 +180,7 @@ export default function FileReviewPage({
     comments: creatorComments,
     loading: creatorCommentsLoading,
     error: creatorCommentsError,
+    refetch: refetchCreatorComments,
   } = useCreatorFileComments(creatorMode ? activeShareToken : undefined, creatorMode ? fileId : undefined);
   const checkItems = record?.check_items ?? null;
   // Comments should always be associated with the root (original) check result, not comparison results
@@ -311,8 +315,8 @@ export default function FileReviewPage({
             return;
           }
           const [{ data: projectPayload, error: projectErr }, { data: filesPayload, error: filesErr }] = await Promise.all([
-            supabase.rpc("get_project_for_creator", { p_share_token: activeShareToken }),
-            supabase.rpc("get_project_files_for_creator", { p_share_token: activeShareToken }),
+            supabase.rpc.bind(supabase)("get_project_for_creator", { p_share_token: activeShareToken }),
+            supabase.rpc.bind(supabase)("get_project_files_for_creator", { p_share_token: activeShareToken }),
           ]);
           if (cancelled) return;
           if (projectErr) throw projectErr;
@@ -343,6 +347,7 @@ export default function FileReviewPage({
           })) as ProjectFile[];
 
           setCreatorAllFiles(creatorFiles);
+          setMyCreatorId(creatorProject?.creator_id ?? null);
           const target = creatorFiles.find((f) => f.id === fileId);
           if (!target) {
             setLoading(false);
@@ -1897,6 +1902,9 @@ export default function FileReviewPage({
           comments={creatorComments}
           loading={creatorCommentsLoading}
           error={creatorCommentsError}
+          shareToken={activeShareToken}
+          myCreatorId={myCreatorId}
+          onRefetch={refetchCreatorComments}
           onAnnotationClick={handleAnnotationClick}
           onSeekMedia={handleSeekMedia}
         />
@@ -2056,33 +2064,53 @@ function CreatorReadonlyCommentsPanel({
   comments,
   loading,
   error,
+  shareToken,
+  myCreatorId,
+  onRefetch,
   onAnnotationClick,
   onSeekMedia,
 }: {
-  comments: Array<{
-    id: string;
-    content: string;
-    author_name: string;
-    status: string;
-    created_at: string;
-    media_timestamp: number | null;
-    annotation_data: unknown | null;
-    parent_id: string | null;
-  }>;
+  comments: CreatorFileComment[];
   loading: boolean;
   error: string | null;
+  shareToken: string;
+  myCreatorId: string | null;
+  onRefetch: () => Promise<void>;
   onAnnotationClick: (annotationData: unknown) => void;
   onSeekMedia: (seconds: number) => void;
 }) {
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
 
   const filtered = comments.filter((c) => {
     if (tab === "open") return c.status === "open";
     if (tab === "resolved") return c.status === "resolved";
     return true;
   });
-  const topLevel = filtered.filter((c) => !c.parent_id);
-  const replies = (parentId: string) => filtered.filter((c) => c.parent_id === parentId);
+  const { reactionsByCommentId, toggleReaction } = useCommentReactions({
+    commentIds: filtered.map((c) => c.id),
+    surface: "creator",
+    shareToken,
+    creatorId: myCreatorId,
+  });
+  const { parents, repliesByParent } = useMemo(() => {
+    const parents: CreatorFileComment[] = [];
+    const repliesByParent: Record<string, CreatorFileComment[]> = {};
+    for (const comment of filtered) {
+      if (comment.parent_id) {
+        (repliesByParent[comment.parent_id] ??= []).push(comment);
+      } else {
+        parents.push(comment);
+      }
+    }
+    Object.values(repliesByParent).forEach((replies) =>
+      replies.sort((a, b) => a.created_at.localeCompare(b.created_at))
+    );
+    return { parents, repliesByParent };
+  }, [filtered]);
 
   const countByTab = (t: "all" | "open" | "resolved") => {
     if (t === "open") return comments.filter((c) => c.status === "open").length;
@@ -2090,21 +2118,69 @@ function CreatorReadonlyCommentsPanel({
     return comments.length;
   };
 
-  const timeAgo = (dateStr: string) => {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return "たった今";
-    if (mins < 60) return `${mins}分前`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}時間前`;
-    return `${Math.floor(hrs / 24)}日前`;
-  };
-
   const tabs = [
     { key: "all" as const, label: "全て" },
     { key: "open" as const, label: "未対応" },
     { key: "resolved" as const, label: "対応済" },
   ];
+
+  const callCreatorComments = async (payload: Record<string, unknown>) => {
+    const { data, error: invokeError } = await supabase.functions.invoke.bind(supabase.functions)("creator-comments", {
+      body: { share_token: shareToken, ...payload },
+    });
+    if (invokeError) throw invokeError;
+    const response = data as { error?: string } | null;
+    if (response?.error) throw new Error(response.error);
+    return data;
+  };
+
+  const handleReply = async (parentId: string) => {
+    const content = replyText.trim();
+    if (!content) return;
+    try {
+      await callCreatorComments({ action: "create_reply", parent_id: parentId, content });
+      setReplyingTo(null);
+      setReplyText("");
+      await onRefetch();
+    } catch (err) {
+      console.error("[creator reply]", err);
+      window.alert("返信の投稿に失敗しました。");
+    }
+  };
+
+  const startEdit = (comment: CreatorFileComment) => {
+    setEditingId(comment.id);
+    setEditingText(comment.content);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditingText("");
+  };
+
+  const handleEdit = async (commentId: string) => {
+    const content = editingText.trim();
+    if (!content) return;
+    try {
+      await callCreatorComments({ action: "update", comment_id: commentId, content });
+      cancelEdit();
+      await onRefetch();
+    } catch (err) {
+      console.error("[creator edit]", err);
+      window.alert("編集に失敗しました。自分のコメントのみ編集できます。");
+    }
+  };
+
+  const handleDelete = async (commentId: string) => {
+    if (!window.confirm("このコメントを削除しますか？")) return;
+    try {
+      await callCreatorComments({ action: "delete", comment_id: commentId });
+      await onRefetch();
+    } catch (err) {
+      console.error("[creator delete]", err);
+      window.alert("削除に失敗しました。自分のコメントのみ削除できます。");
+    }
+  };
 
   return (
     <div className="w-full md:w-[380px] shrink-0 h-[calc(100vh-44px)] md:h-screen border-l-0 md:border-l border-border flex flex-col bg-card overflow-hidden">
@@ -2128,50 +2204,141 @@ function CreatorReadonlyCommentsPanel({
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
         {loading ? <p className="text-xs text-muted-foreground text-center py-8">読み込み中...</p> : null}
         {error ? <p className="text-xs text-destructive text-center py-3">{error}</p> : null}
-        {!loading && topLevel.length === 0 && (
+        {!loading && parents.length === 0 && (
           <p className="text-xs text-muted-foreground text-center py-8">コメントはまだありません</p>
         )}
-        {topLevel.map((c) => (
-          <div key={c.id} className="rounded-lg border border-border p-3 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-xs font-medium">{c.author_name}</p>
-              <span className="text-[10px] text-muted-foreground">{timeAgo(c.created_at)}</span>
-            </div>
-            <p className="text-sm whitespace-pre-wrap">{c.content}</p>
-            <div className="flex items-center gap-2">
-              <span className={cn("text-[10px] px-1.5 py-0.5 rounded", c.status === "resolved" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>
-                {c.status === "resolved" ? "対応済" : "未対応"}
-              </span>
-              {c.media_timestamp != null && c.media_timestamp > 0 && (
-                <button
-                  type="button"
-                  className="text-[10px] text-primary hover:underline"
-                  onClick={() => onSeekMedia(c.media_timestamp || 0)}
-                >
-                  {Math.floor((c.media_timestamp || 0) / 60)}:{String(Math.floor((c.media_timestamp || 0) % 60)).padStart(2, "0")}
-                </button>
-              )}
-              {c.annotation_data ? <button
-                  type="button"
-                  className="text-[10px] text-primary hover:underline"
-                  onClick={() => onAnnotationClick(c.annotation_data)}
-                >
-                  注釈を表示
-                </button> : null}
-            </div>
-            {replies(c.id).map((r) => (
-              <div key={r.id} className="ml-3 pl-3 border-l border-border/70">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-medium">{r.author_name}</p>
-                  <span className="text-[10px] text-muted-foreground">{timeAgo(r.created_at)}</span>
-                </div>
-                <p className="text-sm whitespace-pre-wrap">{r.content}</p>
+        {parents.map((parent) => (
+          <div key={parent.id} className="space-y-2">
+            <CreatorCommentItem
+              comment={parent}
+              isOwn={parent.creator_id != null && parent.creator_id === myCreatorId}
+              onAnnotationClick={onAnnotationClick}
+              onSeekMedia={onSeekMedia}
+              onStartReply={() => {
+                setReplyingTo(replyingTo === parent.id ? null : parent.id);
+                setReplyText("");
+              }}
+              onStartEdit={() => startEdit(parent)}
+              onDelete={() => handleDelete(parent.id)}
+              isEditing={editingId === parent.id}
+              editingText={editingText}
+              setEditingText={setEditingText}
+              onSubmitEdit={() => handleEdit(parent.id)}
+              onCancelEdit={cancelEdit}
+              reactions={reactionsByCommentId[parent.id]}
+              onToggleReaction={(emoji) => void toggleReaction(parent.id, emoji)}
+            />
+            {(repliesByParent[parent.id] ?? []).length > 0 ? (
+              <div className="ml-5 mt-2 space-y-2 border-l border-border/70 pl-3">
+                {(repliesByParent[parent.id] ?? []).map((reply) => (
+                  <CreatorCommentItem
+                    key={reply.id}
+                    comment={reply}
+                    isReply
+                    isOwn={reply.creator_id != null && reply.creator_id === myCreatorId}
+                    onAnnotationClick={onAnnotationClick}
+                    onSeekMedia={onSeekMedia}
+                    onStartEdit={() => startEdit(reply)}
+                    onDelete={() => handleDelete(reply.id)}
+                    isEditing={editingId === reply.id}
+                    editingText={editingText}
+                    setEditingText={setEditingText}
+                    onSubmitEdit={() => handleEdit(reply.id)}
+                    onCancelEdit={cancelEdit}
+                    reactions={reactionsByCommentId[reply.id]}
+                    onToggleReaction={(emoji) => void toggleReaction(reply.id, emoji)}
+                  />
+                ))}
               </div>
-            ))}
+            ) : null}
+            {replyingTo === parent.id ? (
+              <div className="ml-5 mt-2 space-y-1.5 border-l border-border/70 pl-3">
+                <Textarea
+                  value={replyText}
+                  onChange={(e) => setReplyText(e.target.value)}
+                  placeholder="返信を入力..."
+                  className="min-h-[50px] text-xs"
+                />
+                <div className="flex gap-1.5">
+                  <Button size="sm" onClick={() => handleReply(parent.id)} disabled={!replyText.trim()} className="h-6 text-[10px] px-2">
+                    返信する
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => { setReplyingTo(null); setReplyText(""); }} className="h-6 text-[10px] px-2">
+                    キャンセル
+                  </Button>
+                </div>
+              </div>
+            ) : null}
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+function CreatorCommentItem({
+  comment,
+  isReply,
+  isOwn,
+  onAnnotationClick,
+  onSeekMedia,
+  onStartReply,
+  onStartEdit,
+  onDelete,
+  isEditing,
+  editingText,
+  setEditingText,
+  onSubmitEdit,
+  onCancelEdit,
+  reactions,
+  onToggleReaction,
+}: {
+  comment: CreatorFileComment;
+  isReply?: boolean;
+  isOwn: boolean;
+  onAnnotationClick: (annotationData: unknown) => void;
+  onSeekMedia: (seconds: number) => void;
+  onStartReply?: () => void;
+  onStartEdit: () => void;
+  onDelete: () => void;
+  isEditing: boolean;
+  editingText: string;
+  setEditingText: (value: string) => void;
+  onSubmitEdit: () => void;
+  onCancelEdit: () => void;
+  reactions?: ReactionSummary[];
+  onToggleReaction?: (emoji: string) => void;
+}) {
+  const role: CommentRole = comment.creator_id ? "creator" : "internal";
+
+  return (
+    <RichCommentCard
+      authorName={comment.author_name}
+      role={role}
+      createdAt={comment.created_at}
+      status={comment.status}
+      content={comment.content}
+      mediaTimestamp={comment.media_timestamp}
+      onSeekMedia={onSeekMedia}
+      reactions={reactions}
+      onToggleReaction={onToggleReaction}
+      onReply={!isReply ? onStartReply : undefined}
+      onEdit={isOwn && !isEditing ? onStartEdit : undefined}
+      onDelete={isOwn ? onDelete : undefined}
+      isEditing={isEditing}
+      editingText={editingText}
+      setEditingText={setEditingText}
+      onSubmitEdit={onSubmitEdit}
+      onCancelEdit={onCancelEdit}
+      isReply={isReply}
+      contentSlot={comment.annotation_data ? <button
+            type="button"
+            className="text-[10px] text-primary hover:underline"
+            onClick={() => onAnnotationClick(comment.annotation_data)}
+          >
+            注釈を表示
+          </button> : null}
+    />
   );
 }
 
