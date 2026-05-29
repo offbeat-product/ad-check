@@ -2,8 +2,9 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import MentionInput, { type MentionMember } from "@/components/comments/MentionInput";
-import { Square, Circle, ArrowUpRight, Pencil, Type, MapPin, Undo2, Trash2, MessageCircle } from "lucide-react";
+import { Square, Circle, ArrowUpRight, Pencil, Type, MapPin, Undo2, Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { formatMediaTimestampForComment } from "@/lib/comment-annotations";
 
 type ToolType = "rect" | "ellipse" | "arrow" | "freehand" | "text" | "pin";
 
@@ -16,6 +17,13 @@ interface Annotation {
   text?: string;
 }
 
+interface MediaPlaybackControls {
+  currentTime: number;
+  duration: number;
+  onSeek: (seconds: number) => void;
+  onStep: (deltaSeconds: number) => void;
+}
+
 interface AnnotationCanvasProps {
   active: boolean;
   width: number;
@@ -24,6 +32,7 @@ interface AnnotationCanvasProps {
   members?: MentionMember[];
   /** For video: returns current playback time in seconds */
   getMediaCurrentTime?: () => number;
+  mediaPlayback?: MediaPlaybackControls;
 }
 
 const COLORS = [
@@ -50,7 +59,7 @@ const TOOLS: { type: ToolType; icon: typeof Square; label: string }[] = [
   { type: "pin", icon: MapPin, label: "ピン" },
 ];
 
-export default function AnnotationCanvas({ active, width, height, onSaveAnnotations, members = [], getMediaCurrentTime }: AnnotationCanvasProps) {
+export default function AnnotationCanvas({ active, width, height, onSaveAnnotations, members = [], getMediaCurrentTime, mediaPlayback }: AnnotationCanvasProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tool, setTool] = useState<ToolType>("rect");
   const [color, setColor] = useState("#EF4444");
@@ -246,7 +255,6 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
     setPendingAnnotation(null);
     setCommentText("");
     setMentionedUserIds([]);
-    setIsCorrection(false);
   };
 
   const handleCancelComment = () => {
@@ -255,7 +263,6 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
     setCommentText("");
     setCommentError(false);
     setMentionedUserIds([]);
-    setIsCorrection(false);
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -562,6 +569,44 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
         <button onClick={handleClear} disabled={showingPopup} className="w-9 h-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:bg-muted disabled:opacity-40" title="全削除">
           <Trash2 className="h-4 w-4" />
         </button>
+
+        {mediaPlayback ? <>
+            <div className="w-px h-7 bg-border mx-1" />
+            <button
+              type="button"
+              onClick={() => mediaPlayback.onStep(-0.1)}
+              disabled={showingPopup}
+              className="w-9 h-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:bg-muted disabled:opacity-40"
+              title="0.1秒戻す"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => mediaPlayback.onStep(0.1)}
+              disabled={showingPopup}
+              className="w-9 h-9 rounded-lg border border-border flex items-center justify-center text-muted-foreground hover:bg-muted disabled:opacity-40"
+              title="0.1秒進める"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
+            <input
+              type="range"
+              min={0}
+              max={mediaPlayback.duration > 0 ? mediaPlayback.duration : 0}
+              step={0.01}
+              value={Math.min(mediaPlayback.currentTime, mediaPlayback.duration || mediaPlayback.currentTime)}
+              onChange={(event) => mediaPlayback.onSeek(Number(event.target.value))}
+              disabled={showingPopup || mediaPlayback.duration <= 0}
+              className="min-w-[120px] flex-1 accent-primary"
+              aria-label="再生位置"
+            />
+            <span className="text-[10px] font-mono text-muted-foreground whitespace-nowrap">
+              {formatMediaTimestampForComment(mediaPlayback.currentTime)}
+              {" / "}
+              {formatMediaTimestampForComment(mediaPlayback.duration)}
+            </span>
+          </> : null}
       </div>
     </>
   );
