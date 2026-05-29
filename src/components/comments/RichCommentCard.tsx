@@ -4,7 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { humanSize, isImage, type CommentAttachmentView } from "@/lib/comment-attachments";
 import { COMMENT_REACTION_CHOICES } from "@/lib/comment-reactions";
-import { parseTimestampFromText, isValidMediaTimestamp } from "@/lib/comment-annotations";
+import {
+  isValidMediaTimestamp,
+  normalizeCommentContentForDisplay,
+  parseTimestampFromText,
+} from "@/lib/comment-annotations";
 import { cn } from "@/lib/utils";
 
 export type CommentRole = "internal" | "creator" | "client";
@@ -105,13 +109,14 @@ function renderCommentContent(
   mediaTimestamp: number | null | undefined,
   onSeekMedia?: (seconds: number) => void
 ) {
+  const displayContent = normalizeCommentContentForDisplay(content);
   const parts: React.ReactNode[] = [];
   let lastIndex = 0;
 
-  for (const match of content.matchAll(COMMENT_CONTENT_TOKEN_RE)) {
+  for (const match of displayContent.matchAll(COMMENT_CONTENT_TOKEN_RE)) {
     const index = match.index ?? 0;
     if (index > lastIndex) {
-      parts.push(<span key={`text-${lastIndex}`}>{content.slice(lastIndex, index)}</span>);
+      parts.push(<span key={`text-${lastIndex}`}>{displayContent.slice(lastIndex, index)}</span>);
     }
 
     const [fullMatch, mention, timestampText] = match;
@@ -145,11 +150,11 @@ function renderCommentContent(
     lastIndex = index + fullMatch.length;
   }
 
-  if (lastIndex < content.length) {
-    parts.push(<span key={`text-${lastIndex}`}>{content.slice(lastIndex)}</span>);
+  if (lastIndex < displayContent.length) {
+    parts.push(<span key={`text-${lastIndex}`}>{displayContent.slice(lastIndex)}</span>);
   }
 
-  return parts.length > 0 ? parts : content;
+  return parts.length > 0 ? parts : displayContent;
 }
 
 function stopPropagation(handler?: () => void) {
