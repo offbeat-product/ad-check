@@ -94,8 +94,9 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
     let result: CommentWithDraftInfo[] = withDefaultDraftInfo((data ?? []) as CommentRow[]);
 
     try {
-      const rpc = supabase.rpc as unknown as CommentsWithDraftInfoRpc;
-      const { data: draftData, error: rpcError } = await rpc("get_comments_with_draft_info", {
+      const { data: draftData, error: rpcError } = await (
+        supabase.rpc.bind(supabase) as unknown as CommentsWithDraftInfoRpc
+      )("get_comments_with_draft_info", {
         p_check_result_id: checkResultId,
       });
       if (!rpcError && draftData && draftData.length > 0) {
