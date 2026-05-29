@@ -2075,6 +2075,12 @@ export default function FileReviewPage({
   );
 }
 
+interface CreatorReplyTarget {
+  rootId: string;
+  targetId: string;
+  toName: string;
+}
+
 function CreatorReadonlyCommentsPanel({
   comments,
   loading,
@@ -2095,7 +2101,7 @@ function CreatorReadonlyCommentsPanel({
   onSeekMedia: (seconds: number) => void;
 }) {
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
-  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<CreatorReplyTarget | null>(null);
   const [replyText, setReplyText] = useState("");
   const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
   const [attachmentsByCommentId, setAttachmentsByCommentId] = useState<Record<string, CommentAttachmentView[]>>({});
@@ -2151,6 +2157,12 @@ function CreatorReadonlyCommentsPanel({
     { key: "open" as const, label: "未対応" },
     { key: "resolved" as const, label: "対応済" },
   ];
+
+  const startReply = (rootId: string, targetId: string, toName: string) => {
+    setReplyingTo((current) => current?.targetId === targetId ? null : { rootId, targetId, toName });
+    setReplyText("");
+    setReplyAttachments([]);
+  };
 
   useEffect(() => {
     const commentIds = comments.map((comment) => comment.id);
@@ -2274,17 +2286,14 @@ function CreatorReadonlyCommentsPanel({
           <p className="text-xs text-muted-foreground text-center py-8">コメントはまだありません</p>
         )}
         {parents.map((parent) => (
-          <div key={parent.id} className="space-y-2">
-            <CreatorCommentItem
-              comment={parent}
-              isOwn={parent.creator_id != null && parent.creator_id === myCreatorId}
-              onAnnotationClick={onAnnotationClick}
-              onSeekMedia={onSeekMedia}
-              onStartReply={() => {
-                setReplyingTo(replyingTo === parent.id ? null : parent.id);
-                setReplyText("");
-                setReplyAttachments([]);
-              }}
+          <div key={parent.id} className="overflow-hidden rounded-xl border border-border/60 bg-card">
+            <div className="p-3.5">
+              <CreatorCommentItem
+                comment={parent}
+                isOwn={parent.creator_id != null && parent.creator_id === myCreatorId}
+                onAnnotationClick={onAnnotationClick}
+                onSeekMedia={onSeekMedia}
+                onStartReply={() => startReply(parent.id, parent.id, parent.author_name)}
               onStartEdit={() => startEdit(parent)}
               onDelete={() => handleDelete(parent.id)}
               isEditing={editingId === parent.id}
@@ -2295,34 +2304,38 @@ function CreatorReadonlyCommentsPanel({
               reactions={reactionsByCommentId[parent.id]}
               onToggleReaction={(emoji) => void toggleReaction(parent.id, emoji)}
               attachments={attachmentsByCommentId[parent.id]}
-            />
+              />
+            </div>
             {(repliesByParent[parent.id] ?? []).length > 0 ? (
-              <div className="ml-6 mt-2 space-y-2 border-l-2 border-primary/20 pl-3">
+              <>
                 {(repliesByParent[parent.id] ?? []).map((reply) => (
-                  <CreatorCommentItem
-                    key={reply.id}
-                    comment={reply}
-                    isReply
-                    isOwn={reply.creator_id != null && reply.creator_id === myCreatorId}
-                    onAnnotationClick={onAnnotationClick}
-                    onSeekMedia={onSeekMedia}
-                    onStartEdit={() => startEdit(reply)}
-                    onDelete={() => handleDelete(reply.id)}
-                    isEditing={editingId === reply.id}
-                    editingText={editingText}
-                    setEditingText={setEditingText}
-                    onSubmitEdit={() => handleEdit(reply.id)}
-                    onCancelEdit={cancelEdit}
-                    reactions={reactionsByCommentId[reply.id]}
-                    onToggleReaction={(emoji) => void toggleReaction(reply.id, emoji)}
-                    attachments={attachmentsByCommentId[reply.id]}
-                    replyingToName={parent.author_name}
-                  />
+                  <div key={reply.id} className="border-l-2 border-t border-border/40 border-l-primary/20 bg-muted/60 px-4 py-2.5 pl-6">
+                    <CreatorCommentItem
+                      comment={reply}
+                      isReply
+                      isOwn={reply.creator_id != null && reply.creator_id === myCreatorId}
+                      onAnnotationClick={onAnnotationClick}
+                      onSeekMedia={onSeekMedia}
+                      onStartReply={() => startReply(parent.id, reply.id, reply.author_name)}
+                      onStartEdit={() => startEdit(reply)}
+                      onDelete={() => handleDelete(reply.id)}
+                      isEditing={editingId === reply.id}
+                      editingText={editingText}
+                      setEditingText={setEditingText}
+                      onSubmitEdit={() => handleEdit(reply.id)}
+                      onCancelEdit={cancelEdit}
+                      reactions={reactionsByCommentId[reply.id]}
+                      onToggleReaction={(emoji) => void toggleReaction(reply.id, emoji)}
+                      attachments={attachmentsByCommentId[reply.id]}
+                      replyingToName={parent.author_name}
+                    />
+                  </div>
                 ))}
-              </div>
+              </>
             ) : null}
-            {replyingTo === parent.id ? (
-              <div className="ml-5 mt-2 space-y-1.5 border-l border-border/70 pl-3">
+            {replyingTo?.rootId === parent.id ? (
+              <div className="space-y-1.5 border-l-2 border-t border-border/40 border-l-primary/20 bg-muted/60 px-4 py-2.5 pl-6">
+                <p className="text-[11px] text-muted-foreground">{replyingTo.toName}さんへ返信</p>
                 <Textarea
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
@@ -2330,7 +2343,7 @@ function CreatorReadonlyCommentsPanel({
                   className="min-h-[50px] text-xs"
                 />
                 <div className="flex gap-1.5">
-                  <Button size="sm" onClick={() => handleReply(parent.id)} disabled={!replyText.trim() && replyAttachments.length === 0} className="h-6 text-[10px] px-2">
+                  <Button size="sm" onClick={() => handleReply(replyingTo.targetId)} disabled={!replyText.trim() && replyAttachments.length === 0} className="h-6 text-[10px] px-2">
                     返信する
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => { setReplyingTo(null); setReplyText(""); setReplyAttachments([]); }} className="h-6 text-[10px] px-2">
@@ -2414,7 +2427,7 @@ function CreatorCommentItem({
       attachments={attachments}
       reactions={reactions}
       onToggleReaction={onToggleReaction}
-      onReply={!isReply ? onStartReply : undefined}
+      onReply={onStartReply}
       onEdit={isOwn && !isEditing ? onStartEdit : undefined}
       onDelete={isOwn ? onDelete : undefined}
       isEditing={isEditing}
