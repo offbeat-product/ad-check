@@ -18,11 +18,16 @@ import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Lock, AlertTriangle, Bot, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AdCheckLogoMark } from "@/components/AdCheckLogoMark";
-import { formatTimestamp } from "@/components/comments/TimestampBadge";
 import { downloadProjectFile, getSharedCheckDownloadPayload } from "@/lib/download-project-file";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { isValidMediaTimestamp, normalizeAnnotations, shouldShowTimedAnnotation, type CommentAnnotationData } from "@/lib/comment-annotations";
+import {
+  buildCommentContentWithMediaTimestamp,
+  isValidMediaTimestamp,
+  normalizeAnnotations,
+  shouldShowTimedAnnotation,
+  type CommentAnnotationData,
+} from "@/lib/comment-annotations";
 
 export default function SharedViewPage() {
   const { token } = useParams<{ token: string }>();
@@ -151,28 +156,22 @@ export default function SharedViewPage() {
       return;
     }
 
-    // Build timestamp prefix for video
-    let content = comment;
-    if (mediaRef.current) {
-      const time = mediaRef.current.getCurrentTime();
-      if (isValidMediaTimestamp(time)) {
-        const ts = formatTimestamp(time);
-        content = `[${ts}] ${comment}`;
-      }
-    }
-
     const mediaTimestamp = mediaRef.current?.getCurrentTime();
+    const timestampValue = isValidMediaTimestamp(mediaTimestamp) ? mediaTimestamp : null;
+    const content = buildCommentContentWithMediaTimestamp(comment, timestampValue);
 
     try {
       await supabase.functions.invoke("shared-comments", {
         body: {
+          action: "create",
           share_token: token,
           check_result_id: record.id,
           author_name: guestName,
           author_email: localStorage.getItem("shared_guest_email") || "shared@guest",
           content,
           annotation_data: annotations.length > 0 ? annotations[0] : null,
-          media_timestamp: isValidMediaTimestamp(mediaTimestamp) ? mediaTimestamp : null,
+          media_timestamp: null,
+          guest_token: localStorage.getItem("ad_check_shared_guest_token"),
         },
       });
       setSelectedAnnotations(normalizeAnnotations(annotations.length > 0 ? annotations[0] : null));

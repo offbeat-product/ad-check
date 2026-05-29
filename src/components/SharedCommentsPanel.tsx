@@ -17,7 +17,11 @@ import {
   normalizeAttachmentRows,
   type CommentAttachmentView,
 } from "@/lib/comment-attachments";
-import { isValidMediaTimestamp, resolveSeekSeconds } from "@/lib/comment-annotations";
+import {
+  buildCommentContentWithMediaTimestamp,
+  isValidMediaTimestamp,
+  resolveSeekSeconds,
+} from "@/lib/comment-annotations";
 
 const GUEST_TOKEN_KEY = "ad_check_shared_guest_token";
 
@@ -235,6 +239,9 @@ export default function SharedCommentsPanel({
     setPosting(true);
     try {
       const uploadAttachments = files.length > 0 ? await filesToUploads(files) : [];
+      const timestampValue =
+        !parentId && isValidMediaTimestamp(mediaCurrentTime) ? mediaCurrentTime : null;
+      const normalizedContent = buildCommentContentWithMediaTimestamp(content.trim(), timestampValue);
       const res = await invokeSharedComments("shared-comments", {
         body: {
           action: "create",
@@ -242,9 +249,9 @@ export default function SharedCommentsPanel({
           check_result_id: checkResultId,
           author_name: guestName.trim(),
           author_email: guestEmail.trim() || "shared@guest",
-          content,
+          content: normalizedContent,
           check_item_id: null,
-          media_timestamp: (!parentId && isValidMediaTimestamp(mediaCurrentTime)) ? mediaCurrentTime : null,
+          media_timestamp: null,
           parent_id: parentId || null,
           guest_token: guestToken,
           attachments: uploadAttachments,
