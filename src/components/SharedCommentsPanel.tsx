@@ -172,7 +172,25 @@ export default function SharedCommentsPanel({
 
   useEffect(() => { fetchComments(); }, [fetchComments, refreshKey]);
 
-  // Poll for new comments every 15s
+  // Realtime subscription keeps shared viewers in sync with internal/client comments.
+  useEffect(() => {
+    const channel = supabase
+      .channel(`shared-comments-${checkResultId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "comments", filter: `check_result_id=eq.${checkResultId}` },
+        () => {
+          void fetchComments();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [checkResultId, fetchComments]);
+
+  // Fallback polling for environments where Realtime is delayed or unavailable.
   useEffect(() => {
     const interval = setInterval(fetchComments, 15000);
     return () => clearInterval(interval);

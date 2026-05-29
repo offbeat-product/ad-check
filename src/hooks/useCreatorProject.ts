@@ -18,7 +18,7 @@ export function useCreatorProject(shareToken: string | undefined) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchAll = useCallback(async () => {
+  const fetchAll = useCallback(async (options?: { silent?: boolean }) => {
     if (!shareToken?.trim()) {
       setError("共有リンクが無効です");
       setProject(null);
@@ -29,7 +29,9 @@ export function useCreatorProject(shareToken: string | undefined) {
     }
 
     const token = shareToken.trim();
-    setLoading(true);
+    if (!options?.silent) {
+      setLoading(true);
+    }
     setError(null);
 
     try {
@@ -73,6 +75,25 @@ export function useCreatorProject(shareToken: string | undefined) {
   useEffect(() => {
     void fetchAll();
   }, [fetchAll]);
+
+  useEffect(() => {
+    if (!shareToken?.trim()) return;
+
+    const channel = supabase
+      .channel(`creator-project-comments-${shareToken.trim()}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "comments" },
+        () => {
+          void fetchAll({ silent: true });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [fetchAll, shareToken]);
 
   return { project, files, comments, loading, error, refetch: fetchAll };
 }

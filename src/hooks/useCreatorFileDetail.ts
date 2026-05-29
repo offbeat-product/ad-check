@@ -52,7 +52,7 @@ export function useCreatorFileComments(shareToken: string | undefined, fileId: s
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetch = useCallback(async () => {
+  const fetch = useCallback(async (options?: { silent?: boolean }) => {
     if (!shareToken?.trim() || !fileId?.trim()) {
       setComments([]);
       setLoading(false);
@@ -60,7 +60,9 @@ export function useCreatorFileComments(shareToken: string | undefined, fileId: s
       return;
     }
 
-    setLoading(true);
+    if (!options?.silent) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const { data, error: rpcError } = await supabase.rpc.bind(supabase)("get_project_comments_for_creator", {
@@ -84,6 +86,25 @@ export function useCreatorFileComments(shareToken: string | undefined, fileId: s
   useEffect(() => {
     void fetch();
   }, [fetch]);
+
+  useEffect(() => {
+    if (!shareToken?.trim() || !fileId?.trim()) return;
+
+    const channel = supabase
+      .channel(`creator-file-comments-${fileId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "comments" },
+        () => {
+          void fetch({ silent: true });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [fetch, fileId, shareToken]);
 
   return { comments, loading, error, refetch: fetch };
 }
