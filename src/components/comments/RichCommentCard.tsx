@@ -21,6 +21,7 @@ export interface RichCommentCardProps {
   status?: "open" | "resolved" | string | null;
   onToggleStatus?: () => void;
   content: string;
+  commentNumber?: number | null;
   mediaTimestamp?: number | null;
   onSeekMedia?: (seconds: number) => void;
   attachments?: CommentAttachmentView[];
@@ -128,6 +129,7 @@ export function RichCommentCard({
   status,
   onToggleStatus,
   content,
+  commentNumber,
   mediaTimestamp,
   onSeekMedia,
   attachments = [],
@@ -183,6 +185,14 @@ export function RichCommentCard({
       onClick={onCardClick}
     >
       <div className="flex items-start gap-2.5">
+        {!isReply && commentNumber != null ? (
+          <span
+            className="inline-flex h-[22px] min-w-[22px] shrink-0 items-center justify-center rounded-full bg-primary/10 px-1.5 text-[11px] font-semibold text-primary"
+            title={`コメント番号 ${commentNumber}`}
+          >
+            {commentNumber}
+          </span>
+        ) : null}
         <div
           className={cn(
             "flex shrink-0 items-center justify-center rounded-full font-bold",

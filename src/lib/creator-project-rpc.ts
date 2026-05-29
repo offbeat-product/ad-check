@@ -46,6 +46,7 @@ export interface CreatorProjectComment {
   created_at: string;
   created_by_name: string | null;
   parent_id: string | null;
+  comment_number?: number | null;
   creator_id: string | null;
 }
 
