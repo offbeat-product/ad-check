@@ -18,7 +18,9 @@ export type Product = ProductBase & ProductCheckSettingsFields;
 export type Project = Tables<"projects">;
 export type ProjectFile = Tables<"project_files">;
 export type CheckResultRow = Tables<"check_results">;
-export type CommentRow = Tables<"comments">;
+export type CommentRow = Tables<"comments"> & {
+  comment_number?: number | null;
+};
 export type CommentWithDraftInfo = CommentRow & {
   draft_round: number;
   draft_label: string;

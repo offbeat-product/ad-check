@@ -10,6 +10,7 @@ export interface CreatorFileComment {
   media_timestamp: number | null;
   annotation_data: unknown | null;
   parent_id: string | null;
+  comment_number?: number | null;
   creator_id: string | null;
   file_id: string;
   file_name: string;
@@ -33,6 +34,10 @@ function normalizeComments(data: unknown): CreatorFileComment[] {
           : Number(row.media_timestamp),
       annotation_data: row.annotation_data ?? null,
       parent_id: row.parent_id == null ? null : String(row.parent_id),
+      comment_number:
+        row.comment_number == null || Number.isNaN(Number(row.comment_number))
+          ? null
+          : Number(row.comment_number),
       creator_id: row.creator_id == null ? null : String(row.creator_id),
       file_id: String(row.file_id ?? ""),
       file_name: String(row.file_name ?? ""),

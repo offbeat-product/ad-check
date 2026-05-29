@@ -2408,6 +2408,7 @@ function CreatorCommentItem({
       createdAt={comment.created_at}
       status={comment.status}
       content={comment.content}
+      commentNumber={!isReply ? comment.comment_number : null}
       mediaTimestamp={comment.media_timestamp}
       onSeekMedia={onSeekMedia}
       attachments={attachments}

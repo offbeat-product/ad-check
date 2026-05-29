@@ -600,6 +600,7 @@ function CommentCard({ comment, onToggleStatus, onReply, onEdit, onDelete, isRep
       status={comment.status}
       onToggleStatus={onToggleStatus}
       content={comment.content}
+      commentNumber={!isReply ? comment.comment_number : null}
       mediaTimestamp={mediaTimestamp}
       onSeekMedia={onSeekMedia}
       attachments={cardAttachments}
