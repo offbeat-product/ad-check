@@ -23,6 +23,7 @@ export type CommentWithDraftInfo = CommentRow & {
   draft_round: number;
   draft_label: string;
   is_current_draft: boolean;
+  guest_token?: string | null;
 };
 export type CorrectionPatternRow = Tables<"correction_patterns">;
 

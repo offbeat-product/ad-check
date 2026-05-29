@@ -1,13 +1,28 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { CommentRow, CommentWithDraftInfo } from "@/lib/db-types";
 import { withDefaultDraftInfo } from "@/lib/comment-draft-info";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, User, Reply } from "lucide-react";
+import { Send, User, Reply, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import TimestampBadge from "@/components/comments/TimestampBadge";
+
+const GUEST_TOKEN_KEY = "ad_check_shared_guest_token";
+
+function getOrCreateGuestToken(): string {
+  try {
+    let token = localStorage.getItem(GUEST_TOKEN_KEY);
+    if (!token) {
+      token = `guest_${crypto.randomUUID()}`;
+      localStorage.setItem(GUEST_TOKEN_KEY, token);
+    }
+    return token;
+  } catch {
+    return `guest_ephemeral_${Math.random().toString(36).slice(2)}`;
+  }
+}
 
 interface SharedCommentsPanelProps {
   checkResultId: string;
@@ -43,6 +58,9 @@ export default function SharedCommentsPanel({
   const [replyText, setReplyText] = useState("");
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
   const [posting, setPosting] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState("");
+  const guestToken = useMemo(() => getOrCreateGuestToken(), []);
 
   const fetchComments = useCallback(async () => {
     let result: CommentWithDraftInfo[] = [];
@@ -117,6 +135,7 @@ export default function SharedCommentsPanel({
     try {
       const res = await supabase.functions.invoke("shared-comments", {
         body: {
+          action: "create",
           share_token: shareToken,
           check_result_id: checkResultId,
           author_name: guestName.trim(),
@@ -125,6 +144,7 @@ export default function SharedCommentsPanel({
           check_item_id: null,
           media_timestamp: (!parentId && mediaCurrentTime != null && mediaCurrentTime > 0) ? mediaCurrentTime : null,
           parent_id: parentId || null,
+          guest_token: guestToken,
         },
       });
       if (res.error) console.error("[shared-comments]", res.error);
@@ -133,6 +153,57 @@ export default function SharedCommentsPanel({
       console.error("[shared-comments] error:", err);
     }
     setPosting(false);
+  };
+
+  const startEdit = (comment: CommentWithDraftInfo) => {
+    setEditingId(comment.id);
+    setEditingText(comment.content);
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditingText("");
+  };
+
+  const handleEdit = async (commentId: string, content: string) => {
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    try {
+      const { error } = await supabase.functions.invoke("shared-comments", {
+        body: {
+          action: "update",
+          share_token: shareToken,
+          comment_id: commentId,
+          guest_token: guestToken,
+          content: trimmed,
+        },
+      });
+      if (error) throw error;
+      cancelEdit();
+      await fetchComments();
+    } catch (err) {
+      console.error("[shared comment edit]", err);
+      window.alert("編集に失敗しました。自分が投稿したコメントのみ編集できます。");
+    }
+  };
+
+  const handleDelete = async (commentId: string) => {
+    if (!window.confirm("このコメントを削除しますか？")) return;
+    try {
+      const { error } = await supabase.functions.invoke("shared-comments", {
+        body: {
+          action: "delete",
+          share_token: shareToken,
+          comment_id: commentId,
+          guest_token: guestToken,
+        },
+      });
+      if (error) throw error;
+      await fetchComments();
+    } catch (err) {
+      console.error("[shared comment delete]", err);
+      window.alert("削除に失敗しました。自分が投稿したコメントのみ削除できます。");
+    }
   };
 
   const handleSubmit = async () => {
@@ -190,10 +261,31 @@ export default function SharedCommentsPanel({
               onAnnotationClick={onAnnotationClick}
               onSeekMedia={onSeekMedia}
               onReply={allowWrite ? () => setReplyTo(replyTo === c.id ? null : c.id) : undefined}
+              isOwn={c.guest_token != null && c.guest_token === guestToken}
+              isEditing={editingId === c.id}
+              editingText={editingText}
+              setEditingText={setEditingText}
+              onStartEdit={() => startEdit(c)}
+              onCancelEdit={cancelEdit}
+              onEdit={() => handleEdit(c.id, editingText)}
+              onDelete={() => handleDelete(c.id)}
             />
             {getReplies(c.id).map((r) => (
               <div key={r.id} className="ml-5">
-                <SharedCommentCard comment={r} timeAgo={timeAgo} onSeekMedia={onSeekMedia} isReply />
+                <SharedCommentCard
+                  comment={r}
+                  timeAgo={timeAgo}
+                  onSeekMedia={onSeekMedia}
+                  isReply
+                  isOwn={r.guest_token != null && r.guest_token === guestToken}
+                  isEditing={editingId === r.id}
+                  editingText={editingText}
+                  setEditingText={setEditingText}
+                  onStartEdit={() => startEdit(r)}
+                  onCancelEdit={cancelEdit}
+                  onEdit={() => handleEdit(r.id, editingText)}
+                  onDelete={() => handleDelete(r.id)}
+                />
               </div>
             ))}
             {replyTo === c.id && (
@@ -248,13 +340,24 @@ export default function SharedCommentsPanel({
   );
 }
 
-function SharedCommentCard({ comment, timeAgo, onAnnotationClick, onSeekMedia, onReply, isReply }: {
+function SharedCommentCard({
+  comment, timeAgo, onAnnotationClick, onSeekMedia, onReply, isReply,
+  isOwn, isEditing, editingText, setEditingText, onStartEdit, onCancelEdit, onEdit, onDelete,
+}: {
   comment: CommentWithDraftInfo;
   timeAgo: (d: string) => string;
   onAnnotationClick?: (data: unknown) => void;
   onSeekMedia?: (seconds: number) => void;
   onReply?: () => void;
   isReply?: boolean;
+  isOwn?: boolean;
+  isEditing?: boolean;
+  editingText?: string;
+  setEditingText?: (value: string) => void;
+  onStartEdit?: () => void;
+  onCancelEdit?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const hasAnnotation = !!comment.annotation_data;
   const showDraftBadge = !comment.is_current_draft && !!comment.draft_label;
@@ -289,7 +392,26 @@ function SharedCommentCard({ comment, timeAgo, onAnnotationClick, onSeekMedia, o
         </div>
         <span className="text-[10px] text-muted-foreground">{timeAgo(comment.created_at)}</span>
       </div>
-      <p className="text-xs whitespace-pre-wrap">{comment.content}</p>
+      {isEditing ? (
+        <div className="space-y-1.5" onClick={(e) => e.stopPropagation()}>
+          <Textarea
+            value={editingText ?? ""}
+            onChange={(e) => setEditingText?.(e.target.value)}
+            className="min-h-[50px] text-xs"
+            autoFocus
+          />
+          <div className="flex gap-1.5">
+            <Button size="sm" variant="default" onClick={onEdit} className="h-6 text-[10px] px-2">
+              保存
+            </Button>
+            <Button size="sm" variant="ghost" onClick={onCancelEdit} className="h-6 text-[10px] px-2">
+              キャンセル
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-xs whitespace-pre-wrap">{comment.content}</p>
+      )}
       {hasAnnotation ? <button onClick={() => onAnnotationClick?.(comment.annotation_data)} className="text-[10px] text-primary hover:underline">
           📌 アノテーションを表示
         </button> : null}
@@ -301,6 +423,16 @@ function SharedCommentCard({ comment, timeAgo, onAnnotationClick, onSeekMedia, o
         {onReply ? <button onClick={onReply} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
             <Reply className="h-3 w-3" />返信
           </button> : null}
+        {isOwn && !isEditing ? (
+          <>
+            <button onClick={onStartEdit} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
+              <Pencil className="h-3 w-3" />編集
+            </button>
+            <button onClick={onDelete} className="text-[10px] text-muted-foreground hover:text-destructive flex items-center gap-0.5">
+              <Trash2 className="h-3 w-3" />削除
+            </button>
+          </>
+        ) : null}
       </div>
     </div>
   );
