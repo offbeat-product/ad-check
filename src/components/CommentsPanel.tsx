@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useProfile } from "@/hooks/useProfile";
 import type { CommentRow, CommentWithDraftInfo } from "@/lib/db-types";
 import { matchesCommentItemFilter, withDefaultDraftInfo } from "@/lib/comment-draft-info";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
@@ -75,6 +76,8 @@ interface ReplyTarget {
 
 export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia, onCommentDeleted, projectId, processType, productCode, fileId, onCommentCountChange, fileName, refreshKey, selectedCommentId: selectedCommentIdProp, onSelectComment: onSelectCommentProp }: CommentsPanelProps) {
   const { user } = useAuth();
+  const { profile } = useProfile();
+  const currentAuthorName = profile?.display_name?.trim() || user?.email?.split("@")[0] || "User";
   const [comments, setComments] = useState<CommentWithDraftInfo[]>([]);
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
   const [newComment, setNewComment] = useState("");
@@ -194,7 +197,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   const { reactionsByCommentId, toggleReaction } = useCommentReactions({
     commentIds: filtered.map((c) => c.id),
     surface: "internal",
-    reactorName: user?.email?.split("@")[0] || undefined,
+    reactorName: currentAuthorName,
   });
 
   const countByTab = (t: "all" | "open" | "resolved") => {
@@ -337,7 +340,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
 
   const sendMentionNotifications = async (content: string, userIds: string[]) => {
     if (!user || userIds.length === 0) return;
-    const authorName = user.email?.split("@")[0] || "User";
+    const authorName = currentAuthorName;
     // Resolve project name for richer notification
     let projectName = "";
     const resolvedFileName = fileName || "";
@@ -365,7 +368,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
       const { data: insertedComment, error } = await supabase.from("comments").insert({
         check_result_id: checkResultId,
         check_item_id: filterItemId || null,
-        author_name: user.email?.split("@")[0] || "User",
+        author_name: currentAuthorName,
         author_email: user.email || "",
         content: newComment.trim(),
         status: "open",
@@ -401,7 +404,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
       const { data: insertedReply, error } = await supabase.from("comments").insert({
         check_result_id: checkResultId,
         check_item_id: parent?.check_item_id || null,
-        author_name: user.email?.split("@")[0] || "User",
+        author_name: currentAuthorName,
         author_email: user.email || "",
         content: replyText.trim(),
         status: "open",

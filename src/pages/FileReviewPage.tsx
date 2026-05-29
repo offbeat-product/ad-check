@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useProfile } from "@/hooks/useProfile";
 import { useCreatorFileComments, type CreatorFileComment } from "@/hooks/useCreatorFileDetail";
 import { parseCreatorProjectFilesPayload, parseCreatorProjectPayload } from "@/lib/creator-project-rpc";
 import { CreatorUploadModal, type CreatorUploadParentCandidate } from "@/components/creator/CreatorUploadModal";
@@ -110,6 +111,8 @@ export default function FileReviewPage({
     useParams<{ projectId?: string; fileId?: string; shareToken?: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { profile } = useProfile();
+  const currentAuthorName = profile?.display_name?.trim() || user?.email?.split("@")[0] || "User";
   const { toast } = useToast();
   const { exportCsv } = useExportCsv();
   const creatorMode = isCreatorMode;
@@ -1151,7 +1154,7 @@ export default function FileReviewPage({
     const isMedia = aiCfgLocal?.inputMode === "audio" || aiCfgLocal?.inputMode === "video";
     const { data: savedComment, error } = await supabase.from("comments").insert([{
       check_result_id: record.id,
-      author_name: user.email?.split("@")[0] || "User",
+      author_name: currentAuthorName,
       author_email: user.email || "",
       content: comment || "アノテーション追加",
       annotation_data: { annotations } as unknown as Json,
@@ -1191,7 +1194,7 @@ export default function FileReviewPage({
 
       // Send mention notifications
       if (mentionedUserIds && mentionedUserIds.length > 0) {
-        const authorName = user.email?.split("@")[0] || "User";
+        const authorName = currentAuthorName;
         const projectName = project?.name || "";
         const fileName = file?.file_name || "";
         for (const uid of mentionedUserIds) {
@@ -1206,7 +1209,7 @@ export default function FileReviewPage({
       }
 
       // Send general comment notifications
-      const authorName = user.email?.split("@")[0] || "User";
+      const authorName = currentAuthorName;
       const projectName = project?.name || "";
       const fileName = file?.file_name || "";
       const excludeSet = new Set([user.id, ...(mentionedUserIds || [])]);
