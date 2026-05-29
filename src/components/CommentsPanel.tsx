@@ -16,6 +16,8 @@ import { ReplicateCommentDialog, type ReplicateCommentData } from "@/components/
 import {
   COMMENT_ATTACHMENT_BUCKET,
   assertAttachmentSize,
+  dataUrlToBlob,
+  fileToBase64,
   humanSize,
   isImage,
   normalizeAttachmentRows,
@@ -52,12 +54,14 @@ type CommentAttachmentsRpc = (
   args: { p_comment_ids: string[] },
 ) => Promise<{ data: unknown[] | null; error: { message: string } | null }>;
 
-type CommentAttachmentInsert = {
+type InternalCommentAttachmentInsert = {
   comment_id: string;
   storage_path: string;
   file_name: string;
-  mime_type: string;
-  size_bytes: number;
+  file_type: string;
+  file_size_bytes: number;
+  uploaded_by_type: "internal";
+  uploaded_by_id: string;
 };
 
 export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia, onCommentDeleted, projectId, processType, productCode, fileId, onCommentCountChange, fileName, refreshKey }: CommentsPanelProps) {
@@ -218,34 +222,48 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
     }
   };
 
-  const uploadCommentAttachments = async (commentId: string, files: File[]) => {
-    if (!user || files.length === 0) return;
-    const rows: CommentAttachmentInsert[] = [];
+  const getAuthenticatedUserId = async () => {
+    const { data, error } = await supabase.auth.getUser();
+    if (error || !data.user?.id) {
+      throw error ?? new Error("添付ファイルのアップロードに必要なユーザー情報を取得できませんでした");
+    }
+    return data.user.id;
+  };
+
+  const uploadCommentAttachments = async (commentId: string, userId: string, files: File[]) => {
+    if (files.length === 0) return;
 
     for (const file of files) {
       assertAttachmentSize(file);
-      const ext = file.name.split(".").pop() || "bin";
-      const safeName = file.name.replace(/[^\w.-]+/g, "_");
-      const storagePath = `${user.id}/${commentId}/${crypto.randomUUID()}-${safeName || `attachment.${ext}`}`;
+      const upload = await fileToBase64(file);
+      const blob = dataUrlToBlob(`data:${upload.mime_type};base64,${upload.base64}`);
+      const safeName = upload.file_name.replace(/[^\w.-]+/g, "_").slice(0, 120) || "attachment";
+      const storagePath = `${userId}/${commentId}/${Date.now()}_${crypto.randomUUID()}_${safeName}`;
       const { error: uploadError } = await supabase.storage
         .from(COMMENT_ATTACHMENT_BUCKET)
-        .upload(storagePath, file, {
-          contentType: file.type || "application/octet-stream",
+        .upload(storagePath, blob, {
+          contentType: upload.mime_type,
           upsert: false,
         });
-      if (uploadError) throw uploadError;
-      rows.push({
+      if (uploadError) {
+        console.error("[comment attachment upload] storage failed", storagePath, uploadError);
+        throw uploadError;
+      }
+
+      const row: InternalCommentAttachmentInsert = {
         comment_id: commentId,
         storage_path: storagePath,
-        file_name: file.name,
-        mime_type: file.type || "application/octet-stream",
-        size_bytes: file.size,
-      });
-    }
-
-    if (rows.length > 0) {
-      const { error } = await supabase.from("comment_attachments" as never).insert(rows as never);
-      if (error) throw error;
+        file_name: upload.file_name,
+        file_type: upload.mime_type,
+        file_size_bytes: blob.size,
+        uploaded_by_type: "internal",
+        uploaded_by_id: userId,
+      };
+      const { error: insertError } = await supabase.from("comment_attachments" as never).insert(row as never);
+      if (insertError) {
+        console.error("[comment attachment upload] db insert failed", insertError);
+        throw insertError;
+      }
     }
   };
 
@@ -302,7 +320,10 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
         mentions: mentionedUserIds.length > 0 ? mentionedUserIds : null,
       } as any).select("id").single();
       if (handleSupabaseError(error, "comment insert") || !insertedComment?.id) return;
-      await uploadCommentAttachments(String(insertedComment.id), attachments);
+      if (attachments.length > 0) {
+        const attachmentUserId = await getAuthenticatedUserId();
+        await uploadCommentAttachments(String(insertedComment.id), attachmentUserId, attachments);
+      }
 
       // Send mention notifications
       await sendMentionNotifications(newComment, mentionedUserIds);
@@ -334,7 +355,10 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
         parent_id: parentId,
       }).select("id").single();
       if (handleSupabaseError(error, "reply insert") || !insertedReply?.id) return;
-      await uploadCommentAttachments(String(insertedReply.id), replyAttachments);
+      if (replyAttachments.length > 0) {
+        const attachmentUserId = await getAuthenticatedUserId();
+        await uploadCommentAttachments(String(insertedReply.id), attachmentUserId, replyAttachments);
+      }
       setReplyTo(null);
       setReplyText("");
       setReplyAttachments([]);
@@ -438,7 +462,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
               })}
             />
             {replies(c.id).map((r) => (
-              <div key={r.id} className="ml-5">
+              <div key={r.id} className="ml-6 mt-2 space-y-2 border-l-2 border-primary/20 pl-3">
                 <CommentCard
                   comment={r}
                   onToggleStatus={() => toggleStatus(r.id, r.status)}
@@ -460,6 +484,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
                   reactions={reactionsByCommentId[r.id]}
                   onToggleReaction={(emoji) => void toggleReaction(r.id, emoji)}
                   attachments={attachmentsByCommentId[r.id]}
+                  replyingToName={c.author_name}
                 />
               </div>
             ))}
@@ -522,8 +547,8 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   );
 }
 
-function CommentCard({ comment, onToggleStatus, onReply, onEdit, onDelete, isReply, onAnnotationClick, onCheckItemClick, onSeekMedia, fileName, onReplicate, reactions, onToggleReaction, attachments }: {
-  comment: CommentWithDraftInfo; onToggleStatus: () => void; onReply: () => void; onEdit?: (id: string, content: string) => void; onDelete?: (id: string) => void; isReply?: boolean; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void; fileName?: string; onReplicate?: () => void; reactions?: ReactionSummary[]; onToggleReaction?: (emoji: string) => void; attachments?: CommentAttachmentView[];
+function CommentCard({ comment, onToggleStatus, onReply, onEdit, onDelete, isReply, replyingToName, onAnnotationClick, onCheckItemClick, onSeekMedia, fileName, onReplicate, reactions, onToggleReaction, attachments }: {
+  comment: CommentWithDraftInfo; onToggleStatus: () => void; onReply: () => void; onEdit?: (id: string, content: string) => void; onDelete?: (id: string) => void; isReply?: boolean; replyingToName?: string; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void; fileName?: string; onReplicate?: () => void; reactions?: ReactionSummary[]; onToggleReaction?: (emoji: string) => void; attachments?: CommentAttachmentView[];
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.content);
@@ -590,6 +615,7 @@ function CommentCard({ comment, onToggleStatus, onReply, onEdit, onDelete, isRep
       onSubmitEdit={handleSaveEdit}
       onCancelEdit={() => { setIsEditing(false); setEditText(comment.content); }}
       isReply={isReply}
+      replyingToName={replyingToName}
       isDimmed={!comment.is_current_draft}
       onCardClick={isClickable ? handleCardClick : undefined}
       headerSlot={showDraftBadge ? (
