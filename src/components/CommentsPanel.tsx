@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { tusUpload } from "@/lib/tus-upload";
 import { useAuth } from "@/hooks/useAuth";
 import type { CommentRow, CommentWithDraftInfo } from "@/lib/db-types";
 import { matchesCommentItemFilter, withDefaultDraftInfo } from "@/lib/comment-draft-info";
@@ -14,6 +13,14 @@ import { formatTimestamp } from "@/components/comments/TimestampBadge";
 import { RichCommentCard, type CommentRole, type ReactionSummary } from "@/components/comments/RichCommentCard";
 import { useCommentReactions } from "@/hooks/useCommentReactions";
 import { ReplicateCommentDialog, type ReplicateCommentData } from "@/components/ReplicateCommentDialog";
+import {
+  COMMENT_ATTACHMENT_BUCKET,
+  assertAttachmentSize,
+  humanSize,
+  isImage,
+  normalizeAttachmentRows,
+  type CommentAttachmentView,
+} from "@/lib/comment-attachments";
 
 interface CommentsPanelProps {
   checkResultId: string;
@@ -40,6 +47,19 @@ type CommentsWithDraftInfoRpc = (
   args: { p_check_result_id: string },
 ) => Promise<{ data: CommentWithDraftInfo[] | null; error: { message: string } | null }>;
 
+type CommentAttachmentsRpc = (
+  fn: "get_comment_attachments_internal",
+  args: { p_comment_ids: string[] },
+) => Promise<{ data: unknown[] | null; error: { message: string } | null }>;
+
+type CommentAttachmentInsert = {
+  comment_id: string;
+  storage_path: string;
+  file_name: string;
+  mime_type: string;
+  size_bytes: number;
+};
+
 export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia, onCommentDeleted, projectId, processType, productCode, fileId, onCommentCountChange, fileName, refreshKey }: CommentsPanelProps) {
   const { user } = useAuth();
   const [comments, setComments] = useState<CommentWithDraftInfo[]>([]);
@@ -47,9 +67,12 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   const [newComment, setNewComment] = useState("");
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
-  const [attachment, setAttachment] = useState<{ file: File; preview: string } | null>(null);
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
+  const [attachmentsByCommentId, setAttachmentsByCommentId] = useState<Record<string, CommentAttachmentView[]>>({});
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const replyFileInputRef = useRef<HTMLInputElement>(null);
   const [members, setMembers] = useState<MentionMember[]>([]);
   const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
   const [replicateDialogComment, setReplicateDialogComment] = useState<ReplicateCommentData | null>(null);
@@ -110,6 +133,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
       console.warn("[get_comments_with_draft_info] using direct select fallback:", err);
     }
 
+    await fetchAttachmentsForComments(result.map((comment) => comment.id));
     setComments(result);
     onCommentCountChange?.(result.length);
   };
@@ -151,18 +175,93 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
     return base.length;
   };
 
-  const uploadAttachment = async (file: File): Promise<{ url: string; type: string; name: string } | null> => {
-    if (!user) return null;
-    const ext = file.name.split(".").pop() || "bin";
-    const path = `${user.id}/${checkResultId}/${Date.now()}.${ext}`;
+  const fetchAttachmentsForComments = async (commentIds: string[]) => {
+    if (commentIds.length === 0) {
+      setAttachmentsByCommentId({});
+      return;
+    }
+
     try {
-      await tusUpload({ bucketName: "comment-attachments", path, file, contentType: file.type, upsert: false });
-    } catch (e) { console.error("[storage upload]", e); return null; }
-    const { data: urlData, error: signError } = await supabase.storage
-      .from("comment-attachments")
-      .createSignedUrl(path, 60 * 60 * 24 * 7);
-    if (signError || !urlData?.signedUrl) { console.error("[signed url]", signError?.message); return null; }
-    return { url: urlData.signedUrl, type: file.type, name: file.name };
+      const { data, error } = await (
+        supabase.rpc.bind(supabase) as unknown as CommentAttachmentsRpc
+      )("get_comment_attachments_internal", {
+        p_comment_ids: commentIds,
+      });
+      if (error) throw error;
+
+      const rows = normalizeAttachmentRows(data ?? []);
+      const rowsNeedingSignedUrl = rows.filter((row) => row.storage_path && !row.signed_url);
+      const signedRows = await Promise.all(
+        rowsNeedingSignedUrl.map(async (row) => {
+          const { data: signed, error: signedError } = await supabase.storage
+            .from(COMMENT_ATTACHMENT_BUCKET)
+            .createSignedUrl(row.storage_path!, 60 * 60);
+          if (signedError || !signed?.signedUrl) return null;
+          return { ...row, signed_url: signed.signedUrl };
+        })
+      );
+      const signedByPath = new Map(
+        signedRows
+          .filter((row): row is CommentAttachmentView => row !== null)
+          .map((row) => [row.storage_path, row])
+      );
+      const grouped: Record<string, CommentAttachmentView[]> = {};
+      for (const row of rows) {
+        const resolved = row.storage_path && signedByPath.has(row.storage_path) ? signedByPath.get(row.storage_path)! : row;
+        if (!resolved.comment_id) continue;
+        (grouped[resolved.comment_id] ??= []).push(resolved);
+      }
+      setAttachmentsByCommentId(grouped);
+    } catch (err) {
+      console.error("[get_comment_attachments_internal]", err);
+      setAttachmentsByCommentId({});
+    }
+  };
+
+  const uploadCommentAttachments = async (commentId: string, files: File[]) => {
+    if (!user || files.length === 0) return;
+    const rows: CommentAttachmentInsert[] = [];
+
+    for (const file of files) {
+      assertAttachmentSize(file);
+      const ext = file.name.split(".").pop() || "bin";
+      const safeName = file.name.replace(/[^\w.-]+/g, "_");
+      const storagePath = `${user.id}/${commentId}/${crypto.randomUUID()}-${safeName || `attachment.${ext}`}`;
+      const { error: uploadError } = await supabase.storage
+        .from(COMMENT_ATTACHMENT_BUCKET)
+        .upload(storagePath, file, {
+          contentType: file.type || "application/octet-stream",
+          upsert: false,
+        });
+      if (uploadError) throw uploadError;
+      rows.push({
+        comment_id: commentId,
+        storage_path: storagePath,
+        file_name: file.name,
+        mime_type: file.type || "application/octet-stream",
+        size_bytes: file.size,
+      });
+    }
+
+    if (rows.length > 0) {
+      const { error } = await supabase.from("comment_attachments" as never).insert(rows as never);
+      if (error) throw error;
+    }
+  };
+
+  const selectFiles = (files: FileList | null, setter: React.Dispatch<React.SetStateAction<File[]>>) => {
+    if (!files) return;
+    const nextFiles = Array.from(files);
+    try {
+      nextFiles.forEach(assertAttachmentSize);
+      setter((current) => [...current, ...nextFiles]);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "添付ファイルの選択に失敗しました");
+    }
+  };
+
+  const removeSelectedFile = (index: number, setter: React.Dispatch<React.SetStateAction<File[]>>) => {
+    setter((current) => current.filter((_, i) => i !== index));
   };
 
   const sendMentionNotifications = async (content: string, userIds: string[]) => {
@@ -186,58 +285,66 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
     }
   };
   const handleSubmit = async () => {
-    if (!newComment.trim() || !user) return;
+    if ((!newComment.trim() && attachments.length === 0) || !user || uploading) return;
     setUploading(true);
-
-    let attachmentData: Record<string, string> = {};
-    if (attachment) {
-      const result = await uploadAttachment(attachment.file);
-      if (result) {
-        attachmentData = { attachment_url: result.url, attachment_type: result.type, attachment_name: result.name };
-      }
-    }
 
     const timestampValue = (mediaCurrentTime != null && mediaCurrentTime > 0) ? mediaCurrentTime : null;
 
-    const { error } = await supabase.from("comments").insert({
-      check_result_id: checkResultId,
-      check_item_id: filterItemId || null,
-      author_name: user.email?.split("@")[0] || "User",
-      author_email: user.email || "",
-      content: newComment,
-      status: "open",
-      media_timestamp: timestampValue,
-      mentions: mentionedUserIds.length > 0 ? mentionedUserIds : null,
-      ...attachmentData,
-    } as any);
-    handleSupabaseError(error, "comment insert");
+    try {
+      const { data: insertedComment, error } = await supabase.from("comments").insert({
+        check_result_id: checkResultId,
+        check_item_id: filterItemId || null,
+        author_name: user.email?.split("@")[0] || "User",
+        author_email: user.email || "",
+        content: newComment.trim(),
+        status: "open",
+        media_timestamp: timestampValue,
+        mentions: mentionedUserIds.length > 0 ? mentionedUserIds : null,
+      } as any).select("id").single();
+      if (handleSupabaseError(error, "comment insert") || !insertedComment?.id) return;
+      await uploadCommentAttachments(String(insertedComment.id), attachments);
 
-    // Send mention notifications
-    await sendMentionNotifications(newComment, mentionedUserIds);
+      // Send mention notifications
+      await sendMentionNotifications(newComment, mentionedUserIds);
 
-    setNewComment("");
-    setAttachment(null);
-    setMentionedUserIds([]);
-    setUploading(false);
-    fetchComments();
+      setNewComment("");
+      setAttachments([]);
+      setMentionedUserIds([]);
+      await fetchComments();
+    } catch (err) {
+      console.error("[comment submit]", err);
+      window.alert(err instanceof Error ? err.message : "コメントの投稿に失敗しました");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleReply = async (parentId: string) => {
-    if (!replyText.trim() || !user) return;
+    if ((!replyText.trim() && replyAttachments.length === 0) || !user || uploading) return;
     const parent = comments.find((c) => c.id === parentId);
-    const { error } = await supabase.from("comments").insert({
-      check_result_id: checkResultId,
-      check_item_id: parent?.check_item_id || null,
-      author_name: user.email?.split("@")[0] || "User",
-      author_email: user.email || "",
-      content: replyText,
-      status: "open",
-      parent_id: parentId,
-    });
-    handleSupabaseError(error, "reply insert");
-    setReplyTo(null);
-    setReplyText("");
-    fetchComments();
+    setUploading(true);
+    try {
+      const { data: insertedReply, error } = await supabase.from("comments").insert({
+        check_result_id: checkResultId,
+        check_item_id: parent?.check_item_id || null,
+        author_name: user.email?.split("@")[0] || "User",
+        author_email: user.email || "",
+        content: replyText.trim(),
+        status: "open",
+        parent_id: parentId,
+      }).select("id").single();
+      if (handleSupabaseError(error, "reply insert") || !insertedReply?.id) return;
+      await uploadCommentAttachments(String(insertedReply.id), replyAttachments);
+      setReplyTo(null);
+      setReplyText("");
+      setReplyAttachments([]);
+      await fetchComments();
+    } catch (err) {
+      console.error("[reply insert]", err);
+      window.alert(err instanceof Error ? err.message : "返信の投稿に失敗しました");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const toggleStatus = async (id: string, current: string) => {
@@ -247,11 +354,24 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
     fetchComments();
   };
 
+  const cleanupCommentAttachments = async (commentId: string) => {
+    const storagePaths = (attachmentsByCommentId[commentId] ?? [])
+      .map((attachment) => attachment.storage_path)
+      .filter((path): path is string => Boolean(path));
+    if (storagePaths.length > 0) {
+      const { error } = await supabase.storage.from(COMMENT_ATTACHMENT_BUCKET).remove(storagePaths);
+      if (error) console.warn("[comment attachment remove]", error.message);
+    }
+  };
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const preview = file.type.startsWith("image/") ? URL.createObjectURL(file) : "";
-    setAttachment({ file, preview });
+    selectFiles(e.target.files, setAttachments);
+    e.target.value = "";
+  };
+
+  const handleReplyFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    selectFiles(e.target.files, setReplyAttachments);
+    e.target.value = "";
   };
 
   const tabs = [
@@ -292,6 +412,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
                 fetchComments();
               }}
               onDelete={async (id) => {
+                await cleanupCommentAttachments(id);
                 const { error } = await supabase.from("comments").delete().eq("id", id);
                 if (handleSupabaseError(error, "comment delete")) return;
                 await fetchComments();
@@ -303,6 +424,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
               fileName={fileName}
               reactions={reactionsByCommentId[c.id]}
               onToggleReaction={(emoji) => void toggleReaction(c.id, emoji)}
+              attachments={attachmentsByCommentId[c.id]}
               onReplicate={() => setReplicateDialogComment({
                 id: c.id,
                 content: c.content,
@@ -327,6 +449,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
                     fetchComments();
                   }}
                   onDelete={async (id) => {
+                    await cleanupCommentAttachments(id);
                     const { error } = await supabase.from("comments").delete().eq("id", id);
                     if (handleSupabaseError(error, "comment delete")) return;
                     await fetchComments();
@@ -336,13 +459,23 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
                   onSeekMedia={onSeekMedia}
                   reactions={reactionsByCommentId[r.id]}
                   onToggleReaction={(emoji) => void toggleReaction(r.id, emoji)}
+                  attachments={attachmentsByCommentId[r.id]}
                 />
               </div>
             ))}
             {replyTo === c.id && (
-              <div className="ml-5 flex gap-2">
-                <Textarea value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="返信を入力..." className="min-h-[50px] text-xs" />
-                <Button size="sm" onClick={() => handleReply(c.id)} className="self-end h-8"><Send className="h-3 w-3" /></Button>
+              <div className="ml-5 space-y-2">
+                <div className="flex gap-2">
+                  <Textarea value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="返信を入力..." className="min-h-[50px] text-xs" />
+                  <Button size="sm" onClick={() => handleReply(c.id)} disabled={uploading || (!replyText.trim() && replyAttachments.length === 0)} className="self-end h-8"><Send className="h-3 w-3" /></Button>
+                </div>
+                <AttachmentPreview files={replyAttachments} onRemove={(index) => removeSelectedFile(index, setReplyAttachments)} />
+                <div className="flex items-center gap-1">
+                  <button type="button" onClick={() => replyFileInputRef.current?.click()} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
+                    <Paperclip className="h-3.5 w-3.5" />
+                  </button>
+                  <input ref={replyFileInputRef} type="file" multiple className="hidden" onChange={handleReplyFileSelect} />
+                </div>
               </div>
             )}
           </div>
@@ -353,15 +486,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
         {hasMediaTimestamp ? <div className="flex items-center gap-1.5 text-[10px] text-primary">
             🕐 再生位置 <span className="font-mono font-medium">{formatTimestamp(mediaCurrentTime!)}</span> をコメントに自動記録します
           </div> : null}
-        {attachment ? <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
-            {attachment.preview ? (
-              <img src={attachment.preview} alt="" className="w-10 h-10 rounded object-cover" />
-            ) : (
-              <FileText className="h-5 w-5 text-muted-foreground" />
-            )}
-            <span className="text-xs text-muted-foreground truncate flex-1">{attachment.file.name}</span>
-            <button onClick={() => setAttachment(null)}><X className="h-3 w-3 text-muted-foreground" /></button>
-          </div> : null}
+        <AttachmentPreview files={attachments} onRemove={(index) => removeSelectedFile(index, setAttachments)} />
         <div className="flex gap-2">
           <div className="flex-1 space-y-1">
             <MentionInput
@@ -377,11 +502,11 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
               <button onClick={() => fileInputRef.current?.click()} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
                 <Paperclip className="h-3.5 w-3.5" />
               </button>
-              <input ref={fileInputRef} type="file" className="hidden" accept="image/*,.pdf,.ai,.psd,.mp4" onChange={handleFileSelect} />
+              <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelect} />
             </div>
           </div>
-          <Button size="icon" onClick={handleSubmit} disabled={uploading} className="self-end shrink-0 h-8 w-8">
-            <Send className="h-3.5 w-3.5" />
+          <Button size="icon" onClick={handleSubmit} disabled={uploading || (!newComment.trim() && attachments.length === 0)} className="self-end shrink-0 h-8 w-8">
+            {uploading ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground/40 border-t-primary-foreground" /> : <Send className="h-3.5 w-3.5" />}
           </Button>
         </div>
       </div>
@@ -397,8 +522,8 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   );
 }
 
-function CommentCard({ comment, onToggleStatus, onReply, onEdit, onDelete, isReply, onAnnotationClick, onCheckItemClick, onSeekMedia, fileName, onReplicate, reactions, onToggleReaction }: {
-  comment: CommentWithDraftInfo; onToggleStatus: () => void; onReply: () => void; onEdit?: (id: string, content: string) => void; onDelete?: (id: string) => void; isReply?: boolean; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void; fileName?: string; onReplicate?: () => void; reactions?: ReactionSummary[]; onToggleReaction?: (emoji: string) => void;
+function CommentCard({ comment, onToggleStatus, onReply, onEdit, onDelete, isReply, onAnnotationClick, onCheckItemClick, onSeekMedia, fileName, onReplicate, reactions, onToggleReaction, attachments }: {
+  comment: CommentWithDraftInfo; onToggleStatus: () => void; onReply: () => void; onEdit?: (id: string, content: string) => void; onDelete?: (id: string) => void; isReply?: boolean; onAnnotationClick?: (data: unknown) => void; onCheckItemClick?: (patternId: string) => void; onSeekMedia?: (seconds: number) => void; fileName?: string; onReplicate?: () => void; reactions?: ReactionSummary[]; onToggleReaction?: (emoji: string) => void; attachments?: CommentAttachmentView[];
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(comment.content);
@@ -409,6 +534,17 @@ function CommentCard({ comment, onToggleStatus, onReply, onEdit, onDelete, isRep
   const showDraftBadge = !comment.is_current_draft && !!comment.draft_label;
   const isInitialDraft = comment.draft_round === 0;
   const role: CommentRole = comment.creator_id ? "creator" : comment.guest_token ? "client" : "internal";
+  const cardAttachments =
+    attachments && attachments.length > 0
+      ? attachments
+      : comment.attachment_url
+        ? [{
+            file_name: comment.attachment_name ?? "添付ファイル",
+            mime_type: comment.attachment_type ?? null,
+            size_bytes: null,
+            signed_url: comment.attachment_url,
+          }]
+        : [];
 
   const handleCardClick = () => {
     // Auto-seek video to annotation timestamp
@@ -441,6 +577,7 @@ function CommentCard({ comment, onToggleStatus, onReply, onEdit, onDelete, isRep
       content={comment.content}
       mediaTimestamp={mediaTimestamp}
       onSeekMedia={onSeekMedia}
+      attachments={cardAttachments}
       reactions={reactions}
       onToggleReaction={onToggleReaction}
       onReply={!isReply ? onReply : undefined}
@@ -480,16 +617,35 @@ function CommentCard({ comment, onToggleStatus, onReply, onEdit, onDelete, isRep
         {!hasAnnotation && hasCheckItem && onCheckItemClick ? <div className="flex items-center gap-1 text-[10px] text-primary">
           🔍 チェック項目を表示（クリック）
         </div> : null}
-        {comment.attachment_url ? <a href={comment.attachment_url} target="_blank" rel="noopener noreferrer" className="block" onClick={(e) => e.stopPropagation()}>
-          {comment.attachment_type?.startsWith("image/") ? (
-            <img src={comment.attachment_url} alt={comment.attachment_name ?? ""} className="max-h-20 rounded border border-border" />
-          ) : (
-            <div className="flex items-center gap-1.5 text-[10px] text-primary hover:underline">
-              <FileText className="h-3 w-3" />{comment.attachment_name}
-            </div>
-          )}
-        </a> : null}
       </>}
     />
+  );
+}
+
+function AttachmentPreview({ files, onRemove }: { files: File[]; onRemove: (index: number) => void }) {
+  if (files.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {files.map((file, index) => {
+        const previewUrl = isImage(file.type) ? URL.createObjectURL(file) : null;
+        return (
+          <div key={`${file.name}-${file.size}-${index}`} className="flex max-w-full items-center gap-2 rounded-md bg-muted p-2">
+            {previewUrl ? (
+              <img src={previewUrl} alt="" className="h-10 w-10 rounded object-cover" onLoad={() => URL.revokeObjectURL(previewUrl)} />
+            ) : (
+              <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
+            )}
+            <div className="min-w-0">
+              <p className="truncate text-xs text-foreground">{file.name}</p>
+              <p className="text-[10px] text-muted-foreground">{humanSize(file.size)}</p>
+            </div>
+            <button type="button" onClick={() => onRemove(index)} className="shrink-0">
+              <X className="h-3 w-3 text-muted-foreground" />
+            </button>
+          </div>
+        );
+      })}
+    </div>
   );
 }

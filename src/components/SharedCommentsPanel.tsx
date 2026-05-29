@@ -1,14 +1,22 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { CommentRow, CommentWithDraftInfo } from "@/lib/db-types";
 import { withDefaultDraftInfo } from "@/lib/comment-draft-info";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, User } from "lucide-react";
+import { FileText, Paperclip, Send, User, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RichCommentCard, type CommentRole, type ReactionSummary } from "@/components/comments/RichCommentCard";
 import { useCommentReactions } from "@/hooks/useCommentReactions";
+import {
+  assertAttachmentSize,
+  filesToUploads,
+  humanSize,
+  isImage,
+  normalizeAttachmentRows,
+  type CommentAttachmentView,
+} from "@/lib/comment-attachments";
 
 const GUEST_TOKEN_KEY = "ad_check_shared_guest_token";
 
@@ -66,11 +74,44 @@ export default function SharedCommentsPanel({
   const [posting, setPosting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
+  const [attachmentsByCommentId, setAttachmentsByCommentId] = useState<Record<string, CommentAttachmentView[]>>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const replyFileInputRef = useRef<HTMLInputElement>(null);
   const guestToken = useMemo(() => getOrCreateGuestToken(), []);
   const invokeSharedComments = useMemo(
     () => supabase.functions.invoke.bind(supabase.functions) as unknown as SharedCommentsInvoke,
     []
   );
+
+  const fetchAttachmentUrls = useCallback(async (commentIds: string[]) => {
+    if (commentIds.length === 0) {
+      setAttachmentsByCommentId({});
+      return;
+    }
+
+    try {
+      const { data, error } = await invokeSharedComments("shared-comments", {
+        body: {
+          action: "get_attachment_urls",
+          share_token: shareToken,
+          comment_ids: commentIds,
+        },
+      });
+      if (error) throw error;
+      const rows = normalizeAttachmentRows(Array.isArray(data) ? data : (data as { attachments?: unknown[] } | null)?.attachments);
+      const grouped: Record<string, CommentAttachmentView[]> = {};
+      for (const row of rows) {
+        if (!row.comment_id) continue;
+        (grouped[row.comment_id] ??= []).push(row);
+      }
+      setAttachmentsByCommentId(grouped);
+    } catch (err) {
+      console.error("[shared attachment urls]", err);
+      setAttachmentsByCommentId({});
+    }
+  }, [invokeSharedComments, shareToken]);
 
   const fetchComments = useCallback(async () => {
     let result: CommentWithDraftInfo[] = [];
@@ -106,9 +147,10 @@ export default function SharedCommentsPanel({
     }
 
     const sorted = result.slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
+    await fetchAttachmentUrls(sorted.map((comment) => comment.id));
     setComments(sorted);
     onCommentCountChange?.(sorted.length);
-  }, [checkResultId, shareToken, onCommentCountChange]);
+  }, [checkResultId, fetchAttachmentUrls, shareToken, onCommentCountChange]);
 
   useEffect(() => { fetchComments(); }, [fetchComments, refreshKey]);
 
@@ -147,9 +189,10 @@ export default function SharedCommentsPanel({
     setShowGuestForm(false);
   };
 
-  const postComment = async (content: string, parentId?: string) => {
+  const postComment = async (content: string, files: File[], parentId?: string) => {
     setPosting(true);
     try {
+      const uploadAttachments = files.length > 0 ? await filesToUploads(files) : [];
       const res = await invokeSharedComments("shared-comments", {
         body: {
           action: "create",
@@ -162,6 +205,7 @@ export default function SharedCommentsPanel({
           media_timestamp: (!parentId && mediaCurrentTime != null && mediaCurrentTime > 0) ? mediaCurrentTime : null,
           parent_id: parentId || null,
           guest_token: guestToken,
+          attachments: uploadAttachments,
         },
       });
       if (res.error) console.error("[shared-comments]", res.error);
@@ -170,6 +214,31 @@ export default function SharedCommentsPanel({
       console.error("[shared-comments] error:", err);
     }
     setPosting(false);
+  };
+
+  const selectFiles = (files: FileList | null, setter: React.Dispatch<React.SetStateAction<File[]>>) => {
+    if (!files) return;
+    const nextFiles = Array.from(files);
+    try {
+      nextFiles.forEach(assertAttachmentSize);
+      setter((current) => [...current, ...nextFiles]);
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : "添付ファイルの選択に失敗しました");
+    }
+  };
+
+  const removeSelectedFile = (index: number, setter: React.Dispatch<React.SetStateAction<File[]>>) => {
+    setter((current) => current.filter((_, i) => i !== index));
+  };
+
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    selectFiles(event.target.files, setAttachments);
+    event.target.value = "";
+  };
+
+  const handleReplyFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    selectFiles(event.target.files, setReplyAttachments);
+    event.target.value = "";
   };
 
   const startEdit = (comment: CommentWithDraftInfo) => {
@@ -224,16 +293,18 @@ export default function SharedCommentsPanel({
   };
 
   const handleSubmit = async () => {
-    if (!newComment.trim()) return;
-    await postComment(newComment.trim());
+    if ((!newComment.trim() && attachments.length === 0) || posting) return;
+    await postComment(newComment.trim(), attachments);
     setNewComment("");
+    setAttachments([]);
   };
 
   const handleReply = async (parentId: string) => {
-    if (!replyText.trim()) return;
-    await postComment(replyText.trim(), parentId);
+    if ((!replyText.trim() && replyAttachments.length === 0) || posting) return;
+    await postComment(replyText.trim(), replyAttachments, parentId);
     setReplyTo(null);
     setReplyText("");
+    setReplyAttachments([]);
   };
 
   const tabs: { key: "all" | "open" | "resolved"; label: string }[] = [
@@ -277,6 +348,7 @@ export default function SharedCommentsPanel({
               onDelete={() => handleDelete(c.id)}
               reactions={reactionsByCommentId[c.id]}
               onToggleReaction={(emoji) => void toggleReaction(c.id, emoji)}
+              attachments={attachmentsByCommentId[c.id]}
             />
             {getReplies(c.id).map((r) => (
               <div key={r.id} className="ml-5">
@@ -294,15 +366,25 @@ export default function SharedCommentsPanel({
                   onDelete={() => handleDelete(r.id)}
                   reactions={reactionsByCommentId[r.id]}
                   onToggleReaction={(emoji) => void toggleReaction(r.id, emoji)}
+                  attachments={attachmentsByCommentId[r.id]}
                 />
               </div>
             ))}
             {replyTo === c.id && (
-              <div className="ml-5 flex gap-2">
-                <Textarea value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="返信を入力..." className="min-h-[50px] text-xs" />
-                <Button size="sm" onClick={() => handleReply(c.id)} disabled={posting} className="self-end h-8">
-                  <Send className="h-3 w-3" />
-                </Button>
+              <div className="ml-5 space-y-2">
+                <div className="flex gap-2">
+                  <Textarea value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="返信を入力..." className="min-h-[50px] text-xs" />
+                  <Button size="sm" onClick={() => handleReply(c.id)} disabled={posting || (!replyText.trim() && replyAttachments.length === 0)} className="self-end h-8">
+                    <Send className="h-3 w-3" />
+                  </Button>
+                </div>
+                <AttachmentPreview files={replyAttachments} onRemove={(index) => removeSelectedFile(index, setReplyAttachments)} />
+                <div className="flex items-center gap-1">
+                  <button type="button" onClick={() => replyFileInputRef.current?.click()} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
+                    <Paperclip className="h-3.5 w-3.5" />
+                  </button>
+                  <input ref={replyFileInputRef} type="file" multiple className="hidden" onChange={handleReplyFileSelect} />
+                </div>
               </div>
             )}
           </div>
@@ -330,16 +412,25 @@ export default function SharedCommentsPanel({
                   🕐 再生位置をコメントに自動記録します
                 </div>
               )}
+              <AttachmentPreview files={attachments} onRemove={(index) => removeSelectedFile(index, setAttachments)} />
               <div className="flex gap-2">
-                <Textarea
-                  value={newComment}
-                  onChange={(e) => setNewComment(e.target.value)}
-                  placeholder="コメントを入力..."
-                  className="min-h-[50px] text-xs flex-1"
-                  onKeyDown={(e) => { if (e.key === "Enter" && e.metaKey) handleSubmit(); }}
-                />
-                <Button size="icon" onClick={handleSubmit} disabled={posting || !newComment.trim()} className="self-end shrink-0 h-8 w-8">
-                  <Send className="h-3.5 w-3.5" />
+                <div className="flex-1 space-y-1">
+                  <Textarea
+                    value={newComment}
+                    onChange={(e) => setNewComment(e.target.value)}
+                    placeholder="コメントを入力..."
+                    className="min-h-[50px] text-xs"
+                    onKeyDown={(e) => { if (e.key === "Enter" && e.metaKey) handleSubmit(); }}
+                  />
+                  <div className="flex items-center gap-1">
+                    <button type="button" onClick={() => fileInputRef.current?.click()} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
+                      <Paperclip className="h-3.5 w-3.5" />
+                    </button>
+                    <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelect} />
+                  </div>
+                </div>
+                <Button size="icon" onClick={handleSubmit} disabled={posting || (!newComment.trim() && attachments.length === 0)} className="self-end shrink-0 h-8 w-8">
+                  {posting ? <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-primary-foreground/40 border-t-primary-foreground" /> : <Send className="h-3.5 w-3.5" />}
                 </Button>
               </div>
             </>
@@ -351,7 +442,7 @@ export default function SharedCommentsPanel({
 
 function SharedCommentCard({
   comment, onAnnotationClick, onSeekMedia, onReply, isReply,
-  isOwn, isEditing, editingText, setEditingText, onStartEdit, onCancelEdit, onEdit, onDelete, reactions, onToggleReaction,
+  isOwn, isEditing, editingText, setEditingText, onStartEdit, onCancelEdit, onEdit, onDelete, reactions, onToggleReaction, attachments,
 }: {
   comment: CommentWithDraftInfo;
   onAnnotationClick?: (data: unknown) => void;
@@ -368,6 +459,7 @@ function SharedCommentCard({
   onDelete?: () => void;
   reactions?: ReactionSummary[];
   onToggleReaction?: (emoji: string) => void;
+  attachments?: CommentAttachmentView[];
 }) {
   const hasAnnotation = !!comment.annotation_data;
   const showDraftBadge = !comment.is_current_draft && !!comment.draft_label;
@@ -383,6 +475,7 @@ function SharedCommentCard({
       content={comment.content}
       mediaTimestamp={comment.media_timestamp}
       onSeekMedia={onSeekMedia}
+      attachments={attachments}
       reactions={reactions}
       onToggleReaction={onToggleReaction}
       onReply={onReply}
@@ -411,5 +504,33 @@ function SharedCommentCard({
           📌 アノテーションを表示
         </button> : null}
     />
+  );
+}
+
+function AttachmentPreview({ files, onRemove }: { files: File[]; onRemove: (index: number) => void }) {
+  if (files.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {files.map((file, index) => {
+        const previewUrl = isImage(file.type) ? URL.createObjectURL(file) : null;
+        return (
+          <div key={`${file.name}-${file.size}-${index}`} className="flex max-w-full items-center gap-2 rounded-md bg-muted p-2">
+            {previewUrl ? (
+              <img src={previewUrl} alt="" className="h-10 w-10 rounded object-cover" onLoad={() => URL.revokeObjectURL(previewUrl)} />
+            ) : (
+              <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
+            )}
+            <div className="min-w-0">
+              <p className="truncate text-xs text-foreground">{file.name}</p>
+              <p className="text-[10px] text-muted-foreground">{humanSize(file.size)}</p>
+            </div>
+            <button type="button" onClick={() => onRemove(index)} className="shrink-0">
+              <X className="h-3 w-3 text-muted-foreground" />
+            </button>
+          </div>
+        );
+      })}
+    </div>
   );
 }
