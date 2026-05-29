@@ -351,7 +351,7 @@ export default function SharedCommentsPanel({
               attachments={attachmentsByCommentId[c.id]}
             />
             {getReplies(c.id).map((r) => (
-              <div key={r.id} className="ml-5">
+              <div key={r.id} className="ml-6 mt-2 space-y-2 border-l-2 border-primary/20 pl-3">
                 <SharedCommentCard
                   comment={r}
                   onSeekMedia={onSeekMedia}
@@ -367,6 +367,7 @@ export default function SharedCommentsPanel({
                   reactions={reactionsByCommentId[r.id]}
                   onToggleReaction={(emoji) => void toggleReaction(r.id, emoji)}
                   attachments={attachmentsByCommentId[r.id]}
+                  replyingToName={c.author_name}
                 />
               </div>
             ))}
@@ -442,13 +443,14 @@ export default function SharedCommentsPanel({
 
 function SharedCommentCard({
   comment, onAnnotationClick, onSeekMedia, onReply, isReply,
-  isOwn, isEditing, editingText, setEditingText, onStartEdit, onCancelEdit, onEdit, onDelete, reactions, onToggleReaction, attachments,
+  replyingToName, isOwn, isEditing, editingText, setEditingText, onStartEdit, onCancelEdit, onEdit, onDelete, reactions, onToggleReaction, attachments,
 }: {
   comment: CommentWithDraftInfo;
   onAnnotationClick?: (data: unknown) => void;
   onSeekMedia?: (seconds: number) => void;
   onReply?: () => void;
   isReply?: boolean;
+  replyingToName?: string;
   isOwn?: boolean;
   isEditing?: boolean;
   editingText?: string;
@@ -487,6 +489,7 @@ function SharedCommentCard({
       onSubmitEdit={onEdit}
       onCancelEdit={onCancelEdit}
       isReply={isReply}
+      replyingToName={replyingToName}
       isDimmed={!comment.is_current_draft}
       headerSlot={showDraftBadge ? (
             <span

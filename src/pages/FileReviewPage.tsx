@@ -196,6 +196,13 @@ export default function FileReviewPage({
   const { items, markers, commentCounts, paintMode, setPaintMode, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
     useReviewState(rootCheckResultId, checkItems);
 
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("ad-check-comment-panel-state", { detail: { open: rightTab === "comments" } }));
+    return () => {
+      window.dispatchEvent(new CustomEvent("ad-check-comment-panel-state", { detail: { open: false } }));
+    };
+  }, [rightTab]);
+
   // Re-fetch the latest check_result from DB before validating submission
   const validateAndOpenSubmit = useCallback(async () => {
     if (!record?.id || !record?.check_items) {
@@ -2290,7 +2297,7 @@ function CreatorReadonlyCommentsPanel({
               attachments={attachmentsByCommentId[parent.id]}
             />
             {(repliesByParent[parent.id] ?? []).length > 0 ? (
-              <div className="ml-5 mt-2 space-y-2 border-l border-border/70 pl-3">
+              <div className="ml-6 mt-2 space-y-2 border-l-2 border-primary/20 pl-3">
                 {(repliesByParent[parent.id] ?? []).map((reply) => (
                   <CreatorCommentItem
                     key={reply.id}
@@ -2309,6 +2316,7 @@ function CreatorReadonlyCommentsPanel({
                     reactions={reactionsByCommentId[reply.id]}
                     onToggleReaction={(emoji) => void toggleReaction(reply.id, emoji)}
                     attachments={attachmentsByCommentId[reply.id]}
+                    replyingToName={parent.author_name}
                   />
                 ))}
               </div>
@@ -2357,6 +2365,7 @@ function CreatorReadonlyCommentsPanel({
 function CreatorCommentItem({
   comment,
   isReply,
+  replyingToName,
   isOwn,
   onAnnotationClick,
   onSeekMedia,
@@ -2374,6 +2383,7 @@ function CreatorCommentItem({
 }: {
   comment: CreatorFileComment;
   isReply?: boolean;
+  replyingToName?: string;
   isOwn: boolean;
   onAnnotationClick: (annotationData: unknown) => void;
   onSeekMedia: (seconds: number) => void;
@@ -2412,6 +2422,7 @@ function CreatorCommentItem({
       onSubmitEdit={onSubmitEdit}
       onCancelEdit={onCancelEdit}
       isReply={isReply}
+      replyingToName={replyingToName}
       contentSlot={comment.annotation_data ? <button
             type="button"
             className="text-[10px] text-primary hover:underline"

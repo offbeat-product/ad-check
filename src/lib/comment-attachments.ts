@@ -89,7 +89,10 @@ export function normalizeAttachmentRows(data: unknown): CommentAttachmentView[] 
         id: row.id == null ? undefined : String(row.id),
         comment_id: row.comment_id == null ? undefined : String(row.comment_id),
         file_name: String(fileName),
-        mime_type: row.mime_type == null && row.attachment_type == null ? null : String(row.mime_type ?? row.attachment_type),
+        mime_type:
+          row.mime_type == null && row.file_type == null && row.attachment_type == null
+            ? null
+            : String(row.mime_type ?? row.file_type ?? row.attachment_type),
         size_bytes:
           row.size_bytes == null && row.file_size_bytes == null
             ? null

@@ -53,6 +53,7 @@ export function FeedbackButton({ product, className }: FeedbackButtonProps) {
   const location = useLocation();
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
+  const [commentPanelOpen, setCommentPanelOpen] = useState(false);
   const [contextLoading, setContextLoading] = useState(false);
   const [contextPreview, setContextPreview] = useState<{
     page_name: string;
@@ -85,6 +86,22 @@ export function FeedbackButton({ product, className }: FeedbackButtonProps) {
     resetFlow();
     setContextPreview(null);
   }, [resetFlow]);
+
+  useEffect(() => {
+    const onCommentPanelState = (event: Event) => {
+      const detail = (event as CustomEvent<{ open?: boolean }>).detail;
+      setCommentPanelOpen(Boolean(detail?.open));
+    };
+
+    window.addEventListener("ad-check-comment-panel-state", onCommentPanelState);
+    return () => window.removeEventListener("ad-check-comment-panel-state", onCommentPanelState);
+  }, []);
+
+  useEffect(() => {
+    if (commentPanelOpen) {
+      handleClose();
+    }
+  }, [commentPanelOpen, handleClose]);
 
   useEffect(() => {
     if (!open) return;
@@ -169,7 +186,7 @@ export function FeedbackButton({ product, className }: FeedbackButtonProps) {
     setStep("details");
   };
 
-  if (location.pathname.startsWith("/creator/") || location.pathname.startsWith("/shared/")) {
+  if (location.pathname.startsWith("/creator/") || location.pathname.startsWith("/shared/") || commentPanelOpen) {
     return null;
   }
 

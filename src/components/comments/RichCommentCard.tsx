@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
-import { Check, Clock3, Copy, FileText, MessageCircleReply, MoreHorizontal, Pencil, SmilePlus, Trash2 } from "lucide-react";
+import { Check, Clock3, Copy, FileText, MessageCircleReply, Pencil, SmilePlus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { humanSize, isImage, type CommentAttachmentView } from "@/lib/comment-attachments";
@@ -36,6 +36,7 @@ export interface RichCommentCardProps {
   onSubmitEdit?: () => void;
   onCancelEdit?: () => void;
   isReply?: boolean;
+  replyingToName?: string | null;
   isDimmed?: boolean;
   onCardClick?: () => void;
   headerSlot?: ReactNode;
@@ -142,6 +143,7 @@ export function RichCommentCard({
   onSubmitEdit,
   onCancelEdit,
   isReply,
+  replyingToName,
   isDimmed,
   onCardClick,
   headerSlot,
@@ -154,32 +156,27 @@ export function RichCommentCard({
   const visibleReactions = reactions.filter((reaction) => reaction.count > 0 || reaction.reactedByMe);
   const isClickable = Boolean(onCardClick);
   const [reactionPickerOpen, setReactionPickerOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const reactionPickerRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!reactionPickerOpen && !menuOpen) return;
+    if (!reactionPickerOpen) return;
 
     const onDocumentMouseDown = (event: globalThis.MouseEvent) => {
       const target = event.target as Node;
       if (reactionPickerOpen && reactionPickerRef.current && !reactionPickerRef.current.contains(target)) {
         setReactionPickerOpen(false);
       }
-      if (menuOpen && menuRef.current && !menuRef.current.contains(target)) {
-        setMenuOpen(false);
-      }
     };
 
     document.addEventListener("mousedown", onDocumentMouseDown);
     return () => document.removeEventListener("mousedown", onDocumentMouseDown);
-  }, [menuOpen, reactionPickerOpen]);
+  }, [reactionPickerOpen]);
 
   return (
     <div
       className={cn(
         "rounded-lg transition-colors",
-        isReply ? "bg-muted/30 p-2.5" : "border border-border/70 bg-card p-3.5 shadow-sm",
+        isReply ? "bg-muted/40 p-2.5" : "border border-border/70 bg-card p-3.5 shadow-sm",
         isClickable && "cursor-pointer hover:border-primary/40 hover:bg-primary/5",
         isDimmed && "opacity-75"
       )}
@@ -203,6 +200,17 @@ export function RichCommentCard({
                 <span className={cn("rounded-full border px-1.5 py-0.5 text-[10px] font-medium", roleStyle.className)}>
                   {roleStyle.label}
                 </span>
+                {onCopyToOtherFiles ? (
+                  <button
+                    type="button"
+                    onClick={stopPropagation(onCopyToOtherFiles)}
+                    title="他のファイルにもコピー"
+                    className="inline-flex items-center gap-0.5 rounded border border-border/50 px-1.5 py-px text-[10px] text-muted-foreground hover:text-foreground"
+                  >
+                    <Copy className="h-3 w-3" />
+                    コピー
+                  </button>
+                ) : null}
                 {headerSlot}
               </div>
               <span className="text-[11px] text-muted-foreground" title={getFullTime(createdAt)}>
@@ -228,6 +236,13 @@ export function RichCommentCard({
           </div>
 
           {metaSlot ? <div className="space-y-1">{metaSlot}</div> : null}
+
+          {isReply && replyingToName ? (
+            <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <MessageCircleReply className="h-3 w-3" />
+              {replyingToName}さんへの返信
+            </div>
+          ) : null}
 
           {mediaTimestamp != null && mediaTimestamp > 0 ? (
             <button
@@ -352,34 +367,6 @@ export function RichCommentCard({
                 <Trash2 className="h-3 w-3" />
                 削除
               </button>
-            ) : null}
-            {onCopyToOtherFiles ? (
-              <div className="relative shrink-0" ref={menuRef}>
-                <button
-                  type="button"
-                  onClick={() => setMenuOpen((open) => !open)}
-                  aria-label="その他の操作"
-                  aria-expanded={menuOpen}
-                  className="inline-flex items-center rounded px-1.5 py-0.5 text-muted-foreground hover:text-foreground"
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </button>
-                {menuOpen ? (
-                  <div className="absolute bottom-full left-0 z-20 mb-1 w-48 rounded-md border border-border/70 bg-popover p-1 shadow-md">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setMenuOpen(false);
-                        onCopyToOtherFiles();
-                      }}
-                      className="flex w-full items-center gap-2 rounded px-2.5 py-1.5 text-left text-xs hover:bg-muted"
-                    >
-                      <Copy className="h-3.5 w-3.5" />
-                      他のファイルにもコピー
-                    </button>
-                  </div>
-                ) : null}
-              </div>
             ) : null}
             {onToggleReaction ? (
               <div className="relative ml-auto" ref={reactionPickerRef}>
