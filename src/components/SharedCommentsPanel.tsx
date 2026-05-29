@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { CommentRow, CommentWithDraftInfo } from "@/lib/db-types";
-import { matchesCommentItemFilter, withDefaultDraftInfo } from "@/lib/comment-draft-info";
+import { withDefaultDraftInfo } from "@/lib/comment-draft-info";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,11 +13,11 @@ interface SharedCommentsPanelProps {
   checkResultId: string;
   shareToken: string;
   allowWrite: boolean;
-  filterItemId?: string | null;
   onAnnotationClick?: (data: unknown) => void;
   mediaCurrentTime?: number | null;
   onSeekMedia?: (seconds: number) => void;
   refreshKey?: number;
+  onCommentCountChange?: (count: number) => void;
 }
 
 type SharedCommentsWithDraftRpc = (
@@ -31,8 +31,8 @@ type SharedCommentsRpc = (
 ) => Promise<{ data: CommentRow[] | null; error: { message: string } | null }>;
 
 export default function SharedCommentsPanel({
-  checkResultId, shareToken, allowWrite, filterItemId,
-  onAnnotationClick, mediaCurrentTime, onSeekMedia, refreshKey,
+  checkResultId, shareToken, allowWrite,
+  onAnnotationClick, mediaCurrentTime, onSeekMedia, refreshKey, onCommentCountChange,
 }: SharedCommentsPanelProps) {
   const [comments, setComments] = useState<CommentWithDraftInfo[]>([]);
   const [guestName, setGuestName] = useState(() => localStorage.getItem("shared_guest_name") || "");
@@ -44,7 +44,7 @@ export default function SharedCommentsPanel({
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
   const [posting, setPosting] = useState(false);
 
-  const fetchComments = async () => {
+  const fetchComments = useCallback(async () => {
     let result: CommentWithDraftInfo[] = [];
 
     try {
@@ -75,19 +75,20 @@ export default function SharedCommentsPanel({
       return;
     }
 
-    setComments(result.slice().sort((a, b) => a.created_at.localeCompare(b.created_at)));
-  };
+    const sorted = result.slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
+    setComments(sorted);
+    onCommentCountChange?.(sorted.length);
+  }, [checkResultId, shareToken, onCommentCountChange]);
 
-  useEffect(() => { fetchComments(); }, [checkResultId, refreshKey]);
+  useEffect(() => { fetchComments(); }, [fetchComments, refreshKey]);
 
   // Poll for new comments every 15s
   useEffect(() => {
     const interval = setInterval(fetchComments, 15000);
     return () => clearInterval(interval);
-  }, [checkResultId, shareToken]);
+  }, [fetchComments]);
 
   const filtered = comments.filter((c) => {
-    if (!matchesCommentItemFilter(c, filterItemId)) return false;
     if (tab === "open") return c.status === "open";
     if (tab === "resolved") return c.status === "resolved";
     return true;
@@ -97,10 +98,9 @@ export default function SharedCommentsPanel({
   const getReplies = (parentId: string) => filtered.filter((c) => c.parent_id === parentId);
 
   const countByTab = (t: "all" | "open" | "resolved") => {
-    const base = comments.filter((c) => matchesCommentItemFilter(c, filterItemId));
-    if (t === "open") return base.filter((c) => c.status === "open").length;
-    if (t === "resolved") return base.filter((c) => c.status === "resolved").length;
-    return base.length;
+    if (t === "open") return comments.filter((c) => c.status === "open").length;
+    if (t === "resolved") return comments.filter((c) => c.status === "resolved").length;
+    return comments.length;
   };
 
   const handleSaveGuest = () => {
@@ -120,7 +120,7 @@ export default function SharedCommentsPanel({
           author_name: guestName.trim(),
           author_email: guestEmail.trim() || "shared@guest",
           content,
-          check_item_id: filterItemId || null,
+          check_item_id: null,
           media_timestamp: (!parentId && mediaCurrentTime != null && mediaCurrentTime > 0) ? mediaCurrentTime : null,
           parent_id: parentId || null,
         },

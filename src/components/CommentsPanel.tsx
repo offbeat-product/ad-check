@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from "react";
-import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { tusUpload } from "@/lib/tus-upload";
 import { useAuth } from "@/hooks/useAuth";
@@ -8,29 +7,11 @@ import { matchesCommentItemFilter, withDefaultDraftInfo } from "@/lib/comment-dr
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
-import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Send, Pin, Reply, Paperclip, X, FileText, Pencil, Trash2, Check, Copy, MoreHorizontal } from "lucide-react";
 import { cn } from "@/lib/utils";
 import MentionInput, { type MentionMember } from "@/components/comments/MentionInput";
 import TimestampBadge, { formatTimestamp } from "@/components/comments/TimestampBadge";
 import { ReplicateCommentDialog, type ReplicateCommentData } from "@/components/ReplicateCommentDialog";
-
-// 修正指示かどうかをキーワードで簡易判定
-function detectCorrectionIntent(text: string): boolean {
-  const keywords = [
-    '修正', '変更', '直し', '直して', 'NG', '差し替え', '入れ替え',
-    'やり直し', '再作成', '削除して', '追加して', '変えて',
-    'ここは', '違う', '間違', 'ミス', '誤り', '不備',
-    'フォント', '色を', 'サイズ', 'テロップ', 'ロゴ',
-    'タイミング', '秒に', 'フレーム', '音が', 'SE',
-    'してください', 'お願い', 'すべき', 'ください',
-    'なっていない', 'なってない', 'できていない', 'できてない',
-    'ずれ', 'はみ出', 'ぼやけ', '切れて', '見えない', '聞こえない',
-  ];
-  return keywords.some(kw => text.includes(kw));
-}
 
 interface CommentsPanelProps {
   checkResultId: string;
@@ -41,12 +22,9 @@ interface CommentsPanelProps {
   onSeekMedia?: (seconds: number) => void;
   /** Called after a comment is deleted (to refresh annotations etc.) */
   onCommentDeleted?: () => void;
-  /** Correction log context */
-  productId?: string;
   projectId?: string;
   processType?: string;
   productCode?: string;
-  patternId?: string | null;
   fileId?: string;
   onCommentCountChange?: (count: number) => void;
   /** File name to display on comments */
@@ -60,7 +38,7 @@ type CommentsWithDraftInfoRpc = (
   args: { p_check_result_id: string },
 ) => Promise<{ data: CommentWithDraftInfo[] | null; error: { message: string } | null }>;
 
-export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia, onCommentDeleted, productId, projectId, processType, productCode, patternId, fileId, onCommentCountChange, fileName, refreshKey }: CommentsPanelProps) {
+export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia, onCommentDeleted, projectId, processType, productCode, fileId, onCommentCountChange, fileName, refreshKey }: CommentsPanelProps) {
   const { user } = useAuth();
   const [comments, setComments] = useState<CommentWithDraftInfo[]>([]);
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
@@ -73,17 +51,6 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   const [members, setMembers] = useState<MentionMember[]>([]);
   const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
   const [replicateDialogComment, setReplicateDialogComment] = useState<ReplicateCommentData | null>(null);
-
-  // Correction log state
-  const [isCorrectionChecked, setIsCorrectionChecked] = useState(false);
-  const [correctionScope, setCorrectionScope] = useState<"project" | "product">("project");
-
-  // Auto-detect correction intent when comment text changes
-  useEffect(() => {
-    if (newComment.trim().length > 0) {
-      setIsCorrectionChecked(detectCorrectionIntent(newComment));
-    }
-  }, [newComment]);
 
   // Fetch workspace members for mentions
   useEffect(() => {
@@ -210,28 +177,6 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
       });
     }
   };
-
-
-  const saveCorrectionRecord = async (commentId: string, commentText: string) => {
-    if (!productId || !processType) return;
-    try {
-      await supabase.from("correction_logs").insert({
-        product_id: productId,
-        project_id: projectId || null,
-        process_type: processType,
-        pattern_id: patternId || null,
-        file_id: fileId || null,
-        check_result_id: checkResultId || null,
-        comment_id: commentId,
-        correction_text: commentText,
-        ai_scope: correctionScope,
-        created_by: user?.id || null,
-      } as any);
-    } catch (err) {
-      console.error("[correction_logs] silent error:", err);
-    }
-  };
-
   const handleSubmit = async () => {
     if (!newComment.trim() || !user) return;
     setUploading(true);
@@ -246,7 +191,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
 
     const timestampValue = (mediaCurrentTime != null && mediaCurrentTime > 0) ? mediaCurrentTime : null;
 
-    const { data: savedComment, error } = await supabase.from("comments").insert({
+    const { error } = await supabase.from("comments").insert({
       check_result_id: checkResultId,
       check_item_id: filterItemId || null,
       author_name: user.email?.split("@")[0] || "User",
@@ -256,22 +201,15 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
       media_timestamp: timestampValue,
       mentions: mentionedUserIds.length > 0 ? mentionedUserIds : null,
       ...attachmentData,
-    } as any).select("id").single();
+    } as any);
     handleSupabaseError(error, "comment insert");
 
     // Send mention notifications
     await sendMentionNotifications(newComment, mentionedUserIds);
 
-    // Save to correction_logs if checked
-    if (isCorrectionChecked && savedComment?.id) {
-      await saveCorrectionRecord(savedComment.id, newComment);
-    }
-
     setNewComment("");
     setAttachment(null);
     setMentionedUserIds([]);
-    setIsCorrectionChecked(false);
-    setCorrectionScope("project");
     setUploading(false);
     fetchComments();
   };
@@ -448,38 +386,6 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
             <Send className="h-3.5 w-3.5" />
           </Button>
         </div>
-
-        {/* Correction log toggle */}
-        {productId ? <div className="rounded-lg border border-primary/20 bg-primary/5 p-2.5 space-y-2">
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="correction-toggle"
-                checked={isCorrectionChecked}
-                onCheckedChange={(v) => setIsCorrectionChecked(!!v)}
-                className="h-4 w-4"
-              />
-              <Label htmlFor="correction-toggle" className="text-xs font-medium text-foreground cursor-pointer leading-tight">
-                📝 修正指示として記録する
-              </Label>
-            </div>
-            <p className="text-[10px] text-muted-foreground ml-6">
-              チェックすると修正指示として履歴に記録されます
-            </p>
-            {isCorrectionChecked ? <RadioGroup
-                value={correctionScope}
-                onValueChange={(v) => setCorrectionScope(v as "project" | "product")}
-                className="flex items-center gap-3 ml-6"
-              >
-                <div className="flex items-center gap-1">
-                  <RadioGroupItem value="project" id="scope-project" className="h-3.5 w-3.5" />
-                  <Label htmlFor="scope-project" className="text-[11px] text-muted-foreground cursor-pointer">この案件のみ</Label>
-                </div>
-                <div className="flex items-center gap-1">
-                  <RadioGroupItem value="product" id="scope-product" className="h-3.5 w-3.5" />
-                  <Label htmlFor="scope-product" className="text-[11px] text-muted-foreground cursor-pointer">この商材全体</Label>
-                </div>
-              </RadioGroup> : null}
-          </div> : null}
       </div>
       <ReplicateCommentDialog
         open={replicateDialogComment !== null}
@@ -632,8 +538,24 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
             <Reply className="h-3 w-3" />返信
           </button>
         )}
+        {isOwn && !isEditing ? (
+          <>
+            <button
+              onClick={() => setIsEditing(true)}
+              className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 shrink-0"
+            >
+              <Pencil className="h-3 w-3" />編集
+            </button>
+            <button
+              onClick={() => onDelete?.(comment.id)}
+              className="text-[10px] text-muted-foreground hover:text-destructive flex items-center gap-1 shrink-0"
+            >
+              <Trash2 className="h-3 w-3" />削除
+            </button>
+          </>
+        ) : null}
         <div className="flex-1" />
-        {!isReply && (onReplicate || (isOwn && !isEditing)) ? (
+        {!isReply && onReplicate ? (
           <div className="relative shrink-0" ref={menuRef}>
             <button
               onClick={() => setMenuOpen((open) => !open)}
@@ -644,39 +566,15 @@ function CommentCard({ comment, currentUserEmail, onToggleStatus, onReply, onEdi
             </button>
             {menuOpen ? (
               <div className="absolute right-0 top-7 z-20 w-48 rounded-md border border-border bg-popover shadow-md p-1">
-                {onReplicate ? (
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onReplicate();
-                    }}
-                    className="w-full text-left text-xs px-2.5 py-1.5 rounded flex items-center gap-2 hover:bg-muted"
-                  >
-                    <Copy className="h-3.5 w-3.5" />他のファイルにも反映
-                  </button>
-                ) : null}
-                {isOwn && !isEditing ? (
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setIsEditing(true);
-                    }}
-                    className="w-full text-left text-xs px-2.5 py-1.5 rounded flex items-center gap-2 hover:bg-muted"
-                  >
-                    <Pencil className="h-3.5 w-3.5" />編集
-                  </button>
-                ) : null}
-                {isOwn && !isEditing ? (
-                  <button
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onDelete?.(comment.id);
-                    }}
-                    className="w-full text-left text-xs px-2.5 py-1.5 rounded flex items-center gap-2 hover:bg-muted text-destructive"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />削除
-                  </button>
-                ) : null}
+                <button
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onReplicate();
+                  }}
+                  className="w-full text-left text-xs px-2.5 py-1.5 rounded flex items-center gap-2 hover:bg-muted"
+                >
+                  <Copy className="h-3.5 w-3.5" />他のファイルにも反映
+                </button>
               </div>
             ) : null}
           </div>

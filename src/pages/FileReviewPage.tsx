@@ -1828,7 +1828,6 @@ export default function FileReviewPage({
         file={file}
         productId={product?.id}
         projectId={projectId}
-        patternId={file?.pattern_id}
         fileId={fileId}
         mediaCurrentTime={mediaCurrentTime}
         onSeekMedia={handleSeekMedia}

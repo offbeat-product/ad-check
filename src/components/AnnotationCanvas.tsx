@@ -2,7 +2,6 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import MentionInput, { type MentionMember } from "@/components/comments/MentionInput";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Square, Circle, ArrowUpRight, Pencil, Type, MapPin, Undo2, Trash2, MessageCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -69,7 +68,6 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
   const [commentText, setCommentText] = useState("");
   const [commentError, setCommentError] = useState(false);
   const [mentionedUserIds, setMentionedUserIds] = useState<string[]>([]);
-  const [isCorrection, setIsCorrection] = useState(false);
 
   const showingPopup = !!pendingAnnotation;
 
@@ -243,7 +241,7 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
     // Save with comment and mentions
     const imagePosition = getAnnotationImagePosition(pendingAnnotation);
     const annotationWithPosition = { ...pendingAnnotation, imagePosition };
-    onSaveAnnotations?.([annotationWithPosition] as unknown as Annotation[], commentText, mentionedUserIds.length > 0 ? mentionedUserIds : undefined, isCorrection);
+    onSaveAnnotations?.([annotationWithPosition] as unknown as Annotation[], commentText, mentionedUserIds.length > 0 ? mentionedUserIds : undefined);
 
     setPendingAnnotation(null);
     setCommentText("");
@@ -441,9 +439,6 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
                 onChange={(v) => {
                   setCommentText(v);
                   setCommentError(false);
-                  // Auto-detect correction intent
-                  const correctionKeywords = ['修正', '変更', '直し', '直して', 'NG', '差し替え', '削除して', '追加して', '変えて', 'してください', 'お願い'];
-                  setIsCorrection(correctionKeywords.some(kw => v.includes(kw)));
                 }}
                 members={members}
                 onMentions={setMentionedUserIds}
@@ -453,10 +448,6 @@ export default function AnnotationCanvas({ active, width, height, onSaveAnnotati
               />
             </div>
             {commentError ? <p className="text-[10px] text-destructive mb-2">コメントを入力してください</p> : null}
-            <label className="flex items-center gap-2 mb-2 cursor-pointer">
-              <Checkbox checked={isCorrection} onCheckedChange={(v) => setIsCorrection(!!v)} />
-              <span className="text-xs text-muted-foreground">修正指示として記録する</span>
-            </label>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" size="sm" className="text-xs" onClick={handleCancelComment}>取消（削除）</Button>
               <Button size="sm" className="text-xs" onClick={handleConfirmComment}>保存して投稿</Button>
