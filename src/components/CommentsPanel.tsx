@@ -23,7 +23,7 @@ import {
   normalizeAttachmentRows,
   type CommentAttachmentView,
 } from "@/lib/comment-attachments";
-import { isValidMediaTimestamp } from "@/lib/comment-annotations";
+import { isValidMediaTimestamp, resolveSeekSeconds } from "@/lib/comment-annotations";
 
 interface CommentsPanelProps {
   checkResultId: string;
@@ -43,6 +43,8 @@ interface CommentsPanelProps {
   fileName?: string;
   /** Increment to force a refetch of comments */
   refreshKey?: number;
+  selectedCommentId?: string | null;
+  onSelectComment?: (commentId: string | null) => void;
 }
 
 type CommentsWithDraftInfoRpc = (
@@ -71,14 +73,16 @@ interface ReplyTarget {
   toName: string;
 }
 
-export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia, onCommentDeleted, projectId, processType, productCode, fileId, onCommentCountChange, fileName, refreshKey }: CommentsPanelProps) {
+export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia, onCommentDeleted, projectId, processType, productCode, fileId, onCommentCountChange, fileName, refreshKey, selectedCommentId: selectedCommentIdProp, onSelectComment: onSelectCommentProp }: CommentsPanelProps) {
   const { user } = useAuth();
   const [comments, setComments] = useState<CommentWithDraftInfo[]>([]);
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
   const [newComment, setNewComment] = useState("");
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const [replyText, setReplyText] = useState("");
-  const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
+  const [internalSelectedCommentId, setInternalSelectedCommentId] = useState<string | null>(null);
+  const selectedCommentId = selectedCommentIdProp ?? internalSelectedCommentId;
+  const setSelectedCommentId = onSelectCommentProp ?? setInternalSelectedCommentId;
   const [openThreads, setOpenThreads] = useState<Set<string>>(new Set());
   const [attachments, setAttachments] = useState<File[]>([]);
   const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
@@ -637,14 +641,14 @@ function CommentCard({ comment, onToggleStatus, onReply, onEdit, onDelete, isRep
 
   const handleCardClick = () => {
     onSelectComment?.(comment.id);
-    // Auto-seek video to annotation timestamp
-    if (isValidMediaTimestamp(mediaTimestamp) && onSeekMedia) {
-      onSeekMedia(mediaTimestamp);
+    const seekSeconds = resolveSeekSeconds(comment.content, mediaTimestamp);
+    if (seekSeconds != null && onSeekMedia) {
+      onSeekMedia(seekSeconds);
     }
     if (hasAnnotation && onAnnotationClick) {
-      onAnnotationClick(comment.annotation_data, comment.id, mediaTimestamp);
-    } else if (isValidMediaTimestamp(mediaTimestamp)) {
-      onAnnotationClick?.(comment.annotation_data, comment.id, mediaTimestamp);
+      onAnnotationClick(comment.annotation_data, comment.id, seekSeconds);
+    } else if (seekSeconds != null) {
+      onAnnotationClick?.(comment.annotation_data, comment.id, seekSeconds);
     } else if (hasCheckItem && onCheckItemClick) {
       onCheckItemClick(comment.check_item_id!);
     }
@@ -654,8 +658,9 @@ function CommentCard({ comment, onToggleStatus, onReply, onEdit, onDelete, isRep
 
   const handleSeekMedia = (seconds: number) => {
     onSelectComment?.(comment.id);
-    onSeekMedia?.(seconds);
-    onAnnotationClick?.(comment.annotation_data, comment.id, mediaTimestamp);
+    const seekSeconds = resolveSeekSeconds(comment.content, mediaTimestamp) ?? seconds;
+    onSeekMedia?.(seekSeconds);
+    onAnnotationClick?.(comment.annotation_data, comment.id, seekSeconds);
   };
 
   const handleSaveEdit = () => {

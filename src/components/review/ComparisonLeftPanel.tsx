@@ -30,7 +30,6 @@ interface ComparisonLeftPanelProps {
   onPaintModeToggle?: () => void;
   onAnnotationSave?: (annotations: unknown[], comment: string, mentionedUserIds?: string[], isCorrection?: boolean) => void;
   savedAnnotations?: Array<{ type: string; points: { x: number; y: number }[]; color: string; strokeWidth: number; text?: string; imagePosition?: { x: number; y: number; width: number; height: number } }>;
-  highlightAnnotation?: { type: string; points: { x: number; y: number }[]; color: string; strokeWidth: number; text?: string; imagePosition?: { x: number; y: number; width: number; height: number } } | null;
   members?: MentionMember[];
   /** Client submission */
   submissionType?: string;
@@ -42,7 +41,7 @@ interface ComparisonLeftPanelProps {
 export default function ComparisonLeftPanel({
   file, drafts, onDraftsChange, activePairIndex, onActivePairIndexChange, onClose, checkResultId,
   onRevisionUploaded,
-  paintMode, onPaintModeToggle, onAnnotationSave, savedAnnotations, highlightAnnotation, members,
+  paintMode, onPaintModeToggle, onAnnotationSave, savedAnnotations, members,
   submissionType, onSubmitToClient, onInternalRevision,
 }: ComparisonLeftPanelProps) {
   const { toast } = useToast();
@@ -146,19 +145,6 @@ export default function ComparisonLeftPanel({
             ))}
           </svg> : null}
 
-        {/* Highlight annotation */}
-        {highlightAnnotation?.imagePosition && draftIndex === 0 ? <div
-            className="absolute border-3 border-primary border-dashed rounded animate-pulse z-[25] pointer-events-none"
-            style={{
-              left: `${highlightAnnotation.imagePosition.x}%`,
-              top: `${highlightAnnotation.imagePosition.y}%`,
-              width: `${highlightAnnotation.imagePosition.width}%`,
-              height: `${highlightAnnotation.imagePosition.height}%`,
-              borderWidth: '3px',
-            }}
-          /> : null}
-
-        {/* Annotation canvas - only on active draft pair */}
         {paintMode && isActiveDraft ? <AnnotationCanvas active={paintMode} width={size.width} height={size.height} onSaveAnnotations={onAnnotationSave} members={members} /> : null}
       </div>
     );

@@ -20,13 +20,12 @@ interface ImagePreviewProps {
   noDataMessage?: string;
   overlay?: React.ReactNode;
   savedAnnotations?: CommentAnnotationData[];
-  highlightAnnotation?: CommentAnnotationData | null;
   members?: MentionMember[];
 }
 
 export default function ImagePreview({
   imageSrc, markers, paintMode, onPaintModeToggle, onMarkerClick, onAnnotationSave,
-  label, noDataMessage, overlay, savedAnnotations, highlightAnnotation, members,
+  label, noDataMessage, overlay, savedAnnotations, members,
 }: ImagePreviewProps) {
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
@@ -77,16 +76,10 @@ export default function ImagePreview({
           ))}
         </TooltipProvider>
 
-        {/* Saved annotation overlays (from selected comment only) */}
         {savedAnnotations && savedAnnotations.length > 0 ? <svg className="absolute inset-0 w-full h-full pointer-events-none z-[15]" viewBox={`0 0 ${imageSize.width || 800} ${imageSize.height || 400}`} preserveAspectRatio="none">
             {savedAnnotations.map((ann, i) => (
               <SavedAnnotationSvg key={i} ann={ann} containerWidth={imageSize.width || 800} containerHeight={imageSize.height || 400} />
             ))}
-          </svg> : null}
-
-        {/* Highlight overlay for clicked annotation — render same shape as paint mode */}
-        {highlightAnnotation?.imagePosition ? <svg className="absolute inset-0 w-full h-full pointer-events-none z-[25] animate-pulse" viewBox={`0 0 ${imageSize.width || 800} ${imageSize.height || 400}`} preserveAspectRatio="none">
-            <SavedAnnotationSvg ann={highlightAnnotation} containerWidth={imageSize.width || 800} containerHeight={imageSize.height || 400} highlight />
           </svg> : null}
 
         <AnnotationCanvas active={paintMode} width={imageSize.width || 800} height={imageSize.height || 400} onSaveAnnotations={onAnnotationSave} members={members} />
@@ -97,25 +90,25 @@ export default function ImagePreview({
   );
 }
 
-function SavedAnnotationSvg({ ann, containerWidth, containerHeight, highlight }: { ann: CommentAnnotationData; containerWidth: number; containerHeight: number; highlight?: boolean }) {
+function SavedAnnotationSvg({ ann, containerWidth, containerHeight }: { ann: CommentAnnotationData; containerWidth: number; containerHeight: number }) {
   if (!ann.imagePosition) return null;
   const { x, y, width, height } = ann.imagePosition;
   const px = (x / 100) * containerWidth;
   const py = (y / 100) * containerHeight;
   const pw = (width / 100) * containerWidth;
   const ph = (height / 100) * containerHeight;
-  const strokeColor = ann.color || (highlight ? "hsl(var(--primary))" : "#ef4444");
-  const sw = highlight ? Math.max(ann.strokeWidth, 3) : ann.strokeWidth;
-  const op = highlight ? 0.9 : 0.7;
+  const strokeColor = ann.color || "#ef4444";
+  const sw = ann.strokeWidth;
+  const op = 0.7;
 
   if (ann.type === "rect") {
-    return <rect x={px} y={py} width={pw} height={ph} fill={highlight ? `${strokeColor}20` : "none"} stroke={strokeColor} strokeWidth={sw} opacity={op} />;
+    return <rect x={px} y={py} width={pw} height={ph} fill="none" stroke={strokeColor} strokeWidth={sw} opacity={op} />;
   }
   if (ann.type === "ellipse") {
-    return <ellipse cx={px + pw / 2} cy={py + ph / 2} rx={pw / 2} ry={ph / 2} fill={highlight ? `${strokeColor}20` : "none"} stroke={strokeColor} strokeWidth={sw} opacity={op} />;
+    return <ellipse cx={px + pw / 2} cy={py + ph / 2} rx={pw / 2} ry={ph / 2} fill="none" stroke={strokeColor} strokeWidth={sw} opacity={op} />;
   }
   if (ann.type === "arrow" && ann.points.length >= 2) {
     return <line x1={ann.points[0].x} y1={ann.points[0].y} x2={ann.points[1].x} y2={ann.points[1].y} stroke={strokeColor} strokeWidth={sw} opacity={op} />;
   }
-  return <rect x={px} y={py} width={Math.max(pw, 10)} height={Math.max(ph, 10)} fill={highlight ? `${strokeColor}20` : "none"} stroke={strokeColor} strokeWidth={sw} strokeDasharray="6 4" opacity={0.5} />;
+  return <rect x={px} y={py} width={Math.max(pw, 10)} height={Math.max(ph, 10)} fill="none" stroke={strokeColor} strokeWidth={sw} strokeDasharray="6 4" opacity={0.5} />;
 }
