@@ -53,7 +53,7 @@ export default function SharedCommentsPanel({
         p_check_result_id: checkResultId,
         p_share_token: shareToken,
       });
-      if (!draftError && draftData && draftData.length > 0) {
+      if (!draftError && draftData != null) {
         result = draftData;
       } else {
         if (draftError) {
