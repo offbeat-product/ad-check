@@ -48,8 +48,9 @@ export default function SharedCommentsPanel({
     let result: CommentWithDraftInfo[] = [];
 
     try {
-      const draftRpc = supabase.rpc as unknown as SharedCommentsWithDraftRpc;
-      const { data: draftData, error: draftError } = await draftRpc("get_shared_comments_with_draft_info", {
+      const { data: draftData, error: draftError } = await (
+        supabase.rpc.bind(supabase) as unknown as SharedCommentsWithDraftRpc
+      )("get_shared_comments_with_draft_info", {
         p_check_result_id: checkResultId,
         p_share_token: shareToken,
       });
@@ -59,8 +60,9 @@ export default function SharedCommentsPanel({
         if (draftError) {
           console.warn("[get_shared_comments_with_draft_info] using legacy RPC fallback:", draftError.message);
         }
-        const legacyRpc = supabase.rpc as unknown as SharedCommentsRpc;
-        const { data, error } = await legacyRpc("get_shared_comments", {
+        const { data, error } = await (
+          supabase.rpc.bind(supabase) as unknown as SharedCommentsRpc
+        )("get_shared_comments", {
           p_check_result_id: checkResultId,
           p_share_token: shareToken,
         });
