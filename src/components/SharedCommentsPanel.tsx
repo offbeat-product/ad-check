@@ -59,6 +59,12 @@ type SharedCommentsInvoke = (
   options: { body: Record<string, unknown> }
 ) => Promise<{ data: unknown; error: { message?: string } | null }>;
 
+interface ReplyTarget {
+  rootId: string;
+  targetId: string;
+  toName: string;
+}
+
 export default function SharedCommentsPanel({
   checkResultId, shareToken, allowWrite,
   onAnnotationClick, mediaCurrentTime, onSeekMedia, refreshKey, onCommentCountChange,
@@ -68,7 +74,7 @@ export default function SharedCommentsPanel({
   const [guestEmail, setGuestEmail] = useState(() => localStorage.getItem("shared_guest_email") || "");
   const [showGuestForm, setShowGuestForm] = useState(() => !localStorage.getItem("shared_guest_name"));
   const [newComment, setNewComment] = useState("");
-  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const [replyText, setReplyText] = useState("");
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
   const [posting, setPosting] = useState(false);
@@ -187,6 +193,12 @@ export default function SharedCommentsPanel({
     localStorage.setItem("shared_guest_name", guestName.trim());
     if (guestEmail.trim()) localStorage.setItem("shared_guest_email", guestEmail.trim());
     setShowGuestForm(false);
+  };
+
+  const startReply = (rootId: string, targetId: string, toName: string) => {
+    setReplyTo((current) => current?.targetId === targetId ? null : { rootId, targetId, toName });
+    setReplyText("");
+    setReplyAttachments([]);
   };
 
   const postComment = async (content: string, files: File[], parentId?: string) => {
@@ -332,12 +344,13 @@ export default function SharedCommentsPanel({
           <p className="text-xs text-muted-foreground text-center py-8">コメントはまだありません</p>
         )}
         {topLevel.map((c) => (
-          <div key={c.id} className="space-y-2">
-            <SharedCommentCard
-              comment={c}
-              onAnnotationClick={onAnnotationClick}
-              onSeekMedia={onSeekMedia}
-              onReply={allowWrite ? () => setReplyTo(replyTo === c.id ? null : c.id) : undefined}
+          <div key={c.id} className="overflow-hidden rounded-xl border border-border/60 bg-card">
+            <div className="p-3.5">
+              <SharedCommentCard
+                comment={c}
+                onAnnotationClick={onAnnotationClick}
+                onSeekMedia={onSeekMedia}
+                onReply={allowWrite ? () => startReply(c.id, c.id, c.author_name) : undefined}
               isOwn={c.guest_token != null && c.guest_token === guestToken}
               isEditing={editingId === c.id}
               editingText={editingText}
@@ -349,12 +362,14 @@ export default function SharedCommentsPanel({
               reactions={reactionsByCommentId[c.id]}
               onToggleReaction={(emoji) => void toggleReaction(c.id, emoji)}
               attachments={attachmentsByCommentId[c.id]}
-            />
+              />
+            </div>
             {getReplies(c.id).map((r) => (
-              <div key={r.id} className="ml-6 mt-2 space-y-2 border-l-2 border-primary/20 pl-3">
+              <div key={r.id} className="border-l-2 border-t border-border/40 border-l-primary/20 bg-muted/60 px-4 py-2.5 pl-6">
                 <SharedCommentCard
                   comment={r}
                   onSeekMedia={onSeekMedia}
+                  onReply={allowWrite ? () => startReply(c.id, r.id, r.author_name) : undefined}
                   isReply
                   isOwn={r.guest_token != null && r.guest_token === guestToken}
                   isEditing={editingId === r.id}
@@ -371,11 +386,12 @@ export default function SharedCommentsPanel({
                 />
               </div>
             ))}
-            {replyTo === c.id && (
-              <div className="ml-5 space-y-2">
+            {replyTo?.rootId === c.id && (
+              <div className="space-y-2 border-l-2 border-t border-border/40 border-l-primary/20 bg-muted/60 px-4 py-2.5 pl-6">
+                <p className="text-[11px] text-muted-foreground">{replyTo.toName}さんへ返信</p>
                 <div className="flex gap-2">
                   <Textarea value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="返信を入力..." className="min-h-[50px] text-xs" />
-                  <Button size="sm" onClick={() => handleReply(c.id)} disabled={posting || (!replyText.trim() && replyAttachments.length === 0)} className="self-end h-8">
+                  <Button size="sm" onClick={() => handleReply(replyTo.targetId)} disabled={posting || (!replyText.trim() && replyAttachments.length === 0)} className="self-end h-8">
                     <Send className="h-3 w-3" />
                   </Button>
                 </div>

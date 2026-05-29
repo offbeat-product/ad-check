@@ -64,12 +64,18 @@ type InternalCommentAttachmentInsert = {
   uploaded_by_id: string;
 };
 
+interface ReplyTarget {
+  rootId: string;
+  targetId: string;
+  toName: string;
+}
+
 export default function CommentsPanel({ checkResultId, filterItemId, onAnnotationClick, onCheckItemClick, mediaCurrentTime, onSeekMedia, onCommentDeleted, projectId, processType, productCode, fileId, onCommentCountChange, fileName, refreshKey }: CommentsPanelProps) {
   const { user } = useAuth();
   const [comments, setComments] = useState<CommentWithDraftInfo[]>([]);
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
   const [newComment, setNewComment] = useState("");
-  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const [replyText, setReplyText] = useState("");
   const [attachments, setAttachments] = useState<File[]>([]);
   const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
@@ -177,6 +183,12 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
     if (t === "open") return base.filter((c) => c.status === "open").length;
     if (t === "resolved") return base.filter((c) => c.status === "resolved").length;
     return base.length;
+  };
+
+  const startReply = (rootId: string, targetId: string, toName: string) => {
+    setReplyTo((current) => current?.targetId === targetId ? null : { rootId, targetId, toName });
+    setReplyText("");
+    setReplyAttachments([]);
   };
 
   const fetchAttachmentsForComments = async (commentIds: string[]) => {
@@ -425,11 +437,12 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
           <p className="text-xs text-muted-foreground text-center py-8">コメントはまだありません</p>
         )}
         {topLevel.map((c) => (
-          <div key={c.id} className="space-y-2">
-            <CommentCard
-              comment={c}
-              onToggleStatus={() => toggleStatus(c.id, c.status)}
-              onReply={() => setReplyTo(replyTo === c.id ? null : c.id)}
+          <div key={c.id} className="overflow-hidden rounded-xl border border-border/60 bg-card">
+            <div className="p-3.5">
+              <CommentCard
+                comment={c}
+                onToggleStatus={() => toggleStatus(c.id, c.status)}
+                onReply={() => startReply(c.id, c.id, c.author_name)}
               onEdit={async (id, content) => {
                 const { error } = await supabase.from("comments").update({ content }).eq("id", id);
                 handleSupabaseError(error, "comment edit");
@@ -460,13 +473,14 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
                 attachment_name: c.attachment_name,
                 mentions: c.mentions,
               })}
-            />
+              />
+            </div>
             {replies(c.id).map((r) => (
-              <div key={r.id} className="ml-6 mt-2 space-y-2 border-l-2 border-primary/20 pl-3">
+              <div key={r.id} className="border-l-2 border-t border-border/40 border-l-primary/20 bg-muted/60 px-4 py-2.5 pl-6">
                 <CommentCard
                   comment={r}
                   onToggleStatus={() => toggleStatus(r.id, r.status)}
-                  onReply={() => {}}
+                  onReply={() => startReply(c.id, r.id, r.author_name)}
                   onEdit={async (id, content) => {
                     const { error } = await supabase.from("comments").update({ content }).eq("id", id);
                     handleSupabaseError(error, "comment edit");
@@ -488,11 +502,12 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
                 />
               </div>
             ))}
-            {replyTo === c.id && (
-              <div className="ml-5 space-y-2">
+            {replyTo?.rootId === c.id && (
+              <div className="space-y-2 border-l-2 border-t border-border/40 border-l-primary/20 bg-muted/60 px-4 py-2.5 pl-6">
+                <p className="text-[11px] text-muted-foreground">{replyTo.toName}さんへ返信</p>
                 <div className="flex gap-2">
                   <Textarea value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="返信を入力..." className="min-h-[50px] text-xs" />
-                  <Button size="sm" onClick={() => handleReply(c.id)} disabled={uploading || (!replyText.trim() && replyAttachments.length === 0)} className="self-end h-8"><Send className="h-3 w-3" /></Button>
+                  <Button size="sm" onClick={() => handleReply(replyTo.targetId)} disabled={uploading || (!replyText.trim() && replyAttachments.length === 0)} className="self-end h-8"><Send className="h-3 w-3" /></Button>
                 </div>
                 <AttachmentPreview files={replyAttachments} onRemove={(index) => removeSelectedFile(index, setReplyAttachments)} />
                 <div className="flex items-center gap-1">
@@ -606,7 +621,7 @@ function CommentCard({ comment, onToggleStatus, onReply, onEdit, onDelete, isRep
       attachments={cardAttachments}
       reactions={reactions}
       onToggleReaction={onToggleReaction}
-      onReply={!isReply ? onReply : undefined}
+      onReply={onReply}
       onEdit={!isEditing ? () => setIsEditing(true) : undefined}
       onDelete={() => onDelete?.(comment.id)}
       onCopyToOtherFiles={!isReply ? onReplicate : undefined}

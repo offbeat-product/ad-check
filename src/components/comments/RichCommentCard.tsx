@@ -178,7 +178,7 @@ export function RichCommentCard({
     <div
       className={cn(
         "rounded-lg transition-colors",
-        isReply ? "border border-border/80 bg-muted/70 p-2.5" : "border border-border/70 bg-card p-3.5 shadow-sm",
+        "p-0",
         isClickable && "cursor-pointer hover:border-primary/40 hover:bg-primary/5",
         isDimmed && "opacity-75"
       )}
