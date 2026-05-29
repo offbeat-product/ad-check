@@ -40,7 +40,7 @@ export default function SharedViewPage() {
   const mediaRef = useRef<MediaPreviewHandle>(null);
 
   const checkItems = record?.check_items ?? null;
-  const { items, markers, commentCounts, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
+  const { items, markers, commentCounts, highlightCard, rightTab, setRightTab, scrollToCard, handleCommentClick } =
     useReviewState(record?.id, checkItems);
 
   // --- Data Loading ---
@@ -411,11 +411,11 @@ export default function SharedViewPage() {
                 checkResultId={record.id}
                 shareToken={token!}
                 allowWrite={canWriteComments}
-                filterItemId={commentFilter}
                 onAnnotationClick={handleAnnotationClick}
                 mediaCurrentTime={mediaCurrentTime}
                 onSeekMedia={handleSeekMedia}
                 refreshKey={commentRefreshKey}
+                onCommentCountChange={setTotalCommentCount}
               />
             </TabsContent> : null}
         </Tabs>

@@ -169,7 +169,7 @@ export function FeedbackButton({ product, className }: FeedbackButtonProps) {
     setStep("details");
   };
 
-  if (location.pathname.startsWith("/creator/")) {
+  if (location.pathname.startsWith("/creator/") || location.pathname.startsWith("/shared/")) {
     return null;
   }
 

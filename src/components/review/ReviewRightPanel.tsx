@@ -36,8 +36,6 @@ interface ReviewRightPanelProps {
   /** Callback to seek media to a specific time */
   onSeekMedia?: (seconds: number) => void;
   onActiveCheckItemChange?: (item: CheckItem | null) => void;
-  /** Correction log context */
-  patternId?: string | null;
   fileId?: string;
   /** Called after a comment is deleted */
   onCommentDeleted?: () => void;
@@ -67,7 +65,7 @@ export default function ReviewRightPanel({
   rightTab, onTabChange, items, markers, productCode, commentCounts, highlightCard,
   commentFilter, checkResultId, hasCheckResult, onCommentClick, onCheckItemClick, onMarkerClick, emptyCheckMessage, onAnnotationClick,
   overallStatus, checkedAt, file, productId, projectId,
-  mediaCurrentTime, onSeekMedia, patternId, fileId, onCommentDeleted,
+  mediaCurrentTime, onSeekMedia, fileId, onCommentDeleted,
   onActiveCheckItemChange,
   comparisonMode, comparisonBeforeData, comparisonAfterData, comparisonAfterText, comparisonRoundLabel,
   onOpenComparisonMode, onComparisonCheckComplete, onComparisonSaved, onClearAfterData,
@@ -175,7 +173,7 @@ export default function ReviewRightPanel({
 
         <TabsContent value="comments" forceMount className={cn("absolute inset-0 top-10 overflow-hidden mt-0 ring-0 focus-visible:ring-0", effectiveTab !== "comments" && "hidden")}>
           {checkResultId ? (
-            <CommentsPanel checkResultId={checkResultId} filterItemId={commentFilter} onAnnotationClick={onAnnotationClick} onCheckItemClick={onCheckItemClick} mediaCurrentTime={mediaCurrentTime} onSeekMedia={onSeekMedia} productId={productId} projectId={projectId} processType={file?.process_type} productCode={productCode} patternId={patternId} fileId={fileId} onCommentDeleted={onCommentDeleted} onCommentCountChange={setTotalCommentCount} fileName={file?.file_name} refreshKey={commentRefreshKey} />
+            <CommentsPanel checkResultId={checkResultId} filterItemId={commentFilter} onAnnotationClick={onAnnotationClick} onCheckItemClick={onCheckItemClick} mediaCurrentTime={mediaCurrentTime} onSeekMedia={onSeekMedia} projectId={projectId} processType={file?.process_type} productCode={productCode} fileId={fileId} onCommentDeleted={onCommentDeleted} onCommentCountChange={setTotalCommentCount} fileName={file?.file_name} refreshKey={commentRefreshKey} />
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
               <MessageCircle className="h-10 w-10 mb-3 opacity-30" />
