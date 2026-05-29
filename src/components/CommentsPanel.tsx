@@ -133,7 +133,9 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
       .order("created_at", { ascending: true });
     if (handleSupabaseError(error, "comments")) return;
 
-    let result: CommentWithDraftInfo[] = withDefaultDraftInfo((data ?? []) as CommentRow[]);
+    const directComments = withDefaultDraftInfo((data ?? []) as CommentRow[]);
+    const directCommentById = new Map(directComments.map((comment) => [comment.id, comment]));
+    let result: CommentWithDraftInfo[] = directComments;
 
     try {
       const { data: draftData, error: rpcError } = await (
@@ -142,7 +144,17 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
         p_check_result_id: checkResultId,
       });
       if (!rpcError && draftData && draftData.length > 0) {
-        result = draftData.slice().sort((a, b) => a.created_at.localeCompare(b.created_at));
+        result = draftData
+          .map((comment) => {
+            const directComment = directCommentById.get(comment.id);
+            return {
+              ...directComment,
+              ...comment,
+              guest_token: comment.guest_token ?? directComment?.guest_token ?? null,
+              creator_id: comment.creator_id ?? directComment?.creator_id ?? null,
+            };
+          })
+          .sort((a, b) => a.created_at.localeCompare(b.created_at));
       } else if (rpcError) {
         console.warn("[get_comments_with_draft_info] using direct select fallback:", rpcError.message);
       }
