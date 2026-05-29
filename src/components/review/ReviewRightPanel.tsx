@@ -25,7 +25,7 @@ interface ReviewRightPanelProps {
   onCheckItemClick?: (patternId: string) => void;
   onMarkerClick?: (patternId: string) => void;
   emptyCheckMessage?: React.ReactNode;
-  onAnnotationClick?: (annotationData: unknown) => void;
+  onAnnotationClick?: (annotationData: unknown, commentId: string, mediaTimestamp?: number | null) => void;
   overallStatus?: string | null;
   checkedAt?: string | null;
   file?: { file_data: string | null; file_type: string; process_type: string; file_name?: string } | null;

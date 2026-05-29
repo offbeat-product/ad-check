@@ -38,6 +38,7 @@ export interface RichCommentCardProps {
   onCancelEdit?: () => void;
   isReply?: boolean;
   replyingToName?: string | null;
+  isSelected?: boolean;
   isDimmed?: boolean;
   onCardClick?: () => void;
   headerSlot?: ReactNode;
@@ -146,6 +147,7 @@ export function RichCommentCard({
   onCancelEdit,
   isReply,
   replyingToName,
+  isSelected,
   isDimmed,
   onCardClick,
   headerSlot,
@@ -179,6 +181,7 @@ export function RichCommentCard({
       className={cn(
         "rounded-lg transition-colors",
         "p-0",
+        isSelected && "ring-2 ring-primary/50 ring-offset-2 ring-offset-background",
         isClickable && "cursor-pointer hover:border-primary/40 hover:bg-primary/5",
         isDimmed && "opacity-75"
       )}
@@ -254,7 +257,7 @@ export function RichCommentCard({
             </div>
           ) : null}
 
-          {mediaTimestamp != null && mediaTimestamp > 0 ? (
+          {mediaTimestamp != null ? (
             <button
               type="button"
               onClick={stopPropagation(() => onSeekMedia?.(mediaTimestamp))}
