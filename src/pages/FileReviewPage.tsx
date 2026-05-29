@@ -50,7 +50,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, ArrowDown, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight, Lock, Unlock, Trash2, Pencil, CalendarDays, User, MoreHorizontal, CircleCheckBig, FileText, Paperclip, X } from "lucide-react";
+import { ArrowLeft, ArrowDown, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronDown, ChevronLeft, ChevronRight, Lock, Unlock, Trash2, Pencil, CalendarDays, User, MoreHorizontal, CircleCheckBig, FileText, Paperclip, X } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
@@ -2104,6 +2104,7 @@ function CreatorReadonlyCommentsPanel({
   const [replyingTo, setReplyingTo] = useState<CreatorReplyTarget | null>(null);
   const [replyText, setReplyText] = useState("");
   const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
+  const [openThreads, setOpenThreads] = useState<Set<string>>(new Set());
   const [attachmentsByCommentId, setAttachmentsByCommentId] = useState<Record<string, CommentAttachmentView[]>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState("");
@@ -2158,7 +2159,29 @@ function CreatorReadonlyCommentsPanel({
     { key: "resolved" as const, label: "対応済" },
   ];
 
+  const toggleThread = (parentId: string) => {
+    setOpenThreads((current) => {
+      const next = new Set(current);
+      if (next.has(parentId)) {
+        next.delete(parentId);
+      } else {
+        next.add(parentId);
+      }
+      return next;
+    });
+  };
+
+  const openThread = (parentId: string) => {
+    setOpenThreads((current) => {
+      if (current.has(parentId)) return current;
+      const next = new Set(current);
+      next.add(parentId);
+      return next;
+    });
+  };
+
   const startReply = (rootId: string, targetId: string, toName: string) => {
+    openThread(rootId);
     setReplyingTo((current) => current?.targetId === targetId ? null : { rootId, targetId, toName });
     setReplyText("");
     setReplyAttachments([]);
@@ -2199,12 +2222,13 @@ function CreatorReadonlyCommentsPanel({
     };
   }, [callCreatorComments, comments]);
 
-  const handleReply = async (parentId: string) => {
+  const handleReply = async (parentId: string, rootParentId: string) => {
     const content = replyText.trim();
     if (!content && replyAttachments.length === 0) return;
     try {
       const uploadAttachments = replyAttachments.length > 0 ? await filesToUploads(replyAttachments) : [];
       await callCreatorComments({ action: "create_reply", parent_id: parentId, content, attachments: uploadAttachments });
+      openThread(rootParentId);
       setReplyingTo(null);
       setReplyText("");
       setReplyAttachments([]);
@@ -2285,7 +2309,11 @@ function CreatorReadonlyCommentsPanel({
         {!loading && parents.length === 0 && (
           <p className="text-xs text-muted-foreground text-center py-8">コメントはまだありません</p>
         )}
-        {parents.map((parent) => (
+        {parents.map((parent) => {
+          const threadReplies = repliesByParent[parent.id] ?? [];
+          const isThreadOpen = openThreads.has(parent.id);
+
+          return (
           <div key={parent.id} className="overflow-hidden rounded-xl border border-border/60 bg-card">
             <div className="p-3.5">
               <CreatorCommentItem
@@ -2306,9 +2334,19 @@ function CreatorReadonlyCommentsPanel({
               attachments={attachmentsByCommentId[parent.id]}
               />
             </div>
-            {(repliesByParent[parent.id] ?? []).length > 0 ? (
+            {threadReplies.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => toggleThread(parent.id)}
+                className="flex w-full items-center gap-1.5 border-t border-border/40 bg-muted/30 px-4 py-2 text-left text-[12px] text-muted-foreground transition-colors hover:bg-muted/50"
+              >
+                {isThreadOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                {isThreadOpen ? "返信を隠す" : `返信 ${threadReplies.length}件を表示`}
+              </button>
+            ) : null}
+            {isThreadOpen ? (
               <>
-                {(repliesByParent[parent.id] ?? []).map((reply) => (
+                {threadReplies.map((reply) => (
                   <div key={reply.id} className="border-l-2 border-t border-border/40 border-l-primary/20 bg-muted/60 px-4 py-2.5 pl-6">
                     <CreatorCommentItem
                       comment={reply}
@@ -2331,45 +2369,46 @@ function CreatorReadonlyCommentsPanel({
                     />
                   </div>
                 ))}
+                {replyingTo?.rootId === parent.id ? (
+                  <div className="space-y-1.5 border-l-2 border-t border-border/40 border-l-primary/20 bg-muted/60 px-4 py-2.5 pl-6">
+                    <p className="text-[11px] text-muted-foreground">{replyingTo.toName}さんへ返信</p>
+                    <Textarea
+                      value={replyText}
+                      onChange={(e) => setReplyText(e.target.value)}
+                      placeholder="返信を入力..."
+                      className="min-h-[50px] text-xs"
+                    />
+                    <div className="flex gap-1.5">
+                      <Button size="sm" onClick={() => handleReply(replyingTo.targetId, replyingTo.rootId)} disabled={!replyText.trim() && replyAttachments.length === 0} className="h-6 text-[10px] px-2">
+                        返信する
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => { setReplyingTo(null); setReplyText(""); setReplyAttachments([]); }} className="h-6 text-[10px] px-2">
+                        キャンセル
+                      </Button>
+                    </div>
+                    <CreatorAttachmentPreview files={replyAttachments} onRemove={(index) => setReplyAttachments((current) => current.filter((_, i) => i !== index))} />
+                    <div className="flex items-center gap-1">
+                      <button type="button" onClick={() => replyFileInputRef.current?.click()} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
+                        <Paperclip className="h-3.5 w-3.5" />
+                      </button>
+                      <input
+                        ref={replyFileInputRef}
+                        type="file"
+                        multiple
+                        className="hidden"
+                        onChange={(event) => {
+                          selectReplyFiles(event.target.files);
+                          event.target.value = "";
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : null}
               </>
             ) : null}
-            {replyingTo?.rootId === parent.id ? (
-              <div className="space-y-1.5 border-l-2 border-t border-border/40 border-l-primary/20 bg-muted/60 px-4 py-2.5 pl-6">
-                <p className="text-[11px] text-muted-foreground">{replyingTo.toName}さんへ返信</p>
-                <Textarea
-                  value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
-                  placeholder="返信を入力..."
-                  className="min-h-[50px] text-xs"
-                />
-                <div className="flex gap-1.5">
-                  <Button size="sm" onClick={() => handleReply(replyingTo.targetId)} disabled={!replyText.trim() && replyAttachments.length === 0} className="h-6 text-[10px] px-2">
-                    返信する
-                  </Button>
-                  <Button size="sm" variant="ghost" onClick={() => { setReplyingTo(null); setReplyText(""); setReplyAttachments([]); }} className="h-6 text-[10px] px-2">
-                    キャンセル
-                  </Button>
-                </div>
-                <CreatorAttachmentPreview files={replyAttachments} onRemove={(index) => setReplyAttachments((current) => current.filter((_, i) => i !== index))} />
-                <div className="flex items-center gap-1">
-                  <button type="button" onClick={() => replyFileInputRef.current?.click()} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
-                    <Paperclip className="h-3.5 w-3.5" />
-                  </button>
-                  <input
-                    ref={replyFileInputRef}
-                    type="file"
-                    multiple
-                    className="hidden"
-                    onChange={(event) => {
-                      selectReplyFiles(event.target.files);
-                      event.target.value = "";
-                    }}
-                  />
-                </div>
-              </div>
-            ) : null}
           </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
