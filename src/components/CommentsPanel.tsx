@@ -6,7 +6,7 @@ import { matchesCommentItemFilter, withDefaultDraftInfo } from "@/lib/comment-dr
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Send, Pin, Paperclip, X, FileText } from "lucide-react";
+import { ChevronDown, ChevronRight, Send, Pin, Paperclip, X, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 import MentionInput, { type MentionMember } from "@/components/comments/MentionInput";
 import { formatTimestamp } from "@/components/comments/TimestampBadge";
@@ -77,6 +77,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
   const [newComment, setNewComment] = useState("");
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [openThreads, setOpenThreads] = useState<Set<string>>(new Set());
   const [attachments, setAttachments] = useState<File[]>([]);
   const [replyAttachments, setReplyAttachments] = useState<File[]>([]);
   const [attachmentsByCommentId, setAttachmentsByCommentId] = useState<Record<string, CommentAttachmentView[]>>({});
@@ -185,7 +186,29 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
     return base.length;
   };
 
+  const toggleThread = (parentId: string) => {
+    setOpenThreads((current) => {
+      const next = new Set(current);
+      if (next.has(parentId)) {
+        next.delete(parentId);
+      } else {
+        next.add(parentId);
+      }
+      return next;
+    });
+  };
+
+  const openThread = (parentId: string) => {
+    setOpenThreads((current) => {
+      if (current.has(parentId)) return current;
+      const next = new Set(current);
+      next.add(parentId);
+      return next;
+    });
+  };
+
   const startReply = (rootId: string, targetId: string, toName: string) => {
+    openThread(rootId);
     setReplyTo((current) => current?.targetId === targetId ? null : { rootId, targetId, toName });
     setReplyText("");
     setReplyAttachments([]);
@@ -352,7 +375,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
     }
   };
 
-  const handleReply = async (parentId: string) => {
+  const handleReply = async (parentId: string, rootParentId: string) => {
     if ((!replyText.trim() && replyAttachments.length === 0) || !user || uploading) return;
     const parent = comments.find((c) => c.id === parentId);
     setUploading(true);
@@ -371,6 +394,7 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
         const attachmentUserId = await getAuthenticatedUserId();
         await uploadCommentAttachments(String(insertedReply.id), attachmentUserId, replyAttachments);
       }
+      openThread(rootParentId);
       setReplyTo(null);
       setReplyText("");
       setReplyAttachments([]);
@@ -436,7 +460,11 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
         {topLevel.length === 0 && (
           <p className="text-xs text-muted-foreground text-center py-8">コメントはまだありません</p>
         )}
-        {topLevel.map((c) => (
+        {topLevel.map((c) => {
+          const threadReplies = replies(c.id);
+          const isThreadOpen = openThreads.has(c.id);
+
+          return (
           <div key={c.id} className="overflow-hidden rounded-xl border border-border/60 bg-card">
             <div className="p-3.5">
               <CommentCard
@@ -475,51 +503,66 @@ export default function CommentsPanel({ checkResultId, filterItemId, onAnnotatio
               })}
               />
             </div>
-            {replies(c.id).map((r) => (
-              <div key={r.id} className="border-l-2 border-t border-border/40 border-l-primary/20 bg-muted/60 px-4 py-2.5 pl-6">
-                <CommentCard
-                  comment={r}
-                  onToggleStatus={() => toggleStatus(r.id, r.status)}
-                  onReply={() => startReply(c.id, r.id, r.author_name)}
-                  onEdit={async (id, content) => {
-                    const { error } = await supabase.from("comments").update({ content }).eq("id", id);
-                    handleSupabaseError(error, "comment edit");
-                    fetchComments();
-                  }}
-                  onDelete={async (id) => {
-                    await cleanupCommentAttachments(id);
-                    const { error } = await supabase.from("comments").delete().eq("id", id);
-                    if (handleSupabaseError(error, "comment delete")) return;
-                    await fetchComments();
-                    onCommentDeleted?.();
-                  }}
-                  isReply
-                  onSeekMedia={onSeekMedia}
-                  reactions={reactionsByCommentId[r.id]}
-                  onToggleReaction={(emoji) => void toggleReaction(r.id, emoji)}
-                  attachments={attachmentsByCommentId[r.id]}
-                  replyingToName={c.author_name}
-                />
-              </div>
-            ))}
-            {replyTo?.rootId === c.id && (
-              <div className="space-y-2 border-l-2 border-t border-border/40 border-l-primary/20 bg-muted/60 px-4 py-2.5 pl-6">
-                <p className="text-[11px] text-muted-foreground">{replyTo.toName}さんへ返信</p>
-                <div className="flex gap-2">
-                  <Textarea value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="返信を入力..." className="min-h-[50px] text-xs" />
-                  <Button size="sm" onClick={() => handleReply(replyTo.targetId)} disabled={uploading || (!replyText.trim() && replyAttachments.length === 0)} className="self-end h-8"><Send className="h-3 w-3" /></Button>
-                </div>
-                <AttachmentPreview files={replyAttachments} onRemove={(index) => removeSelectedFile(index, setReplyAttachments)} />
-                <div className="flex items-center gap-1">
-                  <button type="button" onClick={() => replyFileInputRef.current?.click()} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
-                    <Paperclip className="h-3.5 w-3.5" />
-                  </button>
-                  <input ref={replyFileInputRef} type="file" multiple className="hidden" onChange={handleReplyFileSelect} />
-                </div>
-              </div>
-            )}
+            {threadReplies.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => toggleThread(c.id)}
+                className="flex w-full items-center gap-1.5 border-t border-border/40 bg-muted/30 px-4 py-2 text-left text-[12px] text-muted-foreground transition-colors hover:bg-muted/50"
+              >
+                {isThreadOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                {isThreadOpen ? "返信を隠す" : `返信 ${threadReplies.length}件を表示`}
+              </button>
+            ) : null}
+            {isThreadOpen ? (
+              <>
+                {threadReplies.map((r) => (
+                  <div key={r.id} className="border-l-2 border-t border-border/40 border-l-primary/20 bg-muted/60 px-4 py-2.5 pl-6">
+                    <CommentCard
+                      comment={r}
+                      onToggleStatus={() => toggleStatus(r.id, r.status)}
+                      onReply={() => startReply(c.id, r.id, r.author_name)}
+                      onEdit={async (id, content) => {
+                        const { error } = await supabase.from("comments").update({ content }).eq("id", id);
+                        handleSupabaseError(error, "comment edit");
+                        fetchComments();
+                      }}
+                      onDelete={async (id) => {
+                        await cleanupCommentAttachments(id);
+                        const { error } = await supabase.from("comments").delete().eq("id", id);
+                        if (handleSupabaseError(error, "comment delete")) return;
+                        await fetchComments();
+                        onCommentDeleted?.();
+                      }}
+                      isReply
+                      onSeekMedia={onSeekMedia}
+                      reactions={reactionsByCommentId[r.id]}
+                      onToggleReaction={(emoji) => void toggleReaction(r.id, emoji)}
+                      attachments={attachmentsByCommentId[r.id]}
+                      replyingToName={c.author_name}
+                    />
+                  </div>
+                ))}
+                {replyTo?.rootId === c.id && (
+                  <div className="space-y-2 border-l-2 border-t border-border/40 border-l-primary/20 bg-muted/60 px-4 py-2.5 pl-6">
+                    <p className="text-[11px] text-muted-foreground">{replyTo.toName}さんへ返信</p>
+                    <div className="flex gap-2">
+                      <Textarea value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="返信を入力..." className="min-h-[50px] text-xs" />
+                      <Button size="sm" onClick={() => handleReply(replyTo.targetId, replyTo.rootId)} disabled={uploading || (!replyText.trim() && replyAttachments.length === 0)} className="self-end h-8"><Send className="h-3 w-3" /></Button>
+                    </div>
+                    <AttachmentPreview files={replyAttachments} onRemove={(index) => removeSelectedFile(index, setReplyAttachments)} />
+                    <div className="flex items-center gap-1">
+                      <button type="button" onClick={() => replyFileInputRef.current?.click()} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
+                        <Paperclip className="h-3.5 w-3.5" />
+                      </button>
+                      <input ref={replyFileInputRef} type="file" multiple className="hidden" onChange={handleReplyFileSelect} />
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : null}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="border-t border-border p-3 shrink-0 space-y-2">

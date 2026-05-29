@@ -5,7 +5,7 @@ import { withDefaultDraftInfo } from "@/lib/comment-draft-info";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { FileText, Paperclip, Send, User, X } from "lucide-react";
+import { ChevronDown, ChevronRight, FileText, Paperclip, Send, User, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { RichCommentCard, type CommentRole, type ReactionSummary } from "@/components/comments/RichCommentCard";
 import { useCommentReactions } from "@/hooks/useCommentReactions";
@@ -76,6 +76,7 @@ export default function SharedCommentsPanel({
   const [newComment, setNewComment] = useState("");
   const [replyTo, setReplyTo] = useState<ReplyTarget | null>(null);
   const [replyText, setReplyText] = useState("");
+  const [openThreads, setOpenThreads] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<"all" | "open" | "resolved">("all");
   const [posting, setPosting] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -195,7 +196,29 @@ export default function SharedCommentsPanel({
     setShowGuestForm(false);
   };
 
+  const toggleThread = (parentId: string) => {
+    setOpenThreads((current) => {
+      const next = new Set(current);
+      if (next.has(parentId)) {
+        next.delete(parentId);
+      } else {
+        next.add(parentId);
+      }
+      return next;
+    });
+  };
+
+  const openThread = (parentId: string) => {
+    setOpenThreads((current) => {
+      if (current.has(parentId)) return current;
+      const next = new Set(current);
+      next.add(parentId);
+      return next;
+    });
+  };
+
   const startReply = (rootId: string, targetId: string, toName: string) => {
+    openThread(rootId);
     setReplyTo((current) => current?.targetId === targetId ? null : { rootId, targetId, toName });
     setReplyText("");
     setReplyAttachments([]);
@@ -311,9 +334,10 @@ export default function SharedCommentsPanel({
     setAttachments([]);
   };
 
-  const handleReply = async (parentId: string) => {
+  const handleReply = async (parentId: string, rootParentId: string) => {
     if ((!replyText.trim() && replyAttachments.length === 0) || posting) return;
     await postComment(replyText.trim(), replyAttachments, parentId);
+    openThread(rootParentId);
     setReplyTo(null);
     setReplyText("");
     setReplyAttachments([]);
@@ -343,7 +367,11 @@ export default function SharedCommentsPanel({
         {topLevel.length === 0 && (
           <p className="text-xs text-muted-foreground text-center py-8">コメントはまだありません</p>
         )}
-        {topLevel.map((c) => (
+        {topLevel.map((c) => {
+          const threadReplies = getReplies(c.id);
+          const isThreadOpen = openThreads.has(c.id);
+
+          return (
           <div key={c.id} className="overflow-hidden rounded-xl border border-border/60 bg-card">
             <div className="p-3.5">
               <SharedCommentCard
@@ -364,48 +392,63 @@ export default function SharedCommentsPanel({
               attachments={attachmentsByCommentId[c.id]}
               />
             </div>
-            {getReplies(c.id).map((r) => (
-              <div key={r.id} className="border-l-2 border-t border-border/40 border-l-primary/20 bg-muted/60 px-4 py-2.5 pl-6">
-                <SharedCommentCard
-                  comment={r}
-                  onSeekMedia={onSeekMedia}
-                  onReply={allowWrite ? () => startReply(c.id, r.id, r.author_name) : undefined}
-                  isReply
-                  isOwn={r.guest_token != null && r.guest_token === guestToken}
-                  isEditing={editingId === r.id}
-                  editingText={editingText}
-                  setEditingText={setEditingText}
-                  onStartEdit={() => startEdit(r)}
-                  onCancelEdit={cancelEdit}
-                  onEdit={() => handleEdit(r.id, editingText)}
-                  onDelete={() => handleDelete(r.id)}
-                  reactions={reactionsByCommentId[r.id]}
-                  onToggleReaction={(emoji) => void toggleReaction(r.id, emoji)}
-                  attachments={attachmentsByCommentId[r.id]}
-                  replyingToName={c.author_name}
-                />
-              </div>
-            ))}
-            {replyTo?.rootId === c.id && (
-              <div className="space-y-2 border-l-2 border-t border-border/40 border-l-primary/20 bg-muted/60 px-4 py-2.5 pl-6">
-                <p className="text-[11px] text-muted-foreground">{replyTo.toName}さんへ返信</p>
-                <div className="flex gap-2">
-                  <Textarea value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="返信を入力..." className="min-h-[50px] text-xs" />
-                  <Button size="sm" onClick={() => handleReply(replyTo.targetId)} disabled={posting || (!replyText.trim() && replyAttachments.length === 0)} className="self-end h-8">
-                    <Send className="h-3 w-3" />
-                  </Button>
-                </div>
-                <AttachmentPreview files={replyAttachments} onRemove={(index) => removeSelectedFile(index, setReplyAttachments)} />
-                <div className="flex items-center gap-1">
-                  <button type="button" onClick={() => replyFileInputRef.current?.click()} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
-                    <Paperclip className="h-3.5 w-3.5" />
-                  </button>
-                  <input ref={replyFileInputRef} type="file" multiple className="hidden" onChange={handleReplyFileSelect} />
-                </div>
-              </div>
-            )}
+            {threadReplies.length > 0 ? (
+              <button
+                type="button"
+                onClick={() => toggleThread(c.id)}
+                className="flex w-full items-center gap-1.5 border-t border-border/40 bg-muted/30 px-4 py-2 text-left text-[12px] text-muted-foreground transition-colors hover:bg-muted/50"
+              >
+                {isThreadOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                {isThreadOpen ? "返信を隠す" : `返信 ${threadReplies.length}件を表示`}
+              </button>
+            ) : null}
+            {isThreadOpen ? (
+              <>
+                {threadReplies.map((r) => (
+                  <div key={r.id} className="border-l-2 border-t border-border/40 border-l-primary/20 bg-muted/60 px-4 py-2.5 pl-6">
+                    <SharedCommentCard
+                      comment={r}
+                      onSeekMedia={onSeekMedia}
+                      onReply={allowWrite ? () => startReply(c.id, r.id, r.author_name) : undefined}
+                      isReply
+                      isOwn={r.guest_token != null && r.guest_token === guestToken}
+                      isEditing={editingId === r.id}
+                      editingText={editingText}
+                      setEditingText={setEditingText}
+                      onStartEdit={() => startEdit(r)}
+                      onCancelEdit={cancelEdit}
+                      onEdit={() => handleEdit(r.id, editingText)}
+                      onDelete={() => handleDelete(r.id)}
+                      reactions={reactionsByCommentId[r.id]}
+                      onToggleReaction={(emoji) => void toggleReaction(r.id, emoji)}
+                      attachments={attachmentsByCommentId[r.id]}
+                      replyingToName={c.author_name}
+                    />
+                  </div>
+                ))}
+                {replyTo?.rootId === c.id && (
+                  <div className="space-y-2 border-l-2 border-t border-border/40 border-l-primary/20 bg-muted/60 px-4 py-2.5 pl-6">
+                    <p className="text-[11px] text-muted-foreground">{replyTo.toName}さんへ返信</p>
+                    <div className="flex gap-2">
+                      <Textarea value={replyText} onChange={(e) => setReplyText(e.target.value)} placeholder="返信を入力..." className="min-h-[50px] text-xs" />
+                      <Button size="sm" onClick={() => handleReply(replyTo.targetId, replyTo.rootId)} disabled={posting || (!replyText.trim() && replyAttachments.length === 0)} className="self-end h-8">
+                        <Send className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <AttachmentPreview files={replyAttachments} onRemove={(index) => removeSelectedFile(index, setReplyAttachments)} />
+                    <div className="flex items-center gap-1">
+                      <button type="button" onClick={() => replyFileInputRef.current?.click()} className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground">
+                        <Paperclip className="h-3.5 w-3.5" />
+                      </button>
+                      <input ref={replyFileInputRef} type="file" multiple className="hidden" onChange={handleReplyFileSelect} />
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : null}
           </div>
-        ))}
+          );
+        })}
       </div>
 
       {allowWrite ? <div className="border-t border-border p-3 shrink-0 space-y-2">
