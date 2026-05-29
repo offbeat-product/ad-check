@@ -15,6 +15,8 @@ import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import type { CheckItem } from "@/lib/types";
 import { getEffectiveSubmitLabel } from "@/lib/check-display";
 import type { MentionMember } from "@/components/comments/MentionInput";
+import { RichCommentCard, type CommentRole, type ReactionSummary } from "@/components/comments/RichCommentCard";
+import { useCommentReactions } from "@/hooks/useCommentReactions";
 import type { Json } from "@/integrations/supabase/types";
 import type { ProjectFile, Product, Project, Client, CheckResultRow } from "@/lib/db-types";
 import { parseCheckResultRow, type CheckResultWithParsedItems } from "@/lib/parse-check-result";
@@ -40,7 +42,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, ArrowDown, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight, Lock, Unlock, Trash2, Pencil, CalendarDays, User, MoreHorizontal, CircleCheckBig, Reply } from "lucide-react";
+import { ArrowLeft, ArrowDown, Download, GitCompare, Link2, CheckCircle2, Loader2, Bot, Upload, ChevronLeft, ChevronRight, Lock, Unlock, Trash2, Pencil, CalendarDays, User, MoreHorizontal, CircleCheckBig } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/components/ui/tooltip";
 import { Input } from "@/components/ui/input";
@@ -2088,6 +2090,12 @@ function CreatorReadonlyCommentsPanel({
     if (tab === "resolved") return c.status === "resolved";
     return true;
   });
+  const { reactionsByCommentId, toggleReaction } = useCommentReactions({
+    commentIds: filtered.map((c) => c.id),
+    surface: "creator",
+    shareToken,
+    creatorId: myCreatorId,
+  });
   const { parents, repliesByParent } = useMemo(() => {
     const parents: CreatorFileComment[] = [];
     const repliesByParent: Record<string, CreatorFileComment[]> = {};
@@ -2108,16 +2116,6 @@ function CreatorReadonlyCommentsPanel({
     if (t === "open") return comments.filter((c) => c.status === "open").length;
     if (t === "resolved") return comments.filter((c) => c.status === "resolved").length;
     return comments.length;
-  };
-
-  const timeAgo = (dateStr: string) => {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return "たった今";
-    if (mins < 60) return `${mins}分前`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}時間前`;
-    return `${Math.floor(hrs / 24)}日前`;
   };
 
   const tabs = [
@@ -2210,11 +2208,10 @@ function CreatorReadonlyCommentsPanel({
           <p className="text-xs text-muted-foreground text-center py-8">コメントはまだありません</p>
         )}
         {parents.map((parent) => (
-          <div key={parent.id} className="rounded-lg border border-border p-3 space-y-2">
+          <div key={parent.id} className="space-y-2">
             <CreatorCommentItem
               comment={parent}
               isOwn={parent.creator_id != null && parent.creator_id === myCreatorId}
-              timeAgo={timeAgo}
               onAnnotationClick={onAnnotationClick}
               onSeekMedia={onSeekMedia}
               onStartReply={() => {
@@ -2228,6 +2225,8 @@ function CreatorReadonlyCommentsPanel({
               setEditingText={setEditingText}
               onSubmitEdit={() => handleEdit(parent.id)}
               onCancelEdit={cancelEdit}
+              reactions={reactionsByCommentId[parent.id]}
+              onToggleReaction={(emoji) => void toggleReaction(parent.id, emoji)}
             />
             {(repliesByParent[parent.id] ?? []).length > 0 ? (
               <div className="ml-5 mt-2 space-y-2 border-l border-border/70 pl-3">
@@ -2237,7 +2236,6 @@ function CreatorReadonlyCommentsPanel({
                     comment={reply}
                     isReply
                     isOwn={reply.creator_id != null && reply.creator_id === myCreatorId}
-                    timeAgo={timeAgo}
                     onAnnotationClick={onAnnotationClick}
                     onSeekMedia={onSeekMedia}
                     onStartEdit={() => startEdit(reply)}
@@ -2247,6 +2245,8 @@ function CreatorReadonlyCommentsPanel({
                     setEditingText={setEditingText}
                     onSubmitEdit={() => handleEdit(reply.id)}
                     onCancelEdit={cancelEdit}
+                    reactions={reactionsByCommentId[reply.id]}
+                    onToggleReaction={(emoji) => void toggleReaction(reply.id, emoji)}
                   />
                 ))}
               </div>
@@ -2280,7 +2280,6 @@ function CreatorCommentItem({
   comment,
   isReply,
   isOwn,
-  timeAgo,
   onAnnotationClick,
   onSeekMedia,
   onStartReply,
@@ -2291,11 +2290,12 @@ function CreatorCommentItem({
   setEditingText,
   onSubmitEdit,
   onCancelEdit,
+  reactions,
+  onToggleReaction,
 }: {
   comment: CreatorFileComment;
   isReply?: boolean;
   isOwn: boolean;
-  timeAgo: (dateStr: string) => string;
   onAnnotationClick: (annotationData: unknown) => void;
   onSeekMedia: (seconds: number) => void;
   onStartReply?: () => void;
@@ -2306,82 +2306,39 @@ function CreatorCommentItem({
   setEditingText: (value: string) => void;
   onSubmitEdit: () => void;
   onCancelEdit: () => void;
+  reactions?: ReactionSummary[];
+  onToggleReaction?: (emoji: string) => void;
 }) {
+  const role: CommentRole = comment.creator_id ? "creator" : "internal";
+
   return (
-    <div className={cn("space-y-1.5", isReply && "rounded-md bg-muted/30 p-2")}>
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium">{comment.author_name}</p>
-        <span className="text-[10px] text-muted-foreground">{timeAgo(comment.created_at)}</span>
-      </div>
-      {isEditing ? (
-        <div className="space-y-1.5">
-          <Textarea
-            value={editingText}
-            onChange={(e) => setEditingText(e.target.value)}
-            className="min-h-[50px] text-xs"
-            autoFocus
-          />
-          <div className="flex gap-1.5">
-            <Button size="sm" onClick={onSubmitEdit} disabled={!editingText.trim()} className="h-6 text-[10px] px-2">
-              保存
-            </Button>
-            <Button size="sm" variant="ghost" onClick={onCancelEdit} className="h-6 text-[10px] px-2">
-              キャンセル
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <p className="text-sm whitespace-pre-wrap">{comment.content}</p>
-      )}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={cn("text-[10px] px-1.5 py-0.5 rounded", comment.status === "resolved" ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground")}>
-          {comment.status === "resolved" ? "対応済" : "未対応"}
-        </span>
-        {comment.media_timestamp != null && comment.media_timestamp > 0 && (
-          <button
-            type="button"
-            className="text-[10px] text-primary hover:underline"
-            onClick={() => onSeekMedia(comment.media_timestamp || 0)}
-          >
-            {Math.floor((comment.media_timestamp || 0) / 60)}:{String(Math.floor((comment.media_timestamp || 0) % 60)).padStart(2, "0")}
-          </button>
-        )}
-        {comment.annotation_data ? <button
+    <RichCommentCard
+      authorName={comment.author_name}
+      role={role}
+      createdAt={comment.created_at}
+      status={comment.status}
+      content={comment.content}
+      mediaTimestamp={comment.media_timestamp}
+      onSeekMedia={onSeekMedia}
+      reactions={reactions}
+      onToggleReaction={onToggleReaction}
+      onReply={!isReply ? onStartReply : undefined}
+      onEdit={isOwn && !isEditing ? onStartEdit : undefined}
+      onDelete={isOwn ? onDelete : undefined}
+      isEditing={isEditing}
+      editingText={editingText}
+      setEditingText={setEditingText}
+      onSubmitEdit={onSubmitEdit}
+      onCancelEdit={onCancelEdit}
+      isReply={isReply}
+      contentSlot={comment.annotation_data ? <button
             type="button"
             className="text-[10px] text-primary hover:underline"
             onClick={() => onAnnotationClick(comment.annotation_data)}
           >
             注釈を表示
           </button> : null}
-        {!isReply && onStartReply ? (
-          <button
-            type="button"
-            className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5"
-            onClick={onStartReply}
-          >
-            <Reply className="h-3 w-3" />返信
-          </button>
-        ) : null}
-        {isOwn && !isEditing ? (
-          <>
-            <button
-              type="button"
-              className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5"
-              onClick={onStartEdit}
-            >
-              <Pencil className="h-3 w-3" />編集
-            </button>
-            <button
-              type="button"
-              className="text-[10px] text-muted-foreground hover:text-destructive flex items-center gap-0.5"
-              onClick={onDelete}
-            >
-              <Trash2 className="h-3 w-3" />削除
-            </button>
-          </>
-        ) : null}
-      </div>
-    </div>
+    />
   );
 }
 
