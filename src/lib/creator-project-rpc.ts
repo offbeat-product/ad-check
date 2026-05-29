@@ -45,6 +45,8 @@ export interface CreatorProjectComment {
   status: string;
   created_at: string;
   created_by_name: string | null;
+  parent_id: string | null;
+  creator_id: string | null;
 }
 
 function firstRecord(data: unknown): Record<string, unknown> | null {
@@ -164,5 +166,7 @@ export function parseCreatorProjectCommentsPayload(data: unknown): CreatorProjec
     status: pickStr(r, "status") ?? "",
     created_at: pickStr(r, "created_at") ?? "",
     created_by_name: pickStr(r, "created_by_name"),
+    parent_id: pickStr(r, "parent_id"),
+    creator_id: pickStr(r, "creator_id"),
   })).filter((c) => c.comment_id);
 }

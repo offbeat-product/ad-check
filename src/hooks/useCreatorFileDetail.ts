@@ -10,6 +10,7 @@ export interface CreatorFileComment {
   media_timestamp: number | null;
   annotation_data: unknown | null;
   parent_id: string | null;
+  creator_id: string | null;
   file_id: string;
   file_name: string;
   process_type: string;
@@ -32,6 +33,7 @@ function normalizeComments(data: unknown): CreatorFileComment[] {
           : Number(row.media_timestamp),
       annotation_data: row.annotation_data ?? null,
       parent_id: row.parent_id == null ? null : String(row.parent_id),
+      creator_id: row.creator_id == null ? null : String(row.creator_id),
       file_id: String(row.file_id ?? ""),
       file_name: String(row.file_name ?? ""),
       process_type: String(row.process_type ?? ""),
@@ -56,7 +58,7 @@ export function useCreatorFileComments(shareToken: string | undefined, fileId: s
     setLoading(true);
     setError(null);
     try {
-      const { data, error: rpcError } = await supabase.rpc("get_project_comments_for_creator", {
+      const { data, error: rpcError } = await supabase.rpc.bind(supabase)("get_project_comments_for_creator", {
         p_share_token: shareToken.trim(),
         p_file_id: fileId.trim(),
       });
