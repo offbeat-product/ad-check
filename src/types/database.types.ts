@@ -5101,6 +5101,14 @@ export type Database = {
           id: string
         }[]
       }
+      get_creator_for_registration: {
+        Args: { p_invitation_token: string }
+        Returns: Json
+      }
+      link_creator_to_auth_user: {
+        Args: { p_invitation_token: string }
+        Returns: Json
+      }
       get_project_comments_for_creator: {
         Args: { p_file_id?: string; p_share_token: string }
         Returns: Json

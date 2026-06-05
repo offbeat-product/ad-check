@@ -1,13 +1,34 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { AlertCircle, CheckCircle2, CircleCheckBig, Loader2 } from "lucide-react";
+import { AlertCircle, CircleCheckBig, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import type { Tables } from "@/integrations/supabase/types";
 
-type CreatorRegistrationRecord = Pick<Tables<"creators">, "id" | "name" | "email" | "user_id" | "is_active">;
+interface CreatorRegistrationRecord {
+  id: string;
+  name: string;
+  email: string;
+}
+
+type CreatorRegistrationErrorCode = "invalid_token" | "inactive_creator" | "already_registered";
+
+function isRegistrationErrorCode(value: unknown): value is CreatorRegistrationErrorCode {
+  return value === "invalid_token" || value === "inactive_creator" || value === "already_registered";
+}
+
+function isCreatorRegistrationRecord(value: unknown): value is CreatorRegistrationRecord {
+  if (!value || typeof value !== "object") return false;
+  const obj = value as Record<string, unknown>;
+  return typeof obj.id === "string" && typeof obj.name === "string" && typeof obj.email === "string";
+}
+
+function getRpcErrorCode(value: unknown): string | null {
+  if (!value || typeof value !== "object") return null;
+  const error = (value as Record<string, unknown>).error;
+  return typeof error === "string" ? error : null;
+}
 
 function CreatorLogo() {
   return (
@@ -26,54 +47,73 @@ export default function CreatorRegisterPage() {
 
   const [loading, setLoading] = useState(true);
   const [creator, setCreator] = useState<CreatorRegistrationRecord | null>(null);
+  const [errorTitle, setErrorTitle] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showLoginButton, setShowLoginButton] = useState(false);
+  const [showRetryButton, setShowRetryButton] = useState(false);
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [completed, setCompleted] = useState(false);
 
   const loadCreator = useCallback(async () => {
     const token = invitationToken?.trim();
     if (!token) {
-      setErrorMessage("無効な登録リンクです");
+      setCreator(null);
+      setErrorTitle("登録リンクが無効です");
+      setErrorMessage("リンクが正しいかご確認ください");
       setLoading(false);
       return;
     }
 
     setLoading(true);
+    setErrorTitle(null);
     setErrorMessage(null);
     setShowLoginButton(false);
+    setShowRetryButton(false);
 
-    const { data, error } = await supabase
-      .from("creators")
-      .select("id, name, email, user_id, is_active")
-      .eq("invitation_token", token)
-      .maybeSingle();
+    const { data: result, error } = await supabase.rpc("get_creator_for_registration", {
+      p_invitation_token: token,
+    });
 
-    if (error || !data) {
+    if (error) {
       setCreator(null);
-      setErrorMessage("無効な登録リンクです");
+      setErrorTitle("アクセスできません");
+      setErrorMessage("データの取得に失敗しました");
+      setShowRetryButton(true);
       setLoading(false);
       return;
     }
 
-    if (data.is_active === false) {
+    const resultError = getRpcErrorCode(result);
+    if (isRegistrationErrorCode(resultError)) {
       setCreator(null);
-      setErrorMessage("アカウントが無効化されています");
+
+      if (resultError === "invalid_token") {
+        setErrorTitle("登録リンクが無効です");
+        setErrorMessage("リンクが正しいかご確認ください");
+      } else if (resultError === "inactive_creator") {
+        setErrorTitle("アカウントが無効化されています");
+        setErrorMessage("Off Beat 担当者にご連絡ください");
+      } else {
+        setErrorTitle("すでに登録済みです");
+        setErrorMessage("ログイン画面からログインしてください");
+        setShowLoginButton(true);
+      }
+
       setLoading(false);
       return;
     }
 
-    if (data.user_id) {
+    if (!isCreatorRegistrationRecord(result)) {
       setCreator(null);
-      setErrorMessage("既に登録済みです。ログイン画面からログインしてください");
-      setShowLoginButton(true);
+      setErrorTitle("アクセスできません");
+      setErrorMessage("データの取得に失敗しました");
+      setShowRetryButton(true);
       setLoading(false);
       return;
     }
 
-    setCreator(data);
+    setCreator(result);
     setLoading(false);
   }, [invitationToken]);
 
@@ -84,47 +124,65 @@ export default function CreatorRegisterPage() {
   const handleSubmit = async () => {
     if (!creator) return;
     if (password.length < 8) {
+      setErrorTitle(null);
       setErrorMessage("パスワードは8文字以上で入力してください");
       return;
     }
     if (password !== passwordConfirm) {
+      setErrorTitle(null);
       setErrorMessage("確認用パスワードが一致しません");
       return;
     }
 
     setSubmitting(true);
+    setErrorTitle(null);
     setErrorMessage(null);
     try {
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      const { error: signUpError } = await supabase.auth.signUp({
         email: creator.email,
         password,
         options: {
-          data: { creator_id: creator.id, name: creator.name },
+          data: { name: creator.name },
         },
       });
 
       if (signUpError) {
-        setErrorMessage(signUpError.message);
+        if (signUpError.message?.toLowerCase().includes("already registered")) {
+          setErrorTitle("メールアドレスがすでに登録されています");
+          setErrorMessage("ログイン画面からログインしてください");
+          setShowLoginButton(true);
+        } else {
+          setErrorTitle("アカウント作成に失敗しました");
+          setErrorMessage(signUpError.message);
+        }
         return;
       }
 
-      const userId = signUpData.user?.id;
-      if (!userId) {
-        setErrorMessage("ユーザー作成結果を確認できませんでした。メール確認設定をご確認ください。");
+      const token = invitationToken?.trim();
+      if (!token) {
+        setErrorTitle("登録リンクが無効です");
+        setErrorMessage("リンクが正しいかご確認ください");
         return;
       }
 
-      const { error: updateError } = await supabase
-        .from("creators")
-        .update({ user_id: userId })
-        .eq("id", creator.id);
+      const { data: linkResult, error: linkError } = await supabase.rpc("link_creator_to_auth_user", {
+        p_invitation_token: token,
+      });
 
-      if (updateError) {
-        setErrorMessage(`アカウント作成後の紐付けに失敗しました: ${updateError.message}`);
+      if (linkError) {
+        setErrorTitle("登録に失敗しました");
+        setErrorMessage("もう一度お試しください");
         return;
       }
 
-      setCompleted(true);
+      const linkResultError = getRpcErrorCode(linkResult);
+      if (linkResultError) {
+        setErrorTitle("登録処理でエラーが発生しました");
+        setErrorMessage(`エラーコード: ${linkResultError}`);
+        return;
+      }
+
+      navigate("/creator/account", { replace: true });
     } finally {
       setSubmitting(false);
     }
@@ -141,31 +199,18 @@ export default function CreatorRegisterPage() {
     );
   }
 
-  if (completed) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center px-4">
-        <div className="glass-card w-full max-w-md p-6 space-y-5 text-center">
-          <CreatorLogo />
-          <CheckCircle2 className="h-12 w-12 text-primary mx-auto" />
-          <div className="space-y-2">
-            <h1 className="text-xl font-semibold">アカウント登録が完了しました</h1>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              これから受け取る案件用の URL から、すぐにアップロード画面にアクセスできるようになります。
-              このページは閉じて構いません。
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (!creator) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
         <div className="glass-card w-full max-w-md p-6 space-y-4 text-center">
           <AlertCircle className="h-12 w-12 text-destructive mx-auto" />
-          <h1 className="text-xl font-semibold">登録できません</h1>
+          <h1 className="text-xl font-semibold">{errorTitle ?? "登録できません"}</h1>
           <p className="text-sm text-muted-foreground">{errorMessage}</p>
+          {showRetryButton ? (
+            <Button type="button" variant="outline" onClick={() => void loadCreator()}>
+              再試行
+            </Button>
+          ) : null}
           {showLoginButton ? (
             <Button type="button" onClick={() => navigate("/creator/login")}>
               ログイン画面へ
@@ -189,6 +234,7 @@ export default function CreatorRegisterPage() {
 
         {errorMessage ? (
           <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+            {errorTitle ? <p className="font-medium">{errorTitle}</p> : null}
             {errorMessage}
           </div>
         ) : null}
