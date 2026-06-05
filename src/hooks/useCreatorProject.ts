@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { handleCreatorRpcError } from "@/lib/creator-rpc-error";
 import {
   parseCreatorProjectPayload,
   parseCreatorProjectFilesPayload,
@@ -12,6 +14,7 @@ import {
 export type { CreatorProjectData, CreatorProjectFile, CreatorProjectComment };
 
 export function useCreatorProject(shareToken: string | undefined) {
+  const navigate = useNavigate();
   const [project, setProject] = useState<CreatorProjectData | null>(null);
   const [files, setFiles] = useState<CreatorProjectFile[]>([]);
   const [comments, setComments] = useState<CreatorProjectComment[]>([]);
@@ -58,6 +61,12 @@ export function useCreatorProject(shareToken: string | undefined) {
       setFiles(parseCreatorProjectFilesPayload(filesRes.data));
       setComments(parseCreatorProjectCommentsPayload(commentsRes.data));
     } catch (e: unknown) {
+      if (handleCreatorRpcError(e, navigate)) {
+        setProject(null);
+        setFiles([]);
+        setComments([]);
+        return;
+      }
       console.error("[useCreatorProject] fetch error:", e);
       const msg =
         e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string"
@@ -70,7 +79,7 @@ export function useCreatorProject(shareToken: string | undefined) {
     } finally {
       setLoading(false);
     }
-  }, [shareToken]);
+  }, [navigate, shareToken]);
 
   useEffect(() => {
     void fetchAll();

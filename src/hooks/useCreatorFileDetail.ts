@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { handleCreatorRpcError } from "@/lib/creator-rpc-error";
 
 export interface CreatorFileComment {
   id: string;
@@ -48,6 +50,7 @@ function normalizeComments(data: unknown): CreatorFileComment[] {
 }
 
 export function useCreatorFileComments(shareToken: string | undefined, fileId: string | undefined) {
+  const navigate = useNavigate();
   const [comments, setComments] = useState<CreatorFileComment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +75,10 @@ export function useCreatorFileComments(shareToken: string | undefined, fileId: s
       if (rpcError) throw rpcError;
       setComments(normalizeComments(data));
     } catch (e: unknown) {
+      if (handleCreatorRpcError(e, navigate)) {
+        setComments([]);
+        return;
+      }
       const msg =
         e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string"
           ? (e as { message: string }).message
@@ -81,7 +88,7 @@ export function useCreatorFileComments(shareToken: string | undefined, fileId: s
     } finally {
       setLoading(false);
     }
-  }, [shareToken, fileId]);
+  }, [navigate, shareToken, fileId]);
 
   useEffect(() => {
     void fetch();
