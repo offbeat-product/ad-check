@@ -23,8 +23,10 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Ban, MoreHorizontal, Pencil, UserPlus, Mail, RefreshCw } from "lucide-react";
+import { Ban, Copy, MoreHorizontal, Pencil, UserPlus, Mail, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getCreatorInviteUrl } from "@/lib/creator-share";
+import { CreatorInviteLinkPanel } from "@/components/creator/CreatorInviteLinkPanel";
 import type { Tables } from "@/integrations/supabase/types";
 
 type Profile = Tables<"profiles">;
@@ -88,6 +90,8 @@ export function SettingsMembersSection() {
   const [creatorNotes, setCreatorNotes] = useState("");
   const [creatorSaving, setCreatorSaving] = useState(false);
   const [creatorEmailError, setCreatorEmailError] = useState<string | null>(null);
+  const [creatorInviteLink, setCreatorInviteLink] = useState<string | null>(null);
+  const [creatorInviteToken, setCreatorInviteToken] = useState<string | null>(null);
 
   const [confirmStaffDeactivate, setConfirmStaffDeactivate] = useState<Profile | null>(null);
   const [confirmCreatorDeactivate, setConfirmCreatorDeactivate] = useState<Creator | null>(null);
@@ -270,7 +274,35 @@ export function SettingsMembersSection() {
     setCreatorEmail("");
     setCreatorNotes("");
     setCreatorEmailError(null);
+    setCreatorInviteLink(null);
+    setCreatorInviteToken(null);
     setCreatorDialogOpen(true);
+  };
+
+  const closeCreatorDialog = async (refresh = false) => {
+    setCreatorDialogOpen(false);
+    setCreatorEmailError(null);
+    setCreatorInviteLink(null);
+    setCreatorInviteToken(null);
+    if (refresh) await fetchData();
+  };
+
+  const copyCreatorInviteLink = async (token: string) => {
+    try {
+      await navigator.clipboard.writeText(getCreatorInviteUrl(token));
+      toast({ title: "招待リンクをコピーしました" });
+    } catch {
+      toast({ title: "コピーに失敗しました", variant: "destructive" });
+    }
+  };
+
+  const resetCreatorAddForm = () => {
+    setCreatorName("");
+    setCreatorEmail("");
+    setCreatorNotes("");
+    setCreatorEmailError(null);
+    setCreatorInviteLink(null);
+    setCreatorInviteToken(null);
   };
 
   const openCreatorEdit = (c: Creator) => {
@@ -294,12 +326,16 @@ export function SettingsMembersSection() {
       const { data: authData } = await supabase.auth.getUser();
       const uid = authData.user?.id;
       if (creatorMode === "add") {
-        const { error } = await supabase.from("creators").insert({
-          name: creatorName.trim(),
-          email: creatorEmail.trim(),
-          notes: creatorNotes.trim() || null,
-          created_by: uid ?? null,
-        });
+        const { data, error } = await supabase
+          .from("creators")
+          .insert({
+            name: creatorName.trim(),
+            email: creatorEmail.trim(),
+            notes: creatorNotes.trim() || null,
+            created_by: uid ?? null,
+          })
+          .select("id, name, email, invitation_token")
+          .single();
         if (error) {
           if (error.code === "23505" || error.message.includes("unique") || error.message.includes("duplicate")) {
             setCreatorEmailError("このメールは既に登録されています");
@@ -309,7 +345,13 @@ export function SettingsMembersSection() {
           setCreatorSaving(false);
           return;
         }
-        toast({ title: "クリエイターを追加しました" });
+        if (data?.invitation_token) {
+          setCreatorInviteToken(data.invitation_token);
+          setCreatorInviteLink(getCreatorInviteUrl(data.invitation_token));
+        } else {
+          toast({ title: "クリエイターを追加しました", description: "招待リンクを取得できませんでした", variant: "destructive" });
+          await closeCreatorDialog(true);
+        }
       } else if (creatorEditingId) {
         const { error } = await supabase
           .from("creators")
@@ -330,9 +372,8 @@ export function SettingsMembersSection() {
           return;
         }
         toast({ title: "保存しました" });
+        await closeCreatorDialog(true);
       }
-      setCreatorDialogOpen(false);
-      await fetchData();
     } catch (e) {
       toast({ title: "エラー", description: e instanceof Error ? e.message : "保存に失敗しました", variant: "destructive" });
     }
@@ -529,6 +570,10 @@ export function SettingsMembersSection() {
                               <Pencil className="h-3.5 w-3.5 mr-2" />
                               編集
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => void copyCreatorInviteLink(c.invitation_token)}>
+                              <Copy className="h-3.5 w-3.5 mr-2" />
+                              招待リンクをコピー
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem className="text-destructive" onClick={() => setConfirmCreatorDeactivate(c)}>
                               <Ban className="h-3.5 w-3.5 mr-2" />
@@ -631,34 +676,55 @@ export function SettingsMembersSection() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={creatorDialogOpen} onOpenChange={(o) => { setCreatorDialogOpen(o); if (!o) setCreatorEmailError(null); }}>
+      <Dialog
+        open={creatorDialogOpen}
+        onOpenChange={(o) => {
+          if (!o) void closeCreatorDialog(creatorInviteLink !== null);
+          else setCreatorDialogOpen(true);
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{creatorMode === "add" ? "クリエイターを追加" : "クリエイター編集"}</DialogTitle>
+            <DialogTitle>
+              {creatorInviteLink
+                ? "クリエイターを追加しました"
+                : creatorMode === "add"
+                  ? "クリエイターを追加"
+                  : "クリエイター編集"}
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs text-muted-foreground">名前 *</Label>
-              <Input className="h-9 text-sm mt-1" value={creatorName} onChange={(e) => setCreatorName(e.target.value)} />
+          {creatorInviteLink ? (
+            <CreatorInviteLinkPanel
+              inviteUrl={creatorInviteLink}
+              onCopy={() => creatorInviteToken && void copyCreatorInviteLink(creatorInviteToken)}
+              secondaryAction={{ label: "もう一人追加", onClick: resetCreatorAddForm }}
+              onClose={() => void closeCreatorDialog(true)}
+            />
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">名前 *</Label>
+                <Input className="h-9 text-sm mt-1" value={creatorName} onChange={(e) => setCreatorName(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">メール *</Label>
+                <Input className={cn("h-9 text-sm mt-1", creatorEmailError && "border-destructive")} value={creatorEmail} onChange={(e) => { setCreatorEmail(e.target.value); setCreatorEmailError(null); }} />
+                {creatorEmailError ? <p className="text-xs text-destructive mt-1">{creatorEmailError}</p> : null}
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">メモ</Label>
+                <Textarea className="text-sm mt-1 min-h-[80px]" value={creatorNotes} onChange={(e) => setCreatorNotes(e.target.value)} />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => void closeCreatorDialog(false)}>
+                  キャンセル
+                </Button>
+                <Button type="button" size="sm" disabled={creatorSaving} onClick={() => void handleSaveCreator()}>
+                  {creatorSaving ? "保存中..." : creatorMode === "add" ? "追加" : "保存"}
+                </Button>
+              </div>
             </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">メール *</Label>
-              <Input className={cn("h-9 text-sm mt-1", creatorEmailError && "border-destructive")} value={creatorEmail} onChange={(e) => { setCreatorEmail(e.target.value); setCreatorEmailError(null); }} />
-              {creatorEmailError ? <p className="text-xs text-destructive mt-1">{creatorEmailError}</p> : null}
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">メモ</Label>
-              <Textarea className="text-sm mt-1 min-h-[80px]" value={creatorNotes} onChange={(e) => setCreatorNotes(e.target.value)} />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setCreatorDialogOpen(false)}>
-                キャンセル
-              </Button>
-              <Button type="button" size="sm" disabled={creatorSaving} onClick={() => void handleSaveCreator()}>
-                {creatorSaving ? "保存中..." : creatorMode === "add" ? "追加" : "保存"}
-              </Button>
-            </div>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
 

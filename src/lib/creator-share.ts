@@ -14,3 +14,8 @@ export function getCreatorShareUrl(shareToken: string): string {
   const base = getCreatorPortalOrigin();
   return `${base}/creator/${shareToken}`;
 }
+
+export function getCreatorInviteUrl(invitationToken: string): string {
+  const base = getCreatorPortalOrigin();
+  return `${base}/creator/invite/${invitationToken}`;
+}

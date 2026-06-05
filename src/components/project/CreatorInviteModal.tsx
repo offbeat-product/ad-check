@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { getCreatorShareUrl } from "@/lib/creator-share";
+import { getCreatorShareUrl, getCreatorInviteUrl } from "@/lib/creator-share";
+import { CreatorInviteLinkPanel } from "@/components/creator/CreatorInviteLinkPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,6 +60,9 @@ export function CreatorInviteModal({ projectId, open, onOpenChange, onInvitesCha
   const [addNotes, setAddNotes] = useState("");
   const [addBusy, setAddBusy] = useState(false);
   const [addEmailError, setAddEmailError] = useState<string | null>(null);
+  const [addInviteUrl, setAddInviteUrl] = useState<string | null>(null);
+  const [addInviteToken, setAddInviteToken] = useState<string | null>(null);
+  const [newlyAddedCreatorId, setNewlyAddedCreatorId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!projectId) return;
@@ -129,6 +133,38 @@ export function CreatorInviteModal({ projectId, open, onOpenChange, onInvitesCha
     }
   };
 
+  const copyInviteLink = async (token: string) => {
+    try {
+      await navigator.clipboard.writeText(getCreatorInviteUrl(token));
+      toast({ title: "招待リンクをコピーしました" });
+    } catch {
+      toast({ title: "コピーに失敗しました", variant: "destructive" });
+    }
+  };
+
+  const resetAddForm = () => {
+    setAddName("");
+    setAddEmail("");
+    setAddNotes("");
+    setAddEmailError(null);
+    setAddInviteUrl(null);
+    setAddInviteToken(null);
+    setNewlyAddedCreatorId(null);
+  };
+
+  const handleInviteNewCreatorToProject = () => {
+    if (newlyAddedCreatorId) {
+      setSelectedIds((prev) => new Set(prev).add(newlyAddedCreatorId));
+    }
+    setAddOpen(false);
+    resetAddForm();
+  };
+
+  const handleCloseAddDialog = () => {
+    setAddOpen(false);
+    resetAddForm();
+  };
+
   const handleSaveNewCreator = async () => {
     if (!addName.trim() || !addEmail.trim()) {
       toast({ title: "入力エラー", description: "名前とメールは必須です", variant: "destructive" });
@@ -147,7 +183,7 @@ export function CreatorInviteModal({ projectId, open, onOpenChange, onInvitesCha
           notes: addNotes.trim() || null,
           created_by: uid ?? null,
         })
-        .select("id, name, email, last_active_at")
+        .select("id, name, email, last_active_at, invitation_token")
         .single();
       if (error) {
         if (error.code === "23505" || error.message.includes("unique") || error.message.includes("duplicate")) {
@@ -158,15 +194,20 @@ export function CreatorInviteModal({ projectId, open, onOpenChange, onInvitesCha
         setAddBusy(false);
         return;
       }
-      toast({ title: "クリエイターを追加しました" });
-      setAddOpen(false);
-      setAddName("");
-      setAddEmail("");
-      setAddNotes("");
-      if (inserted) {
+      if (inserted?.invitation_token) {
+        setNewlyAddedCreatorId(inserted.id);
+        setAddInviteToken(inserted.invitation_token);
+        setAddInviteUrl(getCreatorInviteUrl(inserted.invitation_token));
         setCreators((prev) => [...prev, inserted as CreatorRow].sort((a, b) => a.name.localeCompare(b.name, "ja")));
       } else {
-        await load();
+        toast({ title: "クリエイターを追加しました", description: "招待リンクを取得できませんでした", variant: "destructive" });
+        setAddOpen(false);
+        resetAddForm();
+        if (inserted) {
+          setCreators((prev) => [...prev, inserted as CreatorRow].sort((a, b) => a.name.localeCompare(b.name, "ja")));
+        } else {
+          await load();
+        }
       }
     } catch (e) {
       toast({ title: "エラー", description: e instanceof Error ? e.message : "追加に失敗しました", variant: "destructive" });
@@ -422,41 +463,57 @@ export function CreatorInviteModal({ projectId, open, onOpenChange, onInvitesCha
         </DialogContent>
       </Dialog>
 
-      <Dialog open={addOpen} onOpenChange={(o) => { setAddOpen(o); if (!o) setAddEmailError(null); }}>
+      <Dialog
+        open={addOpen}
+        onOpenChange={(o) => {
+          if (!o) resetAddForm();
+          setAddOpen(o);
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>クリエイターを追加</DialogTitle>
+            <DialogTitle>{addInviteUrl ? "クリエイターを追加しました" : "クリエイターを追加"}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <Label className="text-xs text-muted-foreground">名前 *</Label>
-              <Input className="h-9 text-sm mt-1" value={addName} onChange={(e) => setAddName(e.target.value)} />
+          {addInviteUrl ? (
+            <CreatorInviteLinkPanel
+              inviteUrl={addInviteUrl}
+              onCopy={() => addInviteToken && void copyInviteLink(addInviteToken)}
+              secondaryAction={{ label: "この案件に招待", onClick: handleInviteNewCreatorToProject }}
+              hint="招待リンクをコピーしてから「この案件に招待」を押してください。案件招待画面に戻り、このクリエイターが選択された状態になります。"
+              onClose={handleCloseAddDialog}
+            />
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs text-muted-foreground">名前 *</Label>
+                <Input className="h-9 text-sm mt-1" value={addName} onChange={(e) => setAddName(e.target.value)} />
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">メール *</Label>
+                <Input
+                  className={cn("h-9 text-sm mt-1", addEmailError && "border-destructive")}
+                  value={addEmail}
+                  onChange={(e) => {
+                    setAddEmail(e.target.value);
+                    setAddEmailError(null);
+                  }}
+                />
+                {addEmailError ? <p className="text-xs text-destructive mt-1">{addEmailError}</p> : null}
+              </div>
+              <div>
+                <Label className="text-xs text-muted-foreground">メモ</Label>
+                <Textarea className="text-sm mt-1 min-h-[72px]" value={addNotes} onChange={(e) => setAddNotes(e.target.value)} />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => setAddOpen(false)}>
+                  キャンセル
+                </Button>
+                <Button type="button" size="sm" disabled={addBusy} onClick={() => void handleSaveNewCreator()}>
+                  {addBusy ? "追加中..." : "追加"}
+                </Button>
+              </div>
             </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">メール *</Label>
-              <Input
-                className={cn("h-9 text-sm mt-1", addEmailError && "border-destructive")}
-                value={addEmail}
-                onChange={(e) => {
-                  setAddEmail(e.target.value);
-                  setAddEmailError(null);
-                }}
-              />
-              {addEmailError ? <p className="text-xs text-destructive mt-1">{addEmailError}</p> : null}
-            </div>
-            <div>
-              <Label className="text-xs text-muted-foreground">メモ</Label>
-              <Textarea className="text-sm mt-1 min-h-[72px]" value={addNotes} onChange={(e) => setAddNotes(e.target.value)} />
-            </div>
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setAddOpen(false)}>
-                キャンセル
-              </Button>
-              <Button type="button" size="sm" disabled={addBusy} onClick={() => void handleSaveNewCreator()}>
-                {addBusy ? "追加中..." : "追加"}
-              </Button>
-            </div>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
     </>

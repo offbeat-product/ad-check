@@ -1375,6 +1375,7 @@ export type Database = {
           created_by: string | null
           email: string
           id: string
+          invitation_token: string
           is_active: boolean | null
           last_active_at: string | null
           name: string
@@ -1387,6 +1388,7 @@ export type Database = {
           created_by?: string | null
           email: string
           id?: string
+          invitation_token?: string
           is_active?: boolean | null
           last_active_at?: string | null
           name: string
@@ -1399,6 +1401,7 @@ export type Database = {
           created_by?: string | null
           email?: string
           id?: string
+          invitation_token?: string
           is_active?: boolean | null
           last_active_at?: string | null
           name?: string
@@ -5094,6 +5097,10 @@ export type Database = {
           email: string
           id: string
         }[]
+      }
+      get_creator_dashboard: {
+        Args: { p_invitation_token: string }
+        Returns: Json
       }
       get_project_comments_for_creator: {
         Args: { p_file_id?: string; p_share_token: string }
