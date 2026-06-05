@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { getCreatorShareUrl, getCreatorInviteUrl } from "@/lib/creator-share";
+import { getCreatorShareUrl, getCreatorRegisterUrl } from "@/lib/creator-share";
 import { CreatorInviteLinkPanel } from "@/components/creator/CreatorInviteLinkPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +18,7 @@ import { Copy, Plus, Search, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Tables } from "@/integrations/supabase/types";
 
-type CreatorRow = Pick<Tables<"creators">, "id" | "name" | "email" | "last_active_at">;
+type CreatorRow = Pick<Tables<"creators">, "id" | "name" | "email" | "last_active_at" | "user_id">;
 
 type CollaboratorRow = Pick<
   Tables<"project_collaborators">,
@@ -77,7 +77,7 @@ export function CreatorInviteModal({ projectId, open, onOpenChange, onInvitesCha
           .eq("is_active", true),
         supabase
           .from("creators")
-          .select("id, name, email, last_active_at")
+          .select("id, name, email, last_active_at, user_id")
           .eq("is_active", true)
           .order("name"),
       ]);
@@ -106,13 +106,18 @@ export function CreatorInviteModal({ projectId, open, onOpenChange, onInvitesCha
     void load();
   }, [open, load]);
 
+  const candidateCreators = useMemo(
+    () => creators.filter((c) => c.user_id !== null || invitedAtOpen.has(c.id) || selectedIds.has(c.id)),
+    [creators, invitedAtOpen, selectedIds]
+  );
+
   const filteredCreators = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return creators;
-    return creators.filter(
+    if (!q) return candidateCreators;
+    return candidateCreators.filter(
       (c) => c.name.toLowerCase().includes(q) || c.email.toLowerCase().includes(q)
     );
-  }, [creators, search]);
+  }, [candidateCreators, search]);
 
   const toggleId = (creatorId: string, checked: boolean) => {
     setSelectedIds((prev) => {
@@ -135,8 +140,8 @@ export function CreatorInviteModal({ projectId, open, onOpenChange, onInvitesCha
 
   const copyInviteLink = async (token: string) => {
     try {
-      await navigator.clipboard.writeText(getCreatorInviteUrl(token));
-      toast({ title: "招待リンクをコピーしました" });
+      await navigator.clipboard.writeText(getCreatorRegisterUrl(token));
+      toast({ title: "登録リンクをコピーしました" });
     } catch {
       toast({ title: "コピーに失敗しました", variant: "destructive" });
     }
@@ -183,7 +188,7 @@ export function CreatorInviteModal({ projectId, open, onOpenChange, onInvitesCha
           notes: addNotes.trim() || null,
           created_by: uid ?? null,
         })
-        .select("id, name, email, last_active_at, invitation_token")
+        .select("id, name, email, last_active_at, user_id, invitation_token")
         .single();
       if (error) {
         if (error.code === "23505" || error.message.includes("unique") || error.message.includes("duplicate")) {
@@ -197,10 +202,10 @@ export function CreatorInviteModal({ projectId, open, onOpenChange, onInvitesCha
       if (inserted?.invitation_token) {
         setNewlyAddedCreatorId(inserted.id);
         setAddInviteToken(inserted.invitation_token);
-        setAddInviteUrl(getCreatorInviteUrl(inserted.invitation_token));
+        setAddInviteUrl(getCreatorRegisterUrl(inserted.invitation_token));
         setCreators((prev) => [...prev, inserted as CreatorRow].sort((a, b) => a.name.localeCompare(b.name, "ja")));
       } else {
-        toast({ title: "クリエイターを追加しました", description: "招待リンクを取得できませんでした", variant: "destructive" });
+        toast({ title: "クリエイターを追加しました", description: "登録リンクを取得できませんでした", variant: "destructive" });
         setAddOpen(false);
         resetAddForm();
         if (inserted) {
@@ -476,10 +481,10 @@ export function CreatorInviteModal({ projectId, open, onOpenChange, onInvitesCha
           </DialogHeader>
           {addInviteUrl ? (
             <CreatorInviteLinkPanel
-              inviteUrl={addInviteUrl}
+              registerUrl={addInviteUrl}
               onCopy={() => addInviteToken && void copyInviteLink(addInviteToken)}
               secondaryAction={{ label: "この案件に招待", onClick: handleInviteNewCreatorToProject }}
-              hint="招待リンクをコピーしてから「この案件に招待」を押してください。案件招待画面に戻り、このクリエイターが選択された状態になります。"
+              hint="登録リンクをコピーしてクリエイターに送付してください。案件招待画面に戻る場合は「この案件に招待」を押してください。"
               onClose={handleCloseAddDialog}
             />
           ) : (

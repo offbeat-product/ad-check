@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { handleCreatorRpcError } from "@/lib/creator-rpc-error";
 
 export interface CreatorProcess {
   id: string;
@@ -70,6 +72,7 @@ function normalizeProcesses(data: unknown): CreatorProcess[] {
 }
 
 export function useCreatorProcesses(shareToken: string | undefined) {
+  const navigate = useNavigate();
   const [processes, setProcesses] = useState<CreatorProcess[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,6 +94,10 @@ export function useCreatorProcesses(shareToken: string | undefined) {
       if (rpcError) throw rpcError;
       setProcesses(normalizeProcesses(data));
     } catch (e: unknown) {
+      if (handleCreatorRpcError(e, navigate)) {
+        setProcesses([]);
+        return;
+      }
       const message =
         e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string"
           ? (e as { message: string }).message
@@ -100,7 +107,7 @@ export function useCreatorProcesses(shareToken: string | undefined) {
     } finally {
       setLoading(false);
     }
-  }, [shareToken]);
+  }, [navigate, shareToken]);
 
   useEffect(() => {
     void fetch();

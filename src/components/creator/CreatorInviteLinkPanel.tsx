@@ -3,7 +3,7 @@ import { Input } from "@/components/ui/input";
 import { CheckCircle2 } from "lucide-react";
 
 interface CreatorInviteLinkPanelProps {
-  inviteUrl: string;
+  registerUrl: string;
   onCopy: () => void;
   onClose: () => void;
   secondaryAction?: {
@@ -14,11 +14,11 @@ interface CreatorInviteLinkPanelProps {
 }
 
 export function CreatorInviteLinkPanel({
-  inviteUrl,
+  registerUrl,
   onCopy,
   onClose,
   secondaryAction,
-  hint = "このリンクを Chatwork や Slack でクリエイター本人に送付してください。",
+  hint = "このリンクをクリエイターに送付してください。クリエイターはこのリンクからアカウント登録を行います。",
 }: CreatorInviteLinkPanelProps) {
   return (
     <div className="space-y-4">
@@ -28,9 +28,9 @@ export function CreatorInviteLinkPanel({
       </div>
 
       <div className="space-y-2">
-        <p className="text-xs text-muted-foreground">招待リンク</p>
+        <p className="text-xs text-muted-foreground">登録リンク</p>
         <div className="flex items-center gap-2">
-          <Input readOnly value={inviteUrl} className="h-9 text-xs bg-muted font-mono" />
+          <Input readOnly value={registerUrl} className="h-9 text-xs bg-muted font-mono" />
           <Button type="button" size="sm" variant="outline" className="shrink-0" onClick={onCopy}>
             コピー
           </Button>

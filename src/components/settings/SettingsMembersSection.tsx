@@ -25,7 +25,7 @@ import {
 } from "@/components/ui/table";
 import { Ban, Copy, MoreHorizontal, Pencil, UserPlus, Mail, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getCreatorInviteUrl } from "@/lib/creator-share";
+import { getCreatorRegisterUrl } from "@/lib/creator-share";
 import { CreatorInviteLinkPanel } from "@/components/creator/CreatorInviteLinkPanel";
 import type { Tables } from "@/integrations/supabase/types";
 
@@ -289,8 +289,8 @@ export function SettingsMembersSection() {
 
   const copyCreatorInviteLink = async (token: string) => {
     try {
-      await navigator.clipboard.writeText(getCreatorInviteUrl(token));
-      toast({ title: "招待リンクをコピーしました" });
+      await navigator.clipboard.writeText(getCreatorRegisterUrl(token));
+      toast({ title: "登録リンクをコピーしました" });
     } catch {
       toast({ title: "コピーに失敗しました", variant: "destructive" });
     }
@@ -347,9 +347,9 @@ export function SettingsMembersSection() {
         }
         if (data?.invitation_token) {
           setCreatorInviteToken(data.invitation_token);
-          setCreatorInviteLink(getCreatorInviteUrl(data.invitation_token));
+          setCreatorInviteLink(getCreatorRegisterUrl(data.invitation_token));
         } else {
-          toast({ title: "クリエイターを追加しました", description: "招待リンクを取得できませんでした", variant: "destructive" });
+          toast({ title: "クリエイターを追加しました", description: "登録リンクを取得できませんでした", variant: "destructive" });
           await closeCreatorDialog(true);
         }
       } else if (creatorEditingId) {
@@ -572,7 +572,7 @@ export function SettingsMembersSection() {
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => void copyCreatorInviteLink(c.invitation_token)}>
                               <Copy className="h-3.5 w-3.5 mr-2" />
-                              招待リンクをコピー
+                              登録リンクをコピー
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem className="text-destructive" onClick={() => setConfirmCreatorDeactivate(c)}>
@@ -695,7 +695,7 @@ export function SettingsMembersSection() {
           </DialogHeader>
           {creatorInviteLink ? (
             <CreatorInviteLinkPanel
-              inviteUrl={creatorInviteLink}
+              registerUrl={creatorInviteLink}
               onCopy={() => creatorInviteToken && void copyCreatorInviteLink(creatorInviteToken)}
               secondaryAction={{ label: "もう一人追加", onClick: resetCreatorAddForm }}
               onClose={() => void closeCreatorDialog(true)}
