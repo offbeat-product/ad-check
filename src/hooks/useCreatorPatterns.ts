@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { handleCreatorRpcError } from "@/lib/creator-rpc-error";
 
 export interface CreatorPattern {
   id: string;
@@ -10,6 +12,7 @@ export interface CreatorPattern {
 }
 
 export function useCreatorPatterns(shareToken: string | undefined) {
+  const navigate = useNavigate();
   const [patterns, setPatterns] = useState<CreatorPattern[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -30,6 +33,10 @@ export function useCreatorPatterns(shareToken: string | undefined) {
       const list = Array.isArray(data) ? (data as CreatorPattern[]) : [];
       setPatterns(list);
     } catch (e: unknown) {
+      if (handleCreatorRpcError(e, navigate)) {
+        setPatterns([]);
+        return;
+      }
       const msg =
         e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string"
           ? (e as { message: string }).message
@@ -39,7 +46,7 @@ export function useCreatorPatterns(shareToken: string | undefined) {
     } finally {
       setLoading(false);
     }
-  }, [shareToken]);
+  }, [navigate, shareToken]);
 
   useEffect(() => {
     void fetchPatterns();

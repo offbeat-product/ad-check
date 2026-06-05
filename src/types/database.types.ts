@@ -1382,6 +1382,7 @@ export type Database = {
           notes: string | null
           slack_user_id: string | null
           updated_at: string | null
+          user_id: string | null
         }
         Insert: {
           created_at?: string | null
@@ -1395,6 +1396,7 @@ export type Database = {
           notes?: string | null
           slack_user_id?: string | null
           updated_at?: string | null
+          user_id?: string | null
         }
         Update: {
           created_at?: string | null
@@ -1408,6 +1410,7 @@ export type Database = {
           notes?: string | null
           slack_user_id?: string | null
           updated_at?: string | null
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -5097,10 +5100,6 @@ export type Database = {
           email: string
           id: string
         }[]
-      }
-      get_creator_dashboard: {
-        Args: { p_invitation_token: string }
-        Returns: Json
       }
       get_project_comments_for_creator: {
         Args: { p_file_id?: string; p_share_token: string }

@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
 import { useCreatorFileComments, type CreatorFileComment } from "@/hooks/useCreatorFileDetail";
 import { parseCreatorProjectFilesPayload, parseCreatorProjectPayload } from "@/lib/creator-project-rpc";
+import { handleCreatorRpcError } from "@/lib/creator-rpc-error";
 import { CreatorUploadModal, type CreatorUploadParentCandidate } from "@/components/creator/CreatorUploadModal";
 import { runScriptCheck, getWebhookUrl, webhookFetch, getRelatedProcessData, VIDEO_ASYNC_ACCEPTED } from "@/lib/webhook";
 import { resolveWebhookProductId } from "@/lib/resolve-product-id";
@@ -411,6 +412,10 @@ export default function FileReviewPage({
           return;
         } catch (e) {
           if (!cancelled) {
+            if (handleCreatorRpcError(e, navigate)) {
+              setLoading(false);
+              return;
+            }
             toast({
               title: "取得エラー",
               description: e instanceof Error ? e.message : "ファイルの取得に失敗しました",

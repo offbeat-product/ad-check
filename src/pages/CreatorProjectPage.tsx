@@ -1,6 +1,7 @@
 import { useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { handleCreatorRpcError } from "@/lib/creator-rpc-error";
 import { useCreatorProject } from "@/hooks/useCreatorProject";
 import { useCreatorProcesses } from "@/hooks/useCreatorProcesses";
 import { useCreatorPatterns } from "@/hooks/useCreatorPatterns";
@@ -50,6 +51,7 @@ function getCreativeTypeLabel(creativeType: string | null): string | null {
 
 export default function CreatorProjectPage() {
   const { shareToken } = useParams<{ shareToken: string }>();
+  const navigate = useNavigate();
   const { project, files, loading, error, refetch } = useCreatorProject(shareToken);
   const { processes, loading: processesLoading } = useCreatorProcesses(shareToken);
   const { patterns, loading: patternsLoading } = useCreatorPatterns(shareToken);
@@ -60,9 +62,11 @@ export default function CreatorProjectPage() {
     const pid = project?.project_id;
     if (!token || !pid) return;
     void supabase.rpc("track_creator_access", { p_share_token: token }).then(({ error: rpcErr }) => {
-      if (rpcErr) console.warn("[CreatorProjectPage] access tracking failed:", rpcErr.message);
+      if (!rpcErr) return;
+      if (handleCreatorRpcError(rpcErr, navigate)) return;
+      console.warn("[CreatorProjectPage] access tracking failed:", rpcErr.message);
     });
-  }, [shareToken, project?.project_id]);
+  }, [navigate, shareToken, project?.project_id]);
 
   if (loading || processesLoading || patternsLoading) {
     return (

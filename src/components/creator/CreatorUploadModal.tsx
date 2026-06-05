@@ -1,7 +1,9 @@
 import { useMemo, useRef, useState, type DragEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { CreatorPattern } from "@/hooks/useCreatorPatterns";
+import { handleCreatorRpcError } from "@/lib/creator-rpc-error";
 import { prepareFileForUpload } from "@/lib/file-upload";
 import { getProcessFileUploadConfig } from "@/lib/process-config";
 import { validateFileSize, formatFileSize } from "@/lib/file-validation";
@@ -63,6 +65,7 @@ export function CreatorUploadModal({
   skipPatternSelection = false,
 }: CreatorUploadModalProps) {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadType, setUploadType] = useState<UploadType | null>(defaultUploadType ?? null);
   const [selectedParentFileId, setSelectedParentFileId] = useState<string | null>(defaultParentFileId ?? null);
@@ -258,6 +261,7 @@ export function CreatorUploadModal({
         onUploaded(payload);
       }, 0);
     } catch (e: unknown) {
+      if (handleCreatorRpcError(e, navigate)) return;
       const message =
         e && typeof e === "object" && "message" in e && typeof (e as { message: unknown }).message === "string"
           ? (e as { message: string }).message
