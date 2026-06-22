@@ -128,6 +128,19 @@ npm run dev
 大きなファイル（100MB超）は処理に数分かかる場合があります。
 src/hooks/useVideoCheckPolling.ts のポーリング間隔・タイムアウト値を確認してください。
 
+## Edge Functions（Supabase）
+
+フロント（Vite）は Vercel にデプロイされるが、**Edge Function は Vercel の自動デプロイに含まれない**。
+`supabase/functions/` のソースを変更した場合は、マージ後に Supabase CLI で本番へ別途デプロイする。
+
+```bash
+supabase login
+supabase functions deploy accept-invitation --project-ref itdwxycecvdamarubpww
+# 他: create-share-link, extract-text, fetch-external-rules, shared-comments, verify-share-password
+```
+
+一覧・詳細は `HANDOVER.md` の「Edge Functions」節、`supabase/functions/<name>/README.md`（ある場合）を参照。
+
 ## 関連ドキュメント
 - HANDOVER.md — システム全体像と引き継ぎ情報
 - .cursorrules — Cursor AI向け指示書

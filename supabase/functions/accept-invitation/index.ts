@@ -1,3 +1,7 @@
+/**
+ * 招待受諾 Edge Function（本番 2026-05-19 デプロイ済み）。
+ * リポジトリ正: 変更後は `supabase functions deploy accept-invitation` が必要（Vercel には含まれない）。
+ */
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, type SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2";
 

@@ -135,8 +135,13 @@ n8nのWebhookノードとRespond to Webhookノードの両方に以下を設定:
 - Access-Control-Allow-Origin: *
 
 ## Edge Functions（Supabase）
+
+**重要**: Edge Function は Vercel の自動デプロイに含まれない。`supabase/functions/` を変更したら
+`supabase functions deploy <name> --project-ref itdwxycecvdamarubpww` で本番へ別途デプロイすること。
+
 | 関数名 | 用途 |
 |--------|------|
+| accept-invitation | 招待受諾（ユーザー作成 + email_confirm、AcceptInvitePage） |
 | create-share-link | 外部共有リンクの生成 |
 | extract-text | アップロードファイルからテキスト抽出 |
 | fetch-external-rules | 外部ルール取得 |
