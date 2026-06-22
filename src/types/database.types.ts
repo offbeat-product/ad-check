@@ -4466,6 +4466,7 @@ export type Database = {
           check_result_id: string | null
           created_at: string | null
           expires_at: string | null
+          file_id: string | null
           id: string
           password_hash: string | null
           token: string
@@ -4477,6 +4478,7 @@ export type Database = {
           check_result_id?: string | null
           created_at?: string | null
           expires_at?: string | null
+          file_id?: string | null
           id?: string
           password_hash?: string | null
           token?: string
@@ -4488,6 +4490,7 @@ export type Database = {
           check_result_id?: string | null
           created_at?: string | null
           expires_at?: string | null
+          file_id?: string | null
           id?: string
           password_hash?: string | null
           token?: string
@@ -4498,6 +4501,13 @@ export type Database = {
             columns: ["check_result_id"]
             isOneToOne: false
             referencedRelation: "check_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "share_links_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "project_files"
             referencedColumns: ["id"]
           },
         ]
@@ -5222,6 +5232,14 @@ export type Database = {
           isOneToOne: false
           isSetofReturn: true
         }
+      }
+      get_shared_draft_info: {
+        Args: { p_check_result_id: string; p_share_token: string }
+        Returns: {
+          current_round: number
+          total_rounds: number
+          current_label: string
+        }[]
       }
       get_shared_comments: {
         Args: { p_check_result_id: string; p_share_token: string }

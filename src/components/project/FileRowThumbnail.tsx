@@ -19,7 +19,7 @@ export function FileRowThumbnail({ fileType, processKey, thumbnailData, classNam
 
   return (
     <div className={cn("h-16 rounded-md bg-muted/50 flex items-center justify-center overflow-hidden", className)}>
-      {isImageFile && thumbnailData ? (
+      {isImageFile && canRenderImageByUrl ? (
         <img src={thumbnailData} alt="" className="w-full h-full object-cover" />
       ) : isVideoProcess && thumbnailData ? (
         <video src={thumbnailData} className="w-full h-full object-cover" muted preload="metadata" />

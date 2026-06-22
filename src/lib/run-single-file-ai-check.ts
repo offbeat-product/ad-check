@@ -18,6 +18,28 @@ function dispatchWebhookInBackground(url: string, body: Record<string, unknown>)
   });
 }
 
+function inferFileMimeType(fileNameOrUrl: string | null | undefined, fallback = "image/jpeg"): string {
+  const clean = (fileNameOrUrl || "").split("?")[0]?.toLowerCase() || "";
+  const ext = clean.split(".").pop();
+  switch (ext) {
+    case "png":
+      return "image/png";
+    case "webp":
+      return "image/webp";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "pdf":
+      return "application/pdf";
+    case "psd":
+      return "image/vnd.adobe.photoshop";
+    case "ai":
+      return "application/pdf";
+    default:
+      return fallback;
+  }
+}
+
 export interface RunSingleFileAiCheckUser {
   id: string;
   email?: string | null;
@@ -133,8 +155,13 @@ export async function runSingleFileAiCheck(
             body.image_url = publicUrl;
           }
           body.image_mime_type = mediaType;
+        } else if (fileData.startsWith("http")) {
+          body.image_url = fileData;
+          body.image_mime_type = inferFileMimeType(file.file_name || fileData);
         }
-        inputData = { image_base64: file.file_data };
+        inputData = fileData.startsWith("http")
+          ? { image_url: fileData }
+          : { image_base64: file.file_data };
       } else if (inputMode === "audio") {
         const fileData = file.file_data || "";
         if (fileData.startsWith("data:")) {

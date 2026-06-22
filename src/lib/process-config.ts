@@ -19,7 +19,7 @@ export const PROCESS_FILE_CONFIG: Record<string, { accept: string; allowTextInpu
   'bgm':              { accept: '.mp3,.wav,.m4a', allowTextInput: false, label: 'BGM音声' },
   'vcon':             { accept: '.mp4,.mov,.webm', allowTextInput: false, label: 'Vコン動画' },
   'styleframe':       { accept: '.jpg,.jpeg,.png,.psd,.ai', allowTextInput: false, label: 'スタイルフレーム画像' },
-  'storyboard':       { accept: '.jpg,.jpeg,.png,.pdf,.psd', allowTextInput: false, label: '絵コンテ' },
+  'storyboard':       { accept: '.jpg,.jpeg,.png,.webp,.pdf,.psd', allowTextInput: false, label: '絵コンテ' },
   'video_horizontal': { accept: '.mp4,.mov,.webm', allowTextInput: false, label: '横動画' },
   'video_vertical':   { accept: '.mp4,.mov,.webm', allowTextInput: false, label: '縦動画' },
   'banner_design':    { accept: '.jpg,.jpeg,.png,.pdf,.psd,.webp,.ai', allowTextInput: false, label: 'バナーデザイン' },

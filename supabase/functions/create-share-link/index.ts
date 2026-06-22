@@ -62,7 +62,7 @@ serve(async (req) => {
       );
     }
 
-    const { password, check_result_id, expires_at, allow_download, allow_comment_read, allow_comment_write } = await req.json();
+    const { password, check_result_id, file_id, expires_at, allow_download, allow_comment_read, allow_comment_write } = await req.json();
 
     let passwordHash: string | null = null;
     if (password) {
@@ -71,6 +71,7 @@ serve(async (req) => {
 
     const { data, error } = await supabaseAdmin.from("share_links").insert({
       check_result_id,
+      file_id: file_id ?? null,
       password_hash: passwordHash,
       expires_at,
       allow_download: allow_download ?? true,

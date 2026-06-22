@@ -4,6 +4,7 @@ import { getFileCategory } from "@/lib/file-validation";
 import { tusUpload } from "@/lib/tus-upload";
 
 export type UploadPreparedFileType = "video" | "image" | "audio" | "text";
+export type UploadStorageBucket = "audios" | "videos" | "deliverables";
 
 export interface PrepareFileForUploadInput {
   file: File;
@@ -30,7 +31,12 @@ function sanitizeFileName(name: string): string {
   return `${safeName || `file_${Date.now()}`}${ext}`;
 }
 
-function getStorageBucket(processType: string): "audios" | "videos" | null {
+function isCompressibleImage(file: File): boolean {
+  const ext = file.name.split(".").pop()?.toLowerCase();
+  return Boolean(ext && ["jpg", "jpeg", "png", "webp"].includes(ext) && file.type.startsWith("image/"));
+}
+
+export function getStorageBucket(processType: string, file?: File): UploadStorageBucket | null {
   const audioProcesses = ["narration", "bgm"];
   const videoProcesses = ["vcon", "video_horizontal", "video_vertical"];
   if (audioProcesses.includes(processType)) return "audios";
@@ -38,11 +44,12 @@ function getStorageBucket(processType: string): "audios" | "videos" | null {
   const category = getFileCategory(processType);
   if (category === "audio") return "audios";
   if (category === "video") return "videos";
+  if (category === "image" && file && !isCompressibleImage(file)) return "deliverables";
   return null;
 }
 
 async function uploadToStorageWithFallback(args: {
-  bucket: "audios" | "videos";
+  bucket: UploadStorageBucket;
   path: string;
   file: File;
   onProgress?: (progressPercent: number) => void;
@@ -73,7 +80,7 @@ async function uploadToStorageWithFallback(args: {
 export async function prepareFileForUpload(input: PrepareFileForUploadInput): Promise<PreparedUploadFile> {
   const { file, processType, projectId, fileNamePrefix, onProgress } = input;
   const fileName = sanitizeFileName(file.name);
-  const bucket = getStorageBucket(processType);
+  const bucket = getStorageBucket(processType, file);
 
   if (bucket) {
     const storagePath = `${projectId}/${fileNamePrefix ? `${fileNamePrefix}_` : ""}${Date.now()}_${fileName}`;
@@ -84,14 +91,14 @@ export async function prepareFileForUpload(input: PrepareFileForUploadInput): Pr
       onProgress,
     });
     return {
-      fileType: bucket === "audios" ? "audio" : "video",
+      fileType: bucket === "audios" ? "audio" : bucket === "videos" ? "video" : "image",
       fileData: url,
       fileSizeBytes: file.size,
     };
   }
 
   const category = getFileCategory(processType);
-  if (category === "image" || file.type.startsWith("image/")) {
+  if (category === "image" || isCompressibleImage(file)) {
     const compressed = await compressImage(file);
     return {
       fileType: "image",

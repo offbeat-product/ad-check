@@ -83,6 +83,28 @@ function timestampMs(value: string | null | undefined): number {
   return Number.isNaN(ms) ? 0 : ms;
 }
 
+function inferFileMimeType(fileNameOrUrl: string | null | undefined, fallback = "image/jpeg"): string {
+  const clean = (fileNameOrUrl || "").split("?")[0]?.toLowerCase() || "";
+  const ext = clean.split(".").pop();
+  switch (ext) {
+    case "png":
+      return "image/png";
+    case "webp":
+      return "image/webp";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "pdf":
+      return "application/pdf";
+    case "psd":
+      return "image/vnd.adobe.photoshop";
+    case "ai":
+      return "application/pdf";
+    default:
+      return fallback;
+  }
+}
+
 function checkingStartedMs(
   file: Pick<ProjectFile, "checking_started_at" | "updated_at">,
   checkResult?: Pick<CheckResultRow, "created_at"> | null,
@@ -815,8 +837,13 @@ export default function FileReviewPage({
               body.image_url = publicUrl;
             }
             body.image_mime_type = mediaType;
+          } else if (fileData.startsWith("http")) {
+            body.image_url = fileData;
+            body.image_mime_type = inferFileMimeType(file.file_name || fileData);
           }
-          inputData = { image_base64: file.file_data };
+          inputData = fileData.startsWith("http")
+            ? { image_url: fileData }
+            : { image_base64: file.file_data };
         } else if (inputMode === "audio") {
           const fileData = file.file_data || "";
           if (fileData.startsWith("data:")) {
@@ -1938,7 +1965,14 @@ export default function FileReviewPage({
           }
         }} />}
 
-      {!creatorMode && record ? <ShareLinkModal checkResultId={record.id} open={shareOpen} onOpenChange={setShareOpen} /> : null}
+      {!creatorMode && record ? (
+        <ShareLinkModal
+          checkResultId={record.id}
+          fileId={displayFile?.id ?? file?.id}
+          open={shareOpen}
+          onOpenChange={setShareOpen}
+        />
+      ) : null}
       {creatorMode && file && activeShareToken ? <CreatorUploadModal
           open={creatorRevisionOpen}
           onOpenChange={setCreatorRevisionOpen}
