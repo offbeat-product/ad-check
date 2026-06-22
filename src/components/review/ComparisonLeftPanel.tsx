@@ -1,7 +1,7 @@
 import { useRef, useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Upload, ArrowDown, X, GitCompare, Plus, Pin, CheckCircle2 } from "lucide-react";
+import { Upload, ArrowDown, X, GitCompare, Plus, Pin, CheckCircle2, FileText } from "lucide-react";
 import { compressImage } from "@/lib/image-compress";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import { useToast } from "@/hooks/use-toast";
@@ -156,7 +156,14 @@ export default function ComparisonLeftPanel({
     );
 
     if (isImage) {
-      return renderImageWithPaint(data, label, draftIndex);
+      const canRenderImage = data.startsWith("data:image") || /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(data);
+      if (canRenderImage) return renderImageWithPaint(data, label, draftIndex);
+      return (
+        <div className="h-24 bg-muted rounded-lg flex flex-col items-center justify-center gap-1 text-muted-foreground text-xs">
+          <FileText className="h-5 w-5" />
+          <span>プレビューできないファイルです</span>
+        </div>
+      );
     }
     if (isVideo || (data.startsWith("http") && /\.(mp4|mov|webm|avi)(\?|$)/i.test(data))) {
       return <video src={data} controls playsInline className="w-full max-h-[20vh] rounded-lg border border-border" />;

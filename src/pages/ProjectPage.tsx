@@ -3,10 +3,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { compressImage } from "@/lib/image-compress";
 import { useToast } from "@/hooks/use-toast";
-import { validateFileSize, formatFileSize, MAX_UPLOAD_LABEL, getFileCategory } from "@/lib/file-validation";
-import { tusUpload } from "@/lib/tus-upload";
+import { validateFileSize, formatFileSize, MAX_UPLOAD_LABEL, getFileCategory, getUploadLimitLabel } from "@/lib/file-validation";
+import { prepareFileForUpload } from "@/lib/file-upload";
 import type { Project, Product, Client, ProjectFile, CheckResultRow } from "@/lib/db-types";
 import { FILE_STATUS_CONFIG } from "@/lib/db-types";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
@@ -91,6 +90,23 @@ function pickCanonicalProcessByKey(a: ProjectProcess, b: ProjectProcess): Projec
   if (aCreated !== bCreated) return aCreated > bCreated ? a : b;
   if (a.sort_order !== b.sort_order) return a.sort_order < b.sort_order ? a : b;
   return a;
+}
+
+async function removeStorageFileFromPublicUrl(fileData: string | null | undefined): Promise<void> {
+  if (!fileData || fileData.startsWith("data:")) return;
+
+  try {
+    const url = new URL(fileData);
+    const pathMatch = url.pathname.match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+)/);
+    if (!pathMatch) return;
+
+    const bucket = decodeURIComponent(pathMatch[1]);
+    if (!["audios", "videos", "deliverables"].includes(bucket)) return;
+
+    await supabase.storage.from(bucket).remove([decodeURIComponent(pathMatch[2])]);
+  } catch {
+    void 0;
+  }
 }
 
 function dedupeProcessesByKey(rows: ProjectProcess[]): ProjectProcess[] {
@@ -573,16 +589,7 @@ export default function ProjectPage() {
     try {
       for (const f of targetFiles) {
         // Delete from storage if applicable
-        const bucket = getStorageBucket(f.process_type);
-        if (bucket && f.file_data && !f.file_data.startsWith("data:")) {
-          try {
-            const url = new URL(f.file_data);
-            const pathMatch = url.pathname.match(new RegExp(`/storage/v1/object/public/${bucket}/(.+)`));
-            if (pathMatch) await supabase.storage.from(bucket).remove([decodeURIComponent(pathMatch[1])]);
-          } catch {
-            void 0;
-          }
-        }
+        await removeStorageFileFromPublicUrl(f.file_data);
         // Manual cascade: unlink check_result, delete children, delete check_result, then delete file
         const checkResultId = f.check_result_id;
         if (checkResultId) {
@@ -867,15 +874,6 @@ export default function ProjectPage() {
     setSelectedFiles([]);
   };
 
-  // Determine storage bucket by process type
-  const getStorageBucket = (processType: string): string | null => {
-    const audioProcesses = ["narration", "bgm"];
-    const videoProcesses = ["vcon", "video_horizontal", "video_vertical"];
-    if (audioProcesses.includes(processType)) return "audios";
-    if (videoProcesses.includes(processType)) return "videos";
-    return null; // images & text stay in DB
-  };
-
   const handleChangePattern = async (fileId: string, newPatternId: string | null) => {
     const { error } = await supabase.from("project_files").update({ pattern_id: newPatternId } as any).eq("id", fileId);
     if (error) {
@@ -893,19 +891,19 @@ export default function ProjectPage() {
       na_script: "TXT / DOCX",
       narration: `MP3 / WAV / M4A（最大${MAX_UPLOAD_LABEL}）`,
       bgm: `MP3 / WAV / M4A（最大${MAX_UPLOAD_LABEL}）`,
-      vcon: `MP4 / MOV / WebM（最大${MAX_UPLOAD_LABEL}）`,
+      vcon: `MP4 / MOV / WebM（最大${getUploadLimitLabel("vcon")}）`,
       styleframe: "JPG / PNG / PSD / AI",
-      storyboard: "JPG / PNG / PDF / PSD",
-      video_horizontal: `MP4 / MOV / WebM（最大${MAX_UPLOAD_LABEL}）`,
-      video_vertical: `MP4 / MOV / WebM（最大${MAX_UPLOAD_LABEL}）`,
+      storyboard: "JPG / PNG / WebP / PDF / PSD",
+      video_horizontal: `MP4 / MOV / WebM（最大${getUploadLimitLabel("video_horizontal")}）`,
+      video_vertical: `MP4 / MOV / WebM（最大${getUploadLimitLabel("video_vertical")}）`,
       banner_design: "JPG / PNG / PDF / PSD / AI",
     };
     if (hints[processType]) return hints[processType];
     if (getFileCategory(processType) === "image") {
-      return `JPG / PNG / PDF / PSD など（最大${MAX_UPLOAD_LABEL}）`;
+      return `JPG / PNG / WebP / PDF / PSD など（最大${MAX_UPLOAD_LABEL}）`;
     }
     if (getFileCategory(processType) === "video") {
-      return `MP4 / MOV / WebM（最大${MAX_UPLOAD_LABEL}）`;
+      return `MP4 / MOV / WebM（最大${getUploadLimitLabel(processType)}）`;
     }
     if (getFileCategory(processType) === "audio") {
       return `MP3 / WAV / M4A（最大${MAX_UPLOAD_LABEL}）`;
@@ -991,39 +989,20 @@ export default function ProjectPage() {
           }
 
           const fileName = sanitizeFileName(file.name);
-          const fileSize = file.size;
-          let fileData = "";
-          let fileType = "text";
-          const bucket = getStorageBucket(uploadModal);
-
-          if (bucket) {
-            fileType = file.type.startsWith("audio/") ? "audio" : "video";
-            const storagePath = `${id}/${Date.now()}_${i}_${fileName}`;
-
-            const result = await tusUpload({
-              bucketName: bucket,
-              path: storagePath,
-              file,
-              contentType: file.type,
-              onProgress: (pct) => {
-                const fileProgress = pct / 100;
-                setUploadProgress(Math.round(((i + fileProgress) / total) * 90));
-              },
-            });
-            fileData = result.publicUrl;
-          } else if (file.type.startsWith("image/")) {
-            fileType = "image";
-            const compressed = await compressImage(file);
-            fileData = `data:${compressed.mediaType};base64,${compressed.base64}`;
-          } else {
-            fileType = "text";
-            fileData = await file.text();
-          }
+          const prepared = await prepareFileForUpload({
+            file,
+            processType: uploadModal,
+            projectId: id,
+            onProgress: (pct) => {
+              const fileProgress = pct / 100;
+              setUploadProgress(Math.round(((i + fileProgress) / total) * 90));
+            },
+          });
 
           const filePatternId = usePerFilePatterns ? (filePatternAssignments[i] ?? null) : resolvedPatternId;
           const { data: inserted, error } = await supabase.from("project_files").insert({
             project_id: id, process_type: uploadModal, file_name: fileName,
-            file_type: fileType, file_data: fileData, file_size_bytes: fileSize,
+            file_type: prepared.fileType, file_data: prepared.fileData, file_size_bytes: prepared.fileSizeBytes,
             created_by: user.email || user.id, pattern_id: filePatternId,
             submission_type: uploadSubmissionType,
           } as any).select("id").single();
@@ -1031,10 +1010,10 @@ export default function ProjectPage() {
 
           uploadedInBatch += 1;
           lastInsertedFileId = inserted?.id || null;
-          lastFileData = fileData;
+          lastFileData = prepared.fileData;
           lastFileName = fileName;
-          lastFileType = fileType;
-          lastFileSize = fileSize;
+          lastFileType = prepared.fileType;
+          lastFileSize = prepared.fileSizeBytes;
           setUploadProgress(Math.round(((i + 1) / total) * 95));
         }
 
@@ -2016,18 +1995,7 @@ export default function ProjectPage() {
                 const f = deleteTarget.file;
                 try {
                   // Delete from storage if applicable
-                  const bucket = getStorageBucket(f.process_type);
-                  if (bucket && f.file_data && !f.file_data.startsWith("data:")) {
-                    try {
-                      const url = new URL(f.file_data);
-                      const pathMatch = url.pathname.match(new RegExp(`/storage/v1/object/public/${bucket}/(.+)`));
-                      if (pathMatch) {
-                        await supabase.storage.from(bucket).remove([decodeURIComponent(pathMatch[1])]);
-                      }
-                    } catch {
-            void 0;
-          }
-                  }
+                  await removeStorageFileFromPublicUrl(f.file_data);
                   // Manual cascade: unlink check_result, delete children, then delete file
                   const checkResultId = f.check_result_id;
                   if (checkResultId) {

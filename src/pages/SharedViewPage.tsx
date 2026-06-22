@@ -46,6 +46,7 @@ export default function SharedViewPage() {
   const [selectedAnnotationTimestamp, setSelectedAnnotationTimestamp] = useState<number | null>(null);
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [totalCommentCount, setTotalCommentCount] = useState(0);
+  const [draftInfo, setDraftInfo] = useState<{ current_round: number; total_rounds: number; current_label: string } | null>(null);
   const mediaRef = useRef<MediaPreviewHandle>(null);
 
   const checkItems = record?.check_items ?? null;
@@ -99,14 +100,28 @@ export default function SharedViewPage() {
 
   const loadCheckResult = async (checkResultId: string, cancelled = false) => {
     // get_shared_check_result now returns the latest in the comparison chain
-    const { data: rows, error } = await supabase
-      .rpc("get_shared_check_result", { p_check_result_id: checkResultId, p_share_token: token! });
+    const [{ data: rows, error }, { data: draftRows, error: draftError }] = await Promise.all([
+      supabase.rpc("get_shared_check_result", { p_check_result_id: checkResultId, p_share_token: token! }),
+      supabase.rpc("get_shared_draft_info", { p_check_result_id: checkResultId, p_share_token: token! }),
+    ]);
     if (cancelled) return;
     const cr = rows && rows.length > 0 ? rows[0] : null;
     if (error || !cr) {
       setError("チェック結果が見つかりません");
+      setDraftInfo(null);
     } else {
       setRecord(parseCheckResultRow(cr as CheckResultRow));
+      const draft = draftRows && draftRows.length > 0 ? draftRows[0] : null;
+      if (draftError || !draft) {
+        console.warn("[get_shared_draft_info]", draftError?.message ?? "no draft info");
+        setDraftInfo(null);
+      } else {
+        setDraftInfo({
+          current_round: draft.current_round,
+          total_rounds: draft.total_rounds,
+          current_label: draft.current_label,
+        });
+      }
     }
     setLoading(false);
   };
@@ -269,7 +284,7 @@ export default function SharedViewPage() {
   const allowDownload = shareLink?.allow_download === true;
   const canOfferDownload = getSharedCheckDownloadPayload(record) !== null;
 
-  const imageSrc = inputData?.image_base64 || null;
+  const imageSrc = inputData?.image_base64 || inputData?.image_url || null;
   const videoSrc = inputData?.video_url || null;
   const audioSrc = inputData?.audio_url || null;
   // Filter out raw URLs from script text display
@@ -348,9 +363,12 @@ export default function SharedViewPage() {
           </span>
           <Badge variant="outline" className="text-xs">共有ビュー</Badge>
           <span className="text-sm text-muted-foreground ml-2">{record.client_name} / {record.product_name}</span>
-          {record.comparison_round > 0 && (
-            <Badge variant="secondary" className="text-[10px]">第{record.comparison_round + 1}稿</Badge>
-          )}
+          {draftInfo ? (
+            <Badge variant="secondary" className="text-[10px]">
+              {draftInfo.current_label}
+              {draftInfo.total_rounds > 1 ? `／全${draftInfo.total_rounds}稿` : ""}
+            </Badge>
+          ) : null}
         </header>
 
         <div className="flex-1 overflow-y-auto">

@@ -185,11 +185,14 @@ export function getSharedCheckDownloadPayload(record: CheckResultRow): SharedDow
   if (inputMode === "image") {
     const img =
       (typeof input?.image_base64 === "string" ? input.image_base64.trim() : "") ||
+      (typeof input?.image_url === "string" ? input.image_url.trim() : "") ||
       (typeof input?.after_image === "string" ? input.after_image.trim() : "") ||
       "";
     if (!img) return null;
     const named =
-      (typeof input?.file_name === "string" && input.file_name.trim()) || `${stem}.jpg`;
+      (typeof input?.file_name === "string" && input.file_name.trim()) ||
+      (img.startsWith("http") ? fileNameFromStorageUrl(img) : null) ||
+      `${stem}.jpg`;
     return {
       source: { file_data: img, file_type: "image", process_type: pt },
       displayBaseName: named,

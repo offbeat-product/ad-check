@@ -17,9 +17,10 @@ interface ShareLinkModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   checkResultId: string;
+  fileId?: string;
 }
 
-export default function ShareLinkModal({ open, onOpenChange, checkResultId }: ShareLinkModalProps) {
+export default function ShareLinkModal({ open, onOpenChange, checkResultId, fileId }: ShareLinkModalProps) {
   const { toast } = useToast();
   const [usePassword, setUsePassword] = useState(false);
   const [password, setPassword] = useState("");
@@ -55,6 +56,7 @@ export default function ShareLinkModal({ open, onOpenChange, checkResultId }: Sh
       const { data, error } = await supabase.functions.invoke("create-share-link", {
         body: {
           check_result_id: checkResultId,
+          file_id: fileId ?? null,
           password: usePassword ? password : null,
           expires_at: expiresAt,
           allow_download: allowDownload,

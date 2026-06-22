@@ -3,7 +3,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Button } from "@/components/ui/button";
 import AnnotationCanvas from "@/components/AnnotationCanvas";
 import type { MentionMember } from "@/components/comments/MentionInput";
-import { Pin } from "lucide-react";
+import { ExternalLink, FileText, Pin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CommentAnnotationData } from "@/lib/comment-annotations";
 import type { CheckMarker } from "@/lib/marker-positions";
@@ -29,6 +29,9 @@ export default function ImagePreview({
 }: ImagePreviewProps) {
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+  const canRenderImage =
+    !!imageSrc &&
+    (imageSrc.startsWith("data:image") || /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(imageSrc));
 
   const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     setImageSize({ width: e.currentTarget.clientWidth, height: e.currentTarget.clientHeight });
@@ -44,8 +47,22 @@ export default function ImagePreview({
         </Button>
       </div>
       <div ref={imageContainerRef} className={cn("relative rounded-lg border border-border bg-muted/30", paintMode ? "overflow-visible mb-16" : "overflow-hidden")}>
-        {imageSrc ? (
+        {canRenderImage ? (
           <img src={imageSrc} alt="Preview" className="w-full" onLoad={handleImageLoad} />
+        ) : imageSrc ? (
+          <div className="h-64 flex flex-col items-center justify-center gap-3 text-muted-foreground text-sm px-4 text-center">
+            <FileText className="h-8 w-8 text-muted-foreground/60" />
+            <span>このファイルはプレビューできません。ファイルを開いて確認してください。</span>
+            <a
+              href={imageSrc}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-primary hover:underline"
+            >
+              ファイルを開く
+              <ExternalLink className="h-3 w-3" />
+            </a>
+          </div>
         ) : (
           <div className="h-64 flex items-center justify-center text-muted-foreground text-sm px-4 text-center">
             {noDataMessage || "プレビューなし"}
