@@ -13,6 +13,7 @@ export interface DraftEntry {
   label: string;
   data: string | null;
   text: string;
+  fileId?: string;
 }
 
 interface ComparisonLeftPanelProps {
@@ -136,7 +137,7 @@ export default function ComparisonLeftPanel({
     const isActiveDraft = draftIndex === activePairIndex || draftIndex === activePairIndex + 1;
     return (
       <div className={cn("relative rounded-lg border border-border bg-muted/30", paintMode && isActiveDraft ? "overflow-visible" : "overflow-hidden")}>
-        <img src={data} alt={label} className="w-full max-h-[25vh] object-contain" onLoad={(e) => handleImageLoad(draftIndex, e)} />
+        <img src={data} alt={label} className="w-full max-h-[45vh] object-contain" onLoad={(e) => handleImageLoad(draftIndex, e)} />
         
         {/* Saved annotations overlay */}
         {savedAnnotations && savedAnnotations.length > 0 && draftIndex === 0 ? <svg className="absolute inset-0 w-full h-full pointer-events-none z-[15]" viewBox={`0 0 ${size.width} ${size.height}`} preserveAspectRatio="none">
@@ -166,19 +167,19 @@ export default function ComparisonLeftPanel({
       );
     }
     if (isVideo || (data.startsWith("http") && /\.(mp4|mov|webm|avi)(\?|$)/i.test(data))) {
-      return <video src={data} controls playsInline className="w-full max-h-[20vh] rounded-lg border border-border" />;
+      return <video src={data} controls playsInline className="w-full max-h-[42vh] rounded-lg border border-border" />;
     }
     if (isAudio || (data.startsWith("http") && /\.(mp3|wav|m4a|ogg|aac)(\?|$)/i.test(data))) {
       return <audio src={data} controls className="w-full" />;
     }
     if (data.startsWith("http") && /\/(videos|deliverables)\//.test(data)) {
-      return <video src={data} controls playsInline className="w-full max-h-[20vh] rounded-lg border border-border" />;
+      return <video src={data} controls playsInline className="w-full max-h-[42vh] rounded-lg border border-border" />;
     }
     if (data.startsWith("http") && /\/audios\//.test(data)) {
       return <audio src={data} controls className="w-full" />;
     }
     if (data.startsWith("blob:")) {
-      if (isVideo) return <video src={data} controls playsInline className="w-full max-h-[20vh] rounded-lg border border-border" />;
+      if (isVideo) return <video src={data} controls playsInline className="w-full max-h-[42vh] rounded-lg border border-border" />;
       if (isAudio) return <audio src={data} controls className="w-full" />;
     }
     return (
