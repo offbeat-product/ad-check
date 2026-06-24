@@ -336,8 +336,15 @@ export default function FileReviewPage({
       setVersions(vers);
       return;
     }
+    const { data: current, error: currentErr } = await supabase
+      .from("project_files")
+      .select("id, parent_file_id")
+      .eq("id", fileId)
+      .maybeSingle();
+    handleSupabaseError(currentErr, "versions root");
+    const rootId = current?.parent_file_id || current?.id || fileId;
     const { data: vers, error } = await supabase.from("project_files").select("*")
-      .or(`id.eq.${fileId},parent_file_id.eq.${fileId}`)
+      .or(`id.eq.${rootId},parent_file_id.eq.${rootId}`)
       .order("version_number");
     handleSupabaseError(error, "versions");
     setVersions(vers ?? []);
@@ -914,25 +921,49 @@ export default function FileReviewPage({
         }
 
         const isAsyncProcess = ["vcon", "video_horizontal", "video_vertical", "narration", "bgm"].includes(processKey);
-        // pendingRecordId is hoisted above try block
         if (isAsyncProcess) {
-          const { data: pendingCr, error: pendingErr } = await supabase.from("check_results").insert([{
-            user_id: user.id,
-            client_name: client?.name || "",
-            product_code: product.code,
-            product_name: product.name,
-            process_type: processKey,
-            input_type: "text",
-            input_text: body.script_text || null,
-            status: "pending",
-            input_data: inputData as unknown as Json,
-          }]).select("id").single();
-          if (pendingErr || !pendingCr) {
-            console.error("[CheckMate] Failed to create pending record:", pendingErr);
-          } else {
-            pendingRecordId = pendingCr.id;
-            body.record_id = pendingRecordId;
-            console.log("[CheckMate] Created pending record:", pendingRecordId);
+          if (file.check_result_id) {
+            pendingRecordId = file.check_result_id;
+            const { error: resetErr } = await supabase.from("check_results").update({
+              status: "pending",
+              input_data: inputData as unknown as Json,
+              input_text: body.script_text || null,
+              overall_status: null,
+              detected_case: null,
+              ng_count: null,
+              warning_count: null,
+              ok_count: null,
+              total_checks: null,
+              check_items: null,
+              raw_response: null,
+            }).eq("id", pendingRecordId);
+            if (resetErr) {
+              console.error("[CheckMate] Failed to reset pending record:", resetErr);
+              pendingRecordId = null;
+            } else {
+              body.record_id = pendingRecordId;
+              console.log("[CheckMate] Reusing pending record:", pendingRecordId);
+            }
+          }
+          if (!pendingRecordId) {
+            const { data: pendingCr, error: pendingErr } = await supabase.from("check_results").insert([{
+              user_id: user.id,
+              client_name: client?.name || "",
+              product_code: product.code,
+              product_name: product.name,
+              process_type: processKey,
+              input_type: "text",
+              input_text: body.script_text || null,
+              status: "pending",
+              input_data: inputData as unknown as Json,
+            }]).select("id").single();
+            if (pendingErr || !pendingCr) {
+              console.error("[CheckMate] Failed to create pending record:", pendingErr);
+            } else {
+              pendingRecordId = pendingCr.id;
+              body.record_id = pendingRecordId;
+              console.log("[CheckMate] Created pending record:", pendingRecordId);
+            }
           }
         }
 
@@ -1013,7 +1044,7 @@ export default function FileReviewPage({
         res = rawRes;
       }
 
-      const { data: crData, error: insertErr } = await supabase.from("check_results").insert([{
+      const completedPayload = {
         user_id: user.id,
         client_name: client?.name || "",
         product_code: product.code,
@@ -1030,21 +1061,42 @@ export default function FileReviewPage({
         check_items: res.check_items as unknown as Json,
         raw_response: res as unknown as Json,
         input_data: inputData as unknown as Json,
-      }]).select("id").single();
+        status: "completed",
+      };
 
-      if (handleSupabaseError(insertErr, "check_results insert") || !crData) throw new Error("チェック結果の保存に失敗しました");
+      let savedCheckResultId: string;
+      if (file.check_result_id) {
+        const { error: updateCrErr } = await supabase
+          .from("check_results")
+          .update(completedPayload)
+          .eq("id", file.check_result_id);
+        if (handleSupabaseError(updateCrErr, "check_results update") || !file.check_result_id) {
+          throw new Error("チェック結果の更新に失敗しました");
+        }
+        savedCheckResultId = file.check_result_id;
+      } else {
+        const { data: crData, error: insertErr } = await supabase
+          .from("check_results")
+          .insert([completedPayload])
+          .select("id")
+          .single();
+        if (handleSupabaseError(insertErr, "check_results insert") || !crData) {
+          throw new Error("チェック結果の保存に失敗しました");
+        }
+        savedCheckResultId = crData.id;
+      }
 
       const { error: updateErr } = await supabase.from("project_files").update({
         status: "checked",
-        check_result_id: crData.id,
+        check_result_id: savedCheckResultId,
         checking_by: null,
         checking_started_at: null,
       } as Record<string, unknown>).eq("id", file.id);
       handleSupabaseError(updateErr, "project_files update");
 
-      setFile({ ...file, status: "checked", check_result_id: crData.id, checking_by: null, checking_started_at: null });
+      setFile({ ...file, status: "checked", check_result_id: savedCheckResultId, checking_by: null, checking_started_at: null });
 
-      const { data: fullCr } = await supabase.from("check_results").select("*").eq("id", crData.id).maybeSingle();
+      const { data: fullCr } = await supabase.from("check_results").select("*").eq("id", savedCheckResultId).maybeSingle();
       applyRecord(fullCr);
 
       checkProgress.complete();
@@ -1324,6 +1376,51 @@ export default function FileReviewPage({
     : (displayFile.version_number ?? 1);
   const totalVersions = versions.length;
 
+  // 全バージョン(project_files)から比較ドラフトを自動構築する。
+  // 第2稿が既にアップ済みなら空枠ではなく実データを表示する。
+  const buildDraftsFromVersions = (): DraftEntry[] => {
+    const isText = (AI_CHECK_CONFIG[file.process_type]?.inputMode || "text") === "text";
+    const sorted = (versions.length > 0 ? versions : [file])
+      .slice()
+      .sort((a, b) => (a.version_number ?? 1) - (b.version_number ?? 1));
+    const entries: DraftEntry[] = sorted.map((v) => ({
+      label: (v.version_number ?? 1) === 1 ? "初稿" : `第${v.version_number ?? 1}稿`,
+      data: v.file_data ?? null,
+      text: isText ? (v.file_data || "") : "",
+      fileId: v.id,
+    }));
+    if (entries.length === 0) {
+      entries.push({ label: "初稿", data: file.file_data, text: isText ? (file.file_data || "") : "", fileId: file.id });
+    }
+    if (entries.length === 1) {
+      entries.push({ label: "第2稿", data: null, text: "" });
+    }
+    return entries;
+  };
+
+  // 全バージョンを読み込んだ状態で比較モードに入り、最新ペアにフォーカスする。
+  const openComparisonWithVersions = () => {
+    const built = buildDraftsFromVersions();
+    setComparisonDrafts(built);
+    const lastFilledIndex = (() => {
+      for (let i = built.length - 1; i >= 0; i--) {
+        if (built[i].data) return i;
+      }
+      return 0;
+    })();
+    setComparisonActivePairIndex(Math.max(0, lastFilledIndex - 1));
+    setComparisonMode(true);
+    setRightTab("ai-check");
+  };
+
+  const resolveAfterDraftFileId = (): string | null => {
+    const afterDraft = comparisonDrafts[comparisonActivePairIndex + 1];
+    if (afterDraft?.fileId) return afterDraft.fileId;
+    if (!afterDraft?.data) return null;
+    const match = versions.find((v) => v.file_data === afterDraft.data);
+    return match?.id ?? null;
+  };
+
   const isSf = displayFile.file_type === "image" || AI_CHECK_CONFIG[displayFile.process_type]?.inputMode === "image";
   const currentStatus = file.status || "uploaded";
   const sc = FILE_STATUS_CONFIG[currentStatus] ?? FILE_STATUS_CONFIG.uploaded;
@@ -1496,22 +1593,12 @@ export default function FileReviewPage({
               </Button> : null}
 
             {/* Comparison check button */}
-            {!creatorMode && hasCheckResult && !comparisonMode ? <Button size="sm" variant="outline" className="text-xs h-7 px-2 border-primary/50 text-primary hover:bg-primary/10" onClick={() => {
-                if (comparisonDrafts.length === 0) {
-                  const inputMode = AI_CHECK_CONFIG[file.process_type]?.inputMode || "text";
-                  const isText = inputMode === "text";
-                  setComparisonDrafts([
-                    { label: "初稿", data: file.file_data, text: isText ? (file.file_data || "") : "" },
-                    { label: "第2稿", data: null, text: "" },
-                  ]);
-                  setComparisonActivePairIndex(0);
-                }
-                setComparisonMode(true);
-                setRightTab("ai-check");
-              }}>
+            {!creatorMode && hasCheckResult && !comparisonMode ? (
+              <Button size="sm" variant="outline" className="text-xs h-7 px-2 border-primary/50 text-primary hover:bg-primary/10" onClick={openComparisonWithVersions}>
                 <GitCompare className="h-3 w-3" />
                 <span className="hidden sm:inline ml-1">比較</span>
-              </Button> : null}
+              </Button>
+            ) : null}
 
             {/* Status badge */}
             {!creatorMode && <Popover>
@@ -1876,15 +1963,26 @@ export default function FileReviewPage({
         comparisonAfterData={comparisonDrafts[comparisonActivePairIndex + 1]?.data ?? null}
         comparisonAfterText={comparisonDrafts[comparisonActivePairIndex + 1]?.text ?? ""}
         comparisonRoundLabel={comparisonDrafts[comparisonActivePairIndex + 1]?.label ?? ""}
-        onOpenComparisonMode={() => { setComparisonMode(true); setRightTab("ai-check"); }}
+        onOpenComparisonMode={openComparisonWithVersions}
         onComparisonCheckComplete={(res) => {
           // Update record with comparison result — no-op here, handled in onComparisonSaved
         }}
         onComparisonSaved={async (entry) => {
-          // Load full comparison result from DB and set as the current displayed record
           const { data: fullCr } = await supabase.from("check_results").select("*").eq("id", entry.id).maybeSingle();
           if (fullCr) {
             applyRecord(fullCr);
+          }
+
+          const afterFileId = resolveAfterDraftFileId();
+          if (afterFileId) {
+            const { error: linkErr } = await supabase
+              .from("project_files")
+              .update({ check_result_id: entry.id, status: "checked" })
+              .eq("id", afterFileId);
+            handleSupabaseError(linkErr, "project_files check_result link");
+            if (file.id === afterFileId) {
+              setFile((prev) => prev ? { ...prev, check_result_id: entry.id, status: "checked" } : prev);
+            }
           }
         }}
         onClearAfterData={() => {
@@ -1949,12 +2047,14 @@ export default function FileReviewPage({
             const aiCfgLocal = AI_CHECK_CONFIG[file.process_type];
             const inputMode = aiCfgLocal?.inputMode || "text";
             const isImg = inputMode === "image";
-            const isText = inputMode === "text";
-            setComparisonDrafts([
-              { label: "初稿", data: file.file_data, text: isText ? (file.file_data || "") : "" },
-              { label: "第2稿", data: fileData, text: isImg ? "" : fileData },
-            ]);
-            setComparisonActivePairIndex(0);
+            const baseDrafts = buildDraftsFromVersions().filter((d) => d.data);
+            const nextLabel = `第${baseDrafts.length + 1}稿`;
+            const builtDrafts: DraftEntry[] = [
+              ...baseDrafts,
+              { label: nextLabel, data: fileData, text: isImg ? "" : fileData },
+            ];
+            setComparisonDrafts(builtDrafts);
+            setComparisonActivePairIndex(Math.max(0, builtDrafts.length - 2));
             setComparisonMode(true);
             setRightTab("ai-check");
             autoComparisonPendingRef.current = true;
