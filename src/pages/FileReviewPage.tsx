@@ -235,7 +235,21 @@ export default function FileReviewPage({
   } = useCreatorFileComments(creatorMode ? activeShareToken : undefined, creatorMode ? fileId : undefined);
   const checkItems = record?.check_items ?? null;
   // Comments should always be associated with the root (original) check result, not comparison results
-  const rootCheckResultId = record?.parent_check_result_id || record?.id || null;
+  const rootCheckResultId = useMemo(() => {
+    if (record?.parent_check_result_id) return record.parent_check_result_id;
+    if (record?.id) return record.id;
+    if (activeFile?.check_result_id) return activeFile.check_result_id;
+    if (activeFile?.parent_file_id) {
+      const parentFile = versions.find((v) => v.id === activeFile.parent_file_id);
+      if (parentFile?.check_result_id) return parentFile.check_result_id;
+    }
+    if (file?.check_result_id) return file.check_result_id;
+    if (file && !file.parent_file_id) {
+      const childWithCr = versions.find((v) => v.parent_file_id === file.id && v.check_result_id);
+      if (childWithCr?.check_result_id) return childWithCr.check_result_id;
+    }
+    return null;
+  }, [record, activeFile, file, versions]);
   const { items, markers, commentCounts, paintMode, setPaintMode, highlightCard, rightTab, setRightTab, commentFilter, scrollToCard, handleCommentClick } =
     useReviewState(rootCheckResultId, checkItems);
   const aiInputMode = file ? AI_CHECK_CONFIG[file.process_type]?.inputMode : null;
