@@ -34,7 +34,7 @@ import { parseCheckItems } from "@/schemas/checkItem";
 // getWebhookPaths no longer needed — unified v2 webhook
 import { useReviewState, useExportCsv } from "@/hooks/useReviewState";
 import { downloadProjectFile } from "@/lib/download-project-file";
-import { isVersionExplicit, resolveActiveFile } from "@/lib/project-file-versions";
+import { getLatestVersionId, isVersionExplicit, resolveActiveFile } from "@/lib/project-file-versions";
 import { compressImage } from "@/lib/image-compress";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Button } from "@/components/ui/button";
@@ -177,6 +177,7 @@ export default function FileReviewPage({
   const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
   const [selectedAnnotationTimestamp, setSelectedAnnotationTimestamp] = useState<number | null>(null);
   const [siblingFiles, setSiblingFiles] = useState<ProjectFile[]>([]);
+  const [processSiblingVersions, setProcessSiblingVersions] = useState<ProjectFile[]>([]);
   const [editingName, setEditingName] = useState(false);
   const [editName, setEditName] = useState("");
   const mediaPreviewRef = useRef<MediaPreviewHandle>(null);
@@ -623,10 +624,12 @@ export default function FileReviewPage({
 
     const fetchSiblings = async () => {
       if (creatorMode) {
-        const allFiles = creatorAllFiles
-          .filter((f) => f.process_type === file.process_type && !f.parent_file_id)
+        const allProcessFiles = creatorAllFiles.filter((f) => f.process_type === file.process_type);
+        const rootFiles = allProcessFiles
+          .filter((f) => !f.parent_file_id)
           .sort((a, b) => (a.file_name || "").localeCompare(b.file_name || "", "ja"));
-        setSiblingFiles(allFiles);
+        setProcessSiblingVersions(allProcessFiles);
+        setSiblingFiles(rootFiles);
         return;
       }
       // Fetch patterns for this project to get sort_order
@@ -636,40 +639,43 @@ export default function FileReviewPage({
         .eq("project_id", projectId)
         .order("sort_order", { ascending: true });
 
-      // Fetch all root files in the same process
+      // Fetch all files in the same process (roots + revisions) for latest-version navigation
       const { data, error } = await supabase
         .from("project_files")
-        .select("id, file_name, process_type, check_result_id, status, parent_file_id, pattern_id")
+        .select("id, file_name, process_type, check_result_id, status, parent_file_id, pattern_id, version_number")
         .eq("project_id", projectId)
         .eq("process_type", file.process_type)
-        .is("parent_file_id", null)
         .order("file_name", { ascending: true });
 
       if (cancelled) return;
       handleSupabaseError(error, "sibling files");
 
-      const allFiles = (data ?? []) as ProjectFile[];
+      const allProcessFiles = (data ?? []) as ProjectFile[];
+      const rootFiles = allProcessFiles.filter((f) => !f.parent_file_id);
 
       // Sort: pattern sort_order (null/common first), then file_name within each pattern
       const patternOrderMap = new Map<string | null, number>();
       patternOrderMap.set(null, -1); // common files first
       (projectPatterns ?? []).forEach((p, idx) => patternOrderMap.set(p.id, p.sort_order ?? idx));
 
-      allFiles.sort((a, b) => {
+      rootFiles.sort((a, b) => {
         const aOrder = patternOrderMap.get(a.pattern_id ?? null) ?? 9999;
         const bOrder = patternOrderMap.get(b.pattern_id ?? null) ?? 9999;
         if (aOrder !== bOrder) return aOrder - bOrder;
         return (a.file_name || "").localeCompare(b.file_name || "", "ja");
       });
 
-      setSiblingFiles(allFiles);
+      setProcessSiblingVersions(allProcessFiles);
+      setSiblingFiles(rootFiles);
     };
 
     fetchSiblings();
     return () => { cancelled = true; };
   }, [file?.process_type, projectId, file?.id, creatorMode, creatorAllFiles]);
 
-  const currentIndex = siblingFiles.findIndex(f => f.id === fileId);
+  // siblingFiles は root (parent_file_id IS NULL) のみ。URL は最新稿 id になりうるため root id で位置を特定する。
+  const currentRootId = file?.parent_file_id || file?.id || fileId;
+  const currentIndex = siblingFiles.findIndex((f) => f.id === currentRootId);
   const prevFile = currentIndex > 0 ? siblingFiles[currentIndex - 1] : null;
   const nextFile = currentIndex < siblingFiles.length - 1 ? siblingFiles[currentIndex + 1] : null;
 
@@ -681,21 +687,26 @@ export default function FileReviewPage({
     navigate(`/project/${projectId}/file/${targetFileId}`, { replace: true });
   }, [navigate, projectId, creatorMode, activeShareToken]);
 
+  const navigateToSiblingFile = useCallback((rootFile: ProjectFile) => {
+    const targetId = getLatestVersionId(rootFile, processSiblingVersions);
+    navigateToFile(targetId);
+  }, [navigateToFile, processSiblingVersions]);
+
   // Keyboard shortcuts for prev/next
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === "ArrowLeft" && prevFile) {
         e.preventDefault();
-        navigateToFile(prevFile.id);
+        navigateToSiblingFile(prevFile);
       } else if (e.key === "ArrowRight" && nextFile) {
         e.preventDefault();
-        navigateToFile(nextFile.id);
+        navigateToSiblingFile(nextFile);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [prevFile, nextFile, navigateToFile]);
+  }, [prevFile, nextFile, navigateToSiblingFile]);
 
   // Recovery: re-fetch file & check_result from DB (e.g. after webhook timeout but n8n completed)
   const recoverCheckResult = useCallback(async () => {
@@ -1518,7 +1529,7 @@ export default function FileReviewPage({
 
             {/* Prev */}
             <button
-              onClick={() => prevFile && navigateToFile(prevFile.id)}
+              onClick={() => prevFile && navigateToSiblingFile(prevFile)}
               disabled={!prevFile}
               className={cn("shrink-0 p-0.5 rounded transition-colors", prevFile ? "hover:bg-muted text-muted-foreground hover:text-foreground" : "text-muted-foreground/30 cursor-not-allowed")}
             >
@@ -1588,7 +1599,7 @@ export default function FileReviewPage({
 
             {/* Next */}
             <button
-              onClick={() => nextFile && navigateToFile(nextFile.id)}
+              onClick={() => nextFile && navigateToSiblingFile(nextFile)}
               disabled={!nextFile}
               className={cn("shrink-0 p-0.5 rounded transition-colors", nextFile ? "hover:bg-muted text-muted-foreground hover:text-foreground" : "text-muted-foreground/30 cursor-not-allowed")}
             >
@@ -1884,7 +1895,7 @@ export default function FileReviewPage({
                   size="sm"
                   variant="outline"
                   disabled={!prevFile}
-                  onClick={() => prevFile && navigateToFile(prevFile.id)}
+                  onClick={() => prevFile && navigateToSiblingFile(prevFile)}
                   className="gap-1.5"
                 >
                   <ChevronLeft className="h-4 w-4" />
@@ -1897,7 +1908,7 @@ export default function FileReviewPage({
                   size="sm"
                   variant="outline"
                   disabled={!nextFile}
-                  onClick={() => nextFile && navigateToFile(nextFile.id)}
+                  onClick={() => nextFile && navigateToSiblingFile(nextFile)}
                   className="gap-1.5"
                 >
                   次のファイル
