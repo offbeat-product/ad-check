@@ -37,6 +37,7 @@ interface ReviewRightPanelProps {
   onSeekMedia?: (seconds: number) => void;
   onActiveCheckItemChange?: (item: CheckItem | null) => void;
   fileId?: string;
+  comparisonTargetFileId?: string | null;
   /** Called after a comment is deleted */
   onCommentDeleted?: () => void;
   selectedCommentId?: string | null;
@@ -67,7 +68,7 @@ export default function ReviewRightPanel({
   rightTab, onTabChange, items, markers, productCode, commentCounts, highlightCard,
   commentFilter, checkResultId, hasCheckResult, onCommentClick, onCheckItemClick, onMarkerClick, emptyCheckMessage, onAnnotationClick,
   overallStatus, checkedAt, file, productId, projectId,
-  mediaCurrentTime, onSeekMedia, fileId, onCommentDeleted,
+  mediaCurrentTime, onSeekMedia, fileId, comparisonTargetFileId, onCommentDeleted,
   onActiveCheckItemChange,
   selectedCommentId, onSelectComment,
   comparisonMode, comparisonBeforeData, comparisonAfterData, comparisonAfterText, comparisonRoundLabel,
@@ -107,6 +108,7 @@ export default function ReviewRightPanel({
                 productId={productId}
                 projectId={projectId}
                 fileId={fileId}
+                comparisonTargetFileId={comparisonTargetFileId}
                 checkResultId={checkResultId}
                 clientName={clientName}
                 productCode={productCode}

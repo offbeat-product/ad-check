@@ -201,7 +201,8 @@ export async function runAudioCheck(
   options?: { audioUrl?: string; audioMimeType?: string; audioBase64?: string },
   referenceContext?: string,
   recordId?: string | null,
-  projectId?: string
+  projectId?: string,
+  fileId?: string | null,
 ): Promise<CheckResult> {
   const url = getWebhookUrl(processType);
   if (!url) throw new Error(`音声チェックのWebhookが見つかりません (${processType})`);
@@ -219,6 +220,7 @@ export async function runAudioCheck(
     record_id: recordId || null,
   };
   if (projectId) body.project_id = projectId;
+  if (fileId) body.file_id = fileId;
   if (referenceContext) {
     try { body.reference_context = JSON.parse(referenceContext); } catch { body.reference_context = referenceContext; }
   }
@@ -300,7 +302,8 @@ export async function runVideoCheck(
   projectId?: string,
   patternId?: string | null,
   recordId?: string | null,
-  correctionComments?: { content: string; status: string; check_item_id?: string | null }[]
+  correctionComments?: { content: string; status: string; check_item_id?: string | null }[],
+  fileId?: string | null,
 ): Promise<WebhookResult> {
   const url = getWebhookUrl(processType);
   if (!url) throw new Error(`動画チェックのWebhookが見つかりません (${processType})`);
@@ -318,6 +321,7 @@ export async function runVideoCheck(
     record_id: recordId || null,
   };
   if (projectId) body.project_id = projectId;
+  if (fileId) body.file_id = fileId;
   if (referenceContext) {
     try { body.reference_context = JSON.parse(referenceContext); } catch { body.reference_context = referenceContext; }
   }
@@ -352,7 +356,8 @@ export async function runComparisonCheck(
   },
   referenceContext?: string,
   correctionComments?: { content: string; status: string; check_item_id?: string | null }[],
-  projectId?: string
+  projectId?: string,
+  fileId?: string | null,
 ): Promise<CheckResult> {
   const isImage = !!data.image_base64;
   const url = getWebhookUrl(isImage ? "styleframe" : "script");
@@ -365,6 +370,7 @@ export async function runComparisonCheck(
     check_mode: "comparison",
   };
   if (projectId) body.project_id = projectId;
+  if (fileId) body.file_id = fileId;
   if (data.script_text) body.script_text = data.script_text;
   if (data.original_text) body.original_text = data.original_text;
   if (data.image_base64) body.image_base64 = data.image_base64;

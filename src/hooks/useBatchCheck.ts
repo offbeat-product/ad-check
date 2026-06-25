@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { runSingleFileAiCheck } from "@/lib/run-single-file-ai-check";
+import { resolveBatchCheckTarget } from "@/lib/project-file-versions";
 import { waitForAiCheckCompletion } from "@/lib/wait-for-ai-check-completion";
 import { mapBulkToBatchProgress } from "@/lib/bulk-sequential-check-map";
 import { supabase } from "@/integrations/supabase/client";
@@ -38,14 +39,23 @@ export function useBatchCheck() {
     ) => {
       if (!user) return;
 
-      const targetFiles = files.filter(
-        (f) =>
-          f.file_data &&
-          !f.parent_file_id &&
-          f.status === "uploaded" &&
-          f.project_id === projectId &&
-          (f.process_type || "script") === meta.processType
-      );
+      const targetFiles = files
+        .filter(
+          (f) =>
+            f.file_data &&
+            !f.parent_file_id &&
+            f.status === "uploaded" &&
+            f.project_id === projectId &&
+            (f.process_type || "script") === meta.processType
+        )
+        .map((root) => resolveBatchCheckTarget(root, files))
+        .filter(
+          (f) =>
+            f.file_data &&
+            f.status === "uploaded" &&
+            f.project_id === projectId &&
+            (f.process_type || "script") === meta.processType
+        );
       if (targetFiles.length === 0) {
         toast({
           title: "チェック対象がありません",

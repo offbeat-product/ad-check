@@ -41,6 +41,7 @@ interface ComparisonCheckPanelProps {
   productId: string;
   projectId: string;
   fileId?: string;
+  comparisonTargetFileId?: string | null;
   checkResultId?: string | null;
   clientName?: string;
   productCode?: string;
@@ -73,7 +74,7 @@ interface ComparisonCheckPanelProps {
 }
 
 export default function ComparisonCheckPanel({
-  file, productId, projectId, fileId, checkResultId, clientName, productCode, productName,
+  file, productId, projectId, fileId, comparisonTargetFileId, checkResultId, clientName, productCode, productName,
   comparisonBeforeData, comparisonAfterData, comparisonAfterText, comparisonRoundLabel,
   onOpenComparisonMode, onCheckComplete, onComparisonSaved, onClearAfterData,
   commentCounts = {}, highlightCard, onCommentClick, onTabChange, onSeekMedia, onMarkerClick,
@@ -339,20 +340,22 @@ export default function ComparisonCheckPanel({
         }
       }
 
+      const webhookTargetFileId = comparisonTargetFileId ?? fileId ?? null;
+
       if (isVideo) {
-        // Route video comparison through the video webhook
         const videoUrl = comparisonAfterData || "";
         const mimeType = videoUrl.endsWith(".webm") ? "video/webm" : videoUrl.endsWith(".mov") ? "video/quicktime" : "video/mp4";
         const videoRes = await runVideoCheck(
           productId,
           file.process_type,
-          "", // script_text not used for video
+          "",
           { videoUrl, videoMimeType: mimeType },
           referenceContext,
           projectId,
-          null, // patternId
-          pendingRecordId, // recordId — pending record for n8n to update
+          null,
+          pendingRecordId,
           correctionComments,
+          webhookTargetFileId,
         );
         if (videoRes === VIDEO_ASYNC_ACCEPTED) {
           toast({ title: "動画チェック開始", description: "AIが動画を分析中です。結果は自動的に表示されます。" });
@@ -378,12 +381,13 @@ export default function ComparisonCheckPanel({
         const audioRes = await runAudioCheck(
           productId,
           file.process_type,
-          "", // script_text
+          "",
           { file_name: file.file_type, duration: null, format: audioMimeType },
           { audioUrl, audioMimeType },
           referenceContext,
           pendingRecordId,
           projectId,
+          webhookTargetFileId,
         );
         // Audio also uses async flow via VIDEO_ASYNC_ACCEPTED
         if ((audioRes as any) === VIDEO_ASYNC_ACCEPTED) {
@@ -407,12 +411,12 @@ export default function ComparisonCheckPanel({
           image_base64: newBase64,
           media_type: mediaType,
           original_image_base64: origBase64,
-        }, referenceContext, correctionComments, projectId);
+        }, referenceContext, correctionComments, projectId, webhookTargetFileId);
       } else {
         res = await runComparisonCheck(productId, file.process_type, {
           script_text: comparisonAfterText || comparisonAfterData || "",
           original_text: comparisonBeforeData || "",
-        }, referenceContext, correctionComments, projectId);
+        }, referenceContext, correctionComments, projectId, webhookTargetFileId);
       }
 
       setResult(res);
@@ -471,8 +475,8 @@ export default function ComparisonCheckPanel({
         setHistory(prev => [...prev, entry]);
         setSelectedHistoryId(crData.id);
 
-        if (fileId) {
-          await supabase.from("project_files").update({ status: "checked" }).eq("id", fileId);
+        if (webhookTargetFileId) {
+          await supabase.from("project_files").update({ status: "checked" }).eq("id", webhookTargetFileId);
         }
 
         onComparisonSaved?.(entry);
