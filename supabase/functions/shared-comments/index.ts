@@ -406,7 +406,7 @@ serve(async (req) => {
       .insert({
         check_result_id,
         check_item_id: check_item_id || null,
-        author_name: `[共有] ${author_name}`,
+        author_name,
         author_email: author_email || "shared@guest",
         content,
         status: "open",
