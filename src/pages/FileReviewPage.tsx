@@ -377,6 +377,8 @@ export default function FileReviewPage({
   useEffect(() => {
     if (!fileId) return;
     if (!creatorMode && !projectId) return;
+    setLoading(true);
+    setVersions([]);
     let cancelled = false;
     (async () => {
       if (creatorMode) {
@@ -592,6 +594,9 @@ export default function FileReviewPage({
   useEffect(() => {
     if (creatorMode || !file || !projectId || versions.length <= 1) return;
     if (isVersionExplicit(location.search)) return;
+    // file が現在の versions に含まれていない = 別ファイル遷移直後で versions 未更新
+    // この間にリダイレクト判定するとループバックが発生する（前のファイルに戻される）
+    if (!versions.some((v) => v.id === file.id)) return;
     const resolved = resolveActiveFile(file, versions, location.search);
     if (resolved.id !== file.id) {
       navigate(`/project/${projectId}/file/${resolved.id}`, { replace: true });

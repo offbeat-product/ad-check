@@ -131,28 +131,45 @@ export function ReplicateCommentDialog({
             )}
 
             {!isLoading && targets.length > 0 && (
-              <div className="border border-border rounded divide-y divide-border max-h-80 overflow-y-auto">
+              <div className="space-y-2 max-h-80 overflow-y-auto">
                 {targets.map((target) => {
                   const checked = selectedIds.has(target.id);
+                  const versionLabel = target.version_number <= 1
+                    ? "初稿"
+                    : `第${target.version_number}稿`;
+                  const displayFileName = target.file_name || "（無名）";
+
                   return (
-                    <label
+                    <div
                       key={target.id}
-                      className="flex items-start gap-3 p-3 hover:bg-muted/40 cursor-pointer"
+                      className="flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer"
+                      onClick={() => toggleOne(target.id)}
                     >
                       <Checkbox
                         checked={checked}
                         onCheckedChange={() => toggleOne(target.id)}
+                        onClick={(e) => e.stopPropagation()}
                         className="mt-0.5"
                       />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{target.product_name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {target.process_type}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-medium truncate">{displayFileName}</p>
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
+                            {versionLabel}
+                          </span>
+                          {target.overall_status ? (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground shrink-0">
+                              {target.overall_status}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {target.product_name}
+                          {target.process_type ? <> · {target.process_type}</> : null}
                           {target.created_at ? <> · {new Date(target.created_at).toLocaleDateString("ja-JP")}</> : null}
-                          {target.overall_status ? <> · {target.overall_status}</> : null}
                         </p>
                       </div>
-                    </label>
+                    </div>
                   );
                 })}
               </div>
