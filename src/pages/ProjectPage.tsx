@@ -1713,7 +1713,9 @@ export default function ProjectPage() {
                                       </h4>
                                       <div className="space-y-2">
                                     {group.files.map((file) => {
-                                      const cr = file.check_result_id ? checkResults[file.check_result_id] : null;
+                                      const latestId = getLatestVersionId(file, files);
+                                      const latestFile = files.find((f) => f.id === latestId) ?? file;
+                                      const cr = latestFile.check_result_id ? checkResults[latestFile.check_result_id] : null;
                                       const st = FILE_STATUS_CONFIG[file.status ?? "uploaded"] ?? FILE_STATUS_CONFIG.uploaded;
                                       const cc = file.check_result_id ? (commentCounts[file.check_result_id] || 0) : 0;
                                       const childVersions = files.filter(f => f.parent_file_id === file.id);
@@ -1831,7 +1833,9 @@ export default function ProjectPage() {
                               ) : (
                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
                                   {groupedFiles[0]?.files.map((file) => {
-                                    const cr = file.check_result_id ? checkResults[file.check_result_id] : null;
+                                    const latestId = getLatestVersionId(file, files);
+                                    const latestFile = files.find((f) => f.id === latestId) ?? file;
+                                    const cr = latestFile.check_result_id ? checkResults[latestFile.check_result_id] : null;
                                     const st = FILE_STATUS_CONFIG[file.status ?? "uploaded"] ?? FILE_STATUS_CONFIG.uploaded;
                                     const cc = file.check_result_id ? (commentCounts[file.check_result_id] || 0) : 0;
                                     const childVersions = files.filter(f => f.parent_file_id === file.id);
