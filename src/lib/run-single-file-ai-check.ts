@@ -138,6 +138,7 @@ export async function runSingleFileAiCheck(
         product_id: webhookProductId,
         process_type: processKey,
         project_id: projectId,
+        file_id: file.id,
         script_text: "",
         reference_context: refMaterials,
       };
