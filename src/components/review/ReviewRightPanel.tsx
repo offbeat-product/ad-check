@@ -182,7 +182,10 @@ export default function ReviewRightPanel({
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
               <MessageCircle className="h-10 w-10 mb-3 opacity-30" />
-              <p className="text-sm">コメントを利用するにはAIチェックを実行してください</p>
+              <p className="text-sm">コメントはまだありません</p>
+              <p className="text-xs text-muted-foreground/70 mt-1">
+                AIチェックを実行すると、AI指摘へのコメントも利用できます
+              </p>
             </div>
           )}
         </TabsContent>
