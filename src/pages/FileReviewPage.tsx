@@ -2656,6 +2656,19 @@ function CreatorCommentItem({
   attachments?: CommentAttachmentView[];
 }) {
   const role: CommentRole = comment.creator_id ? "creator" : "internal";
+  const hasAnnotation = !!comment.annotation_data;
+  const seekSeconds = resolveSeekSeconds(comment.content, comment.media_timestamp);
+  const isClickable =
+    hasAnnotation ||
+    isValidMediaTimestamp(comment.media_timestamp) ||
+    seekSeconds != null;
+
+  const handleCardClick = () => {
+    onSelectComment?.(comment.id);
+    const seconds = resolveSeekSeconds(comment.content, comment.media_timestamp);
+    if (seconds != null) onSeekMedia(seconds);
+    onAnnotationClick(comment.annotation_data, comment.id, seconds);
+  };
 
   return (
     <RichCommentCard
@@ -2686,6 +2699,7 @@ function CreatorCommentItem({
       isReply={isReply}
       replyingToName={replyingToName}
       isSelected={selectedCommentId === comment.id}
+      onCardClick={isClickable ? handleCardClick : undefined}
       contentSlot={comment.annotation_data ? <button
             type="button"
             className="text-[10px] text-primary hover:underline"

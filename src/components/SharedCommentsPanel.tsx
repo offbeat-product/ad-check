@@ -11,6 +11,7 @@ import { RichCommentCard, type CommentRole, type ReactionSummary } from "@/compo
 import { useCommentReactions } from "@/hooks/useCommentReactions";
 import {
   assertAttachmentSize,
+  COMMENT_ATTACHMENT_BUCKET,
   filesToUploads,
   humanSize,
   isImage,
@@ -66,6 +67,11 @@ type SharedCommentsInvoke = (
   options: { body: Record<string, unknown> }
 ) => Promise<{ data: unknown; error: { message?: string } | null }>;
 
+type ShareAttachmentsRpc = (
+  fn: "get_comment_attachments_for_share",
+  args: { p_share_token: string; p_comment_ids: string[] },
+) => Promise<{ data: unknown; error: { message: string } | null }>;
+
 interface ReplyTarget {
   rootId: string;
   targetId: string;
@@ -109,6 +115,49 @@ export default function SharedCommentsPanel({
       return;
     }
 
+    const groupRows = async (rows: CommentAttachmentView[]) => {
+      const rowsNeedingSignedUrl = rows.filter((row) => row.storage_path && !row.signed_url);
+      const signedRows = await Promise.all(
+        rowsNeedingSignedUrl.map(async (row) => {
+          const { data: signed, error: signedError } = await supabase.storage
+            .from(COMMENT_ATTACHMENT_BUCKET)
+            .createSignedUrl(row.storage_path!, 60 * 60);
+          if (signedError || !signed?.signedUrl) return null;
+          return { ...row, signed_url: signed.signedUrl };
+        })
+      );
+      const signedByPath = new Map(
+        signedRows
+          .filter((row): row is CommentAttachmentView => row !== null)
+          .map((row) => [row.storage_path, row])
+      );
+      const grouped: Record<string, CommentAttachmentView[]> = {};
+      for (const row of rows) {
+        const resolved = row.storage_path && signedByPath.has(row.storage_path) ? signedByPath.get(row.storage_path)! : row;
+        if (!resolved.comment_id || !resolved.signed_url) continue;
+        (grouped[resolved.comment_id] ??= []).push(resolved);
+      }
+      setAttachmentsByCommentId(grouped);
+    };
+
+    try {
+      const { data, error } = await (
+        supabase.rpc.bind(supabase) as unknown as ShareAttachmentsRpc
+      )("get_comment_attachments_for_share", {
+        p_share_token: shareToken,
+        p_comment_ids: commentIds,
+      });
+      if (!error && data != null) {
+        await groupRows(normalizeAttachmentRows(data));
+        return;
+      }
+      if (error) {
+        console.warn("[get_comment_attachments_for_share] falling back to edge function:", error.message);
+      }
+    } catch (err) {
+      console.warn("[get_comment_attachments_for_share]", err);
+    }
+
     try {
       const { data, error } = await invokeSharedComments("shared-comments", {
         body: {
@@ -121,7 +170,7 @@ export default function SharedCommentsPanel({
       const rows = normalizeAttachmentRows(Array.isArray(data) ? data : (data as { attachments?: unknown[] } | null)?.attachments);
       const grouped: Record<string, CommentAttachmentView[]> = {};
       for (const row of rows) {
-        if (!row.comment_id) continue;
+        if (!row.comment_id || !row.signed_url) continue;
         (grouped[row.comment_id] ??= []).push(row);
       }
       setAttachmentsByCommentId(grouped);
