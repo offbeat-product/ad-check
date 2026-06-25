@@ -59,7 +59,7 @@ const SECTION_ROW_STYLE: Record<
   }
 > = {
   initial_check_pending: {
-    label: "初稿チェック前",
+    label: "チェック前",
     emoji: "⚪",
     badgeClass: "bg-muted text-muted-foreground border border-border",
     progressIndicator: "bg-muted-foreground/45",
@@ -438,7 +438,7 @@ export function ProjectStatusView() {
                     すべて
                   </SelectItem>
                   <SelectItem value="initial_check_pending" className="text-xs">
-                    ⚪ 初稿チェック前
+                    ⚪ チェック前
                   </SelectItem>
                   <SelectItem value="cl_submit_ready" className="text-xs">
                     🔵 CL提出可能

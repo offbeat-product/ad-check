@@ -52,9 +52,9 @@ export function getWebhookPaths(product: Product): Record<string, string> {
 export type ProjectFileStatus = "uploaded" | "checking" | "checked" | "internal_revision" | "client_review" | "fixed";
 
 export const FILE_STATUS_CONFIG: Record<string, { label: string; class: string }> = {
-  uploaded: { label: "初稿チェック前", class: "bg-muted text-muted-foreground" },
-  checking: { label: "初稿チェック中", class: "bg-primary/10 text-primary animate-pulse" },
-  checked: { label: "初稿チェック完了", class: "bg-primary/10 text-primary" },
+  uploaded: { label: "チェック前", class: "bg-muted text-muted-foreground" },
+  checking: { label: "チェック中", class: "bg-primary/10 text-primary animate-pulse" },
+  checked: { label: "チェック完了", class: "bg-primary/10 text-primary" },
   internal_revision: { label: "社内修正中", class: "bg-status-warning/10 text-status-warning" },
   client_review: { label: "CL確認中", class: "bg-status-client-review/15 text-status-client-review border border-status-client-review/40 font-semibold" },
   fixed: { label: "FIX済", class: "bg-status-ok/10 text-status-ok border border-status-ok" },
