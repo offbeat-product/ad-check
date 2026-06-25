@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { validateFileSize, formatFileSize, MAX_UPLOAD_LABEL, getFileCategory, getUploadLimitLabel } from "@/lib/file-validation";
 import { prepareFileForUpload } from "@/lib/file-upload";
+import { getLatestVersionId } from "@/lib/project-file-versions";
 import type { Project, Product, Client, ProjectFile, CheckResultRow } from "@/lib/db-types";
 import { FILE_STATUS_CONFIG } from "@/lib/db-types";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
@@ -1745,7 +1746,7 @@ export default function ProjectPage() {
                                                   return next;
                                                 });
                                               } else {
-                                                navigate(`/project/${id}/file/${file.id}`);
+                                                navigate(`/project/${id}/file/${getLatestVersionId(file, files)}`);
                                               }
                                             }}
                                             className={cn("glass-card p-2 text-left w-full relative overflow-hidden thumbnail-hover",
@@ -1863,7 +1864,7 @@ export default function ProjectPage() {
                                                 return next;
                                               });
                                             } else {
-                                              navigate(`/project/${id}/file/${file.id}`);
+                                              navigate(`/project/${id}/file/${getLatestVersionId(file, files)}`);
                                             }
                                           }}
                                           className={cn("glass-card p-2 text-left w-full relative overflow-hidden thumbnail-hover",
@@ -2368,7 +2369,7 @@ function CheckHistory({ projectId, files, checkResults, onRenameFile, patterns, 
             const fileSt = FILE_STATUS_CONFIG[f.status ?? "uploaded"] ?? FILE_STATUS_CONFIG.uploaded;
 
             return (
-              <tr key={f.id} onClick={() => navigate(`/project/${projectId}/file/${f.id}`)} className="border-b border-border/50 hover:bg-muted/50 cursor-pointer">
+              <tr key={f.id} onClick={() => navigate(`/project/${projectId}/file/${getLatestVersionId(f, files)}`)} className="border-b border-border/50 hover:bg-muted/50 cursor-pointer">
                 <td className="px-4 py-2.5 text-muted-foreground tabular-nums">{checkDate}</td>
                 <td className="px-4 py-2.5">{userName}</td>
                 <td className="px-4 py-2.5">

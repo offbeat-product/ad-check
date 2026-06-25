@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import { format } from "date-fns";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useProfile } from "@/hooks/useProfile";
@@ -34,6 +34,7 @@ import { parseCheckItems } from "@/schemas/checkItem";
 // getWebhookPaths no longer needed — unified v2 webhook
 import { useReviewState, useExportCsv } from "@/hooks/useReviewState";
 import { downloadProjectFile } from "@/lib/download-project-file";
+import { isVersionExplicit, resolveActiveFile } from "@/lib/project-file-versions";
 import { compressImage } from "@/lib/image-compress";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Button } from "@/components/ui/button";
@@ -133,16 +134,16 @@ export default function FileReviewPage({
   const { projectId: routeProjectId, fileId: routeFileId, shareToken: routeShareToken } =
     useParams<{ projectId?: string; fileId?: string; shareToken?: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const { profile } = useProfile();
   const currentAuthorName = profile?.display_name?.trim() || user?.email?.split("@")[0] || "User";
   const { toast } = useToast();
   const { exportCsv } = useExportCsv();
   const creatorMode = isCreatorMode;
-  const activeFileId = propFileId ?? routeFileId ?? "";
   const activeProjectId = routeProjectId ?? "";
   const activeShareToken = shareToken ?? routeShareToken ?? "";
-  const fileId = activeFileId || undefined;
+  const fileId = (propFileId ?? routeFileId) || undefined;
   const projectId = activeProjectId || undefined;
 
   const [file, setFile] = useState<ProjectFile | null>(null);
@@ -160,6 +161,18 @@ export default function FileReviewPage({
   const [shareOpen, setShareOpen] = useState(false);
   const [uploadRevisionOpen, setUploadRevisionOpen] = useState(false);
   const [versions, setVersions] = useState<ProjectFile[]>([]);
+
+  const activeFile = useMemo(() => {
+    if (!file) return null;
+    return resolveActiveFile(file, versions, location.search);
+  }, [file, versions, location.search]);
+
+  const checkTargetFileId = activeFile?.id ?? fileId;
+
+  const patchTargetFileInState = useCallback((targetId: string, patch: Partial<ProjectFile>) => {
+    setVersions((prev) => prev.map((v) => (v.id === targetId ? { ...v, ...patch } : v)));
+    setFile((prev) => (prev && prev.id === targetId ? { ...prev, ...patch } : prev));
+  }, []);
   const [selectedAnnotations, setSelectedAnnotations] = useState<CommentAnnotationData[]>([]);
   const [selectedCommentId, setSelectedCommentId] = useState<string | null>(null);
   const [selectedAnnotationTimestamp, setSelectedAnnotationTimestamp] = useState<number | null>(null);
@@ -179,6 +192,16 @@ export default function FileReviewPage({
   const [creatorRevisionOpen, setCreatorRevisionOpen] = useState(false);
   const [comparisonDrafts, setComparisonDrafts] = useState<DraftEntry[]>([]);
   const [comparisonActivePairIndex, setComparisonActivePairIndex] = useState(0);
+
+  const comparisonAfterFileId = useMemo(() => {
+    const afterDraft = comparisonDrafts[comparisonActivePairIndex + 1];
+    if (afterDraft?.fileId) return afterDraft.fileId;
+    if (afterDraft?.data) {
+      return versions.find((v) => v.file_data === afterDraft.data)?.id ?? null;
+    }
+    return activeFile?.id ?? null;
+  }, [comparisonDrafts, comparisonActivePairIndex, versions, activeFile?.id]);
+
   const [commentRefreshKey, setCommentRefreshKey] = useState(0);
   const [mobilePanel, setMobilePanel] = useState<"preview" | "check">("preview");
   const [activeCheckItem, setActiveCheckItem] = useState<CheckItem | null>(null);
@@ -564,6 +587,34 @@ export default function FileReviewPage({
     return () => { cancelled = true; };
   }, [fileId, projectId, creatorMode, activeShareToken, creatorBreadcrumb, toast]);
 
+  // 初稿URLで最新稿が存在する場合は最新稿へリダイレクト（?v=1 / ?version=1 で初稿明示は除外）
+  useEffect(() => {
+    if (creatorMode || !file || !projectId || versions.length <= 1) return;
+    if (isVersionExplicit(location.search)) return;
+    const resolved = resolveActiveFile(file, versions, location.search);
+    if (resolved.id !== file.id) {
+      navigate(`/project/${projectId}/file/${resolved.id}`, { replace: true });
+    }
+  }, [file, versions, projectId, navigate, location.search, creatorMode]);
+
+  // activeFile と record の不整合を解消（リダイレクト前の一瞬や versions ロード後）
+  useEffect(() => {
+    if (!activeFile?.check_result_id || isRecheckingRef.current || checking || loading) return;
+    if (record?.id === activeFile.check_result_id) return;
+    let cancelled = false;
+    (async () => {
+      const { data: cr } = await supabase
+        .from("check_results")
+        .select("*")
+        .eq("id", activeFile.check_result_id!)
+        .maybeSingle();
+      if (!cancelled && cr && !isRecheckingRef.current) {
+        applyRecord(cr);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeFile?.id, activeFile?.check_result_id, checking, loading, record?.id]);
+
   // Fetch sibling files for navigation (all patterns in same process, ordered by pattern sort_order then file_name)
   useEffect(() => {
     if (!file) return;
@@ -648,64 +699,67 @@ export default function FileReviewPage({
 
   // Recovery: re-fetch file & check_result from DB (e.g. after webhook timeout but n8n completed)
   const recoverCheckResult = useCallback(async () => {
-    if (!fileId || isRecheckingRef.current) return;
-    const { data: freshFile } = await supabase.from("project_files").select("*").eq("id", fileId).maybeSingle();
+    const targetId = checkTargetFileId;
+    if (!targetId || isRecheckingRef.current) return;
+    const { data: freshFile } = await supabase.from("project_files").select("*").eq("id", targetId).maybeSingle();
     if (freshFile && !isRecheckingRef.current) {
-      setFile(freshFile);
+      patchTargetFileInState(targetId, freshFile);
       if (freshFile.check_result_id) {
         const { data: cr } = await supabase.from("check_results").select("*").eq("id", freshFile.check_result_id).maybeSingle();
         if (cr && cr.check_items && !isRecheckingRef.current) {
           applyRecord(cr);
           setChecking(false);
-          // Update file status if still "checking"
           if (freshFile.status === "checking") {
-            await supabase.from("project_files").update({ status: "checked", checking_by: null, checking_started_at: null } as Record<string, unknown>).eq("id", fileId);
-            setFile(prev => prev ? { ...prev, status: "checked", checking_by: null, checking_started_at: null } : prev);
+            await supabase.from("project_files").update({ status: "checked", checking_by: null, checking_started_at: null } as Record<string, unknown>).eq("id", targetId);
+            patchTargetFileInState(targetId, { status: "checked", checking_by: null, checking_started_at: null });
           }
           toast({ title: "チェック完了", description: `Grade: ${cr.overall_status}` });
           return;
         }
       }
     }
-  }, [fileId]);
+  }, [checkTargetFileId, patchTargetFileInState, toast]);
 
   // Poll for check result when checking is in progress (handles n8n completing after frontend timeout)
   // Timeout after 15 minutes to prevent infinite polling
   const pollingStartRef = useRef<number>(0);
   useEffect(() => {
-    if (!checking || !file?.check_result_id || isRecheckingRef.current) return;
+    const targetCrId = activeFile?.check_result_id;
+    if (!checking || !targetCrId || isRecheckingRef.current) return;
     if (!pollingStartRef.current) pollingStartRef.current = Date.now();
-    const MAX_RECOVERY_POLL_MS = 15 * 60 * 1000; // 15 minutes
+    const MAX_RECOVERY_POLL_MS = 15 * 60 * 1000;
+    const targetId = checkTargetFileId;
     const interval = setInterval(async () => {
       if (isRecheckingRef.current) return;
-      // Check if we've been polling too long
       if (Date.now() - pollingStartRef.current > MAX_RECOVERY_POLL_MS) {
         console.warn("[FileReview] Recovery polling timed out, resetting checking state");
         setChecking(false);
-        // Reset file status in DB
-        await supabase.from("project_files").update({ 
-          status: "uploaded", 
-          checking_by: null, 
-          checking_started_at: null 
-        } as any).eq("id", file.id);
-        setFile(prev => prev ? { ...prev, status: "uploaded", checking_by: null, checking_started_at: null } : prev);
+        if (targetId) {
+          await supabase.from("project_files").update({
+            status: "uploaded",
+            checking_by: null,
+            checking_started_at: null,
+          } as Record<string, unknown>).eq("id", targetId);
+          patchTargetFileInState(targetId, { status: "uploaded", checking_by: null, checking_started_at: null });
+        }
         toast({ title: "チェック処理がタイムアウトしました", description: "再度AIチェックを実行してください。", variant: "destructive" });
         pollingStartRef.current = 0;
         return;
       }
-      const { data: cr } = await supabase.from("check_results").select("*").eq("id", file.check_result_id!).maybeSingle();
+      const { data: cr } = await supabase.from("check_results").select("*").eq("id", targetCrId).maybeSingle();
       if (cr && cr.check_items && Array.isArray(cr.check_items) && (cr.check_items as unknown[]).length > 0 && !isRecheckingRef.current) {
         applyRecord(cr);
         setChecking(false);
         pollingStartRef.current = 0;
-        // Update file status in DB to "checked"
-        await supabase.from("project_files").update({ status: "checked", checking_by: null, checking_started_at: null } as Record<string, unknown>).eq("id", fileId);
-        setFile(prev => prev ? { ...prev, status: "checked", checking_by: null, checking_started_at: null } : prev);
+        if (targetId) {
+          await supabase.from("project_files").update({ status: "checked", checking_by: null, checking_started_at: null } as Record<string, unknown>).eq("id", targetId);
+          patchTargetFileInState(targetId, { status: "checked", checking_by: null, checking_started_at: null });
+        }
         toast({ title: "チェック完了", description: `Grade: ${cr.overall_status}` });
       }
     }, 5000);
     return () => clearInterval(interval);
-  }, [checking, file?.check_result_id]);
+  }, [checking, activeFile?.check_result_id, checkTargetFileId, patchTargetFileInState, toast]);
 
   const processInputMode = file ? (AI_CHECK_CONFIG[file.process_type]?.inputMode || "text") : "text";
   const checkProgress = useCheckProgress(ESTIMATED_DURATION[processInputMode] || 60_000);
@@ -716,10 +770,10 @@ export default function FileReviewPage({
 
   // Check lock status on mount and periodically
   useEffect(() => {
-    if (!fileId || !user) return;
+    if (!checkTargetFileId || !user) return;
     let cancelled = false;
     const checkLock = async () => {
-      const { data: f } = await supabase.from("project_files").select("checking_by, checking_started_at").eq("id", fileId).maybeSingle();
+      const { data: f } = await supabase.from("project_files").select("checking_by, checking_started_at").eq("id", checkTargetFileId).maybeSingle();
       if (cancelled || !f) return;
       if (f.checking_by && f.checking_by !== user.id) {
         // Check if lock is stale (> 15 minutes old)
@@ -730,7 +784,7 @@ export default function FileReviewPage({
           if (!cancelled) setLockedByUser(profile?.display_name || profile?.email?.split("@")[0] || "他のユーザー");
         } else {
           // Stale lock — release it
-          await supabase.from("project_files").update({ checking_by: null, checking_started_at: null } as any).eq("id", fileId);
+          await supabase.from("project_files").update({ checking_by: null, checking_started_at: null } as Record<string, unknown>).eq("id", checkTargetFileId);
           if (!cancelled) setLockedByUser(null);
         }
       } else {
@@ -740,21 +794,20 @@ export default function FileReviewPage({
     checkLock();
     const interval = setInterval(checkLock, 10000);
     return () => { cancelled = true; clearInterval(interval); };
-  }, [fileId, user?.id]);
+  }, [checkTargetFileId, user?.id]);
 
   // Release lock on unmount / navigation
   useEffect(() => {
     return () => {
-      if (fileId && user && isExecutingRef.current) {
-        supabase.from("project_files").update({ checking_by: null, checking_started_at: null } as any).eq("id", fileId).eq("checking_by", user.id);
+      if (checkTargetFileId && user && isExecutingRef.current) {
+        supabase.from("project_files").update({ checking_by: null, checking_started_at: null } as Record<string, unknown>).eq("id", checkTargetFileId).eq("checking_by", user.id);
       }
     };
-  }, [fileId, user?.id]);
+  }, [checkTargetFileId, user?.id]);
 
   const acquireLock = async (): Promise<boolean> => {
-    if (!fileId || !user) return false;
-    // Try to acquire lock — only if not locked by someone else
-    const { data: current } = await supabase.from("project_files").select("checking_by, checking_started_at").eq("id", fileId).maybeSingle();
+    if (!checkTargetFileId || !user) return false;
+    const { data: current } = await supabase.from("project_files").select("checking_by, checking_started_at").eq("id", checkTargetFileId).maybeSingle();
     if (current?.checking_by && current.checking_by !== user.id) {
       const startedAt = current.checking_started_at ? new Date(current.checking_started_at).getTime() : 0;
       if (Date.now() - startedAt < 15 * 60 * 1000) {
@@ -764,18 +817,19 @@ export default function FileReviewPage({
         return false;
       }
     }
-    await supabase.from("project_files").update({ checking_by: user.id, checking_started_at: new Date().toISOString() } as any).eq("id", fileId);
+    await supabase.from("project_files").update({ checking_by: user.id, checking_started_at: new Date().toISOString() } as Record<string, unknown>).eq("id", checkTargetFileId);
     return true;
   };
 
   const releaseLock = async () => {
-    if (!fileId || !user) return;
-    await supabase.from("project_files").update({ checking_by: null, checking_started_at: null } as any).eq("id", fileId).eq("checking_by", user.id);
+    if (!checkTargetFileId || !user) return;
+    await supabase.from("project_files").update({ checking_by: null, checking_started_at: null } as Record<string, unknown>).eq("id", checkTargetFileId).eq("checking_by", user.id);
     setLockedByUser(null);
   };
 
   const handleRunCheck = async () => {
-    if (!file || !product || !user || !projectId) return;
+    const targetFile = activeFile ?? file;
+    if (!targetFile || !product || !user || !projectId) return;
     if (isExecutingRef.current) return;
 
     // Acquire lock
@@ -783,24 +837,22 @@ export default function FileReviewPage({
     if (!locked) return;
 
     isExecutingRef.current = true;
-    // Save old check_result_id for recovery on timeout
-    const previousCheckResultId = file.check_result_id;
-    // Clear old results before re-check
+    const previousCheckResultId = targetFile.check_result_id;
     isRecheckingRef.current = true;
     setRecord(null);
     setChecking(true);
     checkProgress.start();
     let pendingRecordId: string | null = null;
-    const processKey = file.process_type || "script";
+    const processKey = targetFile.process_type || "script";
+    const targetFileId = targetFile.id;
 
-    // Immediately mark file as "checking" in DB so ProjectPage can show the status
     const checkingStartedAt = new Date().toISOString();
     await supabase.from("project_files").update({
       status: "checking",
       checking_by: user.id,
       checking_started_at: checkingStartedAt,
-    } as Record<string, unknown>).eq("id", file.id);
-    setFile(prev => prev ? { ...prev, status: "checking", checking_by: user.id, checking_started_at: checkingStartedAt } : prev);
+    } as Record<string, unknown>).eq("id", targetFileId);
+    patchTargetFileInState(targetFileId, { status: "checking", checking_by: user.id, checking_started_at: checkingStartedAt });
 
     try {
       const aiCfg = AI_CHECK_CONFIG[processKey];
@@ -814,11 +866,9 @@ export default function FileReviewPage({
       let inputData: Record<string, any> = {};
 
       if (inputMode === "text") {
-        // Text processes: send directly (small payload)
-        res = await runScriptCheck(product.id, file.file_data || "", processKey, referenceContext, projectId);
-        inputData = { script_text: file.file_data };
+        res = await runScriptCheck(product.id, targetFile.file_data || "", processKey, referenceContext, projectId);
+        inputData = { script_text: targetFile.file_data };
       } else {
-        // Media processes: upload to Storage and send public URL instead of base64
         const webhookUrl = getWebhookUrl(processKey);
         if (!webhookUrl) throw new Error(`この工程(${processKey})のWebhookが見つかりません`);
 
@@ -827,39 +877,40 @@ export default function FileReviewPage({
           product_id: webhookProductId,
           process_type: processKey,
           project_id: projectId,
+          file_id: targetFileId,
           script_text: "",
           reference_context: refMaterials,
         };
 
         if (inputMode === "image") {
-          const fileData = file.file_data || "";
+          const fileData = targetFile.file_data || "";
           if (fileData.startsWith("data:")) {
             const mediaType = fileData.match(/^data:([^;]+);/)?.[1] || "image/jpeg";
             if (fileData.length < 20 * 1024 * 1024) {
               body.image_base64 = fileData;
             } else {
               const ext = mediaType.includes("png") ? "png" : "jpg";
-              const storagePath = `${projectId}/${file.id}.${ext}`;
+              const storagePath = `${projectId}/${targetFileId}.${ext}`;
               const publicUrl = await tusUploadBlob("deliverables", storagePath, fileData, mediaType);
               body.image_url = publicUrl;
             }
             body.image_mime_type = mediaType;
           } else if (fileData.startsWith("http")) {
             body.image_url = fileData;
-            body.image_mime_type = inferFileMimeType(file.file_name || fileData);
+            body.image_mime_type = inferFileMimeType(targetFile.file_name || fileData);
           }
           inputData = fileData.startsWith("http")
             ? { image_url: fileData }
-            : { image_base64: file.file_data };
+            : { image_base64: targetFile.file_data };
         } else if (inputMode === "audio") {
-          const fileData = file.file_data || "";
+          const fileData = targetFile.file_data || "";
           if (fileData.startsWith("data:")) {
             const mediaType = fileData.match(/^data:([^;]+);/)?.[1] || "audio/mpeg";
             if (fileData.length < 20 * 1024 * 1024) {
               body.audio_base64 = fileData;
             } else {
               const ext = mediaType.includes("wav") ? "wav" : mediaType.includes("m4a") ? "m4a" : "mp3";
-              const storagePath = `${projectId}/${file.id}.${ext}`;
+              const storagePath = `${projectId}/${targetFileId}.${ext}`;
               const publicUrl = await tusUploadBlob("audios", storagePath, fileData, mediaType);
               body.audio_url = publicUrl;
             }
@@ -874,15 +925,15 @@ export default function FileReviewPage({
           body.audio_mime_type = body.audio_mime_type || "";
           body.audio_base64 = body.audio_base64 || "";
           body.audio_description = "";
-          body.metadata = { file_name: file.file_name, duration: null, format: body.audio_mime_type || null };
-          body.script_text = file.file_data?.startsWith("data:") || file.file_data?.startsWith("http") ? "" : (file.file_data || "");
+          body.metadata = { file_name: targetFile.file_name, duration: null, format: body.audio_mime_type || null };
+          body.script_text = targetFile.file_data?.startsWith("data:") || targetFile.file_data?.startsWith("http") ? "" : (targetFile.file_data || "");
           inputData = { script_text: body.script_text, audio_url: body.audio_url, audio_base64: body.audio_base64 };
         } else if (inputMode === "video") {
-          const fileData = file.file_data || "";
+          const fileData = targetFile.file_data || "";
           if (fileData.startsWith("data:")) {
             const mediaType = fileData.match(/^data:([^;]+);/)?.[1] || "video/mp4";
             const ext = mediaType.includes("webm") ? "webm" : mediaType.includes("mov") ? "mov" : "mp4";
-            const storagePath = `${projectId}/${file.id}.${ext}`;
+            const storagePath = `${projectId}/${targetFileId}.${ext}`;
             const publicUrl = await tusUploadBlob("videos", storagePath, fileData, mediaType);
             body.video_url = publicUrl;
             body.video_mime_type = mediaType;
@@ -892,7 +943,7 @@ export default function FileReviewPage({
             const urlExt = fileData.split('.').pop()?.split('?')[0]?.toLowerCase() || "mp4";
             body.video_mime_type = urlExt === "webm" ? "video/webm" : urlExt === "mov" ? "video/quicktime" : "video/mp4";
           }
-          body.script_text = file.file_data?.startsWith("data:") ? "" : (file.file_data || "");
+          body.script_text = targetFile.file_data?.startsWith("data:") ? "" : (targetFile.file_data || "");
           inputData = { script_text: body.script_text, video_url: body.video_url || "" };
         }
 
@@ -900,7 +951,7 @@ export default function FileReviewPage({
         // Include related files (all prior process FIX data) for cross-reference
         const isFirstProcess = processKey === "script";
         if (!isFirstProcess && projectId) {
-          const relatedFiles = await getRelatedProcessData(projectId, processKey, file.pattern_id);
+          const relatedFiles = await getRelatedProcessData(projectId, processKey, targetFile.pattern_id);
           if (Object.keys(relatedFiles).length > 0) {
             body.related_files = relatedFiles;
             console.log("[CheckMate] Including related_files:", Object.keys(relatedFiles));
@@ -908,11 +959,11 @@ export default function FileReviewPage({
         }
 
         // Include correction comments for the AI to verify fixes
-        if (file.check_result_id) {
+        if (targetFile.check_result_id) {
           const { data: corrComments } = await supabase
             .from("comments")
             .select("content, status, check_item_id")
-            .eq("check_result_id", file.check_result_id)
+            .eq("check_result_id", targetFile.check_result_id)
             .is("parent_id", null);
           if (corrComments && corrComments.length > 0) {
             body.correction_comments = corrComments;
@@ -922,8 +973,8 @@ export default function FileReviewPage({
 
         const isAsyncProcess = ["vcon", "video_horizontal", "video_vertical", "narration", "bgm"].includes(processKey);
         if (isAsyncProcess) {
-          if (file.check_result_id) {
-            pendingRecordId = file.check_result_id;
+          if (targetFile.check_result_id) {
+            pendingRecordId = targetFile.check_result_id;
             const { error: resetErr } = await supabase.from("check_results").update({
               status: "pending",
               input_data: inputData as unknown as Json,
@@ -982,60 +1033,55 @@ export default function FileReviewPage({
               check_result_id: pendingRecordId,
               checking_by: user.id,
               checking_started_at: checkingStartedAt,
-            } as Record<string, unknown>).eq("id", file.id);
-            setFile({ ...file, status: "checking", check_result_id: pendingRecordId, checking_by: user.id, checking_started_at: checkingStartedAt });
+            } as Record<string, unknown>).eq("id", targetFileId);
+            patchTargetFileInState(targetFileId, { status: "checking", check_result_id: pendingRecordId, checking_by: user.id, checking_started_at: checkingStartedAt });
           }
           const polled = await videoPolling.startPolling(product.code, processKey, webhookSentAt);
           if (!polled) {
             isRecheckingRef.current = false;
-            // Check the pending record directly — n8n may have updated it
             if (pendingRecordId) {
               const { data: updatedCr } = await supabase.from("check_results").select("*").eq("id", pendingRecordId).maybeSingle();
               if (updatedCr && updatedCr.status === "completed" && updatedCr.check_items) {
                 applyRecord(updatedCr);
-                await supabase.from("project_files").update({ status: "checked", check_result_id: updatedCr.id, checking_by: null, checking_started_at: null } as Record<string, unknown>).eq("id", file.id);
-                setFile({ ...file, status: "checked", check_result_id: updatedCr.id, checking_by: null, checking_started_at: null });
+                await supabase.from("project_files").update({ status: "checked", check_result_id: updatedCr.id, checking_by: null, checking_started_at: null } as Record<string, unknown>).eq("id", targetFileId);
+                patchTargetFileInState(targetFileId, { status: "checked", check_result_id: updatedCr.id, checking_by: null, checking_started_at: null });
                 checkProgress.complete();
                 toast({ title: "チェック完了", description: `Grade: ${updatedCr.overall_status}` });
                 return;
               }
             }
-            // Restore previous result if available, and reset file status
             if (previousCheckResultId) {
               const { data: prevCr } = await supabase.from("check_results").select("*").eq("id", previousCheckResultId).maybeSingle();
               if (prevCr) {
                 applyRecord(prevCr);
-                await supabase.from("project_files").update({ 
-                  status: "checked", 
+                await supabase.from("project_files").update({
+                  status: "checked",
                   check_result_id: prevCr.id,
                   checking_by: null,
                   checking_started_at: null,
-                } as any).eq("id", file.id);
-                setFile({ ...file, status: "checked", check_result_id: prevCr.id, checking_by: null, checking_started_at: null });
+                } as Record<string, unknown>).eq("id", targetFileId);
+                patchTargetFileInState(targetFileId, { status: "checked", check_result_id: prevCr.id, checking_by: null, checking_started_at: null });
               }
             } else {
-              // No previous result — reset to uploadable state
-              await supabase.from("project_files").update({ 
-                status: "uploaded", 
-                checking_by: null, 
+              await supabase.from("project_files").update({
+                status: "uploaded",
+                checking_by: null,
                 checking_started_at: null,
-              } as any).eq("id", file.id);
-              setFile({ ...file, status: "uploaded" });
+              } as Record<string, unknown>).eq("id", targetFileId);
+              patchTargetFileInState(targetFileId, { status: "uploaded", checking_by: null, checking_started_at: null });
             }
             toast({ title: "チェック処理がタイムアウトしました", description: "再度AIチェックを実行してください。", variant: "destructive" });
             return;
           }
-          // n8n wrote the result directly — load it
           applyRecord(polled);
-          // Link to file
           const { error: updateErr } = await supabase.from("project_files").update({
             status: "checked",
             check_result_id: polled.id,
             checking_by: null,
             checking_started_at: null,
-          } as Record<string, unknown>).eq("id", file.id);
+          } as Record<string, unknown>).eq("id", targetFileId);
           handleSupabaseError(updateErr, "project_files update");
-          setFile({ ...file, status: "checked", check_result_id: polled.id, checking_by: null, checking_started_at: null });
+          patchTargetFileInState(targetFileId, { status: "checked", check_result_id: polled.id, checking_by: null, checking_started_at: null });
           checkProgress.complete();
           toast({ title: "チェック完了", description: `Grade: ${polled.overall_status}` });
           return;
@@ -1051,7 +1097,7 @@ export default function FileReviewPage({
         product_name: product.name,
         process_type: processKey,
         input_type: inputMode === "image" ? "image" : "text",
-        input_text: inputMode === "image" ? null : file.file_data,
+        input_text: inputMode === "image" ? null : targetFile.file_data,
         overall_status: res.overall_status,
         detected_case: res.detected_case,
         ng_count: res.ng_count,
@@ -1065,15 +1111,15 @@ export default function FileReviewPage({
       };
 
       let savedCheckResultId: string;
-      if (file.check_result_id) {
+      if (targetFile.check_result_id) {
         const { error: updateCrErr } = await supabase
           .from("check_results")
           .update(completedPayload)
-          .eq("id", file.check_result_id);
-        if (handleSupabaseError(updateCrErr, "check_results update") || !file.check_result_id) {
+          .eq("id", targetFile.check_result_id);
+        if (handleSupabaseError(updateCrErr, "check_results update") || !targetFile.check_result_id) {
           throw new Error("チェック結果の更新に失敗しました");
         }
-        savedCheckResultId = file.check_result_id;
+        savedCheckResultId = targetFile.check_result_id;
       } else {
         const { data: crData, error: insertErr } = await supabase
           .from("check_results")
@@ -1091,10 +1137,10 @@ export default function FileReviewPage({
         check_result_id: savedCheckResultId,
         checking_by: null,
         checking_started_at: null,
-      } as Record<string, unknown>).eq("id", file.id);
+      } as Record<string, unknown>).eq("id", targetFileId);
       handleSupabaseError(updateErr, "project_files update");
 
-      setFile({ ...file, status: "checked", check_result_id: savedCheckResultId, checking_by: null, checking_started_at: null });
+      patchTargetFileInState(targetFileId, { status: "checked", check_result_id: savedCheckResultId, checking_by: null, checking_started_at: null });
 
       const { data: fullCr } = await supabase.from("check_results").select("*").eq("id", savedCheckResultId).maybeSingle();
       applyRecord(fullCr);
@@ -1128,8 +1174,8 @@ export default function FileReviewPage({
 
           if (cr && cr.status === "completed" && cr.check_items) {
             applyRecord(cr);
-            await supabase.from("project_files").update({ status: "checked", check_result_id: cr.id, checking_by: null, checking_started_at: null } as Record<string, unknown>).eq("id", file.id);
-            setFile({ ...file, status: "checked", check_result_id: cr.id, checking_by: null, checking_started_at: null });
+            await supabase.from("project_files").update({ status: "checked", check_result_id: cr.id, checking_by: null, checking_started_at: null } as Record<string, unknown>).eq("id", targetFileId);
+            patchTargetFileInState(targetFileId, { status: "checked", check_result_id: cr.id, checking_by: null, checking_started_at: null });
             checkProgress.complete();
             setChecking(false);
             toast({ title: "チェック完了", description: `Grade: ${cr.overall_status}` });
@@ -1153,17 +1199,16 @@ export default function FileReviewPage({
             check_result_id: prevCr.id,
             checking_by: null,
             checking_started_at: null,
-          } as any).eq("id", file.id);
-          setFile({ ...file, status: "checked", check_result_id: prevCr.id, checking_by: null, checking_started_at: null });
+          } as Record<string, unknown>).eq("id", targetFileId);
+          patchTargetFileInState(targetFileId, { status: "checked", check_result_id: prevCr.id, checking_by: null, checking_started_at: null });
         }
       } else {
-        // No previous result — reset to uploadable state so user can retry
-        await supabase.from("project_files").update({ 
-          status: "uploaded", 
-          checking_by: null, 
+        await supabase.from("project_files").update({
+          status: "uploaded",
+          checking_by: null,
           checking_started_at: null,
-        } as any).eq("id", file.id);
-        setFile({ ...file, status: "uploaded" });
+        } as Record<string, unknown>).eq("id", targetFileId);
+        patchTargetFileInState(targetFileId, { status: "uploaded", checking_by: null, checking_started_at: null });
       }
       toast({ title: "チェック送信に失敗しました", description: "n8nへの接続に失敗しました。再度お試しください。", variant: "destructive" });
     } finally {
@@ -1186,7 +1231,7 @@ export default function FileReviewPage({
 
   const handleDownload = async () => {
     if (!file) return;
-    const dlFile = latestVersionFile && latestVersionFile.id !== file.id ? latestVersionFile : file;
+    const dlFile = activeFile;
     try {
       await downloadProjectFile(dlFile, file.file_name);
     } catch (err) {
@@ -1363,17 +1408,11 @@ export default function FileReviewPage({
   }, [items, file, seekToCheckItem]);
 
   if (loading) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">読み込み中...</div>;
-  if (!file) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">ファイルが見つかりません</div>;
+  if (!file || !activeFile) return <div className="flex items-center justify-center h-full text-muted-foreground py-20">ファイルが見つかりません</div>;
 
-  // Determine the latest version file to display (instead of always showing initial draft)
-  const latestVersionFile = versions.length > 1
-    ? versions.reduce((latest, v) => (v.version_number ?? 1) > (latest.version_number ?? 1) ? v : latest, versions[0])
-    : null;
-  const displayFile = latestVersionFile && latestVersionFile.id !== file.id ? latestVersionFile : file;
-  // Use comparison_round from active check result when available (more accurate than file version_number)
   const currentVersionNumber = record?.check_type === "comparison" && record?.comparison_round
     ? record.comparison_round + 1
-    : (displayFile.version_number ?? 1);
+    : (activeFile.version_number ?? 1);
   const totalVersions = versions.length;
 
   // 全バージョン(project_files)から比較ドラフトを自動構築する。
@@ -1421,7 +1460,7 @@ export default function FileReviewPage({
     return match?.id ?? null;
   };
 
-  const isSf = displayFile.file_type === "image" || AI_CHECK_CONFIG[displayFile.process_type]?.inputMode === "image";
+  const isSf = activeFile.file_type === "image" || AI_CHECK_CONFIG[activeFile.process_type]?.inputMode === "image";
   const currentStatus = file.status || "uploaded";
   const sc = FILE_STATUS_CONFIG[currentStatus] ?? FILE_STATUS_CONFIG.uploaded;
   const hasCheckResult = !!record;
@@ -1786,7 +1825,7 @@ export default function FileReviewPage({
             {isSf ? (
               <SectionErrorBoundary label="プレビュー">
               <ImagePreview
-                imageSrc={displayFile.file_data}
+                imageSrc={activeFile.file_data}
                 markers={hasCheckResult ? markers : []}
                 paintMode={paintMode}
                 onPaintModeToggle={() => {
@@ -1813,7 +1852,7 @@ export default function FileReviewPage({
               <SectionErrorBoundary label="プレビュー">
                 <MediaPreview
                   ref={mediaPreviewRef}
-                  src={displayFile.file_data}
+                  src={activeFile.file_data}
                   mediaType={aiCfg.inputMode as "audio" | "video"}
                   label={`${client?.name} / ${product?.name} / ${aiCfg.inputMode === "audio" ? "音声" : "動画"}`}
                   noDataMessage="メディアファイルなし"
@@ -1834,7 +1873,7 @@ export default function FileReviewPage({
               </SectionErrorBoundary>
             ) : (
               <SectionErrorBoundary label="スクリプト">
-                <ScriptDisplay text={displayFile.file_data || ""} items={items} markers={markers} onItemClick={scrollToCard} />
+                <ScriptDisplay text={activeFile.file_data || ""} items={items} markers={markers} onItemClick={scrollToCard} />
               </SectionErrorBoundary>
             )}
 
@@ -1942,10 +1981,11 @@ export default function FileReviewPage({
         onAnnotationClick={handleAnnotationClick}
         overallStatus={record?.overall_status}
         checkedAt={record?.created_at}
-        file={file}
+        file={activeFile}
         productId={product?.id}
         projectId={projectId}
-        fileId={fileId}
+        fileId={checkTargetFileId}
+        comparisonTargetFileId={comparisonAfterFileId}
         mediaCurrentTime={mediaCurrentTime}
         onSeekMedia={handleSeekMedia}
         onActiveCheckItemChange={(item) => {
@@ -1980,9 +2020,7 @@ export default function FileReviewPage({
               .update({ check_result_id: entry.id, status: "checked" })
               .eq("id", afterFileId);
             handleSupabaseError(linkErr, "project_files check_result link");
-            if (file.id === afterFileId) {
-              setFile((prev) => prev ? { ...prev, check_result_id: entry.id, status: "checked" } : prev);
-            }
+            patchTargetFileInState(afterFileId, { check_result_id: entry.id, status: "checked" });
           }
         }}
         onClearAfterData={() => {
@@ -2068,7 +2106,7 @@ export default function FileReviewPage({
       {!creatorMode && record ? (
         <ShareLinkModal
           checkResultId={record.id}
-          fileId={displayFile?.id ?? file?.id}
+          fileId={activeFile?.id ?? file?.id}
           open={shareOpen}
           onOpenChange={setShareOpen}
         />
