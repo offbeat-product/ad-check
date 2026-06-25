@@ -15,9 +15,9 @@ const STATUS_ORDER: ProjectFileStatus[] = [
 ];
 
 const SHORT_LABEL: Record<ProjectFileStatus, string> = {
-  uploaded: "初稿前",
+  uploaded: "チェック前",
   checking: "チェック中",
-  checked: "初稿完了",
+  checked: "チェック完了",
   internal_revision: "修正中",
   client_review: "CL確認",
   fixed: "FIX",
