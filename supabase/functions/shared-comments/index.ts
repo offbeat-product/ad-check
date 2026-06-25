@@ -27,6 +27,7 @@ interface AttachmentInput {
 interface ShareLinkRow {
   id: string;
   check_result_id: string;
+  file_id: string | null;
   allow_comment_write: boolean | null;
   allow_comment_read: boolean | null;
   expires_at: string | null;
@@ -64,7 +65,7 @@ async function loadShareLink(
 ): Promise<{ link: ShareLinkRow | null; error?: string; status?: number }> {
   const { data: link, error } = await supabase
     .from("share_links")
-    .select("id, check_result_id, allow_comment_write, allow_comment_read, expires_at")
+    .select("id, check_result_id, file_id, allow_comment_write, allow_comment_read, expires_at")
     .eq("token", shareToken)
     .single();
 
@@ -105,6 +106,49 @@ async function collectCheckResultChainIds(
   return [...ids];
 }
 
+/** 共有リンクから参照可能な check_result_id（比較チェーン + 同一ファイル系統の全稿） */
+async function collectAllowedCheckResultIdsForShare(
+  supabase: SupabaseClient,
+  link: ShareLinkRow,
+): Promise<string[]> {
+  const ids = new Set<string>(await collectCheckResultChainIds(supabase, link.check_result_id));
+
+  let anchorFileId = link.file_id;
+  if (!anchorFileId) {
+    const { data: pfByCr } = await supabase
+      .from("project_files")
+      .select("id")
+      .eq("check_result_id", link.check_result_id)
+      .limit(1)
+      .maybeSingle();
+    anchorFileId = (pfByCr?.id as string | undefined) ?? null;
+  }
+
+  if (anchorFileId) {
+    const { data: anchorFile } = await supabase
+      .from("project_files")
+      .select("id, parent_file_id")
+      .eq("id", anchorFileId)
+      .maybeSingle();
+
+    if (anchorFile) {
+      const rootId = (anchorFile.parent_file_id as string | null) ?? (anchorFile.id as string);
+      const { data: familyFiles, error: familyError } = await supabase
+        .from("project_files")
+        .select("check_result_id")
+        .or(`id.eq.${rootId},parent_file_id.eq.${rootId}`);
+
+      if (familyError) throw familyError;
+
+      for (const pf of familyFiles ?? []) {
+        if (pf.check_result_id) ids.add(pf.check_result_id as string);
+      }
+    }
+  }
+
+  return [...ids];
+}
+
 async function assertCheckResultAllowed(
   supabase: SupabaseClient,
   shareToken: string,
@@ -115,7 +159,7 @@ async function assertCheckResultAllowed(
     return { ok: false, error: error ?? "Invalid share token", status: status ?? 403 };
   }
 
-  const allowedCheckResultIds = await collectCheckResultChainIds(supabase, link.check_result_id);
+  const allowedCheckResultIds = await collectAllowedCheckResultIdsForShare(supabase, link);
   if (!allowedCheckResultIds.includes(checkResultId)) {
     return { ok: false, error: "Check result not accessible for this share token", status: 403 };
   }
@@ -223,7 +267,7 @@ serve(async (req) => {
         return jsonResponse([]);
       }
 
-      const allowedCheckResultIds = await collectCheckResultChainIds(supabase, link.check_result_id);
+      const allowedCheckResultIds = await collectAllowedCheckResultIdsForShare(supabase, link);
       const { data: comments, error: commentsError } = await supabase
         .from("comments")
         .select("id, check_result_id")
@@ -288,7 +332,7 @@ serve(async (req) => {
         return jsonResponse({ error: error ?? "Write permission denied" }, status ?? 403);
       }
 
-      const allowedCheckResultIds = await collectCheckResultChainIds(supabase, link.check_result_id);
+      const allowedCheckResultIds = await collectAllowedCheckResultIdsForShare(supabase, link);
       const { data: comment, error: commentError } = await supabase
         .from("comments")
         .select("id, guest_token, check_result_id")
@@ -327,7 +371,7 @@ serve(async (req) => {
         return jsonResponse({ error: error ?? "Write permission denied" }, status ?? 403);
       }
 
-      const allowedCheckResultIds = await collectCheckResultChainIds(supabase, link.check_result_id);
+      const allowedCheckResultIds = await collectAllowedCheckResultIdsForShare(supabase, link);
       const { data: comment, error: commentError } = await supabase
         .from("comments")
         .select("id, guest_token, check_result_id")
