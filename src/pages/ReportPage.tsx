@@ -15,6 +15,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Legend } from "recharts";
 import { Target, CheckCircle, TrendingUp, Calendar, Settings2, Save, Download, FileSpreadsheet, FileText, RotateCcw, FolderCheck } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { ProjectBreakdownSection } from "@/components/report/ProjectBreakdownSection";
 import { toast } from "sonner";
 
 /* ─── Types ────────────────────────────────────────── */
@@ -234,17 +235,6 @@ function computeProductBreakdown(
   }).filter(r => r.deadlineTotal > 0 || r.firstDraftTotal > 0);
 }
 
-function computeProjectBreakdown(
-  projectList: ProjectRow[], procs: ProcessRow[], allFiles: FileRow[],
-): BreakdownRow[] {
-  return projectList.map(proj => {
-    const ps = procs.filter(p => p.project_id === proj.id);
-    const fs = allFiles.filter(f => f.project_id === proj.id);
-    const m = computeMetrics(ps, fs, [proj]);
-    return { key: proj.id, label: proj.name, deadlineRate: m.deadlineRate, deadlineTotal: m.deadlineTotal, firstDraftRate: m.firstDraftRate, firstDraftTotal: m.firstDraftTotal, avgRevisions: m.avgRevisions };
-  }).filter(r => r.deadlineTotal > 0 || r.firstDraftTotal > 0);
-}
-
 /* ─── Main Component ───────────────────────────────── */
 
 export default function ReportPage() {
@@ -351,7 +341,6 @@ export default function ReportPage() {
   const processBreakdown = useMemo(() => computeProcessBreakdown(periodProcesses, periodFiles), [periodProcesses, periodFiles]);
   const clientBreakdown = useMemo(() => computeClientBreakdown(clients, products, scopeProjects, periodProcesses, periodFiles), [clients, products, scopeProjects, periodProcesses, periodFiles]);
   const productBreakdown = useMemo(() => computeProductBreakdown(filteredProducts, scopeProjects, periodProcesses, periodFiles), [filteredProducts, scopeProjects, periodProcesses, periodFiles]);
-  const projectBreakdown = useMemo(() => computeProjectBreakdown(scopeProjects, periodProcesses, periodFiles), [scopeProjects, periodProcesses, periodFiles]);
 
   // Monthly trend chart
   const monthlyChartData = useMemo(() => {
@@ -516,8 +505,8 @@ export default function ReportPage() {
         {/* Product Breakdown */}
         <BreakdownTable title="商材別内訳" columnLabel="商材" rows={productBreakdown} deadlineTarget={deadlineTarget} firstDraftTarget={firstDraftTarget} />
 
-        {/* Project Breakdown */}
-        <BreakdownTable title="案件別内訳" columnLabel="案件" rows={projectBreakdown} deadlineTarget={deadlineTarget} firstDraftTarget={firstDraftTarget} />
+        {/* Project Breakdown with process matrix */}
+        <ProjectBreakdownSection />
 
         {/* Process Breakdown */}
         <BreakdownTable title="工程別内訳" columnLabel="工程" rows={processBreakdown} deadlineTarget={deadlineTarget} firstDraftTarget={firstDraftTarget} />
