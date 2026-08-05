@@ -1,9 +1,9 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import AnnotationCanvas from "@/components/AnnotationCanvas";
 import type { MentionMember } from "@/components/comments/MentionInput";
-import { ExternalLink, FileText, Pin } from "lucide-react";
+import { ExternalLink, FileText, Maximize2, Minimize2, Pin } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CommentAnnotationData } from "@/lib/comment-annotations";
 import type { CheckMarker } from "@/lib/marker-positions";
@@ -28,27 +28,70 @@ export default function ImagePreview({
   label, noDataMessage, overlay, savedAnnotations, members,
 }: ImagePreviewProps) {
   const imageContainerRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
+  const [fitToScreen, setFitToScreen] = useState(true);
   const canRenderImage =
     !!imageSrc &&
     (imageSrc.startsWith("data:image") || /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(imageSrc));
 
-  const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
-    setImageSize({ width: e.currentTarget.clientWidth, height: e.currentTarget.clientHeight });
+  const measureImage = useCallback(() => {
+    const el = imageRef.current;
+    if (!el) return;
+    setImageSize((prev) =>
+      prev.width === el.clientWidth && prev.height === el.clientHeight
+        ? prev
+        : { width: el.clientWidth, height: el.clientHeight }
+    );
   }, []);
 
+  // 表示サイズはウィンドウ幅・フィット切替で変わるため、マーカー座標系を追従させる
+  useEffect(() => {
+    const el = imageRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measureImage);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [measureImage, canRenderImage, imageSrc]);
+
   return (
-    <div className="relative">
-      <div className="flex items-center justify-between mb-2">
-        {label ? <span className="text-xs text-muted-foreground">{label}</span> : null}
-        <Button size="sm" variant={paintMode ? "default" : "outline"} onClick={onPaintModeToggle} className="text-xs h-7">
-          <Pin className="h-3 w-3 mr-1" />
-          ペイントモード
-        </Button>
+    <div className="relative text-center">
+      <div className="flex items-center gap-2 mb-2 text-left">
+        {label ? <span className="text-xs text-muted-foreground truncate">{label}</span> : null}
+        <div className="ml-auto flex items-center gap-1.5 shrink-0">
+          {canRenderImage ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setFitToScreen((v) => !v)}
+              className="text-xs h-7"
+            >
+              {fitToScreen ? <Maximize2 className="h-3 w-3 mr-1" /> : <Minimize2 className="h-3 w-3 mr-1" />}
+              {fitToScreen ? "幅に合わせる" : "全体表示"}
+            </Button>
+          ) : null}
+          <Button size="sm" variant={paintMode ? "default" : "outline"} onClick={onPaintModeToggle} className="text-xs h-7">
+            <Pin className="h-3 w-3 mr-1" />
+            ペイントモード
+          </Button>
+        </div>
       </div>
-      <div ref={imageContainerRef} className={cn("relative rounded-lg border border-border bg-muted/30", paintMode ? "overflow-visible mb-16" : "overflow-hidden")}>
+      <div
+        ref={imageContainerRef}
+        className={cn(
+          "relative align-top text-left rounded-lg border border-border bg-muted/30",
+          canRenderImage && fitToScreen ? "inline-block max-w-full" : "block",
+          paintMode ? "overflow-visible mb-16" : "overflow-hidden"
+        )}
+      >
         {canRenderImage ? (
-          <img src={imageSrc} alt="Preview" className="w-full" onLoad={handleImageLoad} />
+          <img
+            ref={imageRef}
+            src={imageSrc}
+            alt="Preview"
+            className={cn("block", fitToScreen ? "w-auto max-w-full max-h-[calc(100vh-13rem)]" : "w-full")}
+            onLoad={measureImage}
+          />
         ) : imageSrc ? (
           <div className="h-64 flex flex-col items-center justify-center gap-3 text-muted-foreground text-sm px-4 text-center">
             <FileText className="h-8 w-8 text-muted-foreground/60" />
