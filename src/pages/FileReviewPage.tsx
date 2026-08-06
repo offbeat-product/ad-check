@@ -15,7 +15,7 @@ import { tusUploadBlob } from "@/lib/tus-upload";
 import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import { AI_CHECK_CONFIG, getProcessLabel } from "@/lib/process-config";
 import type { CheckItem } from "@/lib/types";
-import { getEffectiveSubmitLabel } from "@/lib/check-display";
+import { getEffectiveSubmitLabel, normalizeResolvedItemIds } from "@/lib/check-display";
 import type { MentionMember } from "@/components/comments/MentionInput";
 import { RichCommentCard, type CommentRole, type ReactionSummary } from "@/components/comments/RichCommentCard";
 import { useCommentReactions } from "@/hooks/useCommentReactions";
@@ -273,25 +273,61 @@ export default function FileReviewPage({
       toast({ title: "AIチェックを先に実行してください", description: "クライアント提出前にAIチェックが必要です。", variant: "destructive" });
       return;
     }
-    // Fetch fresh record to get latest resolved_items & overall_status
-    const { data: fresh } = await supabase.from("check_results").select("overall_status, resolved_items, check_items").eq("id", record.id).maybeSingle();
-    if (!fresh) {
+
+    const evaluate = async () => {
+      const { data: fresh } = await supabase
+        .from("check_results")
+        .select("overall_status, resolved_items, check_items")
+        .eq("id", record.id)
+        .maybeSingle();
+      if (!fresh) return { fresh: null, effective: { label: "NG", isOk: false } as const };
+
+      // ローカルに反映済みの修正済があれば DB とマージ（保存直後のレース対策）
+      const resolved = [
+        ...new Set([
+          ...normalizeResolvedItemIds(fresh.resolved_items),
+          ...normalizeResolvedItemIds(record.resolved_items),
+        ]),
+      ];
+      const effective = getEffectiveSubmitLabel(
+        fresh.overall_status,
+        parseCheckItems(fresh.check_items ?? []),
+        resolved,
+      );
+      return { fresh, effective, resolved };
+    };
+
+    let result = await evaluate();
+    if (!result.fresh) {
       toast({ title: "チェック結果の取得に失敗しました", variant: "destructive" });
       return;
     }
-    // Also update local record state so it stays in sync
-    setRecord(prev => prev ? { ...prev, overall_status: fresh.overall_status, resolved_items: fresh.resolved_items } : prev);
-    const effective = getEffectiveSubmitLabel(
-      fresh.overall_status,
-      parseCheckItems(fresh.check_items ?? []),
-      (fresh.resolved_items as unknown as string[]) ?? [],
+    // 修正済クリック直後に提出した場合、保存完了を待って再判定
+    if (!result.effective.isOk) {
+      await new Promise((r) => setTimeout(r, 450));
+      result = await evaluate();
+      if (!result.fresh) {
+        toast({ title: "チェック結果の取得に失敗しました", variant: "destructive" });
+        return;
+      }
+    }
+
+    setRecord((prev) =>
+      prev
+        ? {
+            ...prev,
+            overall_status: result.fresh!.overall_status,
+            resolved_items: result.resolved ?? normalizeResolvedItemIds(result.fresh!.resolved_items),
+          }
+        : prev
     );
-    if (!effective.isOk) {
+
+    if (!result.effective.isOk) {
       toast({ title: "NG項目が未解消です", description: "全てのNG項目を修正済みにしてからクライアントに提出してください。", variant: "destructive" });
       return;
     }
     setSubmitToClientOpen(true);
-  }, [record?.id, record?.check_items, toast]);
+  }, [record?.id, record?.check_items, record?.resolved_items, toast]);
 
   // Poll media current time when comments tab is active
   useEffect(() => {
@@ -591,7 +627,7 @@ export default function FileReviewPage({
           // Check for comparison history — if exists, show latest comparison result by default
           const { data: compHistory } = await supabase
             .from("check_results")
-            .select("id, created_at, overall_status, ng_count, warning_count, ok_count, total_checks, check_items, comparison_round, input_data")
+            .select("id, created_at, overall_status, ng_count, warning_count, ok_count, total_checks, check_items, resolved_items, comparison_round, input_data, parent_check_result_id, check_type")
             .eq("parent_check_result_id", f.check_result_id)
             .eq("check_type", "comparison")
             .order("comparison_round", { ascending: false })
@@ -2045,6 +2081,7 @@ export default function FileReviewPage({
         highlightCard={highlightCard}
         commentFilter={commentFilter}
         checkResultId={rootCheckResultId}
+        aiCheckResultId={record?.id ?? null}
         hasCheckResult={!!record}
         onCommentClick={handleCommentClick}
         onCheckItemClick={scrollToCard}
@@ -2107,6 +2144,17 @@ export default function FileReviewPage({
         onSubmitToClient={validateAndOpenSubmit}
         onInternalRevision={() => setInternalRevisionOpen(true)}
         autoRunComparison={autoComparisonPendingRef.current}
+        onResolvedPersisted={({ resolvedItems, overallStatus }) => {
+          setRecord((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  resolved_items: resolvedItems,
+                  overall_status: overallStatus ?? prev.overall_status,
+                }
+              : prev
+          );
+        }}
         emptyCheckMessage={
           <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground p-6">
             <Bot className="h-10 w-10 mb-3 opacity-30" />
