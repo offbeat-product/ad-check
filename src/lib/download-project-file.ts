@@ -159,6 +159,74 @@ export type SharedDownloadPayload = {
   displayBaseName: string;
 };
 
+export type SharedPreviewSources = {
+  inputMode: "text" | "image" | "audio" | "video";
+  imageSrc: string | null;
+  videoSrc: string | null;
+  audioSrc: string | null;
+  scriptText: string;
+};
+
+function pickString(...values: unknown[]): string {
+  for (const v of values) {
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return "";
+}
+
+/**
+ * Resolve preview media from a shared check_results row.
+ * Comparison results store after_image / after_url instead of image_url / video_url.
+ */
+export function getSharedPreviewSources(record: CheckResultRow): SharedPreviewSources {
+  const pt = record.process_type;
+  const inputMode = AI_CHECK_CONFIG[pt]?.inputMode ?? "text";
+  const input = asInputRecord(record.input_data);
+
+  const scriptRaw =
+    pickString(input?.script_text, input?.after_text, record.input_text);
+  const scriptText = scriptRaw.startsWith("http") ? "" : scriptRaw;
+
+  if (inputMode === "image") {
+    return {
+      inputMode,
+      imageSrc:
+        pickString(input?.image_base64, input?.image_url, input?.after_image, input?.before_image) || null,
+      videoSrc: null,
+      audioSrc: null,
+      scriptText,
+    };
+  }
+
+  if (inputMode === "video") {
+    return {
+      inputMode,
+      imageSrc: null,
+      videoSrc: pickString(input?.video_url, input?.after_url, input?.before_url) || null,
+      audioSrc: null,
+      scriptText,
+    };
+  }
+
+  if (inputMode === "audio") {
+    return {
+      inputMode,
+      imageSrc: null,
+      videoSrc: null,
+      audioSrc: pickString(input?.audio_url, input?.audio_base64, input?.after_url, input?.before_url) || null,
+      scriptText,
+    };
+  }
+
+  return {
+    inputMode: "text",
+    imageSrc: null,
+    videoSrc: null,
+    audioSrc: null,
+    scriptText,
+  };
+}
+
 /**
  * Builds download payload from a shared check_results row (input_data shape varies by process and comparison vs initial check).
  */
