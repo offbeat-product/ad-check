@@ -20,6 +20,8 @@ interface ReviewRightPanelProps {
   highlightCard: string | null;
   commentFilter: string | null;
   checkResultId: string | null;
+  /** AIチェック結果の修正済保存先。未指定時は checkResultId を使う */
+  aiCheckResultId?: string | null;
   hasCheckResult: boolean;
   onCommentClick: (patternId: string) => void;
   onCheckItemClick?: (patternId: string) => void;
@@ -62,11 +64,12 @@ interface ReviewRightPanelProps {
   onInternalRevision?: () => void;
   commentRefreshKey?: number;
   autoRunComparison?: boolean;
+  onResolvedPersisted?: (payload: { resolvedItems: string[]; overallStatus: string | null | undefined }) => void;
 }
 
 export default function ReviewRightPanel({
   rightTab, onTabChange, items, markers, productCode, commentCounts, highlightCard,
-  commentFilter, checkResultId, hasCheckResult, onCommentClick, onCheckItemClick, onMarkerClick, emptyCheckMessage, onAnnotationClick,
+  commentFilter, checkResultId, aiCheckResultId, hasCheckResult, onCommentClick, onCheckItemClick, onMarkerClick, emptyCheckMessage, onAnnotationClick,
   overallStatus, checkedAt, file, productId, projectId,
   mediaCurrentTime, onSeekMedia, fileId, comparisonTargetFileId, onCommentDeleted,
   onActiveCheckItemChange,
@@ -75,6 +78,7 @@ export default function ReviewRightPanel({
   onOpenComparisonMode, onComparisonCheckComplete, onComparisonSaved, onClearAfterData,
   clientName, productName, lockedByUser, onAcquireLock, onReleaseLock,
   submissionType, onSubmitToClient, onInternalRevision, commentRefreshKey, autoRunComparison,
+  onResolvedPersisted,
 }: ReviewRightPanelProps) {
   const [totalCommentCount, setTotalCommentCount] = useState(0);
 
@@ -154,7 +158,7 @@ export default function ReviewRightPanel({
               commentCounts={commentCounts}
               highlightCard={highlightCard}
               onCommentClick={onCommentClick}
-              checkResultId={checkResultId}
+              checkResultId={aiCheckResultId ?? checkResultId}
               onTabChange={onTabChange}
               overallStatus={overallStatus}
               checkedAt={checkedAt}
@@ -164,6 +168,7 @@ export default function ReviewRightPanel({
               onSeekMedia={onSeekMedia}
               onMarkerClick={onMarkerClick}
               onActiveCheckItemChange={onActiveCheckItemChange}
+              onResolvedPersisted={onResolvedPersisted}
             />
             </SectionErrorBoundary>
           ) : (

@@ -12,7 +12,7 @@ import { gatherReferenceMaterials } from "@/lib/reference-materials";
 import { AI_CHECK_CONFIG } from "@/lib/process-config";
 import { supabase } from "@/integrations/supabase/client";
 import { handleSupabaseError } from "@/lib/supabase-helpers";
-import { getSubmitLabel, getSubmitBadgeClass, STATUS_FILTER_OPTIONS, getEffectiveSubmitLabel, getCheckItemId, checkItemStr } from "@/lib/check-display";
+import { getSubmitLabel, getSubmitBadgeClass, STATUS_FILTER_OPTIONS, getEffectiveSubmitLabel, getCheckItemId, checkItemStr, isCheckItemResolved, collectResolvedIdsForItem, normalizeResolvedItemIds } from "@/lib/check-display";
 import type { CheckItem, CheckResult } from "@/lib/types";
 import { parseCheckItems } from "@/schemas/checkItem";
 import type { CheckMarker } from "@/lib/marker-positions";
@@ -114,11 +114,8 @@ export default function ComparisonCheckPanel({
     await supabase.from("check_results").update({ resolved_items: arr }).eq("id", targetId);
 
     // Compute effective status: if all NG items are resolved → GO (B), else keep original
-    const ngItems = currentCheckItems.filter(i => i.status === "NG");
-    const allNgResolved = ngItems.length > 0 && ngItems.every(i => {
-      const id = getCheckItemId(i);
-      return id ? newSet.has(id) : false;
-    });
+    const ngItems = currentCheckItems.filter((i) => (i.status || "").toUpperCase() === "NG");
+    const allNgResolved = ngItems.length > 0 && ngItems.every((i) => isCheckItemResolved(i, newSet));
     const effectiveStatus = allNgResolved ? "B" : originalStatus;
 
     // Always sync to parent so project page badges reflect the effective state
@@ -134,13 +131,17 @@ export default function ComparisonCheckPanel({
   const toggleResolved = useCallback((patternId: string) => {
     setResolvedItems((s) => {
       const next = new Set(s);
-      if (next.has(patternId)) next.delete(patternId);
-      else next.add(patternId);
+      const { items: currentCheckItems } = displayDataRef.current;
+      const target = currentCheckItems.find((i) => getCheckItemId(i) === patternId);
+      const relatedIds = target ? collectResolvedIdsForItem(target, currentCheckItems) : [patternId];
+      const shouldResolve = !relatedIds.every((id) => next.has(id));
+      if (shouldResolve) relatedIds.forEach((id) => next.add(id));
+      else relatedIds.forEach((id) => next.delete(id));
       const targetId = selectedHistoryId || checkResultId;
-      persistResolved(next, targetId);
+      void persistResolved(next, targetId);
       // Also update the history resolved map for badge consistency
       if (selectedHistoryId) {
-        setHistoryResolvedMap(prev => ({ ...prev, [selectedHistoryId]: [...next] }));
+        setHistoryResolvedMap((prev) => ({ ...prev, [selectedHistoryId]: [...next] }));
       }
       return next;
     });
@@ -165,7 +166,7 @@ export default function ComparisonCheckPanel({
     let cancelled = false;
     supabase.from("check_results").select("resolved_items").eq("id", targetId).maybeSingle().then(({ data }) => {
       if (cancelled || !data?.resolved_items) return;
-      const ids = Array.isArray(data.resolved_items) ? data.resolved_items as string[] : [];
+      const ids = normalizeResolvedItemIds(data.resolved_items);
       if (ids.length > 0) setResolvedItems(new Set(ids));
     });
     return () => { cancelled = true; };
@@ -829,7 +830,7 @@ export default function ComparisonCheckPanel({
                     item={item}
                     index={i}
                     marker={marker}
-                    isResolved={resolvedItems.has(itemId)}
+                    isResolved={isCheckItemResolved(item, resolvedItems)}
                     isSelected={selectedItems.has(itemId)}
                     isHighlighted={highlightCard === item.pattern_id}
                     isApplied={appliedItems.has(itemId)}
@@ -867,7 +868,7 @@ export default function ComparisonCheckPanel({
         {displayResult ? <>
             {/* Bulk resolve all NG items */}
             {(() => {
-              const unresolvedNg = displayItems.filter(i => i.status === "NG" && !resolvedItems.has(getCheckItemId(i)));
+              const unresolvedNg = displayItems.filter((i) => (i.status || "").toUpperCase() === "NG" && !isCheckItemResolved(i, resolvedItems));
               return unresolvedNg.length > 0 ? (
                 <Button
                   size="sm"
@@ -875,12 +876,14 @@ export default function ComparisonCheckPanel({
                   className="w-full text-xs gap-1 border-status-ng/30 text-status-ng hover:bg-status-ng/10"
                   onClick={() => {
                     const next = new Set(resolvedItems);
-                    unresolvedNg.forEach(i => next.add(getCheckItemId(i)));
+                    unresolvedNg.forEach((i) => {
+                      collectResolvedIdsForItem(i, displayItems).forEach((id) => next.add(id));
+                    });
                     setResolvedItems(next);
                     const targetId = selectedHistoryId || checkResultId;
-                    persistResolved(next, targetId);
+                    void persistResolved(next, targetId);
                     if (selectedHistoryId) {
-                      setHistoryResolvedMap(prev => ({ ...prev, [selectedHistoryId]: [...next] }));
+                      setHistoryResolvedMap((prev) => ({ ...prev, [selectedHistoryId]: [...next] }));
                     }
                   }}
                 >
@@ -1001,7 +1004,7 @@ function OkItemsCollapsed({ items, markers, resolvedItems, selectedItems, highli
             item={item}
             index={i}
             marker={marker}
-            isResolved={resolvedItems.has(itemId)}
+            isResolved={isCheckItemResolved(item, resolvedItems)}
             isSelected={selectedItems.has(itemId)}
             isHighlighted={highlightCard === item.pattern_id}
             isApplied={appliedItems.has(itemId)}

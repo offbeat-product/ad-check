@@ -53,6 +53,71 @@ function simpleHash(str: string): string {
   return (h >>> 0).toString(36);
 }
 
+/** DB の resolved_items (Json) を string[] に正規化 */
+export function normalizeResolvedItemIds(value: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value
+      .map((v) => {
+        if (typeof v === "string") return v;
+        if (v && typeof v === "object" && "id" in v && typeof (v as { id: unknown }).id === "string") {
+          return (v as { id: string }).id;
+        }
+        return "";
+      })
+      .filter(Boolean);
+  }
+  return [];
+}
+
+/**
+ * 修正済み判定。getCheckItemId 完全一致に加え、pattern_id 単体や
+ * `pattern_id_<hash>` 形式（旧データ／重複項目）も許容する。
+ */
+export function isCheckItemResolved(
+  item: { pattern_id?: string | null; item?: string | null; detail?: string | null },
+  resolvedItems: Iterable<string> | null | undefined,
+): boolean {
+  if (!resolvedItems) return false;
+  const resolvedSet = resolvedItems instanceof Set ? resolvedItems : new Set(resolvedItems);
+  if (resolvedSet.size === 0) return false;
+
+  const id = getCheckItemId(item);
+  if (id && resolvedSet.has(id)) return true;
+
+  const patternId = checkItemStr(item.pattern_id);
+  if (patternId && resolvedSet.has(patternId)) return true;
+  if (patternId) {
+    for (const rid of resolvedSet) {
+      if (rid.startsWith(`${patternId}_`)) return true;
+    }
+  }
+  return false;
+}
+
+/** ある項目を修正済みにするときに一緒に記録すべき ID 群（同一 pattern / 重複行） */
+export function collectResolvedIdsForItem(
+  item: { status?: string; pattern_id?: string | null; item?: string | null; detail?: string | null },
+  allItems: Array<{ status?: string; pattern_id?: string | null; item?: string | null; detail?: string | null }>,
+): string[] {
+  const ids = new Set<string>();
+  const add = (target: { pattern_id?: string | null; item?: string | null; detail?: string | null }) => {
+    const id = getCheckItemId(target);
+    if (id) ids.add(id);
+    const patternId = checkItemStr(target.pattern_id);
+    if (patternId) ids.add(patternId);
+  };
+
+  add(item);
+  const patternId = checkItemStr(item.pattern_id);
+  if (patternId) {
+    for (const other of allItems) {
+      if (checkItemStr(other.pattern_id) === patternId) add(other);
+    }
+  }
+  return [...ids];
+}
+
 /**
  * Compute effective GO/NG considering resolved items.
  * If the original status is NG (C/D) but ALL NG check items have been resolved, return GO.
@@ -64,14 +129,11 @@ export function getEffectiveSubmitLabel(
 ): { label: string; isOk: boolean } {
   const base = getSubmitLabel(overallStatus);
   if (base.isOk) return base; // Already GO
-  if (!checkItems || !resolvedItems || resolvedItems.length === 0) return base;
+  const resolved = normalizeResolvedItemIds(resolvedItems);
+  if (!checkItems || resolved.length === 0) return base;
 
-  const resolvedSet = new Set(resolvedItems);
-  const ngItems = checkItems.filter(i => i.status === "NG");
-  if (ngItems.length > 0 && ngItems.every(i => {
-    const id = getCheckItemId(i);
-    return id ? resolvedSet.has(id) : false;
-  })) {
+  const ngItems = checkItems.filter((i) => (i.status || "").toUpperCase() === "NG");
+  if (ngItems.length > 0 && ngItems.every((i) => isCheckItemResolved(i, resolved))) {
     return { label: "GO", isOk: true };
   }
   return base;
