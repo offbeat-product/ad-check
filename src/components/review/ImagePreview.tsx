@@ -44,7 +44,10 @@ export default function ImagePreview({
   const [sizeLevel, setSizeLevel] = useState(DEFAULT_SIZE_LEVEL);
   const canRenderImage =
     !!imageSrc &&
-    (imageSrc.startsWith("data:image") || /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(imageSrc));
+    (imageSrc.startsWith("data:image") ||
+      imageSrc.startsWith("blob:") ||
+      /^https?:\/\//i.test(imageSrc) ||
+      /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(imageSrc));
 
   const scale = SIZE_LEVELS[sizeLevel]?.scale ?? null;
   const isScaled = canRenderImage && scale !== null;

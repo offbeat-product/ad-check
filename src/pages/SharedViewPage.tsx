@@ -18,7 +18,7 @@ import { handleSupabaseError } from "@/lib/supabase-helpers";
 import { Lock, AlertTriangle, Bot, Download } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { AdCheckLogoMark } from "@/components/AdCheckLogoMark";
-import { downloadProjectFile, getSharedCheckDownloadPayload } from "@/lib/download-project-file";
+import { downloadProjectFile, getSharedCheckDownloadPayload, getSharedPreviewSources } from "@/lib/download-project-file";
 import { useToast } from "@/hooks/use-toast";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import {
@@ -277,19 +277,17 @@ export default function SharedViewPage() {
 
   // --- Derived Data ---
   const aiCfg = AI_CHECK_CONFIG[record.process_type];
-  const inputMode = aiCfg?.inputMode || "text";
-  const inputData = record.input_data as Record<string, string> | null;
+  const preview = getSharedPreviewSources(record);
+  const inputMode = preview.inputMode || aiCfg?.inputMode || "text";
   const canReadComments = shareLink?.allow_comment_read ?? false;
   const canWriteComments = shareLink?.allow_comment_write ?? false;
   const allowDownload = shareLink?.allow_download === true;
   const canOfferDownload = getSharedCheckDownloadPayload(record) !== null;
 
-  const imageSrc = inputData?.image_base64 || inputData?.image_url || null;
-  const videoSrc = inputData?.video_url || null;
-  const audioSrc = inputData?.audio_url || null;
-  // Filter out raw URLs from script text display
-  const rawScriptText = inputData?.script_text || record.input_text || "";
-  const scriptText = rawScriptText.startsWith("http") ? "" : rawScriptText;
+  const imageSrc = preview.imageSrc;
+  const videoSrc = preview.videoSrc;
+  const audioSrc = preview.audioSrc;
+  const scriptText = preview.scriptText;
 
   const effectiveTab = rightTab === "comments" ? "comments" : "ai-check";
 
