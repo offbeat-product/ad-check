@@ -9,24 +9,14 @@ import type { CommentAnnotationData } from "@/lib/comment-annotations";
 import type { CheckMarker } from "@/lib/marker-positions";
 import { checkItemStr } from "@/lib/check-display";
 
-/** 表示サイズ段階。scale=null は従来どおりパネル幅いっぱい表示 */
+/** 表示サイズ段階。scale=null はパネル幅いっぱいの最大表示 */
 const SIZE_LEVELS: { label: string; scale: number | null }[] = [
   { label: "小", scale: 0.55 },
   { label: "中", scale: 0.75 },
   { label: "大", scale: 1 },
-  { label: "幅いっぱい", scale: null },
+  { label: "最大", scale: null },
 ];
 const DEFAULT_SIZE_LEVEL = 2;
-const SIZE_LEVEL_STORAGE_KEY = "adcheck.imagePreview.sizeLevel";
-
-function readStoredSizeLevel() {
-  try {
-    const stored = Number(localStorage.getItem(SIZE_LEVEL_STORAGE_KEY));
-    return Number.isInteger(stored) && stored >= 0 && stored < SIZE_LEVELS.length ? stored : DEFAULT_SIZE_LEVEL;
-  } catch {
-    return DEFAULT_SIZE_LEVEL;
-  }
-}
 
 interface ImagePreviewProps {
   imageSrc: string | null | undefined;
@@ -51,22 +41,13 @@ export default function ImagePreview({
   const imageRef = useRef<HTMLImageElement>(null);
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
   const [availableWidth, setAvailableWidth] = useState(0);
-  const [sizeLevel, setSizeLevel] = useState(readStoredSizeLevel);
+  const [sizeLevel, setSizeLevel] = useState(DEFAULT_SIZE_LEVEL);
   const canRenderImage =
     !!imageSrc &&
     (imageSrc.startsWith("data:image") || /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(imageSrc));
 
   const scale = SIZE_LEVELS[sizeLevel]?.scale ?? null;
   const isScaled = canRenderImage && scale !== null;
-
-  const changeSizeLevel = useCallback((next: number) => {
-    setSizeLevel(next);
-    try {
-      localStorage.setItem(SIZE_LEVEL_STORAGE_KEY, String(next));
-    } catch {
-      // ストレージ不可でも表示自体は継続する
-    }
-  }, []);
 
   const measureImage = useCallback(() => {
     const el = imageRef.current;
@@ -108,7 +89,7 @@ export default function ImagePreview({
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => changeSizeLevel(sizeLevel - 1)}
+                onClick={() => setSizeLevel(sizeLevel - 1)}
                 disabled={sizeLevel === 0}
                 className="h-full px-1.5 rounded-r-none"
                 aria-label="表示を小さく"
@@ -121,7 +102,7 @@ export default function ImagePreview({
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => changeSizeLevel(sizeLevel + 1)}
+                onClick={() => setSizeLevel(sizeLevel + 1)}
                 disabled={sizeLevel === SIZE_LEVELS.length - 1}
                 className="h-full px-1.5 rounded-l-none"
                 aria-label="表示を大きく"
