@@ -13,7 +13,7 @@ import { resolveWebhookProductId } from "@/lib/resolve-product-id";
 import { useVideoCheckPolling } from "@/hooks/useVideoCheckPolling";
 import { tusUploadBlob } from "@/lib/tus-upload";
 import { gatherReferenceMaterials } from "@/lib/reference-materials";
-import { AI_CHECK_CONFIG } from "@/lib/process-config";
+import { AI_CHECK_CONFIG, getProcessLabel } from "@/lib/process-config";
 import type { CheckItem } from "@/lib/types";
 import { getEffectiveSubmitLabel } from "@/lib/check-display";
 import type { MentionMember } from "@/components/comments/MentionInput";
@@ -150,6 +150,7 @@ export default function FileReviewPage({
   const [project, setProject] = useState<Project | null>(null);
   const [product, setProduct] = useState<Product | null>(null);
   const [client, setClient] = useState<Client | null>(null);
+  const [processLabel, setProcessLabel] = useState<string>("");
   const [record, setRecord] = useState<CheckResultWithParsedItems | null>(null);
   const applyRecord = useCallback((row: CheckResultRow | null | undefined) => {
     setRecord(row ? parseCheckResultRow(row) : null);
@@ -393,6 +394,7 @@ export default function FileReviewPage({
     if (!creatorMode && !projectId) return;
     setLoading(true);
     setVersions([]);
+    setProcessLabel("");
     let cancelled = false;
     (async () => {
       if (creatorMode) {
@@ -471,6 +473,29 @@ export default function FileReviewPage({
             created_at: "",
           } as unknown as Client);
 
+          // 案件画面と同じ枠名（process_label）をプレビュータイトルに使う
+          setProcessLabel(getProcessLabel(target.process_type));
+          try {
+            const { data: processPayload } = await supabase.rpc("get_project_processes_for_creator", {
+              p_share_token: activeShareToken,
+            });
+            if (!cancelled && Array.isArray(processPayload)) {
+              const matched = processPayload.find(
+                (row) =>
+                  row &&
+                  typeof row === "object" &&
+                  !Array.isArray(row) &&
+                  String((row as Record<string, unknown>).process_key ?? "") === target.process_type
+              ) as Record<string, unknown> | undefined;
+              const label = matched?.process_label;
+              if (typeof label === "string" && label.trim()) {
+                setProcessLabel(label.trim());
+              }
+            }
+          } catch {
+            // フォールバック済みのため無視
+          }
+
           const rootId = target.parent_file_id || target.id;
           setVersions(
             creatorFiles
@@ -504,6 +529,22 @@ export default function FileReviewPage({
       setComparisonMode(false);
       setComparisonDrafts([]);
       setComparisonActivePairIndex(0);
+
+      // 案件画面の枠名（project_processes.process_label）をプレビュータイトルに使う
+      setProcessLabel(getProcessLabel(f.process_type));
+      const { data: processRow } = await supabase
+        .from("project_processes")
+        .select("process_label")
+        .eq("project_id", projectId)
+        .eq("process_key", f.process_type)
+        .eq("is_active", true)
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled) return;
+      if (processRow?.process_label?.trim()) {
+        setProcessLabel(processRow.process_label.trim());
+      }
 
       const { data: proj, error: projErr } = await supabase.from("projects").select("*").eq("id", projectId).maybeSingle();
       if (cancelled) return;
@@ -1867,7 +1908,7 @@ export default function FileReviewPage({
                 }}
                 onMarkerClick={scrollToCard}
                 onAnnotationSave={handleAnnotationSave}
-                label={`${client?.name} / ${product?.name} / スタイルフレーム`}
+                label={`${client?.name} / ${product?.name} / ${processLabel || getProcessLabel(activeFile.process_type)}`}
                 noDataMessage="プレビューなし"
                 savedAnnotations={visibleSelectedAnnotations}
                 members={mentionMembers}
@@ -1884,7 +1925,7 @@ export default function FileReviewPage({
                   ref={mediaPreviewRef}
                   src={activeFile.file_data}
                   mediaType={aiCfg.inputMode as "audio" | "video"}
-                  label={`${client?.name} / ${product?.name} / ${aiCfg.inputMode === "audio" ? "音声" : "動画"}`}
+                  label={`${client?.name} / ${product?.name} / ${processLabel || getProcessLabel(activeFile.process_type)}`}
                   noDataMessage="メディアファイルなし"
                   paintMode={paintMode}
                   onPaintModeToggle={() => {
@@ -2147,7 +2188,7 @@ export default function FileReviewPage({
           shareToken={activeShareToken}
           projectId={file.project_id || projectId || "creator"}
           processType={file.process_type}
-          processLabel={file.process_type}
+          processLabel={processLabel || getProcessLabel(file.process_type)}
           parentCandidates={creatorParentCandidates}
           defaultUploadType="revision"
           defaultParentFileId={file.parent_file_id ?? file.id}
