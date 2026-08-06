@@ -431,6 +431,12 @@ export default function FileReviewPage({
     setLoading(true);
     setVersions([]);
     setProcessLabel("");
+    // ファイル切替時に前ファイルのコメント赤枠・選択状態を残さない
+    setSelectedAnnotations([]);
+    setSelectedCommentId(null);
+    setSelectedAnnotationTimestamp(null);
+    setActiveCheckItem(null);
+    setPaintMode(false);
     let cancelled = false;
     (async () => {
       if (creatorMode) {
