@@ -3,11 +3,30 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { Button } from "@/components/ui/button";
 import AnnotationCanvas from "@/components/AnnotationCanvas";
 import type { MentionMember } from "@/components/comments/MentionInput";
-import { ExternalLink, FileText, Maximize2, Minimize2, Pin } from "lucide-react";
+import { ExternalLink, FileText, Pin, ZoomIn, ZoomOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CommentAnnotationData } from "@/lib/comment-annotations";
 import type { CheckMarker } from "@/lib/marker-positions";
 import { checkItemStr } from "@/lib/check-display";
+
+/** 表示サイズ段階。scale=null は従来どおりパネル幅いっぱい表示 */
+const SIZE_LEVELS: { label: string; scale: number | null }[] = [
+  { label: "小", scale: 0.55 },
+  { label: "中", scale: 0.75 },
+  { label: "大", scale: 1 },
+  { label: "幅いっぱい", scale: null },
+];
+const DEFAULT_SIZE_LEVEL = 2;
+const SIZE_LEVEL_STORAGE_KEY = "adcheck.imagePreview.sizeLevel";
+
+function readStoredSizeLevel() {
+  try {
+    const stored = Number(localStorage.getItem(SIZE_LEVEL_STORAGE_KEY));
+    return Number.isInteger(stored) && stored >= 0 && stored < SIZE_LEVELS.length ? stored : DEFAULT_SIZE_LEVEL;
+  } catch {
+    return DEFAULT_SIZE_LEVEL;
+  }
+}
 
 interface ImagePreviewProps {
   imageSrc: string | null | undefined;
@@ -27,13 +46,27 @@ export default function ImagePreview({
   imageSrc, markers, paintMode, onPaintModeToggle, onMarkerClick, onAnnotationSave,
   label, noDataMessage, overlay, savedAnnotations, members,
 }: ImagePreviewProps) {
+  const wrapperRef = useRef<HTMLDivElement>(null);
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const imageRef = useRef<HTMLImageElement>(null);
   const [imageSize, setImageSize] = useState({ width: 0, height: 0 });
-  const [fitToScreen, setFitToScreen] = useState(true);
+  const [availableWidth, setAvailableWidth] = useState(0);
+  const [sizeLevel, setSizeLevel] = useState(readStoredSizeLevel);
   const canRenderImage =
     !!imageSrc &&
     (imageSrc.startsWith("data:image") || /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(imageSrc));
+
+  const scale = SIZE_LEVELS[sizeLevel]?.scale ?? null;
+  const isScaled = canRenderImage && scale !== null;
+
+  const changeSizeLevel = useCallback((next: number) => {
+    setSizeLevel(next);
+    try {
+      localStorage.setItem(SIZE_LEVEL_STORAGE_KEY, String(next));
+    } catch {
+      // ストレージ不可でも表示自体は継続する
+    }
+  }, []);
 
   const measureImage = useCallback(() => {
     const el = imageRef.current;
@@ -45,7 +78,7 @@ export default function ImagePreview({
     );
   }, []);
 
-  // 表示サイズはウィンドウ幅・フィット切替で変わるため、マーカー座標系を追従させる
+  // 表示サイズはウィンドウ幅・サイズ切替で変わるため、マーカー座標系を追従させる
   useEffect(() => {
     const el = imageRef.current;
     if (!el || typeof ResizeObserver === "undefined") return;
@@ -54,21 +87,48 @@ export default function ImagePreview({
     return () => observer.disconnect();
   }, [measureImage, canRenderImage, imageSrc]);
 
+  // 画像の最大幅は「枠の実寸 × 倍率」で決める（％指定だと枠が画像に追従せずマーカーがずれる）
+  useEffect(() => {
+    const el = wrapperRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const sync = () => setAvailableWidth((prev) => (prev === el.clientWidth ? prev : el.clientWidth));
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className="relative text-center">
+    <div ref={wrapperRef} className="relative text-center">
       <div className="flex items-center gap-2 mb-2 text-left">
         {label ? <span className="text-xs text-muted-foreground truncate">{label}</span> : null}
         <div className="ml-auto flex items-center gap-1.5 shrink-0">
           {canRenderImage ? (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => setFitToScreen((v) => !v)}
-              className="text-xs h-7"
-            >
-              {fitToScreen ? <Maximize2 className="h-3 w-3 mr-1" /> : <Minimize2 className="h-3 w-3 mr-1" />}
-              {fitToScreen ? "幅に合わせる" : "全体表示"}
-            </Button>
+            <div className="flex items-center rounded-md border border-border h-7">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => changeSizeLevel(sizeLevel - 1)}
+                disabled={sizeLevel === 0}
+                className="h-full px-1.5 rounded-r-none"
+                aria-label="表示を小さく"
+              >
+                <ZoomOut className="h-3 w-3" />
+              </Button>
+              <span className="px-1.5 text-[11px] text-muted-foreground whitespace-nowrap tabular-nums">
+                {SIZE_LEVELS[sizeLevel].label}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => changeSizeLevel(sizeLevel + 1)}
+                disabled={sizeLevel === SIZE_LEVELS.length - 1}
+                className="h-full px-1.5 rounded-l-none"
+                aria-label="表示を大きく"
+              >
+                <ZoomIn className="h-3 w-3" />
+              </Button>
+            </div>
           ) : null}
           <Button size="sm" variant={paintMode ? "default" : "outline"} onClick={onPaintModeToggle} className="text-xs h-7">
             <Pin className="h-3 w-3 mr-1" />
@@ -80,7 +140,7 @@ export default function ImagePreview({
         ref={imageContainerRef}
         className={cn(
           "relative align-top text-left rounded-lg border border-border bg-muted/30",
-          canRenderImage && fitToScreen ? "inline-block max-w-full" : "block",
+          isScaled ? "inline-block max-w-full" : "block",
           paintMode ? "overflow-visible mb-16" : "overflow-hidden"
         )}
       >
@@ -89,7 +149,15 @@ export default function ImagePreview({
             ref={imageRef}
             src={imageSrc}
             alt="Preview"
-            className={cn("block", fitToScreen ? "w-auto max-w-full max-h-[calc(100vh-13rem)]" : "w-full")}
+            className={cn("block max-w-full", isScaled ? "w-auto" : "w-full")}
+            style={
+              isScaled
+                ? {
+                    maxWidth: availableWidth ? `${Math.floor(availableWidth * scale)}px` : undefined,
+                    maxHeight: `calc((100vh - 13rem) * ${scale})`,
+                  }
+                : undefined
+            }
             onLoad={measureImage}
           />
         ) : imageSrc ? (
