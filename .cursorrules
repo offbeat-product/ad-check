@@ -183,3 +183,20 @@ n8nのWebhookノードとRespond to Webhookノードの両方に以下を設定:
 1. Supabaseダッシュボードで変更
 2. src/integrations/supabase/types.ts を再生成
 3. 関連するフック・ページを更新
+
+## 共有ビューのプレビュー（再発防止）
+共有リンク（`SharedViewPage`）のメディア表示・ダウンロードは **必ず** `src/lib/download-project-file.ts` の
+`getSharedPreviewSources` / `getSharedCheckDownloadPayload` を使う。
+
+### input_data のフィールド契約
+| 種別 | 初稿チェック | 比較チェック（最新稿） |
+|------|-------------|----------------------|
+| 画像 | `image_url` / `image_base64` | `after_image`（必須フォールバック） |
+| 動画 | `video_url` | `after_url` |
+| 音声 | `audio_url` / `audio_base64` | `after_url` |
+| テキスト | `script_text` / `input_text` | `after_text` |
+
+- `SharedViewPage` で `input_data.image_url` などを直接参照しない（比較結果でプレビュー不可になる）
+- 比較結果の保存キーを変える場合は `getSharedPreviewSources` と `src/lib/download-project-file.test.ts` を同時更新
+- 回帰テスト: `npm test -- src/lib/download-project-file.test.ts`
+

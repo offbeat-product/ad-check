@@ -228,34 +228,26 @@ export function getSharedPreviewSources(record: CheckResultRow): SharedPreviewSo
 }
 
 /**
- * Builds download payload from a shared check_results row (input_data shape varies by process and comparison vs initial check).
+ * Builds download payload from a shared check_results row.
+ * Media path resolution MUST go through getSharedPreviewSources so preview/download never drift.
  */
 export function getSharedCheckDownloadPayload(record: CheckResultRow): SharedDownloadPayload | null {
   const pt = record.process_type;
-  const inputMode = AI_CHECK_CONFIG[pt]?.inputMode ?? "text";
   const input = asInputRecord(record.input_data);
   const stem = sanitizeFileStem(`${record.product_code}_${pt}`);
+  const preview = getSharedPreviewSources(record);
 
-  const textBody =
-    (typeof input?.script_text === "string" ? input.script_text : "") ||
-    (typeof input?.after_text === "string" ? input.after_text : "") ||
-    (record.input_text ?? "");
-
-  if (inputMode === "text") {
-    const t = textBody.trim();
+  if (preview.inputMode === "text") {
+    const t = preview.scriptText.trim();
     if (!t) return null;
     return {
-      source: { file_data: textBody, file_type: "text", process_type: pt },
+      source: { file_data: preview.scriptText, file_type: "text", process_type: pt },
       displayBaseName: stem,
     };
   }
 
-  if (inputMode === "image") {
-    const img =
-      (typeof input?.image_base64 === "string" ? input.image_base64.trim() : "") ||
-      (typeof input?.image_url === "string" ? input.image_url.trim() : "") ||
-      (typeof input?.after_image === "string" ? input.after_image.trim() : "") ||
-      "";
+  if (preview.inputMode === "image") {
+    const img = preview.imageSrc;
     if (!img) return null;
     const named =
       (typeof input?.file_name === "string" && input.file_name.trim()) ||
@@ -267,11 +259,8 @@ export function getSharedCheckDownloadPayload(record: CheckResultRow): SharedDow
     };
   }
 
-  if (inputMode === "video") {
-    const url =
-      (typeof input?.video_url === "string" ? input.video_url.trim() : "") ||
-      (typeof input?.after_url === "string" ? input.after_url.trim() : "") ||
-      "";
+  if (preview.inputMode === "video") {
+    const url = preview.videoSrc;
     if (!url) return null;
     const fromUrl = url.startsWith("http") ? fileNameFromStorageUrl(url) : null;
     const fallbackExt = PROCESS_FALLBACK_EXT[pt] ?? ".mp4";
@@ -281,17 +270,9 @@ export function getSharedCheckDownloadPayload(record: CheckResultRow): SharedDow
     };
   }
 
-  if (inputMode === "audio") {
-    const au = typeof input?.audio_url === "string" ? input.audio_url.trim() : "";
-    const b64 = typeof input?.audio_base64 === "string" ? input.audio_base64.trim() : "";
-    const after = typeof input?.after_url === "string" ? input.after_url.trim() : "";
-    let file_data = "";
-    if (au.startsWith("http://") || au.startsWith("https://")) file_data = au;
-    else if (b64) file_data = b64;
-    else if (after.startsWith("http://") || after.startsWith("https://")) file_data = after;
-    else if (after) file_data = after;
-    else if (au) file_data = au;
-    if (!file_data.trim()) return null;
+  if (preview.inputMode === "audio") {
+    const file_data = preview.audioSrc;
+    if (!file_data?.trim()) return null;
     const fallbackExt = PROCESS_FALLBACK_EXT[pt] ?? ".mp3";
     const fromUrl =
       file_data.startsWith("http://") || file_data.startsWith("https://")
