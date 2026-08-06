@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getSharedPreviewSources } from "@/lib/download-project-file";
+import { getSharedCheckDownloadPayload, getSharedPreviewSources } from "@/lib/download-project-file";
 import type { CheckResultRow } from "@/lib/db-types";
 
 function fakeRecord(overrides: Partial<CheckResultRow>): CheckResultRow {
@@ -47,5 +47,60 @@ describe("getSharedPreviewSources", () => {
     );
     expect(src.inputMode).toBe("video");
     expect(src.videoSrc).toBe("https://example.com/v.mp4");
+  });
+
+  it("falls back to after_url for comparison audio", () => {
+    const src = getSharedPreviewSources(
+      fakeRecord({
+        process_type: "narration",
+        input_data: { after_url: "https://example.com/a.mp3" },
+      })
+    );
+    expect(src.audioSrc).toBe("https://example.com/a.mp3");
+  });
+
+  it("uses after_text for comparison scripts", () => {
+    const src = getSharedPreviewSources(
+      fakeRecord({
+        process_type: "script",
+        input_data: { after_text: "修正後テキスト" },
+      })
+    );
+    expect(src.scriptText).toBe("修正後テキスト");
+  });
+});
+
+describe("shared preview/download parity (regression guard)", () => {
+  it("preview and download resolve the same comparison image", () => {
+    const record = fakeRecord({
+      input_data: {
+        after_image: "data:image/png;base64,comparison-only",
+      },
+    });
+    const preview = getSharedPreviewSources(record);
+    const download = getSharedCheckDownloadPayload(record);
+    expect(preview.imageSrc).toBe("data:image/png;base64,comparison-only");
+    expect(download?.source.file_data).toBe(preview.imageSrc);
+  });
+
+  it("preview and download resolve the same comparison video", () => {
+    const record = fakeRecord({
+      process_type: "video_horizontal",
+      input_data: { after_url: "https://cdn.example/after.mp4" },
+    });
+    const preview = getSharedPreviewSources(record);
+    const download = getSharedCheckDownloadPayload(record);
+    expect(preview.videoSrc).toBe("https://cdn.example/after.mp4");
+    expect(download?.source.file_data).toBe(preview.videoSrc);
+  });
+
+  it("prefers initial image_url over before_image fallback", () => {
+    const record = fakeRecord({
+      input_data: {
+        image_url: "https://cdn.example/initial.png",
+        before_image: "data:image/png;base64,old",
+      },
+    });
+    expect(getSharedPreviewSources(record).imageSrc).toBe("https://cdn.example/initial.png");
   });
 });
